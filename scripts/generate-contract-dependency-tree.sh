@@ -37,7 +37,7 @@ while IFS= read -r file; do
       to_node="$imp"
     fi
 
-    edges["$from_node --> $to_node"]=1
+    edges["$from_node|$to_node"]=1
     if [[ -z "${import_map[$from_node]:-}" ]]; then
       import_map["$from_node"]="$to_node"
     else
@@ -59,7 +59,9 @@ done < <(rg --files "$SRC_DIR" -g '*.sol' | sort)
   echo '```mermaid'
   echo "graph TD"
   for edge in "${!edges[@]}"; do
-    echo "  \"$edge\""
+    from="${edge%%|*}"
+    to="${edge#*|}"
+    echo "  \"$from\" --> \"$to\""
   done | sort
   echo '```'
   echo
