@@ -5,6 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {NftFactoryRegistry} from "../src/core/NftFactoryRegistry.sol";
 import {MarketplaceFixedPrice} from "../src/core/MarketplaceFixedPrice.sol";
 import {SharedMint721} from "../src/token/SharedMint721.sol";
+import {SharedMint1155} from "../src/token/SharedMint1155.sol";
 import {SubnameRegistrar} from "../src/core/SubnameRegistrar.sol";
 
 contract MarketplaceFixedPriceTest is Test {
@@ -12,6 +13,7 @@ contract MarketplaceFixedPriceTest is Test {
     MarketplaceFixedPrice internal marketplace;
     SubnameRegistrar internal registrar;
     SharedMint721 internal nft;
+    SharedMint1155 internal multi;
 
     address internal admin = address(0xA11CE);
     address internal treasury = address(0xBEEF);
@@ -25,7 +27,9 @@ contract MarketplaceFixedPriceTest is Test {
         marketplace = new MarketplaceFixedPrice(admin, address(registry));
         registrar = new SubnameRegistrar(admin, treasury);
         nft = new SharedMint721(admin, address(registrar), "TestNFT", "TNFT");
+        multi = new SharedMint1155(admin, address(registrar), "TestMulti", "TM");
         registrar.setAuthorizedMinter(address(nft), true);
+        registrar.setAuthorizedMinter(address(multi), true);
         vm.stopPrank();
 
         vm.deal(seller, 10 ether);
@@ -34,6 +38,9 @@ contract MarketplaceFixedPriceTest is Test {
 
         vm.prank(seller);
         nft.setApprovalForAll(address(marketplace), true);
+
+        vm.prank(seller);
+        multi.setApprovalForAll(address(marketplace), true);
     }
 
     function _publishAndList(uint256 price) internal returns (uint256 listingId) {
@@ -185,6 +192,32 @@ contract MarketplaceFixedPriceTest is Test {
         vm.prank(unapprovedSeller);
         vm.expectRevert(MarketplaceFixedPrice.NotApproved.selector);
         marketplace.createListing(address(nft), tokenId, 1, "ERC721", address(0), 0.1 ether);
+    }
+
+    function testCreateListingERC1155() external {
+        vm.prank(seller);
+        uint256 tokenId = multi.publish("", 5, "ipfs://multi");
+
+        vm.prank(seller);
+        marketplace.createListing(address(multi), tokenId, 3, "ERC1155", address(0), 0.1 ether);
+
+        (address s, address n, uint256 tid, uint256 amt, string memory std,, uint256 p, bool active) = marketplace.listings(0);
+        assertEq(s, seller);
+        assertEq(n, address(multi));
+        assertEq(tid, tokenId);
+        assertEq(amt, 3);
+        assertEq(std, "ERC1155");
+        assertEq(p, 0.1 ether);
+        assertTrue(active);
+    }
+
+    function testCreateListingERC1155RevertsWithoutApproval() external {
+        vm.prank(unapprovedSeller);
+        uint256 tokenId = multi.publish("", 5, "ipfs://multi");
+
+        vm.prank(unapprovedSeller);
+        vm.expectRevert(MarketplaceFixedPrice.NotApproved.selector);
+        marketplace.createListing(address(multi), tokenId, 3, "ERC1155", address(0), 0.1 ether);
     }
 
     function testNextListingIdIncrements() external {
