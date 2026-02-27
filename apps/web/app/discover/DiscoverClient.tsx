@@ -2,14 +2,17 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Address } from "viem";
+import { useAccount } from "wagmi";
 import { getContractsConfig } from "../../lib/contracts";
 import {
   fetchActiveListingsBatch,
   formatListingPrice,
   toExplorerAddress,
   truncateAddress,
+  ZERO_ADDRESS,
   type MarketplaceListing
 } from "../../lib/marketplace";
+import { toWeiBigInt } from "../../lib/abi";
 import { createModerationReport, fetchHiddenListingIds } from "../../lib/indexerApi";
 
 type SortBy = "newest" | "priceAsc" | "priceDesc";
@@ -55,6 +58,7 @@ function normalizeAddress(value: string): value is Address {
 
 export default function DiscoverClient() {
   const config = useMemo(() => getContractsConfig(), []);
+  const { address } = useAccount();
 
   const [allListings, setAllListings] = useState<MarketplaceListing[]>([]);
   const [hiddenListingIds, setHiddenListingIds] = useState<number[]>([]);
@@ -73,7 +77,7 @@ export default function DiscoverClient() {
   const [sellerFilter, setSellerFilter] = useState("");
   const [sortBy, setSortBy] = useState<SortBy>("newest");
 
-  const [reporter, setReporter] = useState("collector");
+  const [reporter, setReporter] = useState("");
 
   const refreshHidden = useCallback(async () => {
     try {
@@ -169,13 +173,23 @@ export default function DiscoverClient() {
     void refreshHidden();
   }, [refreshHidden]);
 
+  useEffect(() => {
+    if (!reporter && address) {
+      setReporter(address);
+    }
+  }, [address, reporter]);
+
   const filtered = useMemo(() => {
     const shared721 = config.shared721.toLowerCase();
     const shared1155 = config.shared1155.toLowerCase();
     const normalizedContractFilter = contractFilter.trim().toLowerCase();
     const normalizedSellerFilter = sellerFilter.trim().toLowerCase();
-    const parsedMax = Number.parseFloat(maxPriceEth);
-    const hasMax = Number.isFinite(parsedMax) && parsedMax >= 0;
+    let maxPriceWei: bigint | null = null;
+    try {
+      maxPriceWei = maxPriceEth.trim() ? toWeiBigInt(maxPriceEth.trim()) : null;
+    } catch {
+      maxPriceWei = null;
+    }
     const hiddenSet = new Set(hiddenListingIds);
 
     let rows = allListings.filter((row) => !hiddenSet.has(row.id));
@@ -201,8 +215,8 @@ export default function DiscoverClient() {
       rows = rows.filter((row) => row.seller.toLowerCase().includes(normalizedSellerFilter));
     }
 
-    if (hasMax) {
-      rows = rows.filter((row) => Number(formatListingPrice(row).split(" ")[0]) <= parsedMax);
+    if (maxPriceWei !== null) {
+      rows = rows.filter((row) => row.paymentToken === ZERO_ADDRESS && row.price <= maxPriceWei!);
     }
 
     const sorted = [...rows];
@@ -228,18 +242,24 @@ export default function DiscoverClient() {
   ]);
 
   async function submitReport(listing: MarketplaceListing): Promise<void> {
-    const reason = window.prompt("Report reason (spam, abuse, scam, other):", "spam");
-    if (!reason) return;
+    const reason = (window.prompt("Report reason (spam, abuse, scam, other):", "spam") || "").trim();
+    if (!reason) {
+      setError("Report reason is required.");
+      return;
+    }
+    if (!normalizeAddress(reporter)) {
+      setError("Enter a valid reporter wallet address before submitting a report.");
+      return;
+    }
     try {
+      setError("");
       await createModerationReport({
         listingId: listing.id,
         collectionAddress: listing.nft,
         tokenId: listing.tokenId.toString(),
         sellerAddress: listing.seller,
         standard: listing.standard,
-        reporterAddress: normalizeAddress(reporter)
-          ? reporter.toLowerCase()
-          : "0x0000000000000000000000000000000000000000",
+        reporterAddress: reporter.toLowerCase(),
         reason
       });
       await refreshHidden();
@@ -289,7 +309,7 @@ export default function DiscoverClient() {
           </label>
 
           <label>
-            Max price (ETH)
+            Max price (ETH only)
             <input value={maxPriceEth} onChange={(e) => setMaxPriceEth(e.target.value)} placeholder="0.05" />
           </label>
 
@@ -315,10 +335,11 @@ export default function DiscoverClient() {
 
         <div className="row">
           <label>
-            Reporter label
-            <input value={reporter} onChange={(e) => setReporter(e.target.value)} placeholder="collector" />
+            Reporter address
+            <input value={reporter} onChange={(e) => setReporter(e.target.value)} placeholder="0xreporter..." />
           </label>
         </div>
+        {!reporter && !address ? <p className="hint">Connect wallet or enter reporter address manually.</p> : null}
       </div>
 
       {error ? <p className="error">{error}</p> : null}

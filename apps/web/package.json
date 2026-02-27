@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@rainbow-me/rainbowkit": "^2.2.10",
@@ -22,6 +24,7 @@
     "@types/node": "22.13.4",
     "@types/react": "19.0.10",
     "@types/react-dom": "19.0.4",
-    "typescript": "5.7.3"
+    "typescript": "5.7.3",
+    "vitest": "3.0.5"
   }
 }

@@ -3,6 +3,10 @@ import "dotenv/config";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { URL } from "node:url";
 import { PrismaClient } from "@prisma/client";
+import { pino } from "pino";
+import { isAddress, isZeroAddress, normalizeSubname, parseBearerToken, getClientIp, isRateLimited } from "./utils.js";
+
+const log = pino({ level: process.env.LOG_LEVEL || "info" });
 
 type CreateReportPayload = {
   listingId: number;
@@ -36,6 +40,7 @@ type BackfillSubnamePayload = {
 const CHAIN_ID = Number.parseInt(process.env.CHAIN_ID || "11155111", 10);
 const PORT = Number.parseInt(process.env.INDEXER_PORT || "8787", 10);
 const ADMIN_TOKEN = process.env.INDEXER_ADMIN_TOKEN || "";
+const TRUST_PROXY = process.env.TRUST_PROXY === "true";
 const ADMIN_ALLOWLIST = new Set(
   (process.env.INDEXER_ADMIN_ALLOWLIST || "")
     .split(",")
@@ -44,6 +49,20 @@ const ADMIN_ALLOWLIST = new Set(
 );
 
 const prisma = new PrismaClient();
+const RESOLVE_ACTIONS = new Set(["hide", "restore", "dismiss"]);
+
+class BadRequestError extends Error {}
+type RequestHandlerConfig = {
+  chainId: number;
+  adminToken: string;
+  adminAllowlist: Set<string>;
+  trustProxy: boolean;
+};
+type IndexerDeps = {
+  prisma: PrismaClient;
+  getClientIpImpl: typeof getClientIp;
+  isRateLimitedImpl: typeof isRateLimited;
+};
 
 function assertEnv(name: string): string {
   const value = process.env[name];
@@ -53,35 +72,23 @@ function assertEnv(name: string): string {
   return value;
 }
 
-function isAddress(value: string): boolean {
-  return /^0x[a-fA-F0-9]{40}$/.test(value);
-}
-
-function normalizeSubname(input: string): string {
-  return input.trim().toLowerCase().replace(/\.nftfactory\.eth$/, "");
-}
-
-function parseBearerToken(header: string | undefined): string {
-  if (!header) return "";
-  const [scheme, token] = header.split(" ");
-  if (!scheme || !token) return "";
-  if (scheme.toLowerCase() !== "bearer") return "";
-  return token.trim();
-}
-
-function assertAdminRequest(req: IncomingMessage, actor?: string): { ok: true } | { ok: false; error: string } {
-  if (ADMIN_TOKEN) {
+function assertAdminRequest(
+  req: IncomingMessage,
+  config: RequestHandlerConfig,
+  actor?: string
+): { ok: true } | { ok: false; error: string } {
+  if (config.adminToken) {
     const authToken = parseBearerToken(req.headers.authorization);
-    if (!authToken || authToken !== ADMIN_TOKEN) {
+    if (!authToken || authToken !== config.adminToken) {
       return { ok: false, error: "Missing or invalid admin token" };
     }
   }
 
-  if (ADMIN_ALLOWLIST.size > 0) {
+  if (config.adminAllowlist.size > 0) {
     const headerActor = String(req.headers["x-admin-address"] || "").trim().toLowerCase();
     const payloadActor = String(actor || "").trim().toLowerCase();
     const candidate = headerActor || payloadActor;
-    if (!candidate || !isAddress(candidate) || !ADMIN_ALLOWLIST.has(candidate)) {
+    if (!candidate || !isAddress(candidate) || !config.adminAllowlist.has(candidate)) {
       return { ok: false, error: "Actor is not in admin allowlist" };
     }
   }
@@ -94,9 +101,16 @@ function sendJson(res: ServerResponse, status: number, payload: unknown): void {
     "Content-Type": "application/json",
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type"
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Admin-Address"
   });
   res.end(JSON.stringify(payload));
+}
+
+function parseListingId(value: string | undefined): number | null {
+  if (!value) return null;
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isInteger(parsed) || parsed < 0) return null;
+  return parsed;
 }
 
 async function readJsonBody<T>(req: IncomingMessage): Promise<T> {
@@ -105,23 +119,31 @@ async function readJsonBody<T>(req: IncomingMessage): Promise<T> {
     chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
   }
   const raw = Buffer.concat(chunks).toString("utf8");
-  if (!raw) throw new Error("Missing JSON body");
-  return JSON.parse(raw) as T;
+  if (!raw) throw new BadRequestError("Missing JSON body");
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    throw new BadRequestError("Invalid JSON body");
+  }
 }
 
-async function ensureTokenForListing(payload: CreateReportPayload): Promise<{ tokenRefId: string; listingRowId: string }> {
+async function ensureTokenForListing(
+  payload: CreateReportPayload,
+  deps: IndexerDeps,
+  config: RequestHandlerConfig
+): Promise<{ tokenRefId: string; listingRowId: string }> {
   const collectionAddress = payload.collectionAddress.toLowerCase();
   const sellerAddress = payload.sellerAddress.toLowerCase();
   const standard = (payload.standard || "UNKNOWN").toUpperCase();
 
-  const collection = await prisma.collection.upsert({
+  const collection = await deps.prisma.collection.upsert({
     where: { contractAddress: collectionAddress },
     update: {
       ownerAddress: sellerAddress,
       standard
     },
     create: {
-      chainId: CHAIN_ID,
+      chainId: config.chainId,
       contractAddress: collectionAddress,
       ownerAddress: sellerAddress,
       standard,
@@ -130,7 +152,7 @@ async function ensureTokenForListing(payload: CreateReportPayload): Promise<{ to
     }
   });
 
-  const token = await prisma.token.upsert({
+  const token = await deps.prisma.token.upsert({
     where: {
       collectionId_tokenId: {
         collectionId: collection.id,
@@ -150,10 +172,10 @@ async function ensureTokenForListing(payload: CreateReportPayload): Promise<{ to
     }
   });
 
-  const listing = await prisma.listing.upsert({
+  const listing = await deps.prisma.listing.upsert({
     where: { listingId: String(payload.listingId) },
     update: {
-      chainId: CHAIN_ID,
+      chainId: config.chainId,
       collectionAddress,
       tokenId: payload.tokenId,
       sellerAddress,
@@ -163,7 +185,7 @@ async function ensureTokenForListing(payload: CreateReportPayload): Promise<{ to
     },
     create: {
       listingId: String(payload.listingId),
-      chainId: CHAIN_ID,
+      chainId: config.chainId,
       collectionAddress,
       tokenId: payload.tokenId,
       sellerAddress,
@@ -176,8 +198,8 @@ async function ensureTokenForListing(payload: CreateReportPayload): Promise<{ to
   return { tokenRefId: token.id, listingRowId: listing.id };
 }
 
-async function listHiddenListingIds(): Promise<number[]> {
-  const actions = await prisma.moderationAction.findMany({
+async function listHiddenListingIds(deps: IndexerDeps): Promise<number[]> {
+  const actions = await deps.prisma.moderationAction.findMany({
     orderBy: { createdAt: "desc" },
     select: {
       tokenId: true,
@@ -188,7 +210,14 @@ async function listHiddenListingIds(): Promise<number[]> {
   const hiddenByToken = new Map<string, boolean>();
   for (const action of actions) {
     if (hiddenByToken.has(action.tokenId)) continue;
-    hiddenByToken.set(action.tokenId, action.action.toLowerCase() === "hide");
+    const normalizedAction = action.action.toLowerCase();
+    if (normalizedAction === "hide") {
+      hiddenByToken.set(action.tokenId, true);
+      continue;
+    }
+    if (normalizedAction === "restore") {
+      hiddenByToken.set(action.tokenId, false);
+    }
   }
 
   const hiddenTokenIds = Array.from(hiddenByToken.entries())
@@ -197,7 +226,7 @@ async function listHiddenListingIds(): Promise<number[]> {
 
   if (hiddenTokenIds.length === 0) return [];
 
-  const listings = await prisma.listing.findMany({
+  const listings = await deps.prisma.listing.findMany({
     where: {
       tokenRefId: { in: hiddenTokenIds },
       active: true
@@ -211,7 +240,12 @@ async function listHiddenListingIds(): Promise<number[]> {
     .sort((a: number, b: number) => a - b);
 }
 
-async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
+async function handleRequest(
+  req: IncomingMessage,
+  res: ServerResponse,
+  deps: IndexerDeps,
+  config: RequestHandlerConfig
+): Promise<void> {
   if (!req.url || !req.method) {
     sendJson(res, 400, { error: "Invalid request" });
     return;
@@ -232,7 +266,11 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
 
   if (req.method === "GET" && path === "/api/moderation/reports") {
     const status = (url.searchParams.get("status") || "").toLowerCase();
-    const reports = await prisma.report.findMany({
+    if (status && status !== "open" && status !== "resolved") {
+      sendJson(res, 400, { error: "Invalid status query. Expected 'open' or 'resolved'" });
+      return;
+    }
+    const reports = await deps.prisma.report.findMany({
       where: status ? { status } : undefined,
       include: {
         token: {
@@ -250,9 +288,9 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
     sendJson(
       res,
       200,
-      reports.map((report: any) => ({
+      reports.map((report) => ({
         id: report.id,
-        listingId: report.token.listings[0]?.listingId ? Number.parseInt(report.token.listings[0].listingId, 10) : null,
+        listingId: parseListingId(report.token.listings[0]?.listingId),
         reason: report.reason,
         reporterAddress: report.reporterAddress,
         status: report.status,
@@ -272,6 +310,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
       !isAddress(payload.collectionAddress) ||
       !isAddress(payload.sellerAddress) ||
       !isAddress(payload.reporterAddress) ||
+      isZeroAddress(payload.reporterAddress) ||
       !payload.tokenId?.trim() ||
       !payload.reason?.trim()
     ) {
@@ -279,8 +318,8 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
       return;
     }
 
-    const { tokenRefId } = await ensureTokenForListing(payload);
-    const report = await prisma.report.create({
+    const { tokenRefId } = await ensureTokenForListing(payload, deps, config);
+    const report = await deps.prisma.report.create({
       data: {
         tokenId: tokenRefId,
         reporterAddress: payload.reporterAddress.toLowerCase(),
@@ -299,20 +338,24 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
   }
 
   if (req.method === "POST" && /^\/api\/moderation\/reports\/[^/]+\/resolve$/.test(path)) {
+    if (deps.isRateLimitedImpl(deps.getClientIpImpl(req, config.trustProxy))) {
+      sendJson(res, 429, { error: "Too many requests" });
+      return;
+    }
     const reportId = path.split("/")[4];
     const payload = await readJsonBody<ResolveReportPayload>(req);
 
-    if (!payload.action || !payload.actor?.trim()) {
+    if (!payload.action || !RESOLVE_ACTIONS.has(payload.action) || !payload.actor?.trim()) {
       sendJson(res, 400, { error: "Invalid resolve payload" });
       return;
     }
-    const auth = assertAdminRequest(req, payload.actor);
+    const auth = assertAdminRequest(req, config, payload.actor);
     if (!auth.ok) {
       sendJson(res, 401, { error: auth.error });
       return;
     }
 
-    const report = await prisma.report.findUnique({
+    const report = await deps.prisma.report.findUnique({
       where: { id: reportId }
     });
     if (!report) {
@@ -320,12 +363,12 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
       return;
     }
 
-    await prisma.report.update({
+    await deps.prisma.report.update({
       where: { id: reportId },
       data: { status: "resolved" }
     });
 
-    await prisma.moderationAction.create({
+    await deps.prisma.moderationAction.create({
       data: {
         tokenId: report.tokenId,
         reportId: report.id,
@@ -340,7 +383,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
   }
 
   if (req.method === "GET" && path === "/api/moderation/actions") {
-    const actions = await prisma.moderationAction.findMany({
+    const actions = await deps.prisma.moderationAction.findMany({
       orderBy: { createdAt: "desc" },
       take: 200,
       include: {
@@ -358,13 +401,13 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
     sendJson(
       res,
       200,
-      actions.map((action: any) => ({
+      actions.map((action) => ({
         id: action.id,
         action: action.action,
         actor: action.actor,
         notes: action.notes,
         reportId: action.reportId,
-        listingId: action.token.listings[0]?.listingId ? Number.parseInt(action.token.listings[0].listingId, 10) : null,
+        listingId: parseListingId(action.token.listings[0]?.listingId),
         createdAt: action.createdAt.toISOString()
       }))
     );
@@ -372,20 +415,28 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
   }
 
   if (req.method === "GET" && path === "/api/moderation/hidden-listings") {
-    const listingIds = await listHiddenListingIds();
+    const listingIds = await listHiddenListingIds(deps);
     sendJson(res, 200, { listingIds });
     return;
   }
 
   if (req.method === "POST" && /^\/api\/moderation\/listings\/[^/]+\/visibility$/.test(path)) {
+    if (deps.isRateLimitedImpl(deps.getClientIpImpl(req, config.trustProxy))) {
+      sendJson(res, 429, { error: "Too many requests" });
+      return;
+    }
     const listingId = path.split("/")[4];
     const payload = await readJsonBody<SetListingVisibilityPayload>(req);
-    const auth = assertAdminRequest(req, payload.actor);
+    if (typeof payload.hidden !== "boolean" || !payload.actor?.trim()) {
+      sendJson(res, 400, { error: "Invalid visibility payload" });
+      return;
+    }
+    const auth = assertAdminRequest(req, config, payload.actor);
     if (!auth.ok) {
       sendJson(res, 401, { error: auth.error });
       return;
     }
-    const listing = await prisma.listing.findUnique({
+    const listing = await deps.prisma.listing.findUnique({
       where: { listingId },
       select: { tokenRefId: true }
     });
@@ -395,7 +446,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
       return;
     }
 
-    await prisma.moderationAction.create({
+    await deps.prisma.moderationAction.create({
       data: {
         tokenId: listing.tokenRefId,
         action: payload.hidden ? "hide" : "restore",
@@ -409,8 +460,12 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
   }
 
   if (req.method === "POST" && path === "/api/admin/collections/backfill-subname") {
+    if (deps.isRateLimitedImpl(deps.getClientIpImpl(req, config.trustProxy))) {
+      sendJson(res, 429, { error: "Too many requests" });
+      return;
+    }
     const payload = await readJsonBody<BackfillSubnamePayload>(req);
-    const auth = assertAdminRequest(req);
+    const auth = assertAdminRequest(req, config);
     if (!auth.ok) {
       sendJson(res, 401, { error: auth.error });
       return;
@@ -437,7 +492,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
       return;
     }
 
-    const result = await prisma.collection.updateMany({
+    const result = await deps.prisma.collection.updateMany({
       where: {
         ...(ownerAddress ? { ownerAddress } : {}),
         ...(contractAddress ? { contractAddress } : {})
@@ -462,18 +517,18 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
       return;
     }
 
-    const collections = await prisma.collection.findMany({
+    const collections = await deps.prisma.collection.findMany({
       where: {
         OR: [{ ensSubname: label }, { ensSubname: `${label}.nftfactory.eth` }]
       },
       select: { ownerAddress: true, ensSubname: true, contractAddress: true }
     });
 
-    const sellers = Array.from(new Set(collections.map((item: any) => item.ownerAddress.toLowerCase())));
+    const sellers = Array.from(new Set(collections.map((item) => item.ownerAddress.toLowerCase())));
     sendJson(res, 200, {
       name: label,
       sellers,
-      collections: collections.map((item: any) => ({
+      collections: collections.map((item) => ({
         ensSubname: item.ensSubname,
         contractAddress: item.contractAddress,
         ownerAddress: item.ownerAddress
@@ -485,33 +540,61 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
   sendJson(res, 404, { error: "Not found" });
 }
 
-async function main() {
-  const rpcUrl = assertEnv("RPC_URL");
-  const dbUrl = assertEnv("DATABASE_URL");
-
-  console.log("Indexer booting...");
-  console.log(`RPC: ${rpcUrl}`);
-  console.log(`DB: ${dbUrl.slice(0, 18)}...`);
-
-  const server = createServer((req, res) => {
-    handleRequest(req, res).catch((err) => {
-      console.error("request_error", err);
+export function createRequestHandler(
+  deps: IndexerDeps,
+  config: RequestHandlerConfig
+): (req: IncomingMessage, res: ServerResponse) => void {
+  return (req, res) => {
+    handleRequest(req, res, deps, config).catch((err) => {
+      if (err instanceof BadRequestError) {
+        sendJson(res, 400, { error: err.message });
+        return;
+      }
+      log.error({ err, method: req.method, url: req.url }, "request_error");
       sendJson(res, 500, {
         error: err instanceof Error ? err.message : "Unhandled server error"
       });
     });
-  });
+  };
+}
+
+export async function main() {
+  const rpcUrl = assertEnv("RPC_URL");
+  const dbUrl = assertEnv("DATABASE_URL");
+
+  if (!ADMIN_TOKEN && ADMIN_ALLOWLIST.size === 0) {
+    log.warn("No INDEXER_ADMIN_TOKEN or INDEXER_ADMIN_ALLOWLIST configured — admin endpoints are unprotected");
+  }
+
+  log.info({ rpcUrl, db: dbUrl.slice(0, 18) + "..." }, "Indexer booting");
+
+  const handler = createRequestHandler(
+    {
+      prisma,
+      getClientIpImpl: getClientIp,
+      isRateLimitedImpl: isRateLimited
+    },
+    {
+      chainId: CHAIN_ID,
+      adminToken: ADMIN_TOKEN,
+      adminAllowlist: ADMIN_ALLOWLIST,
+      trustProxy: TRUST_PROXY
+    }
+  );
+  const server = createServer(handler);
 
   server.listen(PORT, () => {
-    console.log(`Indexer API listening on http://127.0.0.1:${PORT}`);
+    log.info({ port: PORT }, "Indexer API listening");
   });
 
   setInterval(() => {
-    console.log("Indexer heartbeat", new Date().toISOString());
+    log.debug("heartbeat");
   }, 15000);
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+if (process.env.NODE_ENV !== "test") {
+  main().catch((err) => {
+    log.fatal({ err }, "Fatal startup error");
+    process.exit(1);
+  });
+}

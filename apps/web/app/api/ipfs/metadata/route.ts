@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 const PINATA_FILE_ENDPOINT = "https://api.pinata.cloud/pinning/pinFileToIPFS";
+const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
 
 type PinataResponse = {
   IpfsHash: string;
@@ -53,6 +54,12 @@ export async function POST(request: Request) {
     if (!(image instanceof File)) {
       return NextResponse.json({ error: "Missing image file" }, { status: 400 });
     }
+    if (!image.type.startsWith("image/")) {
+      return NextResponse.json({ error: "Image must be a valid image/* file type" }, { status: 400 });
+    }
+    if (image.size <= 0 || image.size > MAX_IMAGE_BYTES) {
+      return NextResponse.json({ error: "Image file size must be between 1 byte and 15MB" }, { status: 400 });
+    }
 
     const imageHash = await pinFile(image, image.name || "asset.png", jwt);
     const imageUri = `ipfs://${imageHash}`;
@@ -64,7 +71,15 @@ export async function POST(request: Request) {
     };
 
     if (externalUrl) {
-      metadata.external_url = externalUrl;
+      try {
+        const parsed = new URL(externalUrl);
+        if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+          return NextResponse.json({ error: "external_url must use http or https" }, { status: 400 });
+        }
+        metadata.external_url = parsed.toString();
+      } catch {
+        return NextResponse.json({ error: "external_url must be a valid URL" }, { status: 400 });
+      }
     }
 
     const metadataFile = new File([JSON.stringify(metadata, null, 2)], "metadata.json", {

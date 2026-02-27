@@ -105,6 +105,11 @@ export function encodeSetApprovalForAll(operator: `0x${string}`, approved: boole
   return `0x${selector}${encodeAddress(operator)}${encodeBool(approved)}`;
 }
 
+export function encodeErc20Approve(spender: `0x${string}`, amount: bigint): string {
+  const selector = "095ea7b3";
+  return `0x${selector}${encodeAddress(spender)}${encodeUint256(amount)}`;
+}
+
 export function encodeCreateListing(
   nft: `0x${string}`,
   tokenId: bigint,

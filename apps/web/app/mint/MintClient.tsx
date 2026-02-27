@@ -10,7 +10,6 @@ import {
   encodePublish1155,
   encodePublish721,
   encodeRegisterSubname,
-  hexToBigInt,
   toHexWei,
   truncateHash
 } from "../../lib/abi";
@@ -35,6 +34,12 @@ function normalizeSubname(label: string): string {
   return label.trim().toLowerCase().replace(/\.nftfactory\.eth$/, "");
 }
 
+function isValidSubnameLabel(label: string): boolean {
+  if (!label || label.length > 63) return false;
+  if (label.startsWith("-") || label.endsWith("-")) return false;
+  return /^[a-z0-9-]+$/.test(label);
+}
+
 function isAddress(value: string): value is `0x${string}` {
   return /^0x[a-fA-F0-9]{40}$/.test(value);
 }
@@ -43,9 +48,9 @@ export default function MintClient() {
   const config = useMemo(() => getContractsConfig(), []);
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
+  const publicClient = usePublicClient();
   const { switchChainAsync } = useSwitchChain();
   const { data: walletClient } = useWalletClient();
-  const publicClient = usePublicClient();
 
   const [standard, setStandard] = useState<Standard>("ERC721");
   const [collectionMode, setCollectionMode] = useState<CollectionMode>("shared");
@@ -102,13 +107,11 @@ export default function MintClient() {
     return hash as `0x${string}`;
   }
 
-  async function readUint(contract: `0x${string}`, callData: string): Promise<bigint> {
-    if (!publicClient) throw new Error("No public client available.");
-    const result = await publicClient.call({
-      to: contract as Address,
-      data: callData as Hex
-    });
-    return hexToBigInt((result.data as string) || "0x0");
+  async function waitForReceipt(hash: `0x${string}`): Promise<void> {
+    if (!publicClient) {
+      throw new Error("Public client unavailable. Reconnect wallet and try again.");
+    }
+    await publicClient.waitForTransactionReceipt({ hash: hash as Hex });
   }
 
   async function onUploadMetadata(): Promise<void> {
@@ -143,9 +146,24 @@ export default function MintClient() {
   }
 
   async function onRegisterSubname(): Promise<void> {
+    if (!account) {
+      setSubnameTx({ status: "error", message: "Connect wallet first." });
+      return;
+    }
+    if (wrongNetwork) {
+      setSubnameTx({ status: "error", message: "Switch to Sepolia first." });
+      return;
+    }
     const label = normalizeSubname(subdomainLabel);
     if (!label) {
       setSubnameTx({ status: "error", message: "Subdomain label is required." });
+      return;
+    }
+    if (!isValidSubnameLabel(label)) {
+      setSubnameTx({
+        status: "error",
+        message: "Subdomain must be 1-63 chars, lowercase letters/numbers/hyphens, and not start or end with '-'."
+      });
       return;
     }
     try {
@@ -155,6 +173,7 @@ export default function MintClient() {
         encodeRegisterSubname(label) as `0x${string}`,
         toHexWei(SUBNAME_FEE_ETH) as `0x${string}`
       );
+      await waitForReceipt(txHash);
       setSubnameTx({ status: "success", hash: txHash, message: "Subdomain submitted." });
     } catch (err) {
       setSubnameTx({ status: "error", message: err instanceof Error ? err.message : "Subdomain registration failed" });
@@ -216,7 +235,6 @@ export default function MintClient() {
         }
         targetNft = customCollectionAddress;
         if (standard === "ERC721") {
-          await readUint(targetNft, "0x18160ddd");
           mintData = encodeCreatorPublish721(account as `0x${string}`, metadataUri.trim(), true) as `0x${string}`;
         } else {
           const tokenId = Number.parseInt(custom1155TokenId || "0", 10);
@@ -234,6 +252,7 @@ export default function MintClient() {
       }
 
       const txHash = await sendTransaction(targetNft, mintData);
+      await waitForReceipt(txHash);
       setMintTx({ status: "success", hash: txHash, message: "Mint submitted successfully." });
     } catch (err) {
       setMintTx({ status: "error", message: err instanceof Error ? err.message : "Publish failed" });
@@ -376,6 +395,7 @@ export default function MintClient() {
               Subdomain label
               <input value={subdomainLabel} onChange={(e) => setSubdomainLabel(e.target.value)} placeholder="studio" />
             </label>
+            <p className="hint">Allowed: `a-z`, `0-9`, `-` (1-63 chars; no leading/trailing `-`).</p>
             <button type="button" onClick={onRegisterSubname} disabled={!isConnected || wrongNetwork}>
               Register Subdomain ({SUBNAME_FEE_ETH} ETH)
             </button>
