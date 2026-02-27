@@ -8,6 +8,7 @@ import {
   encodeBuyListing,
   encodeCancelListing,
   encodeCreateListing,
+  encodeErc20Approve,
   encodeSetApprovalForAll,
   toWeiBigInt
 } from "../../lib/abi";
@@ -44,6 +45,19 @@ const marketplaceAbi = [
       { name: "price", type: "uint256" },
       { name: "active", type: "bool" }
     ]
+  }
+] as const;
+
+const erc20Abi = [
+  {
+    type: "function",
+    name: "allowance",
+    stateMutability: "view",
+    inputs: [
+      { name: "owner", type: "address" },
+      { name: "spender", type: "address" }
+    ],
+    outputs: [{ name: "", type: "uint256" }]
   }
 ] as const;
 
@@ -375,17 +389,38 @@ export default function ListClient() {
       setState({ status: "error", message: "Switch to Sepolia first." });
       return;
     }
-    if (row.paymentToken !== ZERO_ADDRESS) {
-      setState({ status: "error", message: "ERC20 buy flow not added yet." });
-      return;
-    }
     try {
       setBuyingId(row.id);
-      setState({ status: "pending", message: `Buying listing #${row.id}...` });
+      if (row.paymentToken !== ZERO_ADDRESS) {
+        if (!publicClient || !address) {
+          throw new Error("Public client unavailable. Reconnect wallet and try again.");
+        }
+
+        const allowance = (await publicClient.readContract({
+          address: row.paymentToken,
+          abi: erc20Abi,
+          functionName: "allowance",
+          args: [address, config.marketplace as Address]
+        })) as bigint;
+
+        if (allowance < row.price) {
+          setState({ status: "pending", message: `Approving ERC20 for listing #${row.id}...` });
+          const approveTx = await sendTransaction(
+            row.paymentToken as `0x${string}`,
+            encodeErc20Approve(config.marketplace as `0x${string}`, row.price) as `0x${string}`
+          );
+          setState({ status: "pending", hash: approveTx, message: `Buying listing #${row.id}...` });
+        } else {
+          setState({ status: "pending", message: `Buying listing #${row.id}...` });
+        }
+      } else {
+        setState({ status: "pending", message: `Buying listing #${row.id}...` });
+      }
+
       const txHash = await sendTransaction(
         config.marketplace as `0x${string}`,
         encodeBuyListing(BigInt(row.id)) as `0x${string}`,
-        row.price
+        row.paymentToken === ZERO_ADDRESS ? row.price : undefined
       );
       setState({ status: "success", hash: txHash, message: `Purchase submitted for listing #${row.id}.` });
       await loadListings();

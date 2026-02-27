@@ -5,6 +5,7 @@ import {
   hexToBigInt,
   truncateHash,
   encodeSetApprovalForAll,
+  encodeErc20Approve,
   encodeCancelListing,
   encodeBuyListing,
   encodeRegisterSubname
@@ -104,6 +105,18 @@ describe("encodeCancelListing", () => {
     const result = encodeCancelListing(1n);
     // Selector + uint256 padded to 64 hex chars
     expect(result).toBe("0x305a67a8" + "0".repeat(63) + "1");
+  });
+});
+
+describe("encodeErc20Approve", () => {
+  it("starts with correct selector", () => {
+    const result = encodeErc20Approve("0x0000000000000000000000000000000000000001", 1n);
+    expect(result.startsWith("0x095ea7b3")).toBe(true);
+  });
+
+  it("has correct length (selector + 2 words)", () => {
+    const result = encodeErc20Approve("0x0000000000000000000000000000000000000001", 42n);
+    expect(result.length).toBe(2 + 8 + 64 + 64);
   });
 });
 
