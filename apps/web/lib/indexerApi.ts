@@ -2,21 +2,56 @@ function getBaseUrl(): string {
   return process.env.NEXT_PUBLIC_INDEXER_API_URL || "http://127.0.0.1:8787";
 }
 
-async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${getBaseUrl()}${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers || {})
-    },
-    cache: "no-store"
-  });
+const INDEXER_REQUEST_TIMEOUT_MS = 12_000;
 
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(text || `Request failed (${response.status})`);
+function withTimeout(init?: RequestInit): { init: RequestInit; cleanup: () => void } {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), INDEXER_REQUEST_TIMEOUT_MS);
+  return {
+    init: {
+      ...init,
+      signal: controller.signal
+    },
+    cleanup: () => clearTimeout(timeout)
+  };
+}
+
+async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const { init: requestInit, cleanup } = withTimeout(init);
+  try {
+    const response = await fetch(`${getBaseUrl()}${path}`, {
+      ...requestInit,
+      headers: {
+        "Content-Type": "application/json",
+        ...(init?.headers || {})
+      },
+      cache: "no-store"
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      let message = text;
+      if (text) {
+        try {
+          const parsed = JSON.parse(text) as { error?: string };
+          if (parsed.error?.trim()) {
+            message = parsed.error;
+          }
+        } catch {
+          // Keep raw response text when payload is not JSON.
+        }
+      }
+      throw new Error(message || `Request failed (${response.status})`);
+    }
+    return (await response.json()) as T;
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error(`Indexer request timed out after ${INDEXER_REQUEST_TIMEOUT_MS}ms`);
+    }
+    throw error;
+  } finally {
+    cleanup();
   }
-  return (await response.json()) as T;
 }
 
 export type AdminAuth = {

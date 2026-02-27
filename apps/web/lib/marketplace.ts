@@ -15,6 +15,7 @@ export type MarketplaceListing = {
 };
 
 export const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+const LISTING_READ_BATCH_SIZE = 20;
 
 export const marketplaceAbi = [
   {
@@ -81,29 +82,43 @@ export async function fetchActiveListingsBatch(params: {
   const start = Math.max(0, end - limit);
   const rows: MarketplaceListing[] = [];
 
+  const ids: number[] = [];
   for (let id = end - 1; id >= start; id -= 1) {
-    const listing = (await publicClient.readContract({
-      address: marketplace,
-      abi: marketplaceAbi,
-      functionName: "listings",
-      args: [BigInt(id)]
-    })) as readonly [Address, Address, bigint, bigint, string, Address, bigint, boolean];
+    ids.push(id);
+  }
 
-    if (!listing[7]) {
-      continue;
+  for (let offset = 0; offset < ids.length; offset += LISTING_READ_BATCH_SIZE) {
+    const batch = ids.slice(offset, offset + LISTING_READ_BATCH_SIZE);
+    const listings = (await Promise.all(
+      batch.map((id) =>
+        publicClient.readContract({
+          address: marketplace,
+          abi: marketplaceAbi,
+          functionName: "listings",
+          args: [BigInt(id)]
+        })
+      )
+    )) as readonly (readonly [Address, Address, bigint, bigint, string, Address, bigint, boolean])[];
+
+    for (let i = 0; i < listings.length; i += 1) {
+      const listing = listings[i];
+      const id = batch[i];
+      if (!listing[7]) {
+        continue;
+      }
+
+      rows.push({
+        id,
+        seller: listing[0],
+        nft: listing[1],
+        tokenId: listing[2],
+        amount: listing[3],
+        standard: listing[4],
+        paymentToken: listing[5],
+        price: listing[6],
+        active: listing[7]
+      });
     }
-
-    rows.push({
-      id,
-      seller: listing[0],
-      nft: listing[1],
-      tokenId: listing[2],
-      amount: listing[3],
-      standard: listing[4],
-      paymentToken: listing[5],
-      price: listing[6],
-      active: listing[7]
-    });
   }
 
   return {

@@ -14,6 +14,7 @@ import {
 } from "../../lib/abi";
 import { buildBuyPlan } from "../../lib/marketplaceBuy";
 import { getContractsConfig } from "../../lib/contracts";
+import { fetchActiveListingsBatch } from "../../lib/marketplace";
 import TxStatus, { type TxState } from "./TxStatus";
 import ListingFilters, { type FilterState, type Preset } from "./ListingFilters";
 import ListingCard, { type ListingRow } from "./ListingCard";
@@ -22,32 +23,6 @@ type Standard = "ERC721" | "ERC1155";
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const DEFAULT_SCAN_LIMIT = 200;
-
-const marketplaceAbi = [
-  {
-    type: "function",
-    name: "nextListingId",
-    stateMutability: "view",
-    inputs: [],
-    outputs: [{ name: "", type: "uint256" }]
-  },
-  {
-    type: "function",
-    name: "listings",
-    stateMutability: "view",
-    inputs: [{ name: "", type: "uint256" }],
-    outputs: [
-      { name: "seller", type: "address" },
-      { name: "nft", type: "address" },
-      { name: "tokenId", type: "uint256" },
-      { name: "amount", type: "uint256" },
-      { name: "standard", type: "string" },
-      { name: "paymentToken", type: "address" },
-      { name: "price", type: "uint256" },
-      { name: "active", type: "bool" }
-    ]
-  }
-] as const;
 
 const erc20Abi = [
   {
@@ -201,47 +176,16 @@ export default function ListClient() {
   }
 
   async function loadListings(): Promise<void> {
-    if (!publicClient) return;
     setListingsLoading(true);
     setListingsError("");
     try {
-      const nextId = (await publicClient.readContract({
-        address: config.marketplace as Address,
-        abi: marketplaceAbi,
-        functionName: "nextListingId"
-      })) as bigint;
-
-      const end = Number(nextId);
       const limit = Number.isInteger(parsedScanDepth) && parsedScanDepth > 0 ? parsedScanDepth : DEFAULT_SCAN_LIMIT;
-      const start = Math.max(0, end - limit);
-      const rows: ListingRow[] = [];
-
-      for (let i = end - 1; i >= start; i -= 1) {
-        const listing = (await publicClient.readContract({
-          address: config.marketplace as Address,
-          abi: marketplaceAbi,
-          functionName: "listings",
-          args: [BigInt(i)]
-        })) as readonly [Address, Address, bigint, bigint, string, Address, bigint, boolean];
-
-        const row: ListingRow = {
-          id: i,
-          seller: listing[0],
-          nft: listing[1],
-          tokenId: listing[2],
-          amount: listing[3],
-          standard: listing[4],
-          paymentToken: listing[5],
-          price: listing[6],
-          active: listing[7]
-        };
-
-        if (row.active) {
-          rows.push(row);
-        }
-      }
-
-      const active = rows.filter((row) => row.active);
+      const result = await fetchActiveListingsBatch({
+        rpcUrl: config.rpcUrl,
+        marketplace: config.marketplace as Address,
+        limit
+      });
+      const active = result.listings;
       setAllListings(active);
       if (address) {
         const account = address.toLowerCase();

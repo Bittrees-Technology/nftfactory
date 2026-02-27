@@ -5,6 +5,10 @@ on:
     branches: [main, master]
   pull_request:
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   web-checks:
     name: Web typecheck & tests
@@ -15,6 +19,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: npm
 
       - name: Install dependencies
         run: npm ci
@@ -23,7 +28,7 @@ jobs:
         run: npm run typecheck:web
 
       - name: Run web tests
-        run: npm --workspace apps/web run test
+        run: npm run test:web
 
   indexer-checks:
     name: Indexer typecheck & tests
@@ -34,6 +39,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: npm
 
       - name: Install dependencies
         run: npm ci
@@ -42,7 +48,7 @@ jobs:
         run: npm run typecheck:indexer
 
       - name: Run indexer tests
-        run: npm --workspace services/indexer run test
+        run: npm run test:indexer
 
   forge-tests:
     name: Solidity build & tests
@@ -56,9 +62,7 @@ jobs:
         uses: foundry-rs/foundry-toolchain@v1
 
       - name: Build contracts
-        working-directory: packages/contracts
-        run: forge build
+        run: npm --workspace packages/contracts run build
 
       - name: Run Forge tests
-        working-directory: packages/contracts
-        run: forge test -vv
+        run: npm run test:contracts
