@@ -1,8 +1,8 @@
 "use client";
 
-import { formatEther } from "viem";
 import type { Address } from "viem";
 import { truncateHash } from "../../lib/abi";
+import { formatListingPrice, type MarketplaceListing } from "../../lib/marketplace";
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
@@ -61,9 +61,7 @@ export default function ListingCard({
       </p>
       <p>Token {item.tokenId.toString()}</p>
       <p>Amt {item.amount.toString()}</p>
-      <p>
-        {formatEther(item.price)} {item.paymentToken === ZERO_ADDRESS ? "ETH" : "ERC20"}
-      </p>
+      <p>{formatListingPrice(item as MarketplaceListing)}</p>
       {variant === "marketplace" && (
         <p className="mono">
           {truncateHash(item.seller)}{" "}
