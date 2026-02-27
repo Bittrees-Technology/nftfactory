@@ -16,6 +16,7 @@ contract MarketplaceFixedPriceTest is Test {
     address internal admin = address(0xA11CE);
     address internal treasury = address(0xBEEF);
     address internal seller = address(0xCAFE);
+    address internal unapprovedSeller = address(0xC0DE);
     address internal buyer = address(0xBAAD);
 
     function setUp() external {
@@ -28,7 +29,11 @@ contract MarketplaceFixedPriceTest is Test {
         vm.stopPrank();
 
         vm.deal(seller, 10 ether);
+        vm.deal(unapprovedSeller, 10 ether);
         vm.deal(buyer, 10 ether);
+
+        vm.prank(seller);
+        nft.setApprovalForAll(address(marketplace), true);
     }
 
     function _publishAndList(uint256 price) internal returns (uint256 listingId) {
@@ -77,9 +82,6 @@ contract MarketplaceFixedPriceTest is Test {
     function testBuyWithETH() external {
         vm.prank(seller);
         uint256 tokenId = nft.publish("", "ipfs://test");
-
-        vm.prank(seller);
-        nft.setApprovalForAll(address(marketplace), true);
 
         vm.prank(seller);
         marketplace.createListing(address(nft), tokenId, 1, "ERC721", address(0), 0.1 ether);
@@ -174,6 +176,15 @@ contract MarketplaceFixedPriceTest is Test {
         vm.prank(seller);
         vm.expectRevert(MarketplaceFixedPrice.InvalidAmount.selector);
         marketplace.createListing(address(nft), tokenId, 2, "ERC721", address(0), 0.1 ether);
+    }
+
+    function testCreateListingRevertsWithoutApproval() external {
+        vm.prank(unapprovedSeller);
+        uint256 tokenId = nft.publish("", "ipfs://test");
+
+        vm.prank(unapprovedSeller);
+        vm.expectRevert(MarketplaceFixedPrice.NotApproved.selector);
+        marketplace.createListing(address(nft), tokenId, 1, "ERC721", address(0), 0.1 ether);
     }
 
     function testNextListingIdIncrements() external {

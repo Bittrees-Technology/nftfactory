@@ -30,6 +30,7 @@ This PR hardens the indexer/admin API surface and completes core marketplace and
   - Listing and buy multi-step flows now wait for receipts before marking success.
   - Added explicit failure when receipt client is unavailable, preventing silent success in degraded wallet-client states.
   - Added `setApprovalForAll` operator support in shared ERC721/ERC1155 contracts so marketplace buys can execute token transfers as an approved operator.
+  - Added marketplace preflight check requiring operator approval before listing creation, preventing listings that cannot settle.
 
 - Mint flow
   - Removed brittle custom ERC721 preflight call path.
@@ -76,7 +77,7 @@ This PR hardens the indexer/admin API surface and completes core marketplace and
 - `npm --workspace services/indexer run test` (pass)
 - `npm run typecheck:web` (pass)
 - `npm run typecheck:indexer` (pass)
-- `forge test -vv` (pass, 47/47)
+- `forge test -vv` (pass, 48/48)
 
 ## Deployment / Ops Notes
 - Keep `TRUST_PROXY=false` unless running behind trusted infrastructure that correctly sets `X-Forwarded-For`.

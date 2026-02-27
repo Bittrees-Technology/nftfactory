@@ -51,6 +51,7 @@ This worktree focused on production hardening, security controls, and end-to-end
   - ERC20 listing price display/filter semantics clarified to raw token units.
   - Listing creation now parses ERC20 prices as raw integer units (ETH parsing retained for ETH listings).
   - Shared ERC721/ERC1155 contracts now support `setApprovalForAll` operator approvals, enabling marketplace-mediated transfers during buys.
+  - Marketplace now enforces operator approval at listing creation for ERC721/ERC1155 listings, preventing non-executable listings from being created.
 
 - Discover UX and moderation:
   - Improved reporter input behavior.
@@ -88,7 +89,7 @@ This worktree focused on production hardening, security controls, and end-to-end
 
 - Contract tests:
   - `forge test -vv`
-  - Result: passing (`47/47`)
+  - Result: passing (`48/48`)
 
 ## Reviewer Notes
 - `TRUST_PROXY` must remain `false` unless deployed behind trusted proxy infrastructure that sets `X-Forwarded-For`.

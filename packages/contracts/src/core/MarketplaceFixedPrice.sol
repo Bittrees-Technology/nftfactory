@@ -45,6 +45,7 @@ contract MarketplaceFixedPrice is Owned {
     error Sanctioned();
     error UnsupportedStandard();
     error InvalidAmount();
+    error NotApproved();
 
     constructor(address initialOwner, address registryAddress) Owned(initialOwner) {
         registry = NftFactoryRegistry(registryAddress);
@@ -69,9 +70,11 @@ contract MarketplaceFixedPrice is Owned {
         if (key == keccak256("ERC721")) {
             if (amount != 1) revert InvalidAmount();
             if (IERC721Lite(nft).ownerOf(tokenId) != msg.sender) revert NotSeller();
+            if (!IERC721Lite(nft).isApprovedForAll(msg.sender, address(this))) revert NotApproved();
         } else if (key == keccak256("ERC1155")) {
             if (amount == 0) revert InvalidAmount();
             if (IERC1155Lite(nft).balanceOf(msg.sender, tokenId) < amount) revert NotSeller();
+            if (!IERC1155Lite(nft).isApprovedForAll(msg.sender, address(this))) revert NotApproved();
         } else {
             revert UnsupportedStandard();
         }
