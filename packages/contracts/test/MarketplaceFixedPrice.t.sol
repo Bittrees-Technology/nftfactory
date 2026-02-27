@@ -271,6 +271,9 @@ contract MarketplaceFixedPriceTest is Test {
         vm.prank(buyer);
         vm.expectRevert(MarketplaceFixedPrice.NotSeller.selector);
         marketplace.buy{value: 0.1 ether}(0);
+
+        (,,,,,,, bool active) = marketplace.listings(0);
+        assertTrue(active);
     }
 
     function testBuyRevertsWhenERC721ApprovalRevoked() external {
@@ -286,6 +289,9 @@ contract MarketplaceFixedPriceTest is Test {
         vm.prank(buyer);
         vm.expectRevert(MarketplaceFixedPrice.NotApproved.selector);
         marketplace.buy{value: 0.1 ether}(0);
+
+        (,,,,,,, bool active) = marketplace.listings(0);
+        assertTrue(active);
     }
 
     function testBuyRevertsWhenERC1155ApprovalRevoked() external {
@@ -301,6 +307,9 @@ contract MarketplaceFixedPriceTest is Test {
         vm.prank(buyer);
         vm.expectRevert(MarketplaceFixedPrice.NotApproved.selector);
         marketplace.buy{value: 0.1 ether}(0);
+
+        (,,,,,,, bool active) = marketplace.listings(0);
+        assertTrue(active);
     }
 
     function testBuyRevertsWhenERC1155BalanceReducedAfterListing() external {
@@ -316,6 +325,9 @@ contract MarketplaceFixedPriceTest is Test {
         vm.prank(buyer);
         vm.expectRevert(MarketplaceFixedPrice.NotSeller.selector);
         marketplace.buy{value: 0.1 ether}(0);
+
+        (,,,,,,, bool active) = marketplace.listings(0);
+        assertTrue(active);
     }
 
     function testNextListingIdIncrements() external {

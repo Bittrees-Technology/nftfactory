@@ -37,6 +37,7 @@ This PR hardens the indexer/admin API surface and completes core marketplace and
   - Added buy-time preflight checks for ownership/balance and approvals to fail stale/revoked listings with explicit errors.
   - Added ERC721 buy-path tests for post-listing ownership transfer and approval revocation.
   - Added ERC1155 buy-path tests for post-listing approval revocation and seller balance reduction.
+  - Added assertions that these preflight reverts preserve listing active state for recovery.
 
 - Mint flow
   - Removed brittle custom ERC721 preflight call path.

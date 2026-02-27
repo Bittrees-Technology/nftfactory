@@ -65,6 +65,7 @@ This worktree focused on production hardening, security controls, and end-to-end
   - Added buy-time preflight checks for ownership/balance and approval to fail stale or revoked listings before payment attempts.
   - Added buy-path tests for revoked ERC721 approval and transferred-away ERC721 inventory.
   - Added buy-path tests for revoked ERC1155 approval and reduced ERC1155 seller balance after listing.
+  - Added assertions that preflight buy reverts keep listings active for seller recovery instead of silently deactivating.
 
 - Discover UX and moderation:
   - Improved reporter input behavior.
