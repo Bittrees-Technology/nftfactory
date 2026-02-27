@@ -61,7 +61,9 @@ done < <(rg --files "$SRC_DIR" -g '*.sol' | sort)
   for edge in "${!edges[@]}"; do
     from="${edge%%|*}"
     to="${edge#*|}"
-    echo "  \"$from\" --> \"$to\""
+    from_id="n$(printf '%s' "$from" | cksum | awk '{print $1}')"
+    to_id="n$(printf '%s' "$to" | cksum | awk '{print $1}')"
+    echo "  $from_id[\"$from\"] --> $to_id[\"$to\"]"
   done | sort
   echo '```'
   echo
