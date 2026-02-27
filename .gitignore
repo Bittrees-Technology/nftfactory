@@ -15,6 +15,7 @@ packages/contracts/out
 packages/contracts/cache
 packages/contracts/broadcast
 packages/contracts/.evm
+packages/contracts/.env.example
 
 # IDE
 .vscode
