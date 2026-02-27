@@ -70,7 +70,9 @@ This PR hardens the indexer/admin API surface and completes core marketplace and
 - `7511f90` fix: wait for transaction receipts in listing and buy multi-step flows
 - `7040583` fix: wait for transaction receipts in mint and subname registration flows
 - `a1c8235` fix: parse ERC20 listing prices as raw token units
+- `1f7ca9c` fix: enable shared-token operator approvals for marketplace buys
 - `a4b4431` fix: fail fast when receipt client is unavailable
+- `ee705c3` fix: require operator approval before marketplace listing
 
 ## Testing
 - `npm --workspace apps/web run test` (pass)
