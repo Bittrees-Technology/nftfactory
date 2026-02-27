@@ -1,0 +1,27 @@
+{
+  "name": "indexer",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/indexer.ts",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "admin:backfill-subname": "tsx scripts/backfill-subnames.ts",
+    "admin:backfill-subnames-file": "tsx scripts/backfill-subnames.ts --file",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@prisma/client": "6.4.1",
+    "dotenv": "16.4.7",
+    "pino": "9.6.0",
+    "viem": "2.23.5"
+  },
+  "devDependencies": {
+    "prisma": "6.4.1",
+    "tsx": "4.19.3",
+    "typescript": "5.7.3",
+    "vitest": "3.0.5"
+  }
+}

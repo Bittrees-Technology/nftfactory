@@ -1,0 +1,88 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+import {Owned} from "../utils/Owned.sol";
+
+contract SubnameRegistrar is Owned {
+    uint256 public constant SUBNAME_FEE = 0.001 ether;
+    uint256 public constant RENEWAL_PERIOD = 365 days;
+
+    address public treasury;
+    mapping(address => bool) public authorizedMinter;
+
+    struct SubnameRecord {
+        address owner;
+        uint256 expiresAt;
+        uint256 mintedCount;
+        bool exists;
+    }
+
+    mapping(bytes32 => SubnameRecord) public subnames;
+    mapping(address => bytes32[]) public ownerSubnames;
+
+    event SubnameRegistered(string indexed label, address indexed owner, uint256 expiresAt);
+    event SubnameRenewed(string indexed label, uint256 expiresAt);
+    event MintCountUpdated(string indexed label, uint256 mintedCount);
+    event AuthorizedMinterUpdated(address indexed minter, bool authorized);
+
+    error WrongFee();
+    error NotSubnameOwner();
+    error UnknownSubname();
+    error NotAuthorizedMinter();
+
+    constructor(address initialOwner, address initialTreasury) Owned(initialOwner) {
+        treasury = initialTreasury;
+    }
+
+    function registerSubname(string calldata label) external payable {
+        if (msg.value != SUBNAME_FEE) revert WrongFee();
+
+        bytes32 key = keccak256(bytes(label));
+        SubnameRecord storage rec = subnames[key];
+
+        rec.owner = msg.sender;
+        rec.expiresAt = block.timestamp + RENEWAL_PERIOD;
+        if (!rec.exists) {
+            rec.exists = true;
+            ownerSubnames[msg.sender].push(key);
+        }
+
+        (bool ok,) = treasury.call{value: msg.value}("");
+        require(ok, "TREASURY_TRANSFER_FAILED");
+
+        emit SubnameRegistered(label, msg.sender, rec.expiresAt);
+    }
+
+    function renewSubname(string calldata label) external payable {
+        if (msg.value != SUBNAME_FEE) revert WrongFee();
+
+        bytes32 key = keccak256(bytes(label));
+        SubnameRecord storage rec = subnames[key];
+        if (!rec.exists) revert UnknownSubname();
+        if (rec.owner != msg.sender) revert NotSubnameOwner();
+
+        // Renewal is required only for subnames with no minted NFTs.
+        if (rec.mintedCount == 0) {
+            rec.expiresAt = block.timestamp + RENEWAL_PERIOD;
+        }
+
+        (bool ok,) = treasury.call{value: msg.value}("");
+        require(ok, "TREASURY_TRANSFER_FAILED");
+
+        emit SubnameRenewed(label, rec.expiresAt);
+    }
+
+    function setAuthorizedMinter(address minter, bool authorized) external onlyOwner {
+        authorizedMinter[minter] = authorized;
+        emit AuthorizedMinterUpdated(minter, authorized);
+    }
+
+    function recordMint(string calldata label) external {
+        if (!authorizedMinter[msg.sender] && msg.sender != owner) revert NotAuthorizedMinter();
+        bytes32 key = keccak256(bytes(label));
+        SubnameRecord storage rec = subnames[key];
+        if (!rec.exists) revert UnknownSubname();
+        rec.mintedCount += 1;
+        emit MintCountUpdated(label, rec.mintedCount);
+    }
+}

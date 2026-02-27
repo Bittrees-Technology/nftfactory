@@ -1,0 +1,27 @@
+node_modules
+.pnpm-store
+.next
+dist
+out
+.env
+.env.*
+!.env.example
+coverage
+artifacts
+cache
+
+# Foundry
+packages/contracts/out
+packages/contracts/cache
+packages/contracts/broadcast
+packages/contracts/.evm
+
+# IDE
+.vscode
+.idea
+
+# OS
+.DS_Store
+
+# Logs
+*.log

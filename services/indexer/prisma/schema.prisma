@@ -1,0 +1,111 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Collection {
+  id                 String   @id @default(cuid())
+  chainId            Int
+  contractAddress    String   @unique
+  ownerAddress       String
+  ensSubname         String?
+  standard           String
+  isFactoryCreated   Boolean  @default(true)
+  isUpgradeable      Boolean  @default(true)
+  finalizedAt        DateTime?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  tokens             Token[]
+}
+
+model Token {
+  id                 String   @id @default(cuid())
+  collectionId       String
+  tokenId            String
+  creatorAddress     String
+  ownerAddress       String
+  metadataCid        String
+  mediaCid           String?
+  immutable          Boolean  @default(true)
+  mintedAt           DateTime @default(now())
+  tags               TokenTag[]
+  listings           Listing[]
+  reports            Report[]
+  moderationActions  ModerationAction[]
+
+  collection         Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+
+  @@unique([collectionId, tokenId])
+}
+
+model Listing {
+  id                 String   @id @default(cuid())
+  listingId          String   @unique
+  chainId            Int
+  collectionAddress  String
+  tokenId            String
+  sellerAddress      String
+  paymentToken       String
+  priceRaw           String
+  active             Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  tokenRefId         String?
+
+  token              Token?   @relation(fields: [tokenRefId], references: [id], onDelete: SetNull)
+}
+
+model Tag {
+  id                 String   @id @default(cuid())
+  slug               String   @unique
+  label              String
+  isSystem           Boolean  @default(false)
+  usageCount         Int      @default(0)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  tokenLinks         TokenTag[]
+}
+
+model TokenTag {
+  id                 String   @id @default(cuid())
+  tokenId            String
+  tagId              String
+  addedByAddress     String
+  createdAt          DateTime @default(now())
+
+  token              Token @relation(fields: [tokenId], references: [id], onDelete: Cascade)
+  tag                Tag   @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([tokenId, tagId, addedByAddress])
+}
+
+model Report {
+  id                 String   @id @default(cuid())
+  tokenId            String
+  reporterAddress    String
+  reason             String
+  evidence           String?
+  status             String   @default("open")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  token              Token @relation(fields: [tokenId], references: [id], onDelete: Cascade)
+
+  @@index([tokenId, status])
+}
+
+model ModerationAction {
+  id                 String   @id @default(cuid())
+  tokenId            String
+  reportId           String?
+  action             String
+  actor              String
+  notes              String?
+  createdAt          DateTime @default(now())
+
+  token              Token @relation(fields: [tokenId], references: [id], onDelete: Cascade)
+}

@@ -1,0 +1,204 @@
+:root {
+  --bg: #faf7f2;
+  --ink: #111015;
+  --accent: #c53a1f;
+  --surface: #fff4e4;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at 0% 0%, #fbd4a4 0, transparent 38%),
+    radial-gradient(circle at 90% 10%, #ffd7cc 0, transparent 32%),
+    var(--bg);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+main {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+nav {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid #e6d7c4;
+  border-radius: 16px;
+  padding: 16px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.wizard {
+  display: grid;
+  gap: 16px;
+}
+
+.row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.formCard {
+  display: grid;
+  gap: 10px;
+}
+
+.gridMini {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.inlineCheck {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.previewWrap {
+  border: 1px dashed #d4c1a8;
+  border-radius: 12px;
+  padding: 10px;
+  background: #fff9f1;
+}
+
+.previewImage {
+  display: block;
+  max-width: 100%;
+  max-height: 360px;
+  margin: 0 auto;
+  border-radius: 10px;
+}
+
+.codeBlock {
+  margin: 0;
+  background: #1f1d1a;
+  color: #f4e9d6;
+  border-radius: 10px;
+  padding: 12px;
+  overflow-x: auto;
+  font-size: 12px;
+}
+
+.inset {
+  border-top: 1px solid #e6d7c4;
+  padding-top: 10px;
+}
+
+.listTable {
+  display: grid;
+  gap: 8px;
+}
+
+.listRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 10px;
+  align-items: center;
+  border: 1px solid #e6d7c4;
+  border-radius: 10px;
+  padding: 10px;
+  background: #fff9f1;
+}
+
+.miniBtn {
+  padding: 4px 8px;
+  border-radius: 8px;
+  border: 1px solid #b98f68;
+  background: #f4e3cd;
+  color: #4f2a18;
+  font-size: 12px;
+}
+
+.presetButton {
+  background: #f4e3cd;
+  color: #4f2a18;
+  border: 1px solid #c9a986;
+}
+
+.presetActive {
+  background: #9a2f17;
+  border-color: #7f220f;
+  color: #fff;
+}
+
+label {
+  display: grid;
+  gap: 6px;
+  font-size: 0.95rem;
+}
+
+input {
+  border: 1px solid #d4c1a8;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font: inherit;
+  background: #fffcf7;
+}
+
+select {
+  border: 1px solid #d4c1a8;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font: inherit;
+  background: #fffcf7;
+}
+
+button {
+  border: 1px solid #8c2a14;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  padding: 10px 14px;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  word-break: break-all;
+}
+
+.hint {
+  color: #5d5a53;
+  margin: 0;
+}
+
+.error {
+  color: #9f1c1c;
+  margin: 0;
+}
+
+.success {
+  color: #146d2a;
+  margin: 0;
+}
