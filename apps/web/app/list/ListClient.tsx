@@ -148,10 +148,10 @@ export default function ListClient() {
     }
 
     if (minPrice !== null) {
-      rows = rows.filter((row) => row.price >= minPrice!);
+      rows = rows.filter((row) => row.paymentToken === ZERO_ADDRESS && row.price >= minPrice!);
     }
     if (maxPrice !== null) {
-      rows = rows.filter((row) => row.price <= maxPrice!);
+      rows = rows.filter((row) => row.paymentToken === ZERO_ADDRESS && row.price <= maxPrice!);
     }
 
     const sorted = [...rows];

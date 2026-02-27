@@ -87,7 +87,7 @@ export default function ListingFilters({ filters, address, onFilterChange, onPre
           />
         </label>
         <label>
-          Min price (ETH)
+          Min price (ETH only)
           <input
             value={filters.filterMinPrice}
             onChange={(e) => onFilterChange({ filterMinPrice: e.target.value, activePreset: "reset" })}
@@ -95,7 +95,7 @@ export default function ListingFilters({ filters, address, onFilterChange, onPre
           />
         </label>
         <label>
-          Max price (ETH)
+          Max price (ETH only)
           <input
             value={filters.filterMaxPrice}
             onChange={(e) => onFilterChange({ filterMaxPrice: e.target.value, activePreset: "reset" })}

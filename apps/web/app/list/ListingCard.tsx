@@ -47,7 +47,7 @@ export default function ListingCard({
 }: Props) {
   const prefix = variant === "mine" ? "my" : "all";
   const isMine = !!currentAddress && item.seller.toLowerCase() === currentAddress.toLowerCase();
-  const canBuy = !isMine && item.paymentToken === ZERO_ADDRESS && isConnected && !wrongNetwork;
+  const canBuy = !isMine && isConnected && !wrongNetwork;
 
   return (
     <div className="listRow">
@@ -86,7 +86,7 @@ export default function ListingCard({
           onClick={() => onBuy(item)}
           disabled={!canBuy || isBuying}
         >
-          {isBuying ? "Buying..." : isMine ? "Your Listing" : item.paymentToken === ZERO_ADDRESS ? "Buy" : "ERC20 Soon"}
+          {isBuying ? "Buying..." : isMine ? "Your Listing" : item.paymentToken === ZERO_ADDRESS ? "Buy" : "Buy (ERC20)"}
         </button>
       )}
     </div>
