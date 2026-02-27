@@ -1,8 +1,29 @@
 # NFTFactory Contracts: Command-and-Control Wiki
 
-This wiki explains who controls what in the smart-contract system, which actions are privileged, and how operational control should be exercised.
+This document is an operator-focused control manual for the NFTFactory contract suite.  
+It explains **ownership topology**, **who has authority to call what**, **what each function controls**, and **how to run governance safely**.
 
-## Scope
+---
+
+## 1) Purpose and Audience
+
+This wiki is for:
+
+- Protocol governance signers (multisig participants)
+- Smart contract operators and release managers
+- Security reviewers and incident responders
+- Backend/frontend engineers who need exact control boundaries
+
+Primary goals:
+
+- Make authority explicit at function-level granularity
+- Clarify which state transitions are admin-controlled vs user-controlled
+- Define operational command flows for normal and emergency actions
+- Reduce ambiguity around upgrade, sanctions, listing, and royalty controls
+
+---
+
+## 2) Scope
 
 Contracts covered:
 
@@ -17,207 +38,483 @@ Contracts covered:
 - `src/token/SharedMint1155.sol`
 - `src/core/RoyaltySplitRegistry.sol`
 
-## Control Model Overview
+Out of scope:
 
-Control planes:
+- Frontend app auth/session concerns
+- Indexer API role controls (covered in separate service docs)
+- Third-party library internals (OpenZeppelin assumed upstream-audited)
 
-- `Protocol admin plane`
-  - Owns and configures protocol-level contracts.
-  - Typical holder: multisig.
-- `Creator plane`
-  - Owns creator collections and publishing behavior.
-- `Marketplace user plane`
-  - Sellers and buyers create/cancel/fill listings.
-- `Moderation/compliance plane`
-  - Sanctions/blocking in registry and marketplace collection blocklist.
+---
 
-Core control primitive:
+## 3) System Command Model
 
-- `Owned.sol` provides:
-  - `owner` state
-  - `onlyOwner` modifier
-  - `transferOwnership(newOwner)`
+NFTFactory control operates in four planes:
 
-## Authority Matrix (Who Can Do What)
+1. `Protocol Governance Plane`
+   - Multisig-administered root controls
+   - Registry policy, marketplace moderation controls, factory implementation pointers
+2. `Creator Governance Plane`
+   - Creator-owned collection contracts
+   - Content publication, metadata policy, royalty settings, upgrades/finalization
+3. `User Action Plane`
+   - Listing/buy/cancel activity and shared mint publishing
+4. `Moderation/Compliance Plane`
+   - Sanctions and blocklist enforcement gates on trading
 
-### `NftFactoryRegistry`
+Core primitive:
 
-Owner-only actions:
+- `Owned.sol` defines:
+  - `owner`
+  - `onlyOwner`
+  - `transferOwnership(address)`
 
-- Set treasury: `setTreasury`
-- Set fee basis points: `setProtocolFeeBps`
-- Set sanctions list: `setBlocked`
-- Authorize/deauthorize factories: `setFactoryAuthorization`
+Every contract inheriting `Owned` should be treated as a command endpoint controlled by its `owner`.
 
-Factory/admin actions:
+---
 
-- Register creator contracts: `registerCreatorContract`
-  - Allowed for authorized factory or owner.
+## 4) Role Glossary
 
-Control impact:
+- `Protocol Owner`
+  - Owner of registry/factory/marketplace/royalty registry/subname registrar (unless delegated)
+- `Factory`
+  - Deployer contract for creator collections; requires registry authorization
+- `Creator`
+  - Owner of individual creator collection proxies
+- `Seller`
+  - Lists NFTs in marketplace
+- `Buyer`
+  - Purchases active listings
+- `Authorized Minter`
+  - Address allowed to increment subname mint counters
 
-- System-wide policy root for sanctions and approved factory deployers.
+---
 
-### `CreatorFactory`
+## 5) Ownership Topology (Recommended)
 
-Owner-only actions:
+Target production posture:
 
-- Set implementations: `setImplementations`
+- Protocol contracts owned by one governance multisig:
+  - `NftFactoryRegistry`
+  - `CreatorFactory`
+  - `MarketplaceFixedPrice`
+  - `RoyaltySplitRegistry`
+  - `SubnameRegistrar`
+- Creator collections owned by creator wallets or creator multisigs:
+  - `CreatorCollection721` proxy owner
+  - `CreatorCollection1155` proxy owner
 
-Caller-restricted action:
+Ownership transfer events to monitor:
 
-- Deploy collection: `deployCollection`
-  - Allowed if caller is `req.creator` or `owner`.
+- `OwnershipTransferred(previousOwner, newOwner)` from each `Owned` contract
 
-Control impact:
+Operational note:
 
-- Governs which collection implementation addresses are used for new deployments.
+- Ownership transfer is immediate; no 2-step acceptance flow exists in `Owned`.
+- Treat owner-key hygiene as critical infrastructure (hardware wallets, signer policy, runbook approvals).
 
-### `CreatorCollection721` / `CreatorCollection1155` (UUPS)
+---
 
-Owner (creator)-only actions:
+## 6) Function-Level Authority Matrix
 
-- Publish/mint content
-- Update metadata (if not locked)
-- Configure royalties
-- Finalize upgrades
+### 6.1 `Owned.sol`
 
-Upgrade authority:
+| Function | Authority | Effect | Operational Risk |
+|---|---|---|---|
+| `transferOwnership(newOwner)` | `onlyOwner` | Reassigns full admin control | Wrong address = immediate governance lockout or takeover |
 
-- UUPS `_authorizeUpgrade` is `onlyOwner` and blocked once `upgradesFinalized` is true.
+### 6.2 `NftFactoryRegistry.sol`
 
-Control impact:
+#### Policy Functions
 
-- Creator retains collection-level editorial control until metadata lock / upgrade finalization policies are applied.
+| Function | Authority | State Controlled | Why It Matters |
+|---|---|---|---|
+| `setTreasury(address)` | `onlyOwner` | `treasury` | Payment destination for protocol economics |
+| `setProtocolFeeBps(uint256)` | `onlyOwner` | `protocolFeeBps` | Fee policy control |
+| `setBlocked(address,bool)` | `onlyOwner` | `blocked[address]` | Global sanctions gate input |
+| `setFactoryAuthorization(address,bool)` | `onlyOwner` | `authorizedFactory[address]` | Determines who can register creator contracts |
 
-### `MarketplaceFixedPrice`
+#### Registry Write Function
 
-Owner-only actions:
+| Function | Authority | State Controlled | Why It Matters |
+|---|---|---|---|
+| `registerCreatorContract(...)` | authorized factory OR owner | `creators[creator]` append | Canonical creator-contract mapping used by app/indexer |
 
-- Set collection blocklist override: `setBlockedCollection`
+Control interpretation:
 
-User actions:
+- This is the **policy root contract** for sanctions and factory permissioning.
+- A compromised owner can alter sanctions and authorization policy globally.
 
-- Seller creates listing: `createListing`
-- Seller cancels listing: `cancelListing`
-- Buyer purchases listing: `buy`
+### 6.3 `CreatorFactory.sol`
 
-Policy gates:
+| Function | Authority | State Controlled | Why It Matters |
+|---|---|---|---|
+| `setImplementations(impl721,impl1155)` | `onlyOwner` | implementation addresses | Dictates logic used for future creator deployments |
+| `deployCollection(req)` | `req.creator` or `owner` | deploys proxy + registry write | Onboarding entrypoint for creator collections |
 
-- Registry sanctions (`registry.blocked`) and marketplace blocklist checks.
+Control interpretation:
 
-Control impact:
+- `setImplementations` is a high-impact governance function.
+- Implementation address changes should require formal review + provenance checks.
 
-- Balances open user trading with admin compliance controls.
+### 6.4 `CreatorCollection721.sol` / `CreatorCollection1155.sol`
 
-### `SubnameRegistrar`
+Shared control concepts:
 
-Owner-only actions:
+- Owner is initialized as creator.
+- UUPS upgrade authorization is owner-gated.
+- `upgradesFinalized` permanently blocks future upgrades via `_authorizeUpgrade`.
 
-- Manage authorized minters: `setAuthorizedMinter`
+| Function Group | Authority | Control Outcome |
+|---|---|---|
+| `publish(...)` | owner | Mints/publishes creator content |
+| `updateTokenURI(...)` | owner (if not locked) | Mutable metadata control |
+| `setMetadataLock(...)` | owner | One-way metadata immutability path |
+| `setDefaultRoyalty(...)`, `setTokenRoyalty(...)` | owner | Royalty policy control |
+| `finalizeUpgrades()` | owner | Turns upgradeability off (practically final) |
+| UUPS upgrade path | owner + not finalized | Contract logic mutation ability |
 
-User actions:
+Control interpretation:
 
-- Register subname: `registerSubname`
-- Renew subname: `renewSubname`
+- Creator ownership is equivalent to collection governance authority.
+- Finalization is a strategic governance step, not merely technical.
 
-Authorized minter actions:
+### 6.5 `MarketplaceFixedPrice.sol`
 
-- Record mint count against subname: `recordMint`
+| Function | Authority | State Controlled | Why It Matters |
+|---|---|---|---|
+| `setBlockedCollection(address,bool)` | `onlyOwner` | local collection blocklist | Immediate moderation override |
+| `createListing(...)` | seller/user | listing table append | Entrypoint to market inventory |
+| `cancelListing(id)` | listing seller | listing active flag | Seller-side listing lifecycle control |
+| `buy(id)` | buyer/user | listing deactivation + settlement | Primary value-transfer path |
 
-Control impact:
+Enforcement gates:
 
-- Name-claim economics and mint attribution enforcement.
+- Registry block checks (`registry.blocked(...)`)
+- Local marketplace block checks (`blockedCollection[...]`)
+- Amount/payment constraints
+- Approval/ownership/balance constraints at execution path
 
-### `SharedMint721` / `SharedMint1155`
+Control interpretation:
 
-User actions:
+- Protocol owner does **not** custody user assets but does control moderation gates.
+- User-level settlement rights remain permissionless subject to policy gates.
 
-- Publish and transfer shared-mint tokens.
+### 6.6 `SubnameRegistrar.sol`
 
-Linked control:
+| Function | Authority | State Controlled | Why It Matters |
+|---|---|---|---|
+| `setAuthorizedMinter(address,bool)` | `onlyOwner` | `authorizedMinter[...]` | Controls who can increment mint counters |
+| `registerSubname(label)` | user + fee | `subnames[label]`, owner index | Name assignment lifecycle |
+| `renewSubname(label)` | subname owner + fee | expiry extension | Retention of naming rights |
+| `recordMint(label)` | authorized minter OR owner | `mintedCount` | Tracks mint usage against subname |
 
-- Attempts `SubnameRegistrar.recordMint` when creator subname is supplied.
+Control interpretation:
 
-Control impact:
+- Owner controls who can record mint activity.
+- Fee route and naming policy are economically sensitive controls.
 
-- Shared mint rails with optional subname-linked attribution.
+### 6.7 `SharedMint721.sol` / `SharedMint1155.sol`
 
-### `RoyaltySplitRegistry`
+| Function | Authority | State Controlled | Why It Matters |
+|---|---|---|---|
+| `publish(...)` | user | mint supply + ownership/balance | Open publish rail |
+| `safeTransferFrom(...)` | owner/operator depending implementation | token movement | User transfer path |
+| optional subname record call | internal flow | registrar mint counter | Attribution coupling |
 
-Owner-only actions:
+Control interpretation:
 
-- Set collection splits: `setCollectionSplits`
-- Set token splits: `setTokenSplits`
+- Shared mint contracts are user-access rails with lightweight governance.
+- Registrar linkage introduces dependency on subname policy behavior.
 
-Control impact:
+### 6.8 `RoyaltySplitRegistry.sol`
 
-- Central authority over split configuration data.
+| Function | Authority | State Controlled | Why It Matters |
+|---|---|---|---|
+| `setCollectionSplits(...)` | `onlyOwner` | collection split table | Collection-level payout policy |
+| `setTokenSplits(...)` | `onlyOwner` | token split table | Token-level payout policy |
+| `get...` functions | public | read-only | Integration/query surface |
 
-## Command Flows (Operational)
+Control interpretation:
 
-### New Creator Onboarding
+- Centralized registry of payout weights.
+- Ownership compromise can rewrite economic distribution metadata.
 
-1. Admin authorizes `CreatorFactory` in registry.
-2. Admin sets current implementation addresses in factory.
-3. Creator (or admin on creator behalf) deploys collection proxy via factory.
-4. Factory registers deployed collection in registry.
+---
 
-### Marketplace Listing and Purchase
+## 7) Operational Command Flows
 
-1. Seller ensures ownership/balance and operator approvals.
+### 7.1 Protocol Bootstrapping
+
+1. Deploy core contracts with multisig owners.
+2. Configure registry treasury and fee.
+3. Authorize factory in registry.
+4. Set factory implementation addresses.
+5. Set subname authorized minters for supported mint rails.
+6. Validate blocklist defaults and emergency procedures.
+
+### 7.2 Creator Onboarding
+
+1. Creator submits deploy request (`ERC721` or `ERC1155`).
+2. Factory validates authority and deploys proxy.
+3. Registry records deployed collection for creator.
+4. Creator optionally sets royalties and metadata policy.
+5. Creator decides upgrade-finalization timing.
+
+### 7.3 Listing Lifecycle
+
+1. Seller approves marketplace on token contract.
 2. Seller calls `createListing`.
-3. Buyer calls `buy` with exact payment semantics.
-4. Marketplace performs sanctions/block checks, executes payment transfer, then NFT transfer.
+3. Buyer executes `buy` with exact payment semantics.
+4. Listing transitions inactive after successful fill.
+5. Seller can `cancelListing` any still-active listing.
 
-### Compliance / Moderation Response
+### 7.4 Compliance Intervention
 
-1. Admin blocks account/collection in registry with `setBlocked`.
-2. Optional marketplace-specific collection block via `setBlockedCollection`.
-3. New listings and purchases for blocked actors/assets are rejected.
+1. Governance identifies account/collection requiring action.
+2. Apply `registry.setBlocked(target,true)`.
+3. Optional `marketplace.setBlockedCollection(collection,true)` for local override.
+4. Verify buy/list pathways reject blocked entities.
+5. Record action rationale in governance log.
 
-### Upgrade Governance for Creator Collections
+### 7.5 Upgrade Management (Creator Collections)
 
-1. Creator upgrades implementation (while allowed).
-2. Creator optionally finalizes upgrades using `finalizeUpgrades`.
-3. After finalization, no further upgrades should be possible via UUPS auth gate.
+1. Pre-upgrade review (storage layout / audit / rollback plan).
+2. Execute upgrade through owner-controlled UUPS path.
+3. Run post-upgrade functional verification.
+4. Decide on `finalizeUpgrades` when governance intent is immutability.
 
-## Command-and-Control Risks to Monitor
+---
 
-- `Owner key management`
-  - Use multisig, hardware-backed keys, and separation of duties.
-- `Implementation drift`
-  - Track and audit any `setImplementations` changes.
-- `Sanctions policy errors`
-  - Incorrect block entries can deny service or permit prohibited access.
-- `Operational dependency on approvals`
-  - Marketplace flows rely on approval state staying valid.
-- `Upgrade finalization timing`
-  - Finalizing too early can block critical fixes; too late extends upgrade risk window.
+## 8) State Ownership and “Who Can Mutate What”
 
-## Recommended Governance Posture
+High-value mutable state:
 
-- Assign protocol owners to a multisig with strict signer policy.
-- Require change-management records for:
-  - Registry sanctions changes
-  - Factory implementation updates
-  - Treasury and fee updates
-  - Royalty split changes
-- Maintain incident runbooks for:
-  - Emergency blocklist updates
-  - Marketplace outage fallback
-  - Upgrade rollback strategy (before finalization)
+- Registry policy state:
+  - `blocked`, `authorizedFactory`, `treasury`, `protocolFeeBps`
+- Factory implementation pointers:
+  - `implementation721`, `implementation1155`
+- Marketplace state:
+  - `listings`, `blockedCollection`
+- Collection governance state:
+  - metadata lock maps, royalty settings, upgrade finalization flags
+- Subname registrar state:
+  - owner/expiry/mint count records, authorized minters
+- Royalty split state:
+  - collection and token split arrays
 
-## Quick Ops Checklist
+Mutation rights summary:
 
-- Before deployment:
-  - Confirm all owner addresses are multisigs.
-  - Confirm registry treasury and fee settings.
-  - Confirm factory implementation addresses.
-- Before enabling trading:
-  - Validate marketplace sanctions and blocklist behavior.
-  - Validate token/operator approvals for seller flows.
-- Periodic:
-  - Audit owner addresses and signer set.
-  - Review sanctioned accounts and collection blocks.
-  - Review outstanding upgrade-finalization status for creator collections.
+- Protocol owner mutates protocol policy and system rails.
+- Creator owner mutates creator collection policy.
+- Users mutate their own market positions and shared mint outputs.
+
+---
+
+## 9) Separation of Duties (Recommended)
+
+For production operations:
+
+- `Governance multisig`:
+  - Registry, Factory, Marketplace, SubnameRegistrar, RoyaltySplitRegistry ownership
+- `Release manager role`:
+  - Proposes implementation updates, never unilaterally executes without signer quorum
+- `Compliance role`:
+  - Prepares sanctions/block requests, governance executes on-chain mutation
+- `Creator support role`:
+  - Assists onboarding but does not own creator collections
+
+Process controls:
+
+- Two-person review minimum for policy-changing tx proposals
+- Signed runbook checklist attached to each governance action
+- Event-based post-execution verification
+
+---
+
+## 10) Event and Monitoring Strategy
+
+Monitor these events continuously:
+
+- `OwnershipTransferred` (all `Owned` contracts)
+- Registry policy events:
+  - `TreasuryUpdated`
+  - `ProtocolFeeUpdated`
+  - `BlockedUpdated`
+  - `FactoryAuthorizationUpdated`
+- Factory events:
+  - `ImplementationsUpdated`
+  - `CreatorCollectionDeployed`
+- Marketplace events:
+  - `Listed`
+  - `Sale`
+  - `Cancelled`
+  - `BlockedCollectionUpdated`
+- Registrar events:
+  - `SubnameRegistered`
+  - `SubnameRenewed`
+  - `AuthorizedMinterUpdated`
+  - `MintCountUpdated`
+- Royalty split events:
+  - `CollectionSplitsSet`
+  - `TokenSplitsSet`
+
+Alert triggers:
+
+- Any owner change
+- Any implementation update
+- Any sanctions/blocklist mutation
+- Any unexpected fee/treasury change
+
+---
+
+## 11) Security and Governance Risks
+
+### High-Impact Governance Risks
+
+- Owner key compromise on protocol contracts
+- Malicious implementation pointer update in factory
+- Incorrect sanctions update causing denial of legitimate activity
+- Premature or delayed upgrade finalization on creator collections
+
+### Process Risks
+
+- Executing changes without post-tx verification
+- No incident rollback plan for policy mistakes
+- Hidden dependency drift between app assumptions and contract policy state
+
+### Mitigations
+
+- Multisig + signer hardening
+- Mandatory preflight + postflight checklists
+- Immutable changelog for governance tx hashes
+- Scheduled control-plane audits (monthly/quarterly)
+
+---
+
+## 12) Incident Playbooks
+
+### A) Suspicious Marketplace Activity
+
+1. Triage evidence (addresses, listing IDs, tx hashes).
+2. Temporarily block actor/collection via registry.
+3. If needed, apply marketplace local collection block.
+4. Validate rejection behavior on list/buy endpoints.
+5. Publish incident summary and remediation plan.
+
+### B) Suspected Factory Implementation Compromise
+
+1. Freeze deployment by replacing implementations with vetted safe addresses (or a neutral fallback flow).
+2. Revoke unauthorized factory addresses in registry if needed.
+3. Audit recent deployments and registry records.
+4. Rotate owner control if key integrity is in question.
+
+### C) Creator Contract Upgrade Incident
+
+1. Confirm current owner and finalization state.
+2. If upgrades not finalized, execute emergency patch upgrade through audited implementation.
+3. Verify storage and functional integrity.
+4. Evaluate whether to finalize upgrades after stabilization.
+
+---
+
+## 13) Change Management SOP (Contract-Speak)
+
+For any governance mutation:
+
+1. `Propose`
+   - Define function selectors and calldata (`setBlocked`, `setImplementations`, etc.).
+2. `Simulate`
+   - Rehearse tx in staging/fork.
+3. `Approve`
+   - Signer quorum with explicit intent text.
+4. `Execute`
+   - Broadcast from governance module.
+5. `Verify`
+   - Assert event emission + state diffs on-chain.
+6. `Record`
+   - Persist tx hash, rationale, and operator sign-off.
+
+Required metadata per action:
+
+- Timestamp
+- Initiator
+- Contract + function
+- Old value / new value
+- Expected blast radius
+- Rollback strategy (if applicable)
+
+---
+
+## 14) Quick Function-to-Authority Reference
+
+### Protocol owner authority (high privilege)
+
+- Registry:
+  - `setTreasury`
+  - `setProtocolFeeBps`
+  - `setBlocked`
+  - `setFactoryAuthorization`
+- Factory:
+  - `setImplementations`
+- Marketplace:
+  - `setBlockedCollection`
+- Registrar:
+  - `setAuthorizedMinter`
+- Royalty split:
+  - `setCollectionSplits`
+  - `setTokenSplits`
+- Any `Owned` contract:
+  - `transferOwnership`
+
+### Creator authority
+
+- Creator collections:
+  - publish / metadata / royalty / upgrade / finalize controls
+
+### User authority
+
+- Marketplace:
+  - `createListing`, `cancelListing`, `buy`
+- Shared mint:
+  - publish and transfer functions
+
+---
+
+## 15) Deployment and Ongoing Ops Checklist
+
+Before launch:
+
+- Verify all protocol owners are multisigs.
+- Verify registry policy baseline:
+  - treasury
+  - fee bps
+  - blocked list defaults
+  - factory authorization list
+- Verify factory implementations are audited and pinned.
+- Verify subname registrar minter authorization set.
+
+During operation:
+
+- Monitor ownership and policy events.
+- Reconcile marketplace behavior against sanctions policy.
+- Review creator collection upgrade status (finalized vs mutable).
+
+Periodic governance audit:
+
+- Validate signer roster and threshold.
+- Review all privileged tx since last audit window.
+- Reconfirm incident runbooks are executable.
+
+---
+
+## 16) Final Notes
+
+The command-and-control security of NFTFactory depends more on **governance process quality** than on any single function guard.
+
+Treat owner-controlled functions as protocol “root commands,” and operate them with:
+
+- explicit approvals,
+- deterministic runbooks,
+- rigorous post-execution verification.
+
+That discipline is the difference between an auditable control plane and a fragile one.
