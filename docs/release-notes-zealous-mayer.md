@@ -25,6 +25,11 @@ This worktree focused on production hardening, security controls, and end-to-end
 - `1f7ca9c` `fix: enable shared-token operator approvals for marketplace buys`
 - `a4b4431` `fix: fail fast when receipt client is unavailable`
 - `ee705c3` `fix: require operator approval before marketplace listing`
+- `1a89323` `fix: correct ERC1155 listing preflight and add coverage`
+- `a9b34e3` `test: add ERC1155 marketplace buy-path coverage`
+- `b4ccd3e` `test: cover ERC1155 listing guard edge cases`
+- `6db5c45` `fix: preflight buy paths for stale listings and revoked approvals`
+- `5eacb8a` `test: cover ERC1155 stale and revoked buy scenarios`
 
 ## Key Changes
 - Indexer API hardening:
