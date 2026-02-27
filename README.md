@@ -29,7 +29,7 @@ This repo includes build-ready scaffolding and first-pass contract/backend code.
 3. Start web app: `npm run dev:web`
 
 ### Secret leak safeguards
-1. Enable local pre-commit hooks once per clone: `git config core.hooksPath .githooks`
+1. Enable local pre-commit hooks once per clone: `npm run security:setup`
 2. The hook runs `scripts/check-secrets.sh` to block common secrets in staged files.
 3. CI runs `.github/workflows/secrets-scan.yml` (gitleaks) on push/PR to catch leaks in history and diffs.
 
