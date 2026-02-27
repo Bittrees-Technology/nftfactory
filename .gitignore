@@ -26,3 +26,6 @@ packages/contracts/.env.example
 
 # Logs
 *.log
+
+# Local ops files
+services/indexer/scripts/subname-map.json

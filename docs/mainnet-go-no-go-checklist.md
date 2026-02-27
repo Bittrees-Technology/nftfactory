@@ -37,6 +37,7 @@ npm --workspace services/indexer run admin:backfill-subname -- --file ./scripts/
 - [ ] Discover indexing/filtering works.
 - [ ] Moderation report -> hide -> restore works.
 - [ ] Profile/subname resolution works.
+- [ ] ENSv2 readiness checks pass for your production RPC providers.
 
 ### Commands
 ```bash
@@ -54,6 +55,9 @@ npm run build:web
 
 # Indexer health (use your active port; example 8790)
 curl -sS http://127.0.0.1:8790/health
+
+# ENSv2 checks (set both RPC URLs)
+MAINNET_RPC_URL="https://..." SEPOLIA_RPC_URL="https://..." npm run check:ensv2
 ```
 
 ### Go / No-Go
@@ -119,4 +123,3 @@ git tag --list | rg '^mvp-rc'
 - [ ] All four sections above are `GO`.
 - [ ] Approver signs off on Sepolia evidence + Safe authority + ops snapshot.
 - [ ] Proceed to mainnet deployment window.
-

@@ -27,6 +27,8 @@ Production-grade monorepo scaffold for `nftfactory.eth`.
   - Solidity import/dependency map (Mermaid + readable trees) to understand composition, trust boundaries, and upgradeable/proxy touchpoints.
 - `docs/audit-scope.md`
   - Security review scope and priority areas for critical paths.
+- `docs/ensv2-forward-compatibility.md`
+  - ENSv2 readiness checks and commands (Sepolia/mainnet resolver + CCIP-read compatibility).
 
 ## Current status
 This repo includes build-ready scaffolding and first-pass contract/backend code. Dependency install and deployment credentials are intentionally not included.
