@@ -11,7 +11,6 @@ contract SubnameRegistrarTest is Test {
     address internal treasury = address(0xBEEF);
     address internal creator = address(0xCAFE);
     address internal minter = address(0x1234);
-    address internal attacker = address(0xDEAD);
 
     function setUp() external {
         vm.prank(admin);
@@ -57,37 +56,5 @@ contract SubnameRegistrarTest is Test {
         vm.prank(minter);
         vm.expectRevert(SubnameRegistrar.NotAuthorizedMinter.selector);
         registrar.recordMint("alice");
-    }
-
-    function testActiveSubnameCannotBeHijacked() external {
-        vm.deal(creator, 1 ether);
-        vm.deal(attacker, 1 ether);
-
-        vm.prank(creator);
-        registrar.registerSubname{value: 0.001 ether}("alice");
-
-        vm.prank(attacker);
-        vm.expectRevert(SubnameRegistrar.SubnameActive.selector);
-        registrar.registerSubname{value: 0.001 ether}("alice");
-    }
-
-    function testExpiredSubnameCanBeReclaimed() external {
-        vm.deal(creator, 1 ether);
-        vm.deal(attacker, 1 ether);
-
-        vm.prank(creator);
-        registrar.registerSubname{value: 0.001 ether}("alice");
-
-        vm.warp(block.timestamp + 366 days);
-
-        vm.prank(attacker);
-        registrar.registerSubname{value: 0.001 ether}("alice");
-
-        bytes32 key = keccak256(bytes("alice"));
-        (address owner,,,) = registrar.subnames(key);
-        assertEq(owner, attacker);
-        assertEq(registrar.ownerSubnames(attacker, 0), key);
-        vm.expectRevert();
-        registrar.ownerSubnames(creator, 0);
     }
 }

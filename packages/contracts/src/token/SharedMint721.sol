@@ -13,9 +13,11 @@ contract SharedMint721 is Owned {
 
     mapping(uint256 => address) private _ownerOf;
     mapping(address => uint256) public balanceOf;
+    mapping(address => mapping(address => bool)) public isApprovedForAll;
     mapping(uint256 => string) public tokenURI;
 
     event Transfer(address indexed from, address indexed to, uint256 indexed tokenId);
+    event ApprovalForAll(address indexed owner, address indexed operator, bool approved);
     event Published(address indexed creator, uint256 indexed tokenId, string creatorSubname, string uri);
 
     error Unauthorized();
@@ -34,7 +36,7 @@ contract SharedMint721 is Owned {
     }
 
     function safeTransferFrom(address from, address to, uint256 tokenId) external {
-        if (_ownerOf[tokenId] != from || msg.sender != from) revert Unauthorized();
+        if (_ownerOf[tokenId] != from || (msg.sender != from && !isApprovedForAll[from][msg.sender])) revert Unauthorized();
         if (to == address(0)) revert InvalidRecipient();
 
         _ownerOf[tokenId] = to;
@@ -42,6 +44,11 @@ contract SharedMint721 is Owned {
         balanceOf[to] += 1;
 
         emit Transfer(from, to, tokenId);
+    }
+
+    function setApprovalForAll(address operator, bool approved) external {
+        isApprovedForAll[msg.sender][operator] = approved;
+        emit ApprovalForAll(msg.sender, operator, approved);
     }
 
     function publish(string calldata creatorSubname, string calldata uri) external returns (uint256 tokenId) {

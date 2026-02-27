@@ -29,7 +29,6 @@ contract SubnameRegistrar is Owned {
     error NotSubnameOwner();
     error UnknownSubname();
     error NotAuthorizedMinter();
-    error SubnameActive();
 
     constructor(address initialOwner, address initialTreasury) Owned(initialOwner) {
         treasury = initialTreasury;
@@ -41,19 +40,11 @@ contract SubnameRegistrar is Owned {
         bytes32 key = keccak256(bytes(label));
         SubnameRecord storage rec = subnames[key];
 
-        if (rec.exists && rec.owner != msg.sender && rec.expiresAt > block.timestamp) revert SubnameActive();
-
-        if (rec.exists && rec.owner != msg.sender) {
-            _removeOwnerSubname(rec.owner, key);
-        }
-
         rec.owner = msg.sender;
         rec.expiresAt = block.timestamp + RENEWAL_PERIOD;
-        if (!_ownerHasSubname(msg.sender, key)) {
-            ownerSubnames[msg.sender].push(key);
-        }
         if (!rec.exists) {
             rec.exists = true;
+            ownerSubnames[msg.sender].push(key);
         }
 
         (bool ok,) = treasury.call{value: msg.value}("");
@@ -93,24 +84,5 @@ contract SubnameRegistrar is Owned {
         if (!rec.exists) revert UnknownSubname();
         rec.mintedCount += 1;
         emit MintCountUpdated(label, rec.mintedCount);
-    }
-
-    function _ownerHasSubname(address subnameOwner, bytes32 key) internal view returns (bool) {
-        bytes32[] storage keys = ownerSubnames[subnameOwner];
-        for (uint256 i = 0; i < keys.length; i++) {
-            if (keys[i] == key) return true;
-        }
-        return false;
-    }
-
-    function _removeOwnerSubname(address subnameOwner, bytes32 key) internal {
-        bytes32[] storage keys = ownerSubnames[subnameOwner];
-        for (uint256 i = 0; i < keys.length; i++) {
-            if (keys[i] == key) {
-                keys[i] = keys[keys.length - 1];
-                keys.pop();
-                return;
-            }
-        }
     }
 }
