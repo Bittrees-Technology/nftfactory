@@ -3,27 +3,22 @@
 import { useMemo, useState } from "react";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useAccount, useChainId, usePublicClient, useSwitchChain, useWalletClient } from "wagmi";
-import { formatEther } from "viem";
 import type { Address, Hex } from "viem";
 import {
   encodeBuyListing,
   encodeCancelListing,
   encodeCreateListing,
+  encodeErc20Approve,
   encodeSetApprovalForAll,
-  toWeiBigInt,
-  truncateHash
+  toWeiBigInt
 } from "../../lib/abi";
+import { buildBuyPlan } from "../../lib/marketplaceBuy";
 import { getContractsConfig } from "../../lib/contracts";
-
-type TxState = {
-  status: "idle" | "pending" | "success" | "error";
-  hash?: string;
-  message?: string;
-};
+import TxStatus, { type TxState } from "./TxStatus";
+import ListingFilters, { type FilterState, type Preset } from "./ListingFilters";
+import ListingCard, { type ListingRow } from "./ListingCard";
 
 type Standard = "ERC721" | "ERC1155";
-type SortBy = "newest" | "oldest" | "priceAsc" | "priceDesc" | "tokenIdAsc" | "tokenIdDesc";
-type Preset = "cheap" | "shared" | "mine" | "reset";
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const DEFAULT_SCAN_LIMIT = 200;
@@ -54,25 +49,33 @@ const marketplaceAbi = [
   }
 ] as const;
 
-type ListingRow = {
-  id: number;
-  seller: Address;
-  nft: Address;
-  tokenId: bigint;
-  amount: bigint;
-  standard: string;
-  paymentToken: Address;
-  price: bigint;
-  active: boolean;
-};
-
-function toExplorerTx(hash: string): string {
-  return `https://sepolia.etherscan.io/tx/${hash}`;
-}
+const erc20Abi = [
+  {
+    type: "function",
+    name: "allowance",
+    stateMutability: "view",
+    inputs: [
+      { name: "owner", type: "address" },
+      { name: "spender", type: "address" }
+    ],
+    outputs: [{ name: "", type: "uint256" }]
+  }
+] as const;
 
 function isAddress(value: string): value is `0x${string}` {
   return /^0x[a-fA-F0-9]{40}$/.test(value);
 }
+
+const DEFAULT_FILTERS: FilterState = {
+  filterSource: "ALL",
+  filterStandard: "ALL",
+  filterContract: "",
+  filterSeller: "",
+  filterMinPrice: "",
+  filterMaxPrice: "",
+  sortBy: "newest",
+  activePreset: "reset"
+};
 
 export default function ListClient() {
   const config = useMemo(() => getContractsConfig(), []);
@@ -89,7 +92,7 @@ export default function ListClient() {
   const [amount, setAmount] = useState("1");
   const [paymentTokenType, setPaymentTokenType] = useState<"ETH" | "ERC20">("ETH");
   const [erc20TokenAddress, setErc20TokenAddress] = useState("");
-  const [priceEth, setPriceEth] = useState("0.01");
+  const [priceInput, setPriceInput] = useState("0.01");
   const [state, setState] = useState<TxState>({ status: "idle" });
   const [allListings, setAllListings] = useState<ListingRow[]>([]);
   const [myListings, setMyListings] = useState<ListingRow[]>([]);
@@ -99,14 +102,7 @@ export default function ListClient() {
   const [buyingId, setBuyingId] = useState<number | null>(null);
   const [copiedKey, setCopiedKey] = useState("");
   const [scanDepth, setScanDepth] = useState("200");
-  const [filterSource, setFilterSource] = useState<"ALL" | "SHARED" | "CUSTOM">("ALL");
-  const [filterStandard, setFilterStandard] = useState<"ALL" | "ERC721" | "ERC1155">("ALL");
-  const [filterContract, setFilterContract] = useState("");
-  const [filterSeller, setFilterSeller] = useState("");
-  const [filterMinPrice, setFilterMinPrice] = useState("");
-  const [filterMaxPrice, setFilterMaxPrice] = useState("");
-  const [sortBy, setSortBy] = useState<SortBy>("newest");
-  const [activePreset, setActivePreset] = useState<Preset>("reset");
+  const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS);
 
   const wrongNetwork = isConnected && chainId !== config.chainId;
   const nftAddress = source === "shared" ? (standard === "ERC721" ? config.shared721 : config.shared1155) : customNftAddress;
@@ -117,23 +113,23 @@ export default function ListClient() {
     const shared721 = config.shared721.toLowerCase();
     const shared1155 = config.shared1155.toLowerCase();
 
-    if (filterSource !== "ALL") {
+    if (filters.filterSource !== "ALL") {
       rows = rows.filter((row) => {
         const isShared = row.nft.toLowerCase() === shared721 || row.nft.toLowerCase() === shared1155;
-        return filterSource === "SHARED" ? isShared : !isShared;
+        return filters.filterSource === "SHARED" ? isShared : !isShared;
       });
     }
 
-    if (filterStandard !== "ALL") {
-      rows = rows.filter((row) => row.standard === filterStandard);
+    if (filters.filterStandard !== "ALL") {
+      rows = rows.filter((row) => row.standard === filters.filterStandard);
     }
 
-    const contractFilter = filterContract.trim().toLowerCase();
+    const contractFilter = filters.filterContract.trim().toLowerCase();
     if (contractFilter) {
       rows = rows.filter((row) => row.nft.toLowerCase().includes(contractFilter));
     }
 
-    const sellerFilter = filterSeller.trim().toLowerCase();
+    const sellerFilter = filters.filterSeller.trim().toLowerCase();
     if (sellerFilter) {
       rows = rows.filter((row) => row.seller.toLowerCase().includes(sellerFilter));
     }
@@ -141,25 +137,25 @@ export default function ListClient() {
     let minPrice: bigint | null = null;
     let maxPrice: bigint | null = null;
     try {
-      minPrice = filterMinPrice.trim() ? toWeiBigInt(filterMinPrice.trim()) : null;
+      minPrice = filters.filterMinPrice.trim() ? toWeiBigInt(filters.filterMinPrice.trim()) : null;
     } catch {
       minPrice = null;
     }
     try {
-      maxPrice = filterMaxPrice.trim() ? toWeiBigInt(filterMaxPrice.trim()) : null;
+      maxPrice = filters.filterMaxPrice.trim() ? toWeiBigInt(filters.filterMaxPrice.trim()) : null;
     } catch {
       maxPrice = null;
     }
 
     if (minPrice !== null) {
-      rows = rows.filter((row) => row.price >= minPrice!);
+      rows = rows.filter((row) => row.paymentToken === ZERO_ADDRESS && row.price >= minPrice!);
     }
     if (maxPrice !== null) {
-      rows = rows.filter((row) => row.price <= maxPrice!);
+      rows = rows.filter((row) => row.paymentToken === ZERO_ADDRESS && row.price <= maxPrice!);
     }
 
     const sorted = [...rows];
-    switch (sortBy) {
+    switch (filters.sortBy) {
       case "oldest":
         sorted.sort((a, b) => a.id - b.id);
         break;
@@ -182,18 +178,27 @@ export default function ListClient() {
     }
 
     return sorted;
-  }, [
-    allListings,
-    config.shared721,
-    config.shared1155,
-    filterSource,
-    filterStandard,
-    filterContract,
-    filterSeller,
-    filterMinPrice,
-    filterMaxPrice,
-    sortBy
-  ]);
+  }, [allListings, config.shared721, config.shared1155, filters]);
+
+  function handleFilterChange(updates: Partial<FilterState>): void {
+    setFilters((prev) => ({ ...prev, ...updates }));
+  }
+
+  function applyPreset(preset: Preset): void {
+    if (preset === "cheap") {
+      setFilters({ ...DEFAULT_FILTERS, filterMaxPrice: "0.05", sortBy: "priceAsc", activePreset: "cheap" });
+      return;
+    }
+    if (preset === "shared") {
+      setFilters({ ...DEFAULT_FILTERS, filterSource: "SHARED", activePreset: "shared" });
+      return;
+    }
+    if (preset === "mine") {
+      setFilters({ ...DEFAULT_FILTERS, filterSeller: address ?? "", activePreset: "mine" });
+      return;
+    }
+    setFilters(DEFAULT_FILTERS);
+  }
 
   async function loadListings(): Promise<void> {
     if (!publicClient) return;
@@ -270,6 +275,13 @@ export default function ListClient() {
     return hash as `0x${string}`;
   }
 
+  async function waitForReceipt(hash: `0x${string}`): Promise<void> {
+    if (!publicClient) {
+      throw new Error("Public client unavailable. Reconnect wallet and try again.");
+    }
+    await publicClient.waitForTransactionReceipt({ hash: hash as Hex });
+  }
+
   async function onSubmit(e: React.FormEvent): Promise<void> {
     e.preventDefault();
     setState({ status: "idle" });
@@ -313,7 +325,15 @@ export default function ListClient() {
 
     let priceWei: bigint;
     try {
-      priceWei = toWeiBigInt(priceEth);
+      if (paymentTokenType === "ETH") {
+        priceWei = toWeiBigInt(priceInput);
+      } else {
+        const normalized = priceInput.trim();
+        if (!/^[0-9]+$/.test(normalized)) {
+          throw new Error("ERC20 price must be a whole number in raw token units.");
+        }
+        priceWei = BigInt(normalized);
+      }
     } catch {
       setState({ status: "error", message: "Price is invalid." });
       return;
@@ -329,6 +349,7 @@ export default function ListClient() {
         nftAddress as `0x${string}`,
         encodeSetApprovalForAll(config.marketplace as `0x${string}`, true) as `0x${string}`
       );
+      await waitForReceipt(approvalTx);
 
       setState({ status: "pending", hash: approvalTx, message: "Creating listing..." });
       const listingTx = await sendTransaction(
@@ -342,6 +363,7 @@ export default function ListClient() {
           priceWei
         ) as `0x${string}`
       );
+      await waitForReceipt(listingTx);
 
       setState({ status: "success", hash: listingTx, message: "Listing submitted successfully." });
       await loadListings();
@@ -367,6 +389,7 @@ export default function ListClient() {
         config.marketplace as `0x${string}`,
         encodeCancelListing(BigInt(listingId)) as `0x${string}`
       );
+      await waitForReceipt(txHash);
       setState({ status: "success", hash: txHash, message: `Cancellation submitted for listing #${listingId}.` });
       await loadListings();
     } catch (err) {
@@ -385,18 +408,50 @@ export default function ListClient() {
       setState({ status: "error", message: "Switch to Sepolia first." });
       return;
     }
-    if (row.paymentToken !== ZERO_ADDRESS) {
-      setState({ status: "error", message: "ERC20 buy flow not added yet." });
-      return;
-    }
     try {
       setBuyingId(row.id);
+      if (row.paymentToken !== ZERO_ADDRESS && (!publicClient || !address)) {
+        throw new Error("Public client unavailable. Reconnect wallet and try again.");
+      }
+
+      const allowance =
+        row.paymentToken === ZERO_ADDRESS
+          ? null
+          : ((await publicClient.readContract({
+              address: row.paymentToken,
+              abi: erc20Abi,
+              functionName: "allowance",
+              args: [address, config.marketplace as Address]
+            })) as bigint);
+
+      const plan = buildBuyPlan({
+        paymentToken: row.paymentToken as `0x${string}`,
+        zeroAddress: ZERO_ADDRESS as `0x${string}`,
+        price: row.price,
+        allowance
+      });
+
+      for (const amount of plan.approvalAmounts) {
+        const approvalMessage =
+          amount === 0n
+            ? `Resetting ERC20 allowance for listing #${row.id}...`
+            : `Approving ERC20 for listing #${row.id}...`;
+        setState({ status: "pending", message: approvalMessage });
+        const approveTx = await sendTransaction(
+          row.paymentToken as `0x${string}`,
+          encodeErc20Approve(config.marketplace as `0x${string}`, amount) as `0x${string}`
+        );
+        await waitForReceipt(approveTx);
+        setState({ status: "pending", hash: approveTx, message: `Buying listing #${row.id}...` });
+      }
+
       setState({ status: "pending", message: `Buying listing #${row.id}...` });
       const txHash = await sendTransaction(
         config.marketplace as `0x${string}`,
         encodeBuyListing(BigInt(row.id)) as `0x${string}`,
-        row.price
+        plan.txValue
       );
+      await waitForReceipt(txHash);
       setState({ status: "success", hash: txHash, message: `Purchase submitted for listing #${row.id}.` });
       await loadListings();
     } catch (err) {
@@ -404,51 +459,6 @@ export default function ListClient() {
     } finally {
       setBuyingId(null);
     }
-  }
-
-  function applyPreset(preset: Preset): void {
-    setActivePreset(preset);
-    if (preset === "cheap") {
-      setFilterSource("ALL");
-      setFilterStandard("ALL");
-      setFilterContract("");
-      setFilterSeller("");
-      setFilterMinPrice("");
-      setFilterMaxPrice("0.05");
-      setSortBy("priceAsc");
-      return;
-    }
-    if (preset === "shared") {
-      setFilterSource("SHARED");
-      setFilterStandard("ALL");
-      setFilterContract("");
-      setFilterSeller("");
-      setFilterMinPrice("");
-      setFilterMaxPrice("");
-      setSortBy("newest");
-      return;
-    }
-    if (preset === "mine") {
-      setFilterSource("ALL");
-      setFilterStandard("ALL");
-      setFilterContract("");
-      setFilterSeller(address ?? "");
-      setFilterMinPrice("");
-      setFilterMaxPrice("");
-      setSortBy("newest");
-      return;
-    }
-    setFilterSource("ALL");
-    setFilterStandard("ALL");
-    setFilterContract("");
-    setFilterSeller("");
-    setFilterMinPrice("");
-    setFilterMaxPrice("");
-    setSortBy("newest");
-  }
-
-  function presetClass(preset: Preset): string {
-    return `presetButton ${activePreset === preset ? "presetActive" : ""}`;
   }
 
   async function copyText(key: string, value: string): Promise<void> {
@@ -541,8 +551,12 @@ export default function ListClient() {
             </label>
           )}
           <label>
-            Price
-            <input value={priceEth} onChange={(e) => setPriceEth(e.target.value)} placeholder="0.01" />
+            {paymentTokenType === "ETH" ? "Price (ETH)" : "Price (raw ERC20 units)"}
+            <input
+              value={priceInput}
+              onChange={(e) => setPriceInput(e.target.value)}
+              placeholder={paymentTokenType === "ETH" ? "0.01" : "1000000"}
+            />
           </label>
         </div>
 
@@ -561,28 +575,20 @@ export default function ListClient() {
           {myListings.length > 0 && (
             <div className="listTable">
               {myListings.map((item) => (
-                <div key={item.id} className="listRow">
-                  <p className="mono">#{item.id}</p>
-                  <p>{item.standard}</p>
-                  <p className="mono">
-                    {truncateHash(item.nft)}{" "}
-                    <button type="button" className="miniBtn" onClick={() => copyText(`my-nft-${item.id}`, item.nft)}>
-                      {copiedKey === `my-nft-${item.id}` ? "Copied" : "Copy"}
-                    </button>
-                  </p>
-                  <p>Token {item.tokenId.toString()}</p>
-                  <p>Amt {item.amount.toString()}</p>
-                  <p>
-                    {formatEther(item.price)} {item.paymentToken === ZERO_ADDRESS ? "ETH" : "ERC20"}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => onCancelListing(item.id)}
-                    disabled={cancelingId === item.id || wrongNetwork || !isConnected}
-                  >
-                    {cancelingId === item.id ? "Canceling..." : "Cancel"}
-                  </button>
-                </div>
+                <ListingCard
+                  key={item.id}
+                  item={item}
+                  currentAddress={address}
+                  wrongNetwork={wrongNetwork}
+                  isConnected={isConnected}
+                  isBuying={false}
+                  isCanceling={cancelingId === item.id}
+                  copiedKey={copiedKey}
+                  onBuy={onBuyListing}
+                  onCancel={onCancelListing}
+                  onCopy={copyText}
+                  variant="mine"
+                />
               ))}
             </div>
           )}
@@ -590,178 +596,35 @@ export default function ListClient() {
 
         <div className="card formCard">
           <h3>Active Marketplace Listings</h3>
-          <div className="row">
-            <button type="button" onClick={() => applyPreset("cheap")} className={presetClass("cheap")}>
-              Cheap &lt; 0.05 ETH
-            </button>
-            <button type="button" onClick={() => applyPreset("shared")} className={presetClass("shared")}>
-              Shared Collections
-            </button>
-            <button
-              type="button"
-              onClick={() => applyPreset("mine")}
-              disabled={!address}
-              className={presetClass("mine")}
-            >
-              My Collections
-            </button>
-            <button type="button" onClick={() => applyPreset("reset")} className={presetClass("reset")}>
-              Reset Filters
-            </button>
-          </div>
-          <div className="gridMini">
-            <label>
-              Source
-              <select
-                value={filterSource}
-                onChange={(e) => {
-                  setFilterSource(e.target.value as "ALL" | "SHARED" | "CUSTOM");
-                  setActivePreset("reset");
-                }}
-              >
-                <option value="ALL">All</option>
-                <option value="SHARED">Shared only</option>
-                <option value="CUSTOM">Custom only</option>
-              </select>
-            </label>
-            <label>
-              Standard
-              <select
-                value={filterStandard}
-                onChange={(e) => {
-                  setFilterStandard(e.target.value as "ALL" | "ERC721" | "ERC1155");
-                  setActivePreset("reset");
-                }}
-              >
-                <option value="ALL">All</option>
-                <option value="ERC721">ERC721</option>
-                <option value="ERC1155">ERC1155</option>
-              </select>
-            </label>
-            <label>
-              Contract contains
-              <input
-                value={filterContract}
-                onChange={(e) => {
-                  setFilterContract(e.target.value);
-                  setActivePreset("reset");
-                }}
-                placeholder="0xabc..."
-              />
-            </label>
-            <label>
-              Seller contains
-              <input
-                value={filterSeller}
-                onChange={(e) => {
-                  setFilterSeller(e.target.value);
-                  setActivePreset("reset");
-                }}
-                placeholder="0xseller..."
-              />
-            </label>
-            <label>
-              Min price (ETH)
-              <input
-                value={filterMinPrice}
-                onChange={(e) => {
-                  setFilterMinPrice(e.target.value);
-                  setActivePreset("reset");
-                }}
-                placeholder="0.01"
-              />
-            </label>
-            <label>
-              Max price (ETH)
-              <input
-                value={filterMaxPrice}
-                onChange={(e) => {
-                  setFilterMaxPrice(e.target.value);
-                  setActivePreset("reset");
-                }}
-                placeholder="1.5"
-              />
-            </label>
-            <label>
-              Sort
-              <select
-                value={sortBy}
-                onChange={(e) => {
-                  setSortBy(e.target.value as SortBy);
-                  setActivePreset("reset");
-                }}
-              >
-                <option value="newest">Newest first</option>
-                <option value="oldest">Oldest first</option>
-                <option value="priceAsc">Price low to high</option>
-                <option value="priceDesc">Price high to low</option>
-                <option value="tokenIdAsc">Token ID low to high</option>
-                <option value="tokenIdDesc">Token ID high to low</option>
-              </select>
-            </label>
-          </div>
+          <ListingFilters
+            filters={filters}
+            address={address}
+            onFilterChange={handleFilterChange}
+            onPreset={applyPreset}
+          />
           {filteredListings.length === 0 && !listingsLoading && <p className="hint">No active listings match filters.</p>}
           {filteredListings.length > 0 && (
             <div className="listTable">
-              {filteredListings.map((item) => {
-                const isMine = !!address && item.seller.toLowerCase() === address.toLowerCase();
-                const canBuy = !isMine && item.paymentToken === ZERO_ADDRESS && isConnected && !wrongNetwork;
-                return (
-                  <div key={`all-${item.id}`} className="listRow">
-                    <p className="mono">#{item.id}</p>
-                    <p>{item.standard}</p>
-                    <p className="mono">
-                      {truncateHash(item.nft)}{" "}
-                      <button type="button" className="miniBtn" onClick={() => copyText(`all-nft-${item.id}`, item.nft)}>
-                        {copiedKey === `all-nft-${item.id}` ? "Copied" : "Copy"}
-                      </button>
-                    </p>
-                    <p>Token {item.tokenId.toString()}</p>
-                    <p>Amt {item.amount.toString()}</p>
-                    <p>
-                      {formatEther(item.price)} {item.paymentToken === ZERO_ADDRESS ? "ETH" : "ERC20"}
-                    </p>
-                    <p className="mono">
-                      {truncateHash(item.seller)}{" "}
-                      <button
-                        type="button"
-                        className="miniBtn"
-                        onClick={() => copyText(`seller-${item.id}`, item.seller)}
-                      >
-                        {copiedKey === `seller-${item.id}` ? "Copied" : "Copy"}
-                      </button>
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => onBuyListing(item)}
-                      disabled={!canBuy || buyingId === item.id}
-                    >
-                      {buyingId === item.id ? "Buying..." : isMine ? "Your Listing" : item.paymentToken === ZERO_ADDRESS ? "Buy" : "ERC20 Soon"}
-                    </button>
-                  </div>
-                );
-              })}
+              {filteredListings.map((item) => (
+                <ListingCard
+                  key={`all-${item.id}`}
+                  item={item}
+                  currentAddress={address}
+                  wrongNetwork={wrongNetwork}
+                  isConnected={isConnected}
+                  isBuying={buyingId === item.id}
+                  isCanceling={false}
+                  copiedKey={copiedKey}
+                  onBuy={onBuyListing}
+                  onCancel={onCancelListing}
+                  onCopy={copyText}
+                  variant="marketplace"
+                />
+              ))}
             </div>
           )}
         </div>
       </form>
     </section>
   );
-}
-
-function TxStatus({ state }: { state: TxState }) {
-  if (state.status === "idle") return null;
-  if (state.status === "pending") return <p className="hint">{state.message}</p>;
-  if (state.status === "error") return <p className="error">{state.message}</p>;
-  if (state.status === "success" && state.hash) {
-    return (
-      <p className="success">
-        {state.message || "Success"}{" "}
-        <a href={toExplorerTx(state.hash)} target="_blank" rel="noreferrer">
-          {truncateHash(state.hash)}
-        </a>
-      </p>
-    );
-  }
-  return <p className="success">{state.message}</p>;
 }

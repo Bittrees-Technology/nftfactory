@@ -5,9 +5,23 @@ dist
 out
 .env
 .env.*
-.evm
+!.env.example
 coverage
 artifacts
 cache
 
-.claude/
+# Foundry
+packages/contracts/out
+packages/contracts/cache
+packages/contracts/broadcast
+packages/contracts/.evm
+
+# IDE
+.vscode
+.idea
+
+# OS
+.DS_Store
+
+# Logs
+*.log

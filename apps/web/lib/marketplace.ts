@@ -52,8 +52,10 @@ export function truncateAddress(address: string): string {
 }
 
 export function formatListingPrice(listing: MarketplaceListing): string {
-  const tokenLabel = listing.paymentToken === ZERO_ADDRESS ? "ETH" : "ERC20";
-  return `${formatEther(listing.price)} ${tokenLabel}`;
+  if (listing.paymentToken === ZERO_ADDRESS) {
+    return `${formatEther(listing.price)} ETH`;
+  }
+  return `${listing.price.toString()} raw ERC20 units`;
 }
 
 export async function fetchActiveListingsBatch(params: {
