@@ -91,6 +91,13 @@ function sendJson(res: ServerResponse, status: number, payload: unknown): void {
   res.end(JSON.stringify(payload));
 }
 
+function parseListingId(value: string | undefined): number | null {
+  if (!value) return null;
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isInteger(parsed) || parsed < 0) return null;
+  return parsed;
+}
+
 async function readJsonBody<T>(req: IncomingMessage): Promise<T> {
   const chunks: Buffer[] = [];
   for await (const chunk of req) {
@@ -235,6 +242,10 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
 
   if (req.method === "GET" && path === "/api/moderation/reports") {
     const status = (url.searchParams.get("status") || "").toLowerCase();
+    if (status && status !== "open" && status !== "resolved") {
+      sendJson(res, 400, { error: "Invalid status query. Expected 'open' or 'resolved'" });
+      return;
+    }
     const reports = await prisma.report.findMany({
       where: status ? { status } : undefined,
       include: {
@@ -253,9 +264,9 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
     sendJson(
       res,
       200,
-      reports.map((report: any) => ({
+      reports.map((report) => ({
         id: report.id,
-        listingId: report.token.listings[0]?.listingId ? Number.parseInt(report.token.listings[0].listingId, 10) : null,
+        listingId: parseListingId(report.token.listings[0]?.listingId),
         reason: report.reason,
         reporterAddress: report.reporterAddress,
         status: report.status,
@@ -366,13 +377,13 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
     sendJson(
       res,
       200,
-      actions.map((action: any) => ({
+      actions.map((action) => ({
         id: action.id,
         action: action.action,
         actor: action.actor,
         notes: action.notes,
         reportId: action.reportId,
-        listingId: action.token.listings[0]?.listingId ? Number.parseInt(action.token.listings[0].listingId, 10) : null,
+        listingId: parseListingId(action.token.listings[0]?.listingId),
         createdAt: action.createdAt.toISOString()
       }))
     );
@@ -489,11 +500,11 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
       select: { ownerAddress: true, ensSubname: true, contractAddress: true }
     });
 
-    const sellers = Array.from(new Set(collections.map((item: any) => item.ownerAddress.toLowerCase())));
+    const sellers = Array.from(new Set(collections.map((item) => item.ownerAddress.toLowerCase())));
     sendJson(res, 200, {
       name: label,
       sellers,
-      collections: collections.map((item: any) => ({
+      collections: collections.map((item) => ({
         ensSubname: item.ensSubname,
         contractAddress: item.contractAddress,
         ownerAddress: item.ownerAddress
