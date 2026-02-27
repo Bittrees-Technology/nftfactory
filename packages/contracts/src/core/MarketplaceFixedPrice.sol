@@ -63,7 +63,7 @@ contract MarketplaceFixedPrice is Owned {
         address paymentToken,
         uint256 price
     ) external {
-        if (registry.blocked(msg.sender) || blockedCollection[nft]) revert Sanctioned();
+        if (registry.blocked(msg.sender) || registry.blocked(nft) || blockedCollection[nft]) revert Sanctioned();
 
         bytes32 key = keccak256(bytes(standard));
         if (key == keccak256("ERC721")) {
@@ -102,7 +102,10 @@ contract MarketplaceFixedPrice is Owned {
     function buy(uint256 listingId) external payable {
         Listing storage listing = listings[listingId];
         if (!listing.active) revert NotActive();
-        if (registry.blocked(msg.sender) || registry.blocked(listing.seller) || blockedCollection[listing.nft]) revert Sanctioned();
+        if (
+            registry.blocked(msg.sender) || registry.blocked(listing.seller) || registry.blocked(listing.nft)
+                || blockedCollection[listing.nft]
+        ) revert Sanctioned();
 
         listing.active = false;
 

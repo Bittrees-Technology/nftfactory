@@ -19,7 +19,7 @@ contract RoyaltySplitRegistry is Owned {
 
     constructor(address initialOwner) Owned(initialOwner) {}
 
-    function setCollectionSplits(address collection, Split[] calldata splits) external {
+    function setCollectionSplits(address collection, Split[] calldata splits) external onlyOwner {
         _validateSplits(splits);
         delete collectionSplits[collection];
         for (uint256 i = 0; i < splits.length; i++) {
@@ -28,7 +28,7 @@ contract RoyaltySplitRegistry is Owned {
         emit CollectionSplitsSet(collection, splits.length);
     }
 
-    function setTokenSplits(address collection, uint256 tokenId, Split[] calldata splits) external {
+    function setTokenSplits(address collection, uint256 tokenId, Split[] calldata splits) external onlyOwner {
         _validateSplits(splits);
         delete tokenSplits[collection][tokenId];
         for (uint256 i = 0; i < splits.length; i++) {
