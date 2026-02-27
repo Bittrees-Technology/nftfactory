@@ -88,6 +88,10 @@ This PR hardens the indexer/admin API surface and completes core marketplace and
 - `b4ccd3e` test: cover ERC1155 listing guard edge cases
 - `6db5c45` fix: preflight buy paths for stale listings and revoked approvals
 - `5eacb8a` test: cover ERC1155 stale and revoked buy scenarios
+- `2414078` test: assert stale-buy reverts keep listings active
+- `ed2df30` test: cover recovery after ERC721 approval restore
+- `2bb7714` test: cover recovery after ERC1155 approval restore
+- `cd1aa16` test: cover recovery after ERC1155 balance restore
 
 ## Testing
 - `npm --workspace apps/web run test` (pass)
