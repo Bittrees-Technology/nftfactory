@@ -410,18 +410,21 @@ export default function ListClient() {
     }
     try {
       setBuyingId(row.id);
-      if (row.paymentToken !== ZERO_ADDRESS && (!publicClient || !address)) {
+      const needsErc20Path = row.paymentToken !== ZERO_ADDRESS;
+      if (needsErc20Path && (!publicClient || !address)) {
         throw new Error("Public client unavailable. Reconnect wallet and try again.");
       }
+      const buyerAddress = address as Address;
+      const reader = publicClient;
 
       const allowance =
-        row.paymentToken === ZERO_ADDRESS
+        !needsErc20Path
           ? null
-          : ((await publicClient.readContract({
+          : ((await reader!.readContract({
               address: row.paymentToken,
               abi: erc20Abi,
               functionName: "allowance",
-              args: [address, config.marketplace as Address]
+              args: [buyerAddress, config.marketplace as Address]
             })) as bigint);
 
       const plan = buildBuyPlan({
