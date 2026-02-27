@@ -11,14 +11,14 @@ const checks = [
     chain: mainnet,
     rpcUrl: MAINNET_RPC_URL,
     ensName: "ur.gtest.eth",
-    expectedAddress: "0x4FfA4316A918321C98d17F0F0f520871C1C0b14E"
+    expectedAddress: "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE"
   },
   {
     name: "ccip-read gateway test",
     chain: mainnet,
     rpcUrl: MAINNET_RPC_URL,
     ensName: "test.offchaindemo.eth",
-    expectedAddress: "0x41563129cDbb05aC8cf6E5e2660D1D4fEe149D78"
+    expectedAddress: "0x779981590E7Ccc0CFAe8040Ce7151324747cDb97"
   },
   {
     name: "sepolia native resolution sanity",
