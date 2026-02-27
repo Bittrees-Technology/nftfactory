@@ -381,6 +381,33 @@ contract MarketplaceFixedPriceTest is Test {
         assertTrue(active);
     }
 
+    function testBuySucceedsAfterERC1155BalanceRestored() external {
+        vm.prank(seller);
+        uint256 tokenId = multi.publish("", 8, "ipfs://multi");
+
+        vm.prank(seller);
+        marketplace.createListing(address(multi), tokenId, 5, "ERC1155", address(0), 0.1 ether);
+
+        vm.prank(seller);
+        multi.safeTransferFrom(seller, unapprovedSeller, tokenId, 4, "");
+
+        vm.prank(buyer);
+        vm.expectRevert(MarketplaceFixedPrice.NotSeller.selector);
+        marketplace.buy{value: 0.1 ether}(0);
+
+        vm.prank(unapprovedSeller);
+        multi.safeTransferFrom(unapprovedSeller, seller, tokenId, 1, "");
+
+        vm.prank(buyer);
+        marketplace.buy{value: 0.1 ether}(0);
+
+        assertEq(multi.balanceOf(tokenId, seller), 0);
+        assertEq(multi.balanceOf(tokenId, buyer), 5);
+        assertEq(multi.balanceOf(tokenId, unapprovedSeller), 3);
+        (,,,,,,, bool active) = marketplace.listings(0);
+        assertFalse(active);
+    }
+
     function testNextListingIdIncrements() external {
         assertEq(marketplace.nextListingId(), 0);
 

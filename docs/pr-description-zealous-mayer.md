@@ -40,6 +40,7 @@ This PR hardens the indexer/admin API surface and completes core marketplace and
   - Added assertions that these preflight reverts preserve listing active state for recovery.
   - Added recovery-path test showing a failed buy can later succeed after ERC721 approval is restored.
   - Added symmetric ERC1155 recovery-path test after approval restoration.
+  - Added ERC1155 recovery-path test after seller balance restoration.
 
 - Mint flow
   - Removed brittle custom ERC721 preflight call path.
@@ -93,7 +94,7 @@ This PR hardens the indexer/admin API surface and completes core marketplace and
 - `npm --workspace services/indexer run test` (pass)
 - `npm run typecheck:web` (pass)
 - `npm run typecheck:indexer` (pass)
-- `forge test -vv` (pass, 59/59)
+- `forge test -vv` (pass, 60/60)
 
 ## Deployment / Ops Notes
 - Keep `TRUST_PROXY=false` unless running behind trusted infrastructure that correctly sets `X-Forwarded-For`.
