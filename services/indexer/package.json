@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx src/indexer.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "admin:backfill-subname": "tsx scripts/backfill-subnames.ts",

@@ -12,6 +12,7 @@
     "build:web": "npm --workspace apps/web run build",
     "lint:web": "npm --workspace apps/web run lint",
     "typecheck:web": "npm --workspace apps/web run typecheck",
+    "typecheck:indexer": "npm --workspace services/indexer run typecheck",
     "dev:indexer": "npm --workspace services/indexer run dev"
   }
 }

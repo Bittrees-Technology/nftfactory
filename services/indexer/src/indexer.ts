@@ -3,7 +3,7 @@ import "dotenv/config";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { URL } from "node:url";
 import { PrismaClient } from "@prisma/client";
-import pino from "pino";
+import { pino } from "pino";
 import { isAddress, isZeroAddress, normalizeSubname, parseBearerToken, getClientIp, isRateLimited } from "./utils.js";
 
 const log = pino({ level: process.env.LOG_LEVEL || "info" });
