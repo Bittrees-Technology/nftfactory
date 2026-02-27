@@ -32,6 +32,7 @@ This PR hardens the indexer/admin API surface and completes core marketplace and
   - Added `setApprovalForAll` operator support in shared ERC721/ERC1155 contracts so marketplace buys can execute token transfers as an approved operator.
   - Added marketplace preflight check requiring operator approval before listing creation, preventing listings that cannot settle.
   - Fixed ERC1155 listing ownership preflight by correcting interface/call ordering for `balanceOf(id, account)`.
+  - Added ERC1155 buy-path test coverage for ETH settlement and token balance transitions.
 
 - Mint flow
   - Removed brittle custom ERC721 preflight call path.
@@ -80,7 +81,7 @@ This PR hardens the indexer/admin API surface and completes core marketplace and
 - `npm --workspace services/indexer run test` (pass)
 - `npm run typecheck:web` (pass)
 - `npm run typecheck:indexer` (pass)
-- `forge test -vv` (pass, 50/50)
+- `forge test -vv` (pass, 51/51)
 
 ## Deployment / Ops Notes
 - Keep `TRUST_PROXY=false` unless running behind trusted infrastructure that correctly sets `X-Forwarded-For`.
