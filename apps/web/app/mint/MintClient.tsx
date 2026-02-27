@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
-import { useAccount, useChainId, useSwitchChain, useWalletClient } from "wagmi";
+import { useAccount, useChainId, usePublicClient, useSwitchChain, useWalletClient } from "wagmi";
 import type { Address, Hex } from "viem";
 import {
   encodeCreatorPublish1155,
@@ -48,6 +48,7 @@ export default function MintClient() {
   const config = useMemo(() => getContractsConfig(), []);
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
+  const publicClient = usePublicClient();
   const { switchChainAsync } = useSwitchChain();
   const { data: walletClient } = useWalletClient();
 
@@ -104,6 +105,11 @@ export default function MintClient() {
       value: valueHex ? (BigInt(valueHex) as bigint) : undefined
     });
     return hash as `0x${string}`;
+  }
+
+  async function waitForReceipt(hash: `0x${string}`): Promise<void> {
+    if (!publicClient) return;
+    await publicClient.waitForTransactionReceipt({ hash: hash as Hex });
   }
 
   async function onUploadMetadata(): Promise<void> {
@@ -165,6 +171,7 @@ export default function MintClient() {
         encodeRegisterSubname(label) as `0x${string}`,
         toHexWei(SUBNAME_FEE_ETH) as `0x${string}`
       );
+      await waitForReceipt(txHash);
       setSubnameTx({ status: "success", hash: txHash, message: "Subdomain submitted." });
     } catch (err) {
       setSubnameTx({ status: "error", message: err instanceof Error ? err.message : "Subdomain registration failed" });
@@ -243,6 +250,7 @@ export default function MintClient() {
       }
 
       const txHash = await sendTransaction(targetNft, mintData);
+      await waitForReceipt(txHash);
       setMintTx({ status: "success", hash: txHash, message: "Mint submitted successfully." });
     } catch (err) {
       setMintTx({ status: "error", message: err instanceof Error ? err.message : "Publish failed" });
