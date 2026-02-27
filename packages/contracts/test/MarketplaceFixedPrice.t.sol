@@ -258,6 +258,36 @@ contract MarketplaceFixedPriceTest is Test {
         assertFalse(active);
     }
 
+    function testBuyRevertsWhenSellerNoLongerOwnsERC721() external {
+        vm.prank(seller);
+        uint256 tokenId = nft.publish("", "ipfs://test");
+
+        vm.prank(seller);
+        marketplace.createListing(address(nft), tokenId, 1, "ERC721", address(0), 0.1 ether);
+
+        vm.prank(seller);
+        nft.safeTransferFrom(seller, unapprovedSeller, tokenId);
+
+        vm.prank(buyer);
+        vm.expectRevert(MarketplaceFixedPrice.NotSeller.selector);
+        marketplace.buy{value: 0.1 ether}(0);
+    }
+
+    function testBuyRevertsWhenERC721ApprovalRevoked() external {
+        vm.prank(seller);
+        uint256 tokenId = nft.publish("", "ipfs://test");
+
+        vm.prank(seller);
+        marketplace.createListing(address(nft), tokenId, 1, "ERC721", address(0), 0.1 ether);
+
+        vm.prank(seller);
+        nft.setApprovalForAll(address(marketplace), false);
+
+        vm.prank(buyer);
+        vm.expectRevert(MarketplaceFixedPrice.NotApproved.selector);
+        marketplace.buy{value: 0.1 ether}(0);
+    }
+
     function testNextListingIdIncrements() external {
         assertEq(marketplace.nextListingId(), 0);
 

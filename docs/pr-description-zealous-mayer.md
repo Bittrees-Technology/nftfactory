@@ -34,6 +34,8 @@ This PR hardens the indexer/admin API surface and completes core marketplace and
   - Fixed ERC1155 listing ownership preflight by correcting interface/call ordering for `balanceOf(id, account)`.
   - Added ERC1155 buy-path test coverage for ETH settlement and token balance transitions.
   - Added ERC1155 listing guard tests for zero amount and insufficient balance.
+  - Added buy-time preflight checks for ownership/balance and approvals to fail stale/revoked listings with explicit errors.
+  - Added ERC721 buy-path tests for post-listing ownership transfer and approval revocation.
 
 - Mint flow
   - Removed brittle custom ERC721 preflight call path.
@@ -82,7 +84,7 @@ This PR hardens the indexer/admin API surface and completes core marketplace and
 - `npm --workspace services/indexer run test` (pass)
 - `npm run typecheck:web` (pass)
 - `npm run typecheck:indexer` (pass)
-- `forge test -vv` (pass, 53/53)
+- `forge test -vv` (pass, 55/55)
 
 ## Deployment / Ops Notes
 - Keep `TRUST_PROXY=false` unless running behind trusted infrastructure that correctly sets `X-Forwarded-For`.

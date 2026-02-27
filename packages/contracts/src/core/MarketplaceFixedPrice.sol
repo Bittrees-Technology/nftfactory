@@ -107,6 +107,17 @@ contract MarketplaceFixedPrice is Owned {
         if (!listing.active) revert NotActive();
         if (registry.blocked(msg.sender) || registry.blocked(listing.seller) || blockedCollection[listing.nft]) revert Sanctioned();
 
+        bytes32 key = keccak256(bytes(listing.standard));
+        if (key == keccak256("ERC721")) {
+            if (IERC721Lite(listing.nft).ownerOf(listing.tokenId) != listing.seller) revert NotSeller();
+            if (!IERC721Lite(listing.nft).isApprovedForAll(listing.seller, address(this))) revert NotApproved();
+        } else if (key == keccak256("ERC1155")) {
+            if (IERC1155Lite(listing.nft).balanceOf(listing.tokenId, listing.seller) < listing.amount) revert NotSeller();
+            if (!IERC1155Lite(listing.nft).isApprovedForAll(listing.seller, address(this))) revert NotApproved();
+        } else {
+            revert UnsupportedStandard();
+        }
+
         listing.active = false;
 
         if (listing.paymentToken == address(0)) {
@@ -119,7 +130,6 @@ contract MarketplaceFixedPrice is Owned {
             require(ok, "ERC20_TRANSFER_FAILED");
         }
 
-        bytes32 key = keccak256(bytes(listing.standard));
         if (key == keccak256("ERC721")) {
             IERC721Lite(listing.nft).safeTransferFrom(listing.seller, msg.sender, listing.tokenId);
         } else if (key == keccak256("ERC1155")) {
