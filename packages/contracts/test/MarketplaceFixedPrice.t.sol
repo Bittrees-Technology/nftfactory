@@ -220,6 +220,24 @@ contract MarketplaceFixedPriceTest is Test {
         marketplace.createListing(address(multi), tokenId, 3, "ERC1155", address(0), 0.1 ether);
     }
 
+    function testCreateListingERC1155AmountMustBePositive() external {
+        vm.prank(seller);
+        uint256 tokenId = multi.publish("", 5, "ipfs://multi");
+
+        vm.prank(seller);
+        vm.expectRevert(MarketplaceFixedPrice.InvalidAmount.selector);
+        marketplace.createListing(address(multi), tokenId, 0, "ERC1155", address(0), 0.1 ether);
+    }
+
+    function testCreateListingERC1155RevertsInsufficientBalance() external {
+        vm.prank(seller);
+        uint256 tokenId = multi.publish("", 2, "ipfs://multi");
+
+        vm.prank(seller);
+        vm.expectRevert(MarketplaceFixedPrice.NotSeller.selector);
+        marketplace.createListing(address(multi), tokenId, 3, "ERC1155", address(0), 0.1 ether);
+    }
+
     function testBuyERC1155WithETH() external {
         vm.prank(seller);
         uint256 tokenId = multi.publish("", 8, "ipfs://multi");

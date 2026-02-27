@@ -56,6 +56,7 @@ This worktree focused on production hardening, security controls, and end-to-end
   - Marketplace now enforces operator approval at listing creation for ERC721/ERC1155 listings, preventing non-executable listings from being created.
   - Fixed ERC1155 marketplace balance preflight call to use the correct `balanceOf(id, account)` signature, so ERC1155 listings validate correctly.
   - Added marketplace ERC1155 buy-path coverage to verify settlement, balances, and seller payout in ETH buys.
+  - Added ERC1155 listing guard coverage for zero-amount and insufficient-balance rejection paths.
 
 - Discover UX and moderation:
   - Improved reporter input behavior.
@@ -93,7 +94,7 @@ This worktree focused on production hardening, security controls, and end-to-end
 
 - Contract tests:
   - `forge test -vv`
-  - Result: passing (`51/51`)
+  - Result: passing (`53/53`)
 
 ## Reviewer Notes
 - `TRUST_PROXY` must remain `false` unless deployed behind trusted proxy infrastructure that sets `X-Forwarded-For`.
