@@ -97,3 +97,85 @@ graph TD
 ### `core/SubnameRegistrar.sol`
 - `utils/Owned`
 
+## Readable Trees
+
+### Protocol-Centric View
+
+```text
+Owned (src/utils/Owned.sol)
+├─ NftFactoryRegistry (src/core/NftFactoryRegistry.sol)
+│  ├─ MarketplaceFixedPrice (src/core/MarketplaceFixedPrice.sol)
+│  │  ├─ IERC20 (src/interfaces/IERC20.sol)
+│  │  ├─ IERC721Lite (src/interfaces/IERC721Lite.sol)
+│  │  └─ IERC1155Lite (src/interfaces/IERC1155Lite.sol)
+│  └─ CreatorFactory (src/core/CreatorFactory.sol)
+│     ├─ CreatorCollection721 (src/token/CreatorCollection721.sol)
+│     │  ├─ OZ Initializable
+│     │  ├─ OZ OwnableUpgradeable
+│     │  ├─ OZ UUPSUpgradeable
+│     │  ├─ OZ ERC721URIStorageUpgradeable
+│     │  └─ OZ ERC2981Upgradeable
+│     ├─ CreatorCollection1155 (src/token/CreatorCollection1155.sol)
+│     │  ├─ OZ Initializable
+│     │  ├─ OZ OwnableUpgradeable
+│     │  ├─ OZ UUPSUpgradeable
+│     │  ├─ OZ ERC1155Upgradeable
+│     │  └─ OZ ERC2981Upgradeable
+│     └─ OZ ERC1967Proxy
+├─ RoyaltySplitRegistry (src/core/RoyaltySplitRegistry.sol)
+├─ SubnameRegistrar (src/core/SubnameRegistrar.sol)
+│  ├─ SharedMint721 (src/token/SharedMint721.sol)
+│  └─ SharedMint1155 (src/token/SharedMint1155.sol)
+└─ MarketplaceFixedPrice (already shown above)
+```
+
+Leaf interfaces (no further imports):
+
+- IERC20
+- IERC721Lite
+- IERC1155Lite
+
+### Marketplace Flow
+
+```text
+MarketplaceFixedPrice (src/core/MarketplaceFixedPrice.sol)
+├─ Owned (src/utils/Owned.sol)
+├─ NftFactoryRegistry (src/core/NftFactoryRegistry.sol)
+├─ IERC20 (src/interfaces/IERC20.sol)
+├─ IERC721Lite (src/interfaces/IERC721Lite.sol)
+└─ IERC1155Lite (src/interfaces/IERC1155Lite.sol)
+```
+
+### Factory + Upgradeable Collections
+
+```text
+CreatorFactory (src/core/CreatorFactory.sol)
+├─ Owned (src/utils/Owned.sol)
+├─ NftFactoryRegistry (src/core/NftFactoryRegistry.sol)
+├─ CreatorCollection721 (src/token/CreatorCollection721.sol)
+│  ├─ OZ Initializable
+│  ├─ OZ OwnableUpgradeable
+│  ├─ OZ UUPSUpgradeable
+│  ├─ OZ ERC721URIStorageUpgradeable
+│  └─ OZ ERC2981Upgradeable
+├─ CreatorCollection1155 (src/token/CreatorCollection1155.sol)
+│  ├─ OZ Initializable
+│  ├─ OZ OwnableUpgradeable
+│  ├─ OZ UUPSUpgradeable
+│  ├─ OZ ERC1155Upgradeable
+│  └─ OZ ERC2981Upgradeable
+└─ OZ ERC1967Proxy
+```
+
+### Subname + Shared Mint Path
+
+```text
+SubnameRegistrar (src/core/SubnameRegistrar.sol)
+├─ Owned (src/utils/Owned.sol)
+├─ SharedMint721 (src/token/SharedMint721.sol)
+│  ├─ Owned (src/utils/Owned.sol)
+│  └─ SubnameRegistrar (src/core/SubnameRegistrar.sol)
+└─ SharedMint1155 (src/token/SharedMint1155.sol)
+   ├─ Owned (src/utils/Owned.sol)
+   └─ SubnameRegistrar (src/core/SubnameRegistrar.sol)
+```
