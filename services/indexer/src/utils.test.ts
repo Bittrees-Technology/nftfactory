@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { isAddress, normalizeSubname, parseBearerToken, isRateLimited, resetRateLimits } from "./utils.js";
+import { isAddress, isZeroAddress, normalizeSubname, parseBearerToken, isRateLimited, resetRateLimits } from "./utils.js";
 
 describe("isAddress", () => {
   it("accepts valid checksummed address", () => {
@@ -24,6 +24,16 @@ describe("isAddress", () => {
 
   it("rejects address with invalid characters", () => {
     expect(isAddress("0xZZ5801a7d398351b8be11c439e05c5b3259aec9b")).toBe(false);
+  });
+});
+
+describe("isZeroAddress", () => {
+  it("accepts zero address", () => {
+    expect(isZeroAddress("0x0000000000000000000000000000000000000000")).toBe(true);
+  });
+
+  it("rejects non-zero address", () => {
+    expect(isZeroAddress("0xab5801a7d398351b8be11c439e05c5b3259aec9b")).toBe(false);
   });
 });
 

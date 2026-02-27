@@ -4,6 +4,10 @@ export function isAddress(value: string): boolean {
   return /^0x[a-fA-F0-9]{40}$/.test(value);
 }
 
+export function isZeroAddress(value: string): boolean {
+  return /^0x0{40}$/.test(value);
+}
+
 export function normalizeSubname(input: string): string {
   return input.trim().toLowerCase().replace(/\.nftfactory\.eth$/, "");
 }

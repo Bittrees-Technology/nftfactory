@@ -4,7 +4,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { URL } from "node:url";
 import { PrismaClient } from "@prisma/client";
 import pino from "pino";
-import { isAddress, normalizeSubname, parseBearerToken, getClientIp, isRateLimited } from "./utils.js";
+import { isAddress, isZeroAddress, normalizeSubname, parseBearerToken, getClientIp, isRateLimited } from "./utils.js";
 
 const log = pino({ level: process.env.LOG_LEVEL || "info" });
 
@@ -183,7 +183,14 @@ async function listHiddenListingIds(): Promise<number[]> {
   const hiddenByToken = new Map<string, boolean>();
   for (const action of actions) {
     if (hiddenByToken.has(action.tokenId)) continue;
-    hiddenByToken.set(action.tokenId, action.action.toLowerCase() === "hide");
+    const normalizedAction = action.action.toLowerCase();
+    if (normalizedAction === "hide") {
+      hiddenByToken.set(action.tokenId, true);
+      continue;
+    }
+    if (normalizedAction === "restore") {
+      hiddenByToken.set(action.tokenId, false);
+    }
   }
 
   const hiddenTokenIds = Array.from(hiddenByToken.entries())
@@ -267,6 +274,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
       !isAddress(payload.collectionAddress) ||
       !isAddress(payload.sellerAddress) ||
       !isAddress(payload.reporterAddress) ||
+      isZeroAddress(payload.reporterAddress) ||
       !payload.tokenId?.trim() ||
       !payload.reason?.trim()
     ) {
