@@ -57,7 +57,8 @@ done < <(rg --files "$SRC_DIR" -g '*.sol' | sort)
   echo "## Graph"
   echo
   echo '```mermaid'
-  echo "graph TD"
+  echo "%%{init: {'flowchart': {'rankSpacing': 120, 'nodeSpacing': 30}}}%%"
+  echo "flowchart TB"
   for edge in "${!edges[@]}"; do
     from="${edge%%|*}"
     to="${edge#*|}"

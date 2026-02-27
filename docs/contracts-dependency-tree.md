@@ -2,13 +2,14 @@
 
 Generated from Solidity imports in `packages/contracts/src`.
 
-- Generated at (UTC): 2026-02-27 08:21:48
+- Generated at (UTC): 2026-02-27 08:23:39
 - Regenerate with: `bash scripts/generate-contract-dependency-tree.sh`
 
 ## Graph
 
 ```mermaid
-graph TD
+%%{init: {'flowchart': {'rankSpacing': 120, 'nodeSpacing': 30}}}%%
+flowchart TB
   n1488782301["core/CreatorFactory"] --> n2181168441["token/CreatorCollection721"]
   n1488782301["core/CreatorFactory"] --> n2464630231["@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol"]
   n1488782301["core/CreatorFactory"] --> n4035126880["core/NftFactoryRegistry"]
