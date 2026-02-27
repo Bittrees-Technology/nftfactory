@@ -92,7 +92,7 @@ export default function ListClient() {
   const [amount, setAmount] = useState("1");
   const [paymentTokenType, setPaymentTokenType] = useState<"ETH" | "ERC20">("ETH");
   const [erc20TokenAddress, setErc20TokenAddress] = useState("");
-  const [priceEth, setPriceEth] = useState("0.01");
+  const [priceInput, setPriceInput] = useState("0.01");
   const [state, setState] = useState<TxState>({ status: "idle" });
   const [allListings, setAllListings] = useState<ListingRow[]>([]);
   const [myListings, setMyListings] = useState<ListingRow[]>([]);
@@ -323,7 +323,15 @@ export default function ListClient() {
 
     let priceWei: bigint;
     try {
-      priceWei = toWeiBigInt(priceEth);
+      if (paymentTokenType === "ETH") {
+        priceWei = toWeiBigInt(priceInput);
+      } else {
+        const normalized = priceInput.trim();
+        if (!/^[0-9]+$/.test(normalized)) {
+          throw new Error("ERC20 price must be a whole number in raw token units.");
+        }
+        priceWei = BigInt(normalized);
+      }
     } catch {
       setState({ status: "error", message: "Price is invalid." });
       return;
@@ -541,8 +549,12 @@ export default function ListClient() {
             </label>
           )}
           <label>
-            Price
-            <input value={priceEth} onChange={(e) => setPriceEth(e.target.value)} placeholder="0.01" />
+            {paymentTokenType === "ETH" ? "Price (ETH)" : "Price (raw ERC20 units)"}
+            <input
+              value={priceInput}
+              onChange={(e) => setPriceInput(e.target.value)}
+              placeholder={paymentTokenType === "ETH" ? "0.01" : "1000000"}
+            />
           </label>
         </div>
 
