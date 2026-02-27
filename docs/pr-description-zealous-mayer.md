@@ -28,6 +28,7 @@ This PR hardens the indexer/admin API surface and completes core marketplace and
   - Updated listing UI and filter copy to clarify ETH-only price filters.
   - Updated ERC20 listing price display and parsing to raw token units.
   - Listing and buy multi-step flows now wait for receipts before marking success.
+  - Added explicit failure when receipt client is unavailable, preventing silent success in degraded wallet-client states.
   - Added `setApprovalForAll` operator support in shared ERC721/ERC1155 contracts so marketplace buys can execute token transfers as an approved operator.
 
 - Mint flow
@@ -68,6 +69,7 @@ This PR hardens the indexer/admin API surface and completes core marketplace and
 - `7511f90` fix: wait for transaction receipts in listing and buy multi-step flows
 - `7040583` fix: wait for transaction receipts in mint and subname registration flows
 - `a1c8235` fix: parse ERC20 listing prices as raw token units
+- `a4b4431` fix: fail fast when receipt client is unavailable
 
 ## Testing
 - `npm --workspace apps/web run test` (pass)

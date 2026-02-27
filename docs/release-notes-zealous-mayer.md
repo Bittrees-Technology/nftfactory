@@ -22,6 +22,7 @@ This worktree focused on production hardening, security controls, and end-to-end
 - `7511f90` `fix: wait for transaction receipts in listing and buy multi-step flows`
 - `7040583` `fix: wait for transaction receipts in mint and subname registration flows`
 - `a1c8235` `fix: parse ERC20 listing prices as raw token units`
+- `a4b4431` `fix: fail fast when receipt client is unavailable`
 
 ## Key Changes
 - Indexer API hardening:
@@ -41,6 +42,7 @@ This worktree focused on production hardening, security controls, and end-to-end
   - Removed brittle custom ERC721 preflight behavior.
   - Added subname label validation and custom mint safety guards.
   - Mint publish and subname registration now wait for transaction receipts before success state.
+  - Mint/listing flows now fail fast if wallet/public receipt client is unavailable to avoid false success states.
 
 - Marketplace/listing flow completion:
   - ERC20 buy path implemented (allowance check + approval + buy).
