@@ -276,7 +276,9 @@ export default function ListClient() {
   }
 
   async function waitForReceipt(hash: `0x${string}`): Promise<void> {
-    if (!publicClient) return;
+    if (!publicClient) {
+      throw new Error("Public client unavailable. Reconnect wallet and try again.");
+    }
     await publicClient.waitForTransactionReceipt({ hash: hash as Hex });
   }
 
