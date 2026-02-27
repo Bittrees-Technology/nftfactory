@@ -79,6 +79,9 @@ contract MarketplaceFixedPriceTest is Test {
         uint256 tokenId = nft.publish("", "ipfs://test");
 
         vm.prank(seller);
+        nft.setApprovalForAll(address(marketplace), true);
+
+        vm.prank(seller);
         marketplace.createListing(address(nft), tokenId, 1, "ERC721", address(0), 0.1 ether);
 
         uint256 sellerBalBefore = seller.balance;

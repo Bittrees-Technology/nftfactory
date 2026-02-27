@@ -28,6 +28,7 @@ This PR hardens the indexer/admin API surface and completes core marketplace and
   - Updated listing UI and filter copy to clarify ETH-only price filters.
   - Updated ERC20 listing price display and parsing to raw token units.
   - Listing and buy multi-step flows now wait for receipts before marking success.
+  - Added `setApprovalForAll` operator support in shared ERC721/ERC1155 contracts so marketplace buys can execute token transfers as an approved operator.
 
 - Mint flow
   - Removed brittle custom ERC721 preflight call path.
@@ -73,6 +74,7 @@ This PR hardens the indexer/admin API surface and completes core marketplace and
 - `npm --workspace services/indexer run test` (pass)
 - `npm run typecheck:web` (pass)
 - `npm run typecheck:indexer` (pass)
+- `forge test -vv` (pass, 47/47)
 
 ## Deployment / Ops Notes
 - Keep `TRUST_PROXY=false` unless running behind trusted infrastructure that correctly sets `X-Forwarded-For`.

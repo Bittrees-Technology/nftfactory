@@ -65,6 +65,20 @@ contract SharedMint1155Test is Test {
         nft.safeTransferFrom(creator, other, tokenId, 1, "");
     }
 
+    function testApprovedOperatorCanTransfer() external {
+        vm.prank(creator);
+        uint256 tokenId = nft.publish("", 10, "ipfs://test");
+
+        vm.prank(creator);
+        nft.setApprovalForAll(other, true);
+
+        vm.prank(other);
+        nft.safeTransferFrom(creator, other, tokenId, 4, "");
+
+        assertEq(nft.balanceOf(tokenId, creator), 6);
+        assertEq(nft.balanceOf(tokenId, other), 4);
+    }
+
     function testTransferToZeroAddressReverts() external {
         vm.prank(creator);
         uint256 tokenId = nft.publish("", 10, "ipfs://test");

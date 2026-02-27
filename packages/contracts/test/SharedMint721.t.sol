@@ -67,6 +67,21 @@ contract SharedMint721Test is Test {
         nft.safeTransferFrom(creator, other, tokenId);
     }
 
+    function testApprovedOperatorCanTransfer() external {
+        vm.prank(creator);
+        uint256 tokenId = nft.publish("", "ipfs://test");
+
+        vm.prank(creator);
+        nft.setApprovalForAll(other, true);
+
+        vm.prank(other);
+        nft.safeTransferFrom(creator, other, tokenId);
+
+        assertEq(nft.ownerOf(tokenId), other);
+        assertEq(nft.balanceOf(creator), 0);
+        assertEq(nft.balanceOf(other), 1);
+    }
+
     function testTransferToZeroAddressReverts() external {
         vm.prank(creator);
         uint256 tokenId = nft.publish("", "ipfs://test");
