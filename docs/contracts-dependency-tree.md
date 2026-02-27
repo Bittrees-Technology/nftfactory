@@ -2,7 +2,7 @@
 
 Generated from Solidity imports in `packages/contracts/src`.
 
-- Generated at (UTC): 2026-02-27 08:26:14
+- Generated at (UTC): 2026-02-27 08:29:44
 - Regenerate with: `bash scripts/generate-contract-dependency-tree.sh`
 
 ## Graph
@@ -10,7 +10,7 @@ Generated from Solidity imports in `packages/contracts/src`.
 ### Internal Contract Graph
 
 ```mermaid
-%%{init: {'theme':'base','flowchart': {'rankSpacing': 170, 'nodeSpacing': 90, 'curve':'linear'}, 'themeVariables': {'fontSize':'18px'}}}%%
+%%{init: {'theme':'base','flowchart': {'rankSpacing': 280, 'nodeSpacing': 180, 'curve':'linear'}, 'themeVariables': {'fontSize':'19px'}}}%%
 flowchart TB
   n1488782301["core/CreatorFactory"] --> n2181168441["token/CreatorCollection721"]
   n1488782301["core/CreatorFactory"] --> n4035126880["core/NftFactoryRegistry"]
@@ -35,7 +35,7 @@ flowchart TB
 ### External Library/Proxy Dependencies
 
 ```mermaid
-%%{init: {'theme':'base','flowchart': {'rankSpacing': 140, 'nodeSpacing': 80, 'curve':'linear'}, 'themeVariables': {'fontSize':'16px'}}}%%
+%%{init: {'theme':'base','flowchart': {'rankSpacing': 240, 'nodeSpacing': 150, 'curve':'linear'}, 'themeVariables': {'fontSize':'18px'}}}%%
 flowchart TB
   n1488782301["core/CreatorFactory"] --> n2464630231["@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol"]
   n2181168441["token/CreatorCollection721"] --> n1164467089["@openzeppelin/contracts-upgradeable/token/common/ERC2981Upgradeable.sol"]

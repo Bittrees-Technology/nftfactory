@@ -59,7 +59,7 @@ done < <(rg --files "$SRC_DIR" -g '*.sol' | sort)
   echo "### Internal Contract Graph"
   echo
   echo '```mermaid'
-  echo "%%{init: {'theme':'base','flowchart': {'rankSpacing': 170, 'nodeSpacing': 90, 'curve':'linear'}, 'themeVariables': {'fontSize':'18px'}}}%%"
+  echo "%%{init: {'theme':'base','flowchart': {'rankSpacing': 280, 'nodeSpacing': 180, 'curve':'linear'}, 'themeVariables': {'fontSize':'19px'}}}%%"
   echo "flowchart TB"
   for edge in "${!edges[@]}"; do
     from="${edge%%|*}"
@@ -78,7 +78,7 @@ done < <(rg --files "$SRC_DIR" -g '*.sol' | sort)
   echo "### External Library/Proxy Dependencies"
   echo
   echo '```mermaid'
-  echo "%%{init: {'theme':'base','flowchart': {'rankSpacing': 140, 'nodeSpacing': 80, 'curve':'linear'}, 'themeVariables': {'fontSize':'16px'}}}%%"
+  echo "%%{init: {'theme':'base','flowchart': {'rankSpacing': 240, 'nodeSpacing': 150, 'curve':'linear'}, 'themeVariables': {'fontSize':'18px'}}}%%"
   echo "flowchart TB"
   for edge in "${!edges[@]}"; do
     from="${edge%%|*}"
