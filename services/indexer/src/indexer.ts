@@ -48,6 +48,9 @@ const ADMIN_ALLOWLIST = new Set(
 );
 
 const prisma = new PrismaClient();
+const RESOLVE_ACTIONS = new Set(["hide", "restore", "dismiss"]);
+
+class BadRequestError extends Error {}
 
 function assertEnv(name: string): string {
   const value = process.env[name];
@@ -82,7 +85,7 @@ function sendJson(res: ServerResponse, status: number, payload: unknown): void {
     "Content-Type": "application/json",
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type"
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Admin-Address"
   });
   res.end(JSON.stringify(payload));
 }
@@ -93,8 +96,12 @@ async function readJsonBody<T>(req: IncomingMessage): Promise<T> {
     chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
   }
   const raw = Buffer.concat(chunks).toString("utf8");
-  if (!raw) throw new Error("Missing JSON body");
-  return JSON.parse(raw) as T;
+  if (!raw) throw new BadRequestError("Missing JSON body");
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    throw new BadRequestError("Invalid JSON body");
+  }
 }
 
 async function ensureTokenForListing(payload: CreateReportPayload): Promise<{ tokenRefId: string; listingRowId: string }> {
@@ -294,7 +301,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
     const reportId = path.split("/")[4];
     const payload = await readJsonBody<ResolveReportPayload>(req);
 
-    if (!payload.action || !payload.actor?.trim()) {
+    if (!payload.action || !RESOLVE_ACTIONS.has(payload.action) || !payload.actor?.trim()) {
       sendJson(res, 400, { error: "Invalid resolve payload" });
       return;
     }
@@ -376,6 +383,10 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
     }
     const listingId = path.split("/")[4];
     const payload = await readJsonBody<SetListingVisibilityPayload>(req);
+    if (typeof payload.hidden !== "boolean" || !payload.actor?.trim()) {
+      sendJson(res, 400, { error: "Invalid visibility payload" });
+      return;
+    }
     const auth = assertAdminRequest(req, payload.actor);
     if (!auth.ok) {
       sendJson(res, 401, { error: auth.error });
@@ -497,6 +508,10 @@ async function main() {
 
   const server = createServer((req, res) => {
     handleRequest(req, res).catch((err) => {
+      if (err instanceof BadRequestError) {
+        sendJson(res, 400, { error: err.message });
+        return;
+      }
       log.error({ err, method: req.method, url: req.url }, "request_error");
       sendJson(res, 500, {
         error: err instanceof Error ? err.message : "Unhandled server error"

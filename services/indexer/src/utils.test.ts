@@ -81,6 +81,10 @@ describe("parseBearerToken", () => {
   it("trims token whitespace", () => {
     expect(parseBearerToken("Bearer  tok  ")).toBe("tok");
   });
+
+  it("handles multiple spaces between scheme and token", () => {
+    expect(parseBearerToken("Bearer    token789")).toBe("token789");
+  });
 });
 
 describe("isRateLimited", () => {

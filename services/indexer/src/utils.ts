@@ -10,7 +10,7 @@ export function normalizeSubname(input: string): string {
 
 export function parseBearerToken(header: string | undefined): string {
   if (!header) return "";
-  const [scheme, token] = header.split(" ");
+  const [scheme, token] = header.trim().split(/\s+/, 2);
   if (!scheme || !token) return "";
   if (scheme.toLowerCase() !== "bearer") return "";
   return token.trim();
