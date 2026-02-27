@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
-import { useAccount, useChainId, usePublicClient, useSwitchChain, useWalletClient } from "wagmi";
+import { useAccount, useChainId, useSwitchChain, useWalletClient } from "wagmi";
 import type { Address, Hex } from "viem";
 import {
   encodeCreatorPublish1155,
@@ -10,7 +10,6 @@ import {
   encodePublish1155,
   encodePublish721,
   encodeRegisterSubname,
-  hexToBigInt,
   toHexWei,
   truncateHash
 } from "../../lib/abi";
@@ -45,7 +44,6 @@ export default function MintClient() {
   const chainId = useChainId();
   const { switchChainAsync } = useSwitchChain();
   const { data: walletClient } = useWalletClient();
-  const publicClient = usePublicClient();
 
   const [standard, setStandard] = useState<Standard>("ERC721");
   const [collectionMode, setCollectionMode] = useState<CollectionMode>("shared");
@@ -100,15 +98,6 @@ export default function MintClient() {
       value: valueHex ? (BigInt(valueHex) as bigint) : undefined
     });
     return hash as `0x${string}`;
-  }
-
-  async function readUint(contract: `0x${string}`, callData: string): Promise<bigint> {
-    if (!publicClient) throw new Error("No public client available.");
-    const result = await publicClient.call({
-      to: contract as Address,
-      data: callData as Hex
-    });
-    return hexToBigInt((result.data as string) || "0x0");
   }
 
   async function onUploadMetadata(): Promise<void> {
@@ -216,7 +205,6 @@ export default function MintClient() {
         }
         targetNft = customCollectionAddress;
         if (standard === "ERC721") {
-          await readUint(targetNft, "0x18160ddd");
           mintData = encodeCreatorPublish721(account as `0x${string}`, metadataUri.trim(), true) as `0x${string}`;
         } else {
           const tokenId = Number.parseInt(custom1155TokenId || "0", 10);
