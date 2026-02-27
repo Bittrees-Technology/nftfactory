@@ -12,6 +12,7 @@ import {
   encodeSetApprovalForAll,
   toWeiBigInt
 } from "../../lib/abi";
+import { buildBuyPlan } from "../../lib/marketplaceBuy";
 import { getContractsConfig } from "../../lib/contracts";
 import TxStatus, { type TxState } from "./TxStatus";
 import ListingFilters, { type FilterState, type Preset } from "./ListingFilters";
@@ -391,46 +392,45 @@ export default function ListClient() {
     }
     try {
       setBuyingId(row.id);
-      if (row.paymentToken !== ZERO_ADDRESS) {
-        if (!publicClient || !address) {
-          throw new Error("Public client unavailable. Reconnect wallet and try again.");
-        }
-
-        const allowance = (await publicClient.readContract({
-          address: row.paymentToken,
-          abi: erc20Abi,
-          functionName: "allowance",
-          args: [address, config.marketplace as Address]
-        })) as bigint;
-
-        if (allowance < row.price) {
-          // Some ERC20s require setting allowance to zero before raising it.
-          if (allowance > 0n) {
-            setState({ status: "pending", message: `Resetting ERC20 allowance for listing #${row.id}...` });
-            const resetTx = await sendTransaction(
-              row.paymentToken as `0x${string}`,
-              encodeErc20Approve(config.marketplace as `0x${string}`, 0n) as `0x${string}`
-            );
-            setState({ status: "pending", hash: resetTx, message: `Approving ERC20 for listing #${row.id}...` });
-          } else {
-            setState({ status: "pending", message: `Approving ERC20 for listing #${row.id}...` });
-          }
-          const approveTx = await sendTransaction(
-            row.paymentToken as `0x${string}`,
-            encodeErc20Approve(config.marketplace as `0x${string}`, row.price) as `0x${string}`
-          );
-          setState({ status: "pending", hash: approveTx, message: `Buying listing #${row.id}...` });
-        } else {
-          setState({ status: "pending", message: `Buying listing #${row.id}...` });
-        }
-      } else {
-        setState({ status: "pending", message: `Buying listing #${row.id}...` });
+      if (row.paymentToken !== ZERO_ADDRESS && (!publicClient || !address)) {
+        throw new Error("Public client unavailable. Reconnect wallet and try again.");
       }
 
+      const allowance =
+        row.paymentToken === ZERO_ADDRESS
+          ? null
+          : ((await publicClient.readContract({
+              address: row.paymentToken,
+              abi: erc20Abi,
+              functionName: "allowance",
+              args: [address, config.marketplace as Address]
+            })) as bigint);
+
+      const plan = buildBuyPlan({
+        paymentToken: row.paymentToken as `0x${string}`,
+        zeroAddress: ZERO_ADDRESS as `0x${string}`,
+        price: row.price,
+        allowance
+      });
+
+      for (const amount of plan.approvalAmounts) {
+        const approvalMessage =
+          amount === 0n
+            ? `Resetting ERC20 allowance for listing #${row.id}...`
+            : `Approving ERC20 for listing #${row.id}...`;
+        setState({ status: "pending", message: approvalMessage });
+        const approveTx = await sendTransaction(
+          row.paymentToken as `0x${string}`,
+          encodeErc20Approve(config.marketplace as `0x${string}`, amount) as `0x${string}`
+        );
+        setState({ status: "pending", hash: approveTx, message: `Buying listing #${row.id}...` });
+      }
+
+      setState({ status: "pending", message: `Buying listing #${row.id}...` });
       const txHash = await sendTransaction(
         config.marketplace as `0x${string}`,
         encodeBuyListing(BigInt(row.id)) as `0x${string}`,
-        row.paymentToken === ZERO_ADDRESS ? row.price : undefined
+        plan.txValue
       );
       setState({ status: "success", hash: txHash, message: `Purchase submitted for listing #${row.id}.` });
       await loadListings();
