@@ -17,6 +17,7 @@
     "test:indexer": "npm --workspace services/indexer run test",
     "dev:indexer": "npm --workspace services/indexer run dev",
     "test:contracts": "npm --workspace packages/contracts run test",
+    "docs:contracts-deps": "bash scripts/generate-contract-dependency-tree.sh",
     "typecheck:all": "npm run typecheck:web && npm run typecheck:indexer",
     "test:all": "npm run test:web && npm run test:indexer && npm run test:contracts",
     "check:all": "npm run typecheck:all && npm run test:all"
