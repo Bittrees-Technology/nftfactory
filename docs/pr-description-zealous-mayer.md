@@ -36,6 +36,7 @@ This PR hardens the indexer/admin API surface and completes core marketplace and
   - Added ERC1155 listing guard tests for zero amount and insufficient balance.
   - Added buy-time preflight checks for ownership/balance and approvals to fail stale/revoked listings with explicit errors.
   - Added ERC721 buy-path tests for post-listing ownership transfer and approval revocation.
+  - Added ERC1155 buy-path tests for post-listing approval revocation and seller balance reduction.
 
 - Mint flow
   - Removed brittle custom ERC721 preflight call path.
@@ -84,7 +85,7 @@ This PR hardens the indexer/admin API surface and completes core marketplace and
 - `npm --workspace services/indexer run test` (pass)
 - `npm run typecheck:web` (pass)
 - `npm run typecheck:indexer` (pass)
-- `forge test -vv` (pass, 55/55)
+- `forge test -vv` (pass, 57/57)
 
 ## Deployment / Ops Notes
 - Keep `TRUST_PROXY=false` unless running behind trusted infrastructure that correctly sets `X-Forwarded-For`.
