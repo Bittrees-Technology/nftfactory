@@ -275,6 +275,11 @@ export default function ListClient() {
     return hash as `0x${string}`;
   }
 
+  async function waitForReceipt(hash: `0x${string}`): Promise<void> {
+    if (!publicClient) return;
+    await publicClient.waitForTransactionReceipt({ hash: hash as Hex });
+  }
+
   async function onSubmit(e: React.FormEvent): Promise<void> {
     e.preventDefault();
     setState({ status: "idle" });
@@ -334,6 +339,7 @@ export default function ListClient() {
         nftAddress as `0x${string}`,
         encodeSetApprovalForAll(config.marketplace as `0x${string}`, true) as `0x${string}`
       );
+      await waitForReceipt(approvalTx);
 
       setState({ status: "pending", hash: approvalTx, message: "Creating listing..." });
       const listingTx = await sendTransaction(
@@ -347,6 +353,7 @@ export default function ListClient() {
           priceWei
         ) as `0x${string}`
       );
+      await waitForReceipt(listingTx);
 
       setState({ status: "success", hash: listingTx, message: "Listing submitted successfully." });
       await loadListings();
@@ -372,6 +379,7 @@ export default function ListClient() {
         config.marketplace as `0x${string}`,
         encodeCancelListing(BigInt(listingId)) as `0x${string}`
       );
+      await waitForReceipt(txHash);
       setState({ status: "success", hash: txHash, message: `Cancellation submitted for listing #${listingId}.` });
       await loadListings();
     } catch (err) {
@@ -423,6 +431,7 @@ export default function ListClient() {
           row.paymentToken as `0x${string}`,
           encodeErc20Approve(config.marketplace as `0x${string}`, amount) as `0x${string}`
         );
+        await waitForReceipt(approveTx);
         setState({ status: "pending", hash: approveTx, message: `Buying listing #${row.id}...` });
       }
 
@@ -432,6 +441,7 @@ export default function ListClient() {
         encodeBuyListing(BigInt(row.id)) as `0x${string}`,
         plan.txValue
       );
+      await waitForReceipt(txHash);
       setState({ status: "success", hash: txHash, message: `Purchase submitted for listing #${row.id}.` });
       await loadListings();
     } catch (err) {
