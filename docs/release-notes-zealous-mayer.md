@@ -34,6 +34,8 @@ This worktree focused on production hardening, security controls, and end-to-end
 - `ed2df30` `test: cover recovery after ERC721 approval restore`
 - `2bb7714` `test: cover recovery after ERC1155 approval restore`
 - `cd1aa16` `test: cover recovery after ERC1155 balance restore`
+- `18b1337` `docs: sync commit lists with latest recovery tests`
+- `3264906` `test: cover recovery after ERC721 ownership restore`
 
 ## Key Changes
 - Indexer API hardening:

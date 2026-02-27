@@ -93,6 +93,8 @@ This PR hardens the indexer/admin API surface and completes core marketplace and
 - `ed2df30` test: cover recovery after ERC721 approval restore
 - `2bb7714` test: cover recovery after ERC1155 approval restore
 - `cd1aa16` test: cover recovery after ERC1155 balance restore
+- `18b1337` docs: sync commit lists with latest recovery tests
+- `3264906` test: cover recovery after ERC721 ownership restore
 
 ## Testing
 - `npm --workspace apps/web run test` (pass)
