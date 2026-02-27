@@ -1,20 +1,18 @@
 ## TL;DR
-- Hardened indexer admin/moderation endpoints (validation, auth behavior, safer rate-limit IP handling).
-- Completed ERC20 marketplace buy flow (allowance check, approve, reset+approve compatibility).
-- Added meaningful test coverage for:
-  - frontend buy-branch logic, and
-  - backend endpoint auth/status/rate-limit behavior.
-- Updated env/docs for `TRUST_PROXY` and added release notes.
+- Hardened indexer admin/moderation and upload surfaces (validation, auth behavior, safer rate-limit IP handling).
+- Completed ERC20 marketplace/listing parity (allowance handling, reset flow compatibility, raw-unit pricing consistency).
+- Hardened mint/listing/buy UX by waiting for transaction receipts before success states.
+- Added meaningful frontend/backend tests and CI typecheck enforcement.
 
 ## Summary
-This PR hardens the indexer/admin surface area and completes marketplace ERC20 buy parity, with targeted tests for both backend endpoint behavior and frontend buy-branch logic.
+This PR hardens the indexer/admin API surface and completes core marketplace and mint user flows, with targeted tests for endpoint behavior and frontend buy/listing branch logic.
 
 ## What Changed
 - Indexer API hardening
   - Added stricter payload validation for moderation/admin write routes.
-  - Added explicit `400` handling for malformed or missing JSON bodies.
+  - Added explicit `400` handling for malformed/missing JSON bodies.
   - Added strict `status` query validation on moderation reports endpoint.
-  - Improved CORS allow headers for admin auth headers.
+  - Improved CORS allow-headers for admin auth headers.
   - Rejected zero-address reporters for moderation reports.
   - Fixed hidden-listing resolution so `dismiss` does not unintentionally restore.
   - Added opt-in proxy trust behavior for rate limiting via `TRUST_PROXY`.
@@ -23,15 +21,28 @@ This PR hardens the indexer/admin surface area and completes marketplace ERC20 b
   - Added image MIME/type and file-size validation on IPFS metadata upload.
   - Added `external_url` protocol/URL validation.
 
-- Marketplace buy flow
+- Marketplace/listing flow
   - Added ERC20 buy flow (allowance check -> approve -> buy).
   - Added compatibility for tokens requiring allowance reset (`approve(0)` then approve target).
   - Refactored buy planning into pure helper with branch coverage.
+  - Updated listing UI and filter copy to clarify ETH-only price filters.
+  - Updated ERC20 listing price display and parsing to raw token units.
+  - Listing and buy multi-step flows now wait for receipts before marking success.
 
-- Testability and tests
+- Mint flow
+  - Removed brittle custom ERC721 preflight call path.
+  - Added stricter subname input validation and custom mint guards.
+  - Subname registration and mint publish flows now wait for receipts before success state.
+
+- Discover UX
+  - Improved moderation reporter input behavior.
+  - Clarified ETH-only filtering labels.
+
+- Testability, tests, and CI
   - Refactored indexer server to expose dependency-injected request handler for endpoint tests.
-  - Added endpoint tests for auth enforcement, status validation, and trust-proxy rate-limit behavior.
+  - Added indexer endpoint tests for auth enforcement, status validation, and trust-proxy/rate-limit behavior.
   - Added frontend unit tests for buy planning branches (ETH / ERC20 direct / approve / reset+approve).
+  - Added indexer typecheck script and CI enforcement.
 
 - Docs
   - Updated env examples and README notes for `TRUST_PROXY`.
@@ -47,17 +58,25 @@ This PR hardens the indexer/admin surface area and completes marketplace ERC20 b
 - `e9442f6` fix: handle ERC20 allowance reset flow before marketplace buy
 - `387c112` test: cover marketplace buy planning branches and refactor buy flow
 - `a6f4625` test: add endpoint handler coverage for auth, status validation, and trust-proxy rate limiting
-- `442edb2` docs: add release notes for zealous-mayer hardening and test coverage
+- `a30e8b4` chore: enforce indexer typecheck in scripts and CI
+- `3de50fe` fix: align listing UI with ERC20 buy flow and ETH-only price filters
+- `5509d37` fix: remove brittle custom ERC721 preflight call from mint flow
+- `253e242` fix: validate subname inputs and guard custom mint registration flow
+- `d8b9433` fix: improve discover reporting UX and clarify ETH-only price filtering
+- `62932e7` fix: avoid misleading ERC20 price display by showing raw token units
+- `7511f90` fix: wait for transaction receipts in listing and buy multi-step flows
+- `7040583` fix: wait for transaction receipts in mint and subname registration flows
+- `a1c8235` fix: parse ERC20 listing prices as raw token units
 
 ## Testing
 - `npm --workspace apps/web run test` (pass)
 - `npm --workspace services/indexer run test` (pass)
 - `npm run typecheck:web` (pass)
+- `npm run typecheck:indexer` (pass)
 
 ## Deployment / Ops Notes
 - Keep `TRUST_PROXY=false` unless running behind trusted infrastructure that correctly sets `X-Forwarded-For`.
 - Admin security posture assumes `INDEXER_ADMIN_TOKEN` and/or `INDEXER_ADMIN_ALLOWLIST` are configured in production.
 
 ## Risks / Follow-ups
-- ERC20 buy path now works for common patterns; token-specific nonstandard behavior still depends on token contract compliance.
-- Consider adding CI step for indexer `tsc` compile if strict compile gating is desired beyond current test scripts.
+- ERC20 buy/listing paths now cover common token behaviors, but non-standard token implementations can still require contract-specific handling.

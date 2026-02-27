@@ -1,7 +1,7 @@
 # Zealous Mayer Worktree Release Notes
 
 ## Scope
-This worktree focused on production hardening, security controls, and buyer-flow completeness across the web app and indexer API.
+This worktree focused on production hardening, security controls, and end-to-end mint/listing/marketplace flow completion across the web app and indexer API.
 
 ## Commits Included
 - `9d6d7a0` `chore: sync lockfile with workspace dependencies`
@@ -13,29 +13,51 @@ This worktree focused on production hardening, security controls, and buyer-flow
 - `e9442f6` `fix: handle ERC20 allowance reset flow before marketplace buy`
 - `387c112` `test: cover marketplace buy planning branches and refactor buy flow`
 - `a6f4625` `test: add endpoint handler coverage for auth, status validation, and trust-proxy rate limiting`
+- `a30e8b4` `chore: enforce indexer typecheck in scripts and CI`
+- `3de50fe` `fix: align listing UI with ERC20 buy flow and ETH-only price filters`
+- `5509d37` `fix: remove brittle custom ERC721 preflight call from mint flow`
+- `253e242` `fix: validate subname inputs and guard custom mint registration flow`
+- `d8b9433` `fix: improve discover reporting UX and clarify ETH-only price filtering`
+- `62932e7` `fix: avoid misleading ERC20 price display by showing raw token units`
+- `7511f90` `fix: wait for transaction receipts in listing and buy multi-step flows`
+- `7040583` `fix: wait for transaction receipts in mint and subname registration flows`
+- `a1c8235` `fix: parse ERC20 listing prices as raw token units`
 
 ## Key Changes
 - Indexer API hardening:
-  - Added stricter payload validation for moderation/admin mutations.
-  - Added invalid JSON handling with explicit `400` responses.
-  - Added strict query validation for moderation `status`.
-  - Improved CORS allow headers to support admin auth headers.
-  - Prevented zero-address reporters.
-  - Corrected hidden-list visibility logic so `dismiss` does not implicitly restore visibility.
-  - Added opt-in proxy trust model for rate limiting via `TRUST_PROXY`.
+  - Stricter payload validation for moderation/admin mutations.
+  - Invalid JSON handling with explicit `400` responses.
+  - Strict query validation for moderation `status`.
+  - CORS allow-headers updated for admin auth headers.
+  - Zero-address reporter submissions rejected.
+  - Hidden-list visibility logic corrected so `dismiss` does not implicitly restore.
+  - Opt-in proxy trust model for rate limiting via `TRUST_PROXY`.
 
 - Web/API upload hardening:
-  - Added IPFS upload validation for image MIME type and file size.
-  - Added `external_url` URL/protocol validation.
+  - IPFS upload validation for image MIME type and file size.
+  - `external_url` URL/protocol validation.
 
-- Marketplace buy flow completion:
-  - Implemented ERC20 buy path (allowance check + approval + buy).
-  - Added compatibility for ERC20 tokens requiring allowance reset (`approve(0)` before increasing).
-  - Refactored buy decision logic into a pure helper with branch-level tests.
+- Mint flow hardening:
+  - Removed brittle custom ERC721 preflight behavior.
+  - Added subname label validation and custom mint safety guards.
+  - Mint publish and subname registration now wait for transaction receipts before success state.
 
-- Testability improvements:
-  - Refactored indexer server to expose a dependency-injected request handler for endpoint tests.
-  - Added handler tests for auth, status validation, and trust-proxy/rate-limit behavior.
+- Marketplace/listing flow completion:
+  - ERC20 buy path implemented (allowance check + approval + buy).
+  - Compatibility added for tokens requiring allowance reset (`approve(0)` before increasing).
+  - Listing and buy multi-step flows now wait for transaction receipts.
+  - ERC20 listing price display/filter semantics clarified to raw token units.
+  - Listing creation now parses ERC20 prices as raw integer units (ETH parsing retained for ETH listings).
+
+- Discover UX and moderation:
+  - Improved reporter input behavior.
+  - Clarified ETH-only price filtering UX.
+
+- Testability and CI:
+  - Refactored indexer server to expose dependency-injected request handler for endpoint tests.
+  - Added endpoint tests for auth, status validation, and trust-proxy/rate-limit behavior.
+  - Added frontend unit tests for marketplace buy planning branches.
+  - Enforced indexer typecheck in scripts and CI.
 
 ## New/Updated Environment Settings
 - `services/indexer/.env.example` now includes:
@@ -47,7 +69,7 @@ This worktree focused on production hardening, security controls, and buyer-flow
 ## Test Evidence
 - Web tests:
   - `npm --workspace apps/web run test`
-  - Result: passing (`28/28`)
+  - Result: passing (`30/30`)
 
 - Indexer tests:
   - `npm --workspace services/indexer run test`
@@ -55,6 +77,10 @@ This worktree focused on production hardening, security controls, and buyer-flow
 
 - Web typecheck:
   - `npm run typecheck:web`
+  - Result: passing
+
+- Indexer typecheck:
+  - `npm run typecheck:indexer`
   - Result: passing
 
 ## Reviewer Notes
