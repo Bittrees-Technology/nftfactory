@@ -56,16 +56,42 @@ done < <(rg --files "$SRC_DIR" -g '*.sol' | sort)
   echo
   echo "## Graph"
   echo
+  echo "### Internal Contract Graph"
+  echo
   echo '```mermaid'
-  echo "%%{init: {'flowchart': {'rankSpacing': 120, 'nodeSpacing': 30}}}%%"
+  echo "%%{init: {'theme':'base','flowchart': {'rankSpacing': 170, 'nodeSpacing': 90, 'curve':'linear'}, 'themeVariables': {'fontSize':'18px'}}}%%"
   echo "flowchart TB"
   for edge in "${!edges[@]}"; do
     from="${edge%%|*}"
     to="${edge#*|}"
+    if [[ -z "${local_nodes[$to]:-}" ]]; then
+      continue
+    fi
     from_id="n$(printf '%s' "$from" | cksum | awk '{print $1}')"
     to_id="n$(printf '%s' "$to" | cksum | awk '{print $1}')"
     echo "  $from_id[\"$from\"] --> $to_id[\"$to\"]"
   done | sort
+  echo "  classDef default fill:#f9fafb,stroke:#111827,stroke-width:2px,color:#111827,font-size:18px;"
+  echo "  linkStyle default stroke:#111827,stroke-width:2.5px;"
+  echo '```'
+  echo
+  echo "### External Library/Proxy Dependencies"
+  echo
+  echo '```mermaid'
+  echo "%%{init: {'theme':'base','flowchart': {'rankSpacing': 140, 'nodeSpacing': 80, 'curve':'linear'}, 'themeVariables': {'fontSize':'16px'}}}%%"
+  echo "flowchart TB"
+  for edge in "${!edges[@]}"; do
+    from="${edge%%|*}"
+    to="${edge#*|}"
+    if [[ "$to" != @openzeppelin/* ]]; then
+      continue
+    fi
+    from_id="n$(printf '%s' "$from" | cksum | awk '{print $1}')"
+    to_id="n$(printf '%s' "$to" | cksum | awk '{print $1}')"
+    echo "  $from_id[\"$from\"] --> $to_id[\"$to\"]"
+  done | sort
+  echo "  classDef default fill:#fff7ed,stroke:#9a3412,stroke-width:2px,color:#7c2d12,font-size:16px;"
+  echo "  linkStyle default stroke:#9a3412,stroke-width:2.5px;"
   echo '```'
   echo
   echo "## Contracts and Direct Imports"
