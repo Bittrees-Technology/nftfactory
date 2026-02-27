@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Address } from "viem";
+import { useAccount } from "wagmi";
 import { getContractsConfig } from "../../lib/contracts";
 import {
   fetchActiveListingsBatch,
@@ -57,6 +58,7 @@ function normalizeAddress(value: string): value is Address {
 
 export default function DiscoverClient() {
   const config = useMemo(() => getContractsConfig(), []);
+  const { address } = useAccount();
 
   const [allListings, setAllListings] = useState<MarketplaceListing[]>([]);
   const [hiddenListingIds, setHiddenListingIds] = useState<number[]>([]);
@@ -171,6 +173,12 @@ export default function DiscoverClient() {
     void refreshHidden();
   }, [refreshHidden]);
 
+  useEffect(() => {
+    if (!reporter && address) {
+      setReporter(address);
+    }
+  }, [address, reporter]);
+
   const filtered = useMemo(() => {
     const shared721 = config.shared721.toLowerCase();
     const shared1155 = config.shared1155.toLowerCase();
@@ -234,8 +242,11 @@ export default function DiscoverClient() {
   ]);
 
   async function submitReport(listing: MarketplaceListing): Promise<void> {
-    const reason = window.prompt("Report reason (spam, abuse, scam, other):", "spam");
-    if (!reason) return;
+    const reason = (window.prompt("Report reason (spam, abuse, scam, other):", "spam") || "").trim();
+    if (!reason) {
+      setError("Report reason is required.");
+      return;
+    }
     if (!normalizeAddress(reporter)) {
       setError("Enter a valid reporter wallet address before submitting a report.");
       return;
@@ -298,7 +309,7 @@ export default function DiscoverClient() {
           </label>
 
           <label>
-            Max price (ETH)
+            Max price (ETH only)
             <input value={maxPriceEth} onChange={(e) => setMaxPriceEth(e.target.value)} placeholder="0.05" />
           </label>
 
@@ -328,6 +339,7 @@ export default function DiscoverClient() {
             <input value={reporter} onChange={(e) => setReporter(e.target.value)} placeholder="0xreporter..." />
           </label>
         </div>
+        {!reporter && !address ? <p className="hint">Connect wallet or enter reporter address manually.</p> : null}
       </div>
 
       {error ? <p className="error">{error}</p> : null}
