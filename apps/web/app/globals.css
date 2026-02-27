@@ -93,6 +93,44 @@ nav {
   border-radius: 10px;
 }
 
+.nftPreviewCard {
+  border: 1px solid #e6d7c4;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fff9f1;
+}
+
+.nftPreviewThumb {
+  display: block;
+  width: 100%;
+  max-height: 260px;
+  object-fit: cover;
+}
+
+.nftPreviewMeta {
+  padding: 10px 12px;
+  display: grid;
+  gap: 4px;
+}
+
+.nftPreviewName {
+  font-weight: 600;
+  margin: 0;
+  font-size: 1rem;
+}
+
+.nftPreviewDesc {
+  margin: 0;
+  color: #5d5a53;
+  font-size: 0.875rem;
+}
+
+.nftPreviewUri {
+  font-size: 0.75rem;
+  color: #9a8a7a;
+  margin: 0;
+}
+
 .codeBlock {
   margin: 0;
   background: #1f1d1a;
@@ -131,6 +169,13 @@ nav {
   background: #f4e3cd;
   color: #4f2a18;
   font-size: 12px;
+}
+
+.reportInline {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
 }
 
 .presetButton {

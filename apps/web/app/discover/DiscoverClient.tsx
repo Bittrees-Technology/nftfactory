@@ -78,6 +78,8 @@ export default function DiscoverClient() {
   const [sortBy, setSortBy] = useState<SortBy>("newest");
 
   const [reporter, setReporter] = useState("");
+  const [reportingId, setReportingId] = useState<number | null>(null);
+  const [reportReason, setReportReason] = useState("spam");
 
   const refreshHidden = useCallback(async () => {
     try {
@@ -242,11 +244,6 @@ export default function DiscoverClient() {
   ]);
 
   async function submitReport(listing: MarketplaceListing): Promise<void> {
-    const reason = (window.prompt("Report reason (spam, abuse, scam, other):", "spam") || "").trim();
-    if (!reason) {
-      setError("Report reason is required.");
-      return;
-    }
     if (!normalizeAddress(reporter)) {
       setError("Enter a valid reporter wallet address before submitting a report.");
       return;
@@ -260,8 +257,10 @@ export default function DiscoverClient() {
         sellerAddress: listing.seller,
         standard: listing.standard,
         reporterAddress: reporter.toLowerCase(),
-        reason
+        reason: reportReason
       });
+      setReportingId(null);
+      setReportReason("spam");
       await refreshHidden();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to submit report.");
@@ -284,9 +283,13 @@ export default function DiscoverClient() {
           <button type="button" onClick={() => void loadInitial(true)} disabled={isLoading}>
             {isLoading ? "Loading..." : "Refresh"}
           </button>
-          <button type="button" onClick={() => void loadMore()} disabled={isLoadingMore || !canLoadMore}>
-            {isLoadingMore ? "Loading more..." : canLoadMore ? "Load More" : "End of Feed"}
-          </button>
+          {canLoadMore ? (
+            <button type="button" onClick={() => void loadMore()} disabled={isLoadingMore}>
+              {isLoadingMore ? "Loading more..." : "Load More"}
+            </button>
+          ) : (
+            <p className="hint">End of feed</p>
+          )}
         </div>
 
         <div className="gridMini">
@@ -374,9 +377,29 @@ export default function DiscoverClient() {
             <a href={toExplorerAddress(row.seller)} target="_blank" rel="noreferrer" className="mono">
               Seller {truncateAddress(row.seller)}
             </a>
-            <button type="button" className="miniBtn" onClick={() => void submitReport(row)}>
-              Report
-            </button>
+            {reportingId === row.id ? (
+              <div className="reportInline">
+                <select
+                  value={reportReason}
+                  onChange={(e) => setReportReason(e.target.value)}
+                >
+                  <option value="spam">Spam</option>
+                  <option value="abuse">Abuse</option>
+                  <option value="scam">Scam</option>
+                  <option value="other">Other</option>
+                </select>
+                <button type="button" className="miniBtn" onClick={() => void submitReport(row)}>
+                  Submit
+                </button>
+                <button type="button" className="miniBtn" onClick={() => setReportingId(null)}>
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button type="button" className="miniBtn" onClick={() => setReportingId(row.id)}>
+                Report
+              </button>
+            )}
           </article>
         ))}
       </div>

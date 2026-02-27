@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useAccount, useChainId, usePublicClient, useSwitchChain, useWalletClient } from "wagmi";
 import type { Address, Hex } from "viem";
@@ -82,6 +82,10 @@ export default function ListClient() {
   const wrongNetwork = isConnected && chainId !== config.chainId;
   const nftAddress = source === "shared" ? (standard === "ERC721" ? config.shared721 : config.shared1155) : customNftAddress;
   const parsedScanDepth = Number.parseInt(scanDepth, 10);
+
+  // Load listings once on mount so the feed isn't empty by default.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { void loadListings(); }, []);
 
   const filteredListings = useMemo(() => {
     let rows = allListings;
@@ -476,10 +480,12 @@ export default function ListClient() {
             Token ID
             <input value={tokenId} onChange={(e) => setTokenId(e.target.value)} inputMode="numeric" placeholder="1" />
           </label>
-          <label>
-            Amount
-            <input value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="numeric" placeholder="1" />
-          </label>
+          {standard === "ERC1155" && (
+            <label>
+              Amount
+              <input value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="numeric" placeholder="1" />
+            </label>
+          )}
         </div>
 
         <div className="card formCard">

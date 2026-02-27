@@ -363,7 +363,7 @@ export default function MintClient() {
           </label>
           {previewUrl && (
             <div className="previewWrap">
-              <img src={previewUrl} alt="NFT preview" className="previewImage" />
+              <img src={previewUrl} alt={name || "NFT preview"} className="previewImage" />
             </div>
           )}
           <button type="button" onClick={onUploadMetadata} disabled={uploadTx.status === "pending"}>
@@ -371,7 +371,12 @@ export default function MintClient() {
           </button>
           <label>
             Metadata URI
-            <input value={metadataUri} onChange={(e) => setMetadataUri(e.target.value)} placeholder="ipfs://.../metadata.json" />
+            <input
+              value={metadataUri}
+              onChange={(e) => setMetadataUri(e.target.value)}
+              placeholder="ipfs://.../metadata.json"
+              readOnly={uploadTx.status === "success"}
+            />
           </label>
           {imageUri && <p className="mono">Image URI: {imageUri}</p>}
           <TxStatus state={uploadTx} />
@@ -384,6 +389,25 @@ export default function MintClient() {
               Number of copies
               <input value={copies} onChange={(e) => setCopies(e.target.value)} inputMode="numeric" placeholder="10" />
             </label>
+          )}
+          {(previewUrl || name) && (
+            <div className="nftPreviewCard">
+              {previewUrl && (
+                <img src={previewUrl} alt={name || "NFT preview"} className="nftPreviewThumb" />
+              )}
+              <div className="nftPreviewMeta">
+                <p className="nftPreviewName">{name || "Untitled NFT"}</p>
+                {description && <p className="nftPreviewDesc">{description}</p>}
+                {metadataUri && (
+                  <p className="mono nftPreviewUri">
+                    {metadataUri.length > 48 ? `${metadataUri.slice(0, 48)}…` : metadataUri}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+          {!previewUrl && !name && (
+            <p className="hint">Fill in asset details above to see a preview here.</p>
           )}
         </div>
 

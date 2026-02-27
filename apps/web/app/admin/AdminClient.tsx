@@ -29,6 +29,8 @@ export default function AdminClient() {
   const [hiddenListings, setHiddenListings] = useState<number[]>([]);
   const [manualListingId, setManualListingId] = useState("");
   const [error, setError] = useState("");
+  const [pendingDecision, setPendingDecision] = useState<{ reportId: string; decision: Decision } | null>(null);
+  const [notesDraft, setNotesDraft] = useState("");
 
   async function refresh(): Promise<void> {
     try {
@@ -52,34 +54,46 @@ export default function AdminClient() {
 
   const openReports = useMemo(() => reports.filter((item) => item.status.toLowerCase() === "open"), [reports]);
 
-  async function applyDecision(reportId: string, decision: Decision): Promise<void> {
-    const notes = window.prompt("Optional moderation note:", "");
-    await resolveModerationReport({
-      reportId,
-      action: decision,
-      actor,
-      notes: notes || undefined,
-      auth: {
-        adminToken,
-        adminAddress: adminAddress || actor
-      }
-    });
-    await refresh();
+  async function confirmDecision(): Promise<void> {
+    if (!pendingDecision) return;
+    try {
+      setError("");
+      await resolveModerationReport({
+        reportId: pendingDecision.reportId,
+        action: pendingDecision.decision,
+        actor,
+        notes: notesDraft.trim() || undefined,
+        auth: {
+          adminToken,
+          adminAddress: adminAddress || actor
+        }
+      });
+      setPendingDecision(null);
+      setNotesDraft("");
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to apply decision.");
+    }
   }
 
   async function setManualHidden(hidden: boolean): Promise<void> {
     const id = Number.parseInt(manualListingId, 10);
     if (!Number.isInteger(id) || id < 0) return;
-    await setListingVisibility({
-      listingId: id,
-      hidden,
-      actor,
-      auth: {
-        adminToken,
-        adminAddress: adminAddress || actor
-      }
-    });
-    await refresh();
+    try {
+      setError("");
+      await setListingVisibility({
+        listingId: id,
+        hidden,
+        actor,
+        auth: {
+          adminToken,
+          adminAddress: adminAddress || actor
+        }
+      });
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update visibility.");
+    }
   }
 
   return (
@@ -159,17 +173,33 @@ export default function AdminClient() {
               <span>
                 <strong>Created</strong> {formatIso(report.createdAt)}
               </span>
-              <div className="row">
-                <button type="button" className="miniBtn" onClick={() => void applyDecision(report.id, "hide")}>
-                  Hide
-                </button>
-                <button type="button" className="miniBtn" onClick={() => void applyDecision(report.id, "restore")}>
-                  Restore
-                </button>
-                <button type="button" className="miniBtn" onClick={() => void applyDecision(report.id, "dismiss")}>
-                  Dismiss
-                </button>
-              </div>
+              {pendingDecision?.reportId === report.id ? (
+                <div className="reportInline">
+                  <input
+                    value={notesDraft}
+                    onChange={(e) => setNotesDraft(e.target.value)}
+                    placeholder="Optional note..."
+                  />
+                  <button type="button" className="miniBtn" onClick={() => void confirmDecision()}>
+                    Confirm {pendingDecision.decision}
+                  </button>
+                  <button type="button" className="miniBtn" onClick={() => { setPendingDecision(null); setNotesDraft(""); }}>
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <div className="row">
+                  <button type="button" className="miniBtn" onClick={() => { setPendingDecision({ reportId: report.id, decision: "hide" }); setNotesDraft(""); }}>
+                    Hide
+                  </button>
+                  <button type="button" className="miniBtn" onClick={() => { setPendingDecision({ reportId: report.id, decision: "restore" }); setNotesDraft(""); }}>
+                    Restore
+                  </button>
+                  <button type="button" className="miniBtn" onClick={() => { setPendingDecision({ reportId: report.id, decision: "dismiss" }); setNotesDraft(""); }}>
+                    Dismiss
+                  </button>
+                </div>
+              )}
             </article>
           ))}
         </div>

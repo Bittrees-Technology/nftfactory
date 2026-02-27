@@ -85,15 +85,17 @@ export default function ProfileClient({ name }: { name: string }) {
     }
 
     const collections = new Set(creatorListings.map((item) => item.nft.toLowerCase()));
-    let floor = creatorListings[0].price;
-    for (const item of creatorListings) {
-      if (item.price < floor) floor = item.price;
-    }
+
+    // Floor price: find the lowest-priced ETH listing so formatting is always correct.
+    const ethListings = creatorListings.filter((item) => item.paymentToken === "0x0000000000000000000000000000000000000000");
+    const floorListing = ethListings.length > 0
+      ? ethListings.reduce((min, item) => (item.price < min.price ? item : min), ethListings[0])
+      : null;
 
     return {
       listings: creatorListings.length,
       uniqueCollections: collections.size,
-      floorPrice: formatListingPrice({ ...creatorListings[0], price: floor })
+      floorPrice: floorListing ? formatListingPrice(floorListing) : "ERC20 only"
     };
   }, [creatorListings]);
 
