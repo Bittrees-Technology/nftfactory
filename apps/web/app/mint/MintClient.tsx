@@ -34,6 +34,12 @@ function normalizeSubname(label: string): string {
   return label.trim().toLowerCase().replace(/\.nftfactory\.eth$/, "");
 }
 
+function isValidSubnameLabel(label: string): boolean {
+  if (!label || label.length > 63) return false;
+  if (label.startsWith("-") || label.endsWith("-")) return false;
+  return /^[a-z0-9-]+$/.test(label);
+}
+
 function isAddress(value: string): value is `0x${string}` {
   return /^0x[a-fA-F0-9]{40}$/.test(value);
 }
@@ -132,9 +138,24 @@ export default function MintClient() {
   }
 
   async function onRegisterSubname(): Promise<void> {
+    if (!account) {
+      setSubnameTx({ status: "error", message: "Connect wallet first." });
+      return;
+    }
+    if (wrongNetwork) {
+      setSubnameTx({ status: "error", message: "Switch to Sepolia first." });
+      return;
+    }
     const label = normalizeSubname(subdomainLabel);
     if (!label) {
       setSubnameTx({ status: "error", message: "Subdomain label is required." });
+      return;
+    }
+    if (!isValidSubnameLabel(label)) {
+      setSubnameTx({
+        status: "error",
+        message: "Subdomain must be 1-63 chars, lowercase letters/numbers/hyphens, and not start or end with '-'."
+      });
       return;
     }
     try {
@@ -364,6 +385,7 @@ export default function MintClient() {
               Subdomain label
               <input value={subdomainLabel} onChange={(e) => setSubdomainLabel(e.target.value)} placeholder="studio" />
             </label>
+            <p className="hint">Allowed: `a-z`, `0-9`, `-` (1-63 chars; no leading/trailing `-`).</p>
             <button type="button" onClick={onRegisterSubname} disabled={!isConnected || wrongNetwork}>
               Register Subdomain ({SUBNAME_FEE_ETH} ETH)
             </button>
