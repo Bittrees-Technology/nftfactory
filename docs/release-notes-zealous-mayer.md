@@ -66,6 +66,7 @@ This worktree focused on production hardening, security controls, and end-to-end
   - Added buy-path tests for revoked ERC721 approval and transferred-away ERC721 inventory.
   - Added buy-path tests for revoked ERC1155 approval and reduced ERC1155 seller balance after listing.
   - Added assertions that preflight buy reverts keep listings active for seller recovery instead of silently deactivating.
+  - Added recovery-path test proving buy succeeds after ERC721 approval is restored post-failure.
 
 - Discover UX and moderation:
   - Improved reporter input behavior.
@@ -103,7 +104,7 @@ This worktree focused on production hardening, security controls, and end-to-end
 
 - Contract tests:
   - `forge test -vv`
-  - Result: passing (`57/57`)
+  - Result: passing (`58/58`)
 
 ## Reviewer Notes
 - `TRUST_PROXY` must remain `false` unless deployed behind trusted proxy infrastructure that sets `X-Forwarded-For`.
