@@ -20,6 +20,14 @@ Production-grade monorepo scaffold for `nftfactory.eth`.
 - `services/indexer`: Postgres/Prisma-based indexer + moderation data model
 - `docs`: architecture, deployment, and ops docs
 
+## Docs quicklinks
+- `docs/contracts-command-and-control-wiki.md`
+  - Command-and-control view of the protocol: authority matrix, privileged functions, governance posture, and operational playbooks for admin/factory/creator/marketplace control surfaces.
+- `docs/contracts-dependency-tree.md`
+  - Solidity import/dependency map (Mermaid + readable trees) to understand composition, trust boundaries, and upgradeable/proxy touchpoints.
+- `docs/audit-scope.md`
+  - Security review scope and priority areas for critical paths.
+
 ## Current status
 This repo includes build-ready scaffolding and first-pass contract/backend code. Dependency install and deployment credentials are intentionally not included.
 
