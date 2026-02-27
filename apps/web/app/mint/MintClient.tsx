@@ -67,9 +67,6 @@ export default function MintClient() {
   const [imageUri, setImageUri] = useState("");
 
   const [subdomainLabel, setSubdomainLabel] = useState("");
-  const [customCollectionName, setCustomCollectionName] = useState("My NFT Collection");
-  const [customCollectionSymbol, setCustomCollectionSymbol] = useState("MYNFT");
-  const [royaltyBps, setRoyaltyBps] = useState("500");
 
   const [uploadTx, setUploadTx] = useState<TxState>({ status: "idle" });
   const [mintTx, setMintTx] = useState<TxState>({ status: "idle" });
@@ -178,18 +175,6 @@ export default function MintClient() {
     } catch (err) {
       setSubnameTx({ status: "error", message: err instanceof Error ? err.message : "Subdomain registration failed" });
     }
-  }
-
-  function buildCreateCollectionCommand(): string {
-    const normalized = normalizeSubname(subdomainLabel);
-    const bps = Number.parseInt(royaltyBps || "0", 10) || 0;
-    const safeSubname = normalized || "creator";
-    return [
-      "cd ~/nftfactory/packages/contracts",
-      `cast send <CREATOR_FACTORY_ADDRESS> 'deployCollection((string,address,string,string,string,address,uint96))'`,
-      `"(${standard},${account || "<YOUR_WALLET>"},${customCollectionName},${customCollectionSymbol},${safeSubname},${account || "<ROYALTY_RECEIVER>"},${bps})"`,
-      `--rpc-url "$SEPOLIA_RPC_URL" --private-key "$PRIVATE_KEY"`
-    ].join(" \\\n  ");
   }
 
   async function onPublish(e: FormEvent): Promise<void> {
@@ -324,19 +309,9 @@ export default function MintClient() {
                 <summary>No custom collection yet? Create one</summary>
                 <div className="formCard inset">
                   <p className="hint">Subdomain registration below is only for custom contract naming identity.</p>
-                  <label>
-                    Collection name
-                    <input value={customCollectionName} onChange={(e) => setCustomCollectionName(e.target.value)} />
-                  </label>
-                  <label>
-                    Collection symbol
-                    <input value={customCollectionSymbol} onChange={(e) => setCustomCollectionSymbol(e.target.value)} />
-                  </label>
-                  <label>
-                    Royalty bps
-                    <input value={royaltyBps} onChange={(e) => setRoyaltyBps(e.target.value)} inputMode="numeric" />
-                  </label>
-                  <pre className="codeBlock">{buildCreateCollectionCommand()}</pre>
+                  <p className="hint">
+                    Deploy your custom collection via the contracts runbook, then paste the deployed contract address above.
+                  </p>
                 </div>
               </details>
             </>
