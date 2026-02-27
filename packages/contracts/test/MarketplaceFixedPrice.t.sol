@@ -167,6 +167,33 @@ contract MarketplaceFixedPriceTest is Test {
         marketplace.createListing(address(nft), tokenId, 1, "ERC721", address(0), 0.1 ether);
     }
 
+    function testRegistryBlockedCollectionCannotList() external {
+        vm.prank(admin);
+        registry.setBlocked(address(nft), true);
+
+        vm.prank(seller);
+        uint256 tokenId = nft.publish("", "ipfs://test");
+
+        vm.prank(seller);
+        vm.expectRevert(MarketplaceFixedPrice.Sanctioned.selector);
+        marketplace.createListing(address(nft), tokenId, 1, "ERC721", address(0), 0.1 ether);
+    }
+
+    function testRegistryBlockedCollectionCannotBuy() external {
+        vm.prank(seller);
+        uint256 tokenId = nft.publish("", "ipfs://test");
+
+        vm.prank(seller);
+        marketplace.createListing(address(nft), tokenId, 1, "ERC721", address(0), 0.1 ether);
+
+        vm.prank(admin);
+        registry.setBlocked(address(nft), true);
+
+        vm.prank(buyer);
+        vm.expectRevert(MarketplaceFixedPrice.Sanctioned.selector);
+        marketplace.buy{value: 0.1 ether}(0);
+    }
+
     function testUnsupportedStandardReverts() external {
         vm.prank(seller);
         uint256 tokenId = nft.publish("", "ipfs://test");
@@ -250,8 +277,8 @@ contract MarketplaceFixedPriceTest is Test {
         vm.prank(buyer);
         marketplace.buy{value: 0.1 ether}(0);
 
-        assertEq(multi.balanceOf(seller, tokenId), 3);
-        assertEq(multi.balanceOf(buyer, tokenId), 5);
+        assertEq(multi.balanceOf(tokenId, seller), 3);
+        assertEq(multi.balanceOf(tokenId, buyer), 5);
         assertEq(seller.balance, sellerBalBefore + 0.1 ether);
 
         (,,,,,,, bool active) = marketplace.listings(0);
@@ -382,8 +409,8 @@ contract MarketplaceFixedPriceTest is Test {
         vm.prank(buyer);
         marketplace.buy{value: 0.1 ether}(0);
 
-        assertEq(multi.balanceOf(seller, tokenId), 3);
-        assertEq(multi.balanceOf(buyer, tokenId), 5);
+        assertEq(multi.balanceOf(tokenId, seller), 3);
+        assertEq(multi.balanceOf(tokenId, buyer), 5);
         (,,,,,,, bool active) = marketplace.listings(0);
         assertFalse(active);
     }
@@ -426,9 +453,9 @@ contract MarketplaceFixedPriceTest is Test {
         vm.prank(buyer);
         marketplace.buy{value: 0.1 ether}(0);
 
-        assertEq(multi.balanceOf(seller, tokenId), 0);
-        assertEq(multi.balanceOf(buyer, tokenId), 5);
-        assertEq(multi.balanceOf(unapprovedSeller, tokenId), 3);
+        assertEq(multi.balanceOf(tokenId, seller), 0);
+        assertEq(multi.balanceOf(tokenId, buyer), 5);
+        assertEq(multi.balanceOf(tokenId, unapprovedSeller), 3);
         (,,,,,,, bool active) = marketplace.listings(0);
         assertFalse(active);
     }

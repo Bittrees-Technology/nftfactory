@@ -22,6 +22,7 @@ contract RoyaltySplitRegistryTest is Test {
         splits[0] = RoyaltySplitRegistry.Split({account: recipientA, bps: 7000});
         splits[1] = RoyaltySplitRegistry.Split({account: recipientB, bps: 3000});
 
+        vm.prank(admin);
         splitter.setCollectionSplits(collection, splits);
 
         RoyaltySplitRegistry.Split[] memory stored = splitter.getCollectionSplits(collection);
@@ -36,6 +37,7 @@ contract RoyaltySplitRegistryTest is Test {
         RoyaltySplitRegistry.Split[] memory splits = new RoyaltySplitRegistry.Split[](1);
         splits[0] = RoyaltySplitRegistry.Split({account: recipientA, bps: 10_000});
 
+        vm.prank(admin);
         splitter.setTokenSplits(collection, 42, splits);
 
         RoyaltySplitRegistry.Split[] memory stored = splitter.getTokenSplits(collection, 42);
@@ -48,6 +50,7 @@ contract RoyaltySplitRegistryTest is Test {
         RoyaltySplitRegistry.Split[] memory splits = new RoyaltySplitRegistry.Split[](1);
         splits[0] = RoyaltySplitRegistry.Split({account: recipientA, bps: 5000});
 
+        vm.prank(admin);
         vm.expectRevert(RoyaltySplitRegistry.InvalidSplit.selector);
         splitter.setCollectionSplits(collection, splits);
     }
@@ -56,6 +59,7 @@ contract RoyaltySplitRegistryTest is Test {
         RoyaltySplitRegistry.Split[] memory splits = new RoyaltySplitRegistry.Split[](1);
         splits[0] = RoyaltySplitRegistry.Split({account: address(0), bps: 10_000});
 
+        vm.prank(admin);
         vm.expectRevert(RoyaltySplitRegistry.InvalidSplit.selector);
         splitter.setCollectionSplits(collection, splits);
     }
@@ -64,13 +68,26 @@ contract RoyaltySplitRegistryTest is Test {
         RoyaltySplitRegistry.Split[] memory splits1 = new RoyaltySplitRegistry.Split[](2);
         splits1[0] = RoyaltySplitRegistry.Split({account: recipientA, bps: 5000});
         splits1[1] = RoyaltySplitRegistry.Split({account: recipientB, bps: 5000});
+        vm.prank(admin);
         splitter.setCollectionSplits(collection, splits1);
 
         RoyaltySplitRegistry.Split[] memory splits2 = new RoyaltySplitRegistry.Split[](1);
         splits2[0] = RoyaltySplitRegistry.Split({account: recipientA, bps: 10_000});
+        vm.prank(admin);
         splitter.setCollectionSplits(collection, splits2);
 
         RoyaltySplitRegistry.Split[] memory stored = splitter.getCollectionSplits(collection);
         assertEq(stored.length, 1);
+    }
+
+    function testNonOwnerCannotSetSplits() external {
+        RoyaltySplitRegistry.Split[] memory splits = new RoyaltySplitRegistry.Split[](1);
+        splits[0] = RoyaltySplitRegistry.Split({account: recipientA, bps: 10_000});
+
+        vm.expectRevert();
+        splitter.setCollectionSplits(collection, splits);
+
+        vm.expectRevert();
+        splitter.setTokenSplits(collection, 1, splits);
     }
 }
