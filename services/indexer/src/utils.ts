@@ -20,9 +20,17 @@ export function parseBearerToken(header: string | undefined): string {
   return token.trim();
 }
 
-export function getClientIp(req: IncomingMessage): string {
-  const forwarded = req.headers["x-forwarded-for"];
-  if (typeof forwarded === "string") return forwarded.split(",")[0].trim();
+export function getClientIp(req: IncomingMessage, trustProxy = false): string {
+  if (trustProxy) {
+    const forwarded = req.headers["x-forwarded-for"];
+    if (typeof forwarded === "string") {
+      const first = forwarded
+        .split(",")
+        .map((item) => item.trim())
+        .find(Boolean);
+      if (first) return first;
+    }
+  }
   return req.socket.remoteAddress || "unknown";
 }
 

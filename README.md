@@ -36,6 +36,7 @@ This repo includes build-ready scaffolding and first-pass contract/backend code.
   - `CHAIN_ID=11155111` (optional; defaults to Sepolia chain id)
   - `INDEXER_ADMIN_TOKEN=...` (recommended; required for admin mutation routes when set)
   - `INDEXER_ADMIN_ALLOWLIST=0xabc...,0xdef...` (optional; wallet addresses allowed to perform admin actions)
+  - `TRUST_PROXY=false` (optional; keep `false` unless a trusted proxy sets `X-Forwarded-For`)
 - `apps/web/.env.local`
   - `NEXT_PUBLIC_INDEXER_API_URL=http://127.0.0.1:8787`
   - existing contract and wallet env vars already used by mint/list flows
@@ -58,6 +59,7 @@ This repo includes build-ready scaffolding and first-pass contract/backend code.
   - via `x-admin-address` header, or
   - via request `actor` field (must be a valid allowlisted wallet address).
 - In the web Admin panel, use `Actor label`, `Admin address`, and `Admin token` fields to satisfy auth.
+- Rate limiting keys off socket IP by default; set `TRUST_PROXY=true` only when deployed behind trusted infra.
 
 ## Contracts (Foundry)
 1. `cd packages/contracts`

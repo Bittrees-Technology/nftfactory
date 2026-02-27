@@ -1,5 +1,6 @@
+import type { IncomingMessage } from "node:http";
 import { describe, it, expect, beforeEach } from "vitest";
-import { isAddress, isZeroAddress, normalizeSubname, parseBearerToken, isRateLimited, resetRateLimits } from "./utils.js";
+import { getClientIp, isAddress, isZeroAddress, normalizeSubname, parseBearerToken, isRateLimited, resetRateLimits } from "./utils.js";
 
 describe("isAddress", () => {
   it("accepts valid checksummed address", () => {
@@ -94,6 +95,33 @@ describe("parseBearerToken", () => {
 
   it("handles multiple spaces between scheme and token", () => {
     expect(parseBearerToken("Bearer    token789")).toBe("token789");
+  });
+});
+
+describe("getClientIp", () => {
+  function mockReq(params: {
+    forwarded?: string;
+    remoteAddress?: string;
+  }): IncomingMessage {
+    return {
+      headers: params.forwarded ? { "x-forwarded-for": params.forwarded } : {},
+      socket: { remoteAddress: params.remoteAddress || null }
+    } as IncomingMessage;
+  }
+
+  it("uses socket remote address by default", () => {
+    const req = mockReq({ forwarded: "203.0.113.1", remoteAddress: "127.0.0.1" });
+    expect(getClientIp(req)).toBe("127.0.0.1");
+  });
+
+  it("uses x-forwarded-for when trustProxy is enabled", () => {
+    const req = mockReq({ forwarded: "203.0.113.1, 203.0.113.2", remoteAddress: "127.0.0.1" });
+    expect(getClientIp(req, true)).toBe("203.0.113.1");
+  });
+
+  it("returns unknown when remote address is unavailable", () => {
+    const req = mockReq({});
+    expect(getClientIp(req)).toBe("unknown");
   });
 });
 
