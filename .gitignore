@@ -1,0 +1,12 @@
+node_modules
+.pnpm-store
+.next
+dist
+out
+.env
+.env.*
+coverage
+artifacts
+cache
+
+.claude/

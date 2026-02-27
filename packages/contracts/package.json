@@ -1,0 +1,13 @@
+{
+  "name": "contracts",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "build": "echo 'Use Foundry: forge build'",
+    "test": "echo 'Use Foundry: forge test'"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "5.4.0",
+    "@openzeppelin/contracts-upgradeable": "5.4.0"
+  }
+}
