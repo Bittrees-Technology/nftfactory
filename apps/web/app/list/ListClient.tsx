@@ -404,7 +404,17 @@ export default function ListClient() {
         })) as bigint;
 
         if (allowance < row.price) {
-          setState({ status: "pending", message: `Approving ERC20 for listing #${row.id}...` });
+          // Some ERC20s require setting allowance to zero before raising it.
+          if (allowance > 0n) {
+            setState({ status: "pending", message: `Resetting ERC20 allowance for listing #${row.id}...` });
+            const resetTx = await sendTransaction(
+              row.paymentToken as `0x${string}`,
+              encodeErc20Approve(config.marketplace as `0x${string}`, 0n) as `0x${string}`
+            );
+            setState({ status: "pending", hash: resetTx, message: `Approving ERC20 for listing #${row.id}...` });
+          } else {
+            setState({ status: "pending", message: `Approving ERC20 for listing #${row.id}...` });
+          }
           const approveTx = await sendTransaction(
             row.paymentToken as `0x${string}`,
             encodeErc20Approve(config.marketplace as `0x${string}`, row.price) as `0x${string}`
