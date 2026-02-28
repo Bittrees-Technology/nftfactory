@@ -97,12 +97,14 @@ contract SharedMint721 is Owned {
     /// @notice Returns the address approved to transfer `tokenId`, or address(0) if none.
     /// @param tokenId The token to query.
     function getApproved(uint256 tokenId) external view returns (address) {
+        if (_ownerOf[tokenId] == address(0)) revert NonexistentToken();
         return _approvals[tokenId];
     }
 
     /// @notice Returns the metadata URI for `tokenId` (ERC-721 Metadata extension).
     /// @param tokenId The token to query.
     function tokenURI(uint256 tokenId) external view returns (string memory) {
+        if (_ownerOf[tokenId] == address(0)) revert NonexistentToken();
         return _tokenURIs[tokenId];
     }
 

@@ -110,6 +110,11 @@ contract SharedMint721Test is Test {
         assertEq(nft.getApproved(tokenId), other);
     }
 
+    function testGetApprovedRevertsForNonexistentToken() external {
+        vm.expectRevert(SharedMint721.NonexistentToken.selector);
+        nft.getApproved(999);
+    }
+
     function testApproveEmitsApprovalEvent() external {
         vm.prank(creator);
         uint256 tokenId = nft.publish("", "ipfs://test");
@@ -316,6 +321,11 @@ contract SharedMint721Test is Test {
     }
 
     // ── Metadata ──────────────────────────────────────────────────────────────
+
+    function testTokenURIRevertsForNonexistentToken() external {
+        vm.expectRevert(SharedMint721.NonexistentToken.selector);
+        nft.tokenURI(999);
+    }
 
     function testNameAndSymbol() external view {
         assertEq(nft.name(), "SharedNFT");

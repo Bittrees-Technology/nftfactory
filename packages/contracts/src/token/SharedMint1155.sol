@@ -62,7 +62,7 @@ contract SharedMint1155 is Owned {
     /// @dev balanceOf[account][id] — outer key is account per EIP-1155 §5.3.
     ///      WARNING: previous deployments of this contract used the reversed layout
     ///      (id → account); those contracts must be redeployed to gain compliance.
-    mapping(address => mapping(uint256 => uint256)) public balanceOf;
+    mapping(address => mapping(uint256 => uint256)) private _balances;
     mapping(address => mapping(address => bool)) public isApprovedForAll;
     mapping(uint256 => string) private _uris;
 
@@ -91,6 +91,7 @@ contract SharedMint1155 is Owned {
     error InvalidRecipient();
     error InsufficientBalance();
     error ArrayLengthMismatch();
+    error InvalidOwner();
 
     // ── Constructor ───────────────────────────────────────────────────────────
 
@@ -110,6 +111,14 @@ contract SharedMint1155 is Owned {
         return _uris[tokenId];
     }
 
+    /// @notice Returns the balance of `account` for token `id`.
+    /// @param account The token holder to query.
+    /// @param id      The token ID to query.
+    function balanceOf(address account, uint256 id) public view returns (uint256) {
+        if (account == address(0)) revert InvalidOwner();
+        return _balances[account][id];
+    }
+
     /// @notice Returns the balances of multiple (account, id) pairs in a single call.
     /// @param accounts Array of holder addresses.
     /// @param ids      Array of token IDs (must be the same length as `accounts`).
@@ -122,7 +131,8 @@ contract SharedMint1155 is Owned {
         if (accounts.length != ids.length) revert ArrayLengthMismatch();
         balances = new uint256[](accounts.length);
         for (uint256 i = 0; i < accounts.length; i++) {
-            balances[i] = balanceOf[accounts[i]][ids[i]];
+            if (accounts[i] == address(0)) revert InvalidOwner();
+            balances[i] = _balances[accounts[i]][ids[i]];
         }
     }
 
@@ -145,11 +155,11 @@ contract SharedMint1155 is Owned {
         if (msg.sender != from && !isApprovedForAll[from][msg.sender]) revert Unauthorized();
         if (to == address(0)) revert InvalidRecipient();
 
-        uint256 fromBal = balanceOf[from][id];
+        uint256 fromBal = _balances[from][id];
         if (fromBal < amount) revert InsufficientBalance();
 
-        balanceOf[from][id] = fromBal - amount;
-        balanceOf[to][id] += amount;
+        _balances[from][id] = fromBal - amount;
+        _balances[to][id] += amount;
 
         emit TransferSingle(msg.sender, from, to, id, amount);
         _checkOnERC1155Received(from, to, id, amount, data);
@@ -175,10 +185,10 @@ contract SharedMint1155 is Owned {
         if (ids.length != amounts.length) revert ArrayLengthMismatch();
 
         for (uint256 i = 0; i < ids.length; i++) {
-            uint256 fromBal = balanceOf[from][ids[i]];
+            uint256 fromBal = _balances[from][ids[i]];
             if (fromBal < amounts[i]) revert InsufficientBalance();
-            balanceOf[from][ids[i]] = fromBal - amounts[i];
-            balanceOf[to][ids[i]] += amounts[i];
+            _balances[from][ids[i]] = fromBal - amounts[i];
+            _balances[to][ids[i]] += amounts[i];
         }
 
         emit TransferBatch(msg.sender, from, to, ids, amounts);
@@ -201,7 +211,7 @@ contract SharedMint1155 is Owned {
         returns (uint256 tokenId)
     {
         tokenId = ++nextTokenId;
-        balanceOf[msg.sender][tokenId] += amount;
+        _balances[msg.sender][tokenId] += amount;
         _uris[tokenId] = newUri;
 
         if (bytes(creatorSubname).length != 0) {

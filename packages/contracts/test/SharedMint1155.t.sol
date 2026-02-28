@@ -114,6 +114,11 @@ contract SharedMint1155Test is Test {
         nft.publish("", 10, "ipfs://test");
     }
 
+    function testBalanceOfRevertsForZeroAddress() external {
+        vm.expectRevert(SharedMint1155.InvalidOwner.selector);
+        nft.balanceOf(address(0), 1);
+    }
+
     // ── safeTransferFrom ──────────────────────────────────────────────────────
 
     function testTransfer() external {
@@ -342,6 +347,17 @@ contract SharedMint1155Test is Test {
         ids[0] = 1;
 
         vm.expectRevert(SharedMint1155.ArrayLengthMismatch.selector);
+        nft.balanceOfBatch(accounts, ids);
+    }
+
+    function testBalanceOfBatchRevertsForZeroAddressAccount() external {
+        address[] memory accounts = new address[](1);
+        accounts[0] = address(0);
+
+        uint256[] memory ids = new uint256[](1);
+        ids[0] = 1;
+
+        vm.expectRevert(SharedMint1155.InvalidOwner.selector);
         nft.balanceOfBatch(accounts, ids);
     }
 
