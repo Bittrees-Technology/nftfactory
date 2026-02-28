@@ -250,8 +250,8 @@ contract MarketplaceFixedPriceTest is Test {
         vm.prank(buyer);
         marketplace.buy{value: 0.1 ether}(0);
 
-        assertEq(multi.balanceOf(tokenId, seller), 3);
-        assertEq(multi.balanceOf(tokenId, buyer), 5);
+        assertEq(multi.balanceOf(seller, tokenId), 3);
+        assertEq(multi.balanceOf(buyer, tokenId), 5);
         assertEq(seller.balance, sellerBalBefore + 0.1 ether);
 
         (,,,,,,, bool active) = marketplace.listings(0);
@@ -382,8 +382,8 @@ contract MarketplaceFixedPriceTest is Test {
         vm.prank(buyer);
         marketplace.buy{value: 0.1 ether}(0);
 
-        assertEq(multi.balanceOf(tokenId, seller), 3);
-        assertEq(multi.balanceOf(tokenId, buyer), 5);
+        assertEq(multi.balanceOf(seller, tokenId), 3);
+        assertEq(multi.balanceOf(buyer, tokenId), 5);
         (,,,,,,, bool active) = marketplace.listings(0);
         assertFalse(active);
     }
@@ -426,9 +426,9 @@ contract MarketplaceFixedPriceTest is Test {
         vm.prank(buyer);
         marketplace.buy{value: 0.1 ether}(0);
 
-        assertEq(multi.balanceOf(tokenId, seller), 0);
-        assertEq(multi.balanceOf(tokenId, buyer), 5);
-        assertEq(multi.balanceOf(tokenId, unapprovedSeller), 3);
+        assertEq(multi.balanceOf(seller, tokenId), 0);
+        assertEq(multi.balanceOf(buyer, tokenId), 5);
+        assertEq(multi.balanceOf(unapprovedSeller, tokenId), 3);
         (,,,,,,, bool active) = marketplace.listings(0);
         assertFalse(active);
     }

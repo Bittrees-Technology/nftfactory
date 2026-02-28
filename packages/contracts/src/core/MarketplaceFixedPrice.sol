@@ -73,7 +73,7 @@ contract MarketplaceFixedPrice is Owned {
             if (!IERC721Lite(nft).isApprovedForAll(msg.sender, address(this))) revert NotApproved();
         } else if (key == keccak256("ERC1155")) {
             if (amount == 0) revert InvalidAmount();
-            if (IERC1155Lite(nft).balanceOf(tokenId, msg.sender) < amount) revert NotSeller();
+            if (IERC1155Lite(nft).balanceOf(msg.sender, tokenId) < amount) revert NotSeller();
             if (!IERC1155Lite(nft).isApprovedForAll(msg.sender, address(this))) revert NotApproved();
         } else {
             revert UnsupportedStandard();
@@ -112,7 +112,7 @@ contract MarketplaceFixedPrice is Owned {
             if (IERC721Lite(listing.nft).ownerOf(listing.tokenId) != listing.seller) revert NotSeller();
             if (!IERC721Lite(listing.nft).isApprovedForAll(listing.seller, address(this))) revert NotApproved();
         } else if (key == keccak256("ERC1155")) {
-            if (IERC1155Lite(listing.nft).balanceOf(listing.tokenId, listing.seller) < listing.amount) revert NotSeller();
+            if (IERC1155Lite(listing.nft).balanceOf(listing.seller, listing.tokenId) < listing.amount) revert NotSeller();
             if (!IERC1155Lite(listing.nft).isApprovedForAll(listing.seller, address(this))) revert NotApproved();
         } else {
             revert UnsupportedStandard();
