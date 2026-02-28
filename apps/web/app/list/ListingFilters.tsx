@@ -8,6 +8,8 @@ export type FilterState = {
   filterStandard: "ALL" | "ERC721" | "ERC1155";
   filterContract: string;
   filterSeller: string;
+  /** ENS subname label typed by the user (e.g. "studio"). Resolved to wallet addresses by ListClient. */
+  filterSubname: string;
   filterMinPrice: string;
   filterMaxPrice: string;
   sortBy: SortBy;
@@ -19,13 +21,15 @@ type Props = {
   address?: string;
   onFilterChange: (updates: Partial<FilterState>) => void;
   onPreset: (preset: Preset) => void;
+  /** Status text shown below the ENS subname input (e.g. "→ 0xabc…" or "not found"). */
+  subnameHint?: string;
 };
 
 function presetClass(active: Preset, preset: Preset): string {
   return `presetButton ${active === preset ? "presetActive" : ""}`;
 }
 
-export default function ListingFilters({ filters, address, onFilterChange, onPreset }: Props) {
+export default function ListingFilters({ filters, address, onFilterChange, onPreset, subnameHint }: Props) {
   return (
     <>
       <div className="row">
@@ -85,6 +89,15 @@ export default function ListingFilters({ filters, address, onFilterChange, onPre
             onChange={(e) => onFilterChange({ filterSeller: e.target.value, activePreset: "reset" })}
             placeholder="0xseller..."
           />
+        </label>
+        <label>
+          Creator (ENS subname)
+          <input
+            value={filters.filterSubname}
+            onChange={(e) => onFilterChange({ filterSubname: e.target.value.trim().toLowerCase(), activePreset: "reset" })}
+            placeholder="e.g. studio"
+          />
+          {subnameHint && <small className="hint">{subnameHint}</small>}
         </label>
         <label>
           Min price (ETH only)
