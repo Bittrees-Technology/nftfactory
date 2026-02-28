@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { useAccount, useChainId, usePublicClient, useSwitchChain, useWalletClient } from "wagmi";
+import { useAccount, useChainId, usePublicClient, useWalletClient } from "wagmi";
 import type { Address, Hex } from "viem";
 import {
   encodeCreatorPublish1155,
@@ -22,7 +22,7 @@ import {
 } from "../../lib/creatorCollection";
 import { getContractsConfig } from "../../lib/contracts";
 import { getAppChain, getExplorerBaseUrl } from "../../lib/chains";
-import { fetchProfileResolution } from "../../lib/indexerApi";
+import { fetchCollectionsByOwner, fetchProfileResolution } from "../../lib/indexerApi";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -32,6 +32,15 @@ type TxState = {
   message?: string;
 };
 
+type UploadReceipt = {
+  imageUri?: string | null;
+  imageGatewayUrl?: string | null;
+  audioUri?: string | null;
+  audioGatewayUrl?: string | null;
+  metadataUri?: string | null;
+  metadataGatewayUrl?: string | null;
+};
+
 type Standard = "ERC721" | "ERC1155";
 /** "shared" = shared public contracts; "custom" = a CreatorCollection deployed by the factory */
 type MintMode = "shared" | "custom";
@@ -39,7 +48,6 @@ type MintMode = "shared" | "custom";
 type PageMode = "mint" | "manage";
 
 const SUBNAME_FEE_ETH = "0.001";
-const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as `0x${string}`;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -63,6 +71,11 @@ function isValidSubnameLabel(label: string): boolean {
   return /^[a-z0-9-]+$/.test(label);
 }
 
+function isValidEnsReference(value: string): boolean {
+  if (!value) return false;
+  return /^(?:[a-z0-9-]+\.)+[a-z]{2,}$/i.test(value.trim());
+}
+
 function isAddress(value: string): value is `0x${string}` {
   return /^0x[a-fA-F0-9]{40}$/.test(value);
 }
@@ -71,8 +84,19 @@ function storageKey(ownerAddress: string): string {
   return `nftfactory:known-collections:${ownerAddress.toLowerCase()}`;
 }
 
+function metadataDraftKey(ownerAddress: string): string {
+  return `nftfactory:mint-draft:${ownerAddress.toLowerCase()}`;
+}
+
 function shortenAddress(value: string): string {
   return `${value.slice(0, 8)}…${value.slice(-6)}`;
+}
+
+function formatCollectionIdentity(value: string | null): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  return trimmed.includes(".") ? trimmed : `${trimmed}.nftfactory.eth`;
 }
 
 type MintClientProps = {
@@ -99,7 +123,6 @@ export default function MintClient({
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
   const publicClient = usePublicClient();
-  const { switchChainAsync } = useSwitchChain();
   const { data: walletClient } = useWalletClient();
 
   // ── Top-level page mode ───────────────────────────────────────────────────
@@ -127,37 +150,39 @@ export default function MintClient({
   // Token metadata
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [includeExternalUrl, setIncludeExternalUrl] = useState(false);
   const [externalUrl, setExternalUrl] = useState("");
+  const [useCustomMetadataUri, setUseCustomMetadataUri] = useState(false);
   const [metadataUri, setMetadataUri] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
+  const [includeAudio, setIncludeAudio] = useState(false);
+  const [audioFile, setAudioFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState("");
   const [imageUri, setImageUri] = useState("");
+  const [audioUri, setAudioUri] = useState("");
 
   // Mint-specific settings
   const [copies, setCopies] = useState("1");
   const [custom1155TokenId, setCustom1155TokenId] = useState("1");
   const [lockMetadata, setLockMetadata] = useState(true);
 
-  // ENS attribution subname (for shared mints, attributes mint to a registered subname)
-  const [attributionSubname, setAttributionSubname] = useState(initialProfileLabel);
-  // Register subname flow (for custom collections)
+  // Collection identity management
   const [registerSubnameLabel, setRegisterSubnameLabel] = useState(initialProfileLabel);
+  const [identityMode, setIdentityMode] = useState<"ens" | "subname" | "nftfactory">("nftfactory");
 
   // Transaction state
   const [uploadTx, setUploadTx] = useState<TxState>({ status: "idle" });
   const [mintTx, setMintTx] = useState<TxState>({ status: "idle" });
   const [subnameTx, setSubnameTx] = useState<TxState>({ status: "idle" });
+  const [uploadReceipt, setUploadReceipt] = useState<UploadReceipt>({});
 
   // ── Collection management state ───────────────────────────────────────────
   const [manageAddress, setManageAddress] = useState("");
+  const [manageSelector, setManageSelector] = useState<"saved" | "manual">("saved");
   const [transferTarget, setTransferTarget] = useState("");
   const [transferTx, setTransferTx] = useState<TxState>({ status: "idle" });
   const [finalizeTx, setFinalizeTx] = useState<TxState>({ status: "idle" });
   const [finalizeConfirmed, setFinalizeConfirmed] = useState(false);
-
-  // ── ENS lookup for attribution ────────────────────────────────────────────
-  const [subnameResolved, setSubnameResolved] = useState<string | null>(null);
-  const [subnameResolving, setSubnameResolving] = useState(false);
 
   const wrongNetwork = isConnected && chainId !== config.chainId;
   const account = address ?? "";
@@ -193,24 +218,6 @@ export default function MintClient({
     return () => URL.revokeObjectURL(url);
   }, [imageFile]);
 
-  // Resolve attribution subname live
-  useEffect(() => {
-    const label = normalizeSubname(attributionSubname);
-    if (!label || !isValidSubnameLabel(label)) {
-      setSubnameResolved(null);
-      return;
-    }
-    let cancelled = false;
-    setSubnameResolving(true);
-    void fetchProfileResolution(label)
-      .then((r) => {
-        if (!cancelled) setSubnameResolved(r.sellers[0] ?? null);
-      })
-      .catch(() => { if (!cancelled) setSubnameResolved(null); })
-      .finally(() => { if (!cancelled) setSubnameResolving(false); });
-    return () => { cancelled = true; };
-  }, [attributionSubname]);
-
   useEffect(() => {
     if (!account || typeof window === "undefined") {
       setKnownCollections([]);
@@ -231,11 +238,35 @@ export default function MintClient({
   }, [account]);
 
   useEffect(() => {
-    if (!account || mintMode !== "custom") return;
+    if (!account) return;
+    let cancelled = false;
+    void fetchCollectionsByOwner(account)
+      .then((result) => {
+        if (cancelled) return;
+        const owned = result.collections
+          .filter((item) => item.ownerAddress.toLowerCase() === account.toLowerCase())
+          .map((item) => ({
+            contractAddress: item.contractAddress,
+            ensSubname: item.ensSubname,
+            ownerAddress: item.ownerAddress
+          }));
+        if (owned.length > 0) {
+          mergeKnownCollections(owned);
+        }
+      })
+      .catch(() => {
+        // Keep the local cache fallback when the indexer is unavailable.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [account]);
+
+  useEffect(() => {
+    if (!account) return;
     const labels = [
       normalizeSubname(deploySubname),
-      normalizeSubname(registerSubnameLabel),
-      normalizeSubname(attributionSubname)
+      normalizeSubname(registerSubnameLabel)
     ].filter(Boolean);
     const uniqueLabels = [...new Set(labels)];
     if (uniqueLabels.length === 0) return;
@@ -254,7 +285,95 @@ export default function MintClient({
         if (owned.length > 0) mergeKnownCollections(owned);
       });
     return () => { cancelled = true; };
-  }, [account, attributionSubname, deploySubname, mintMode, registerSubnameLabel]);
+  }, [account, deploySubname, registerSubnameLabel]);
+
+  useEffect(() => {
+    if (!includeAudio && audioFile) {
+      setAudioFile(null);
+      setAudioUri("");
+    }
+  }, [audioFile, includeAudio]);
+
+  useEffect(() => {
+    if (!includeExternalUrl && externalUrl) {
+      setExternalUrl("");
+    }
+  }, [externalUrl, includeExternalUrl]);
+
+  useEffect(() => {
+    if (!useCustomMetadataUri && metadataUri && uploadReceipt.metadataUri === metadataUri) {
+      setMetadataUri("");
+    }
+  }, [metadataUri, uploadReceipt.metadataUri, useCustomMetadataUri]);
+
+  useEffect(() => {
+    if (!account || typeof window === "undefined") {
+      return;
+    }
+    const raw = window.localStorage.getItem(metadataDraftKey(account));
+    if (!raw) {
+      return;
+    }
+    try {
+      const parsed = JSON.parse(raw) as {
+        name?: string;
+        description?: string;
+        includeExternalUrl?: boolean;
+        externalUrl?: string;
+        useCustomMetadataUri?: boolean;
+        metadataUri?: string;
+        includeAudio?: boolean;
+        imageUri?: string;
+        audioUri?: string;
+        uploadReceipt?: UploadReceipt;
+      };
+      if (parsed.name) setName(parsed.name);
+      if (parsed.description) setDescription(parsed.description);
+      if (typeof parsed.includeExternalUrl === "boolean") setIncludeExternalUrl(parsed.includeExternalUrl);
+      if (parsed.externalUrl) setExternalUrl(parsed.externalUrl);
+      if (typeof parsed.useCustomMetadataUri === "boolean") setUseCustomMetadataUri(parsed.useCustomMetadataUri);
+      if (parsed.metadataUri) setMetadataUri(parsed.metadataUri);
+      if (typeof parsed.includeAudio === "boolean") setIncludeAudio(parsed.includeAudio);
+      if (parsed.imageUri) setImageUri(parsed.imageUri);
+      if (parsed.audioUri) setAudioUri(parsed.audioUri);
+      if (parsed.uploadReceipt) setUploadReceipt(parsed.uploadReceipt);
+    } catch {
+      // Ignore malformed local drafts.
+    }
+  }, [account]);
+
+  useEffect(() => {
+    if (!account || typeof window === "undefined") {
+      return;
+    }
+    window.localStorage.setItem(
+      metadataDraftKey(account),
+      JSON.stringify({
+        name,
+        description,
+        includeExternalUrl,
+        externalUrl,
+        useCustomMetadataUri,
+        metadataUri,
+        includeAudio,
+        imageUri,
+        audioUri,
+        uploadReceipt
+      })
+    );
+  }, [
+    account,
+    audioUri,
+    description,
+    externalUrl,
+    imageUri,
+    includeAudio,
+    includeExternalUrl,
+    metadataUri,
+    name,
+    uploadReceipt,
+    useCustomMetadataUri
+  ]);
 
   useEffect(() => {
     if (mintMode !== "custom") return;
@@ -273,11 +392,17 @@ export default function MintClient({
     }
   }, [customCollectionAddress, manageAddress]);
 
-  // ── Utilities ─────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (knownCollections.length === 0) {
+      setManageSelector("manual");
+      return;
+    }
+    if (manageSelector === "saved" && !manageAddress) {
+      setManageAddress(knownCollections[0].contractAddress);
+    }
+  }, [knownCollections, manageAddress, manageSelector]);
 
-  async function switchToExpectedNetwork(): Promise<void> {
-    try { await switchChainAsync({ chainId: config.chainId }); } catch { /* wallet handles display */ }
-  }
+  // ── Utilities ─────────────────────────────────────────────────────────────
 
   async function sendTransaction(
     to: `0x${string}`,
@@ -302,23 +427,41 @@ export default function MintClient({
   // ── Upload metadata to IPFS ───────────────────────────────────────────────
 
   async function uploadMetadata(): Promise<string> {
-    if (!imageFile) {
-      setUploadTx({ status: "error", message: "Choose an image file first." });
-      throw new Error("Choose an image file first.");
+    if (useCustomMetadataUri) {
+      const customUri = metadataUri.trim();
+      if (!customUri) {
+        setUploadTx({ status: "error", message: "Enter a custom metadata URI first." });
+        throw new Error("Enter a custom metadata URI first.");
+      }
+      if (!customUri.startsWith("ipfs://")) {
+        setUploadTx({ status: "error", message: "Custom metadata URI must start with ipfs://." });
+        throw new Error("Custom metadata URI must start with ipfs://.");
+      }
+      setUploadReceipt({
+        metadataUri: customUri
+      });
+      setUploadTx({ status: "success", message: "Using custom metadata URI." });
+      return customUri;
     }
     if (!name.trim()) { setUploadTx({ status: "error", message: "Token name is required." }); throw new Error("Token name is required."); }
     try {
-      setUploadTx({ status: "pending", message: "Uploading image and metadata to IPFS…" });
+      setUploadTx({ status: "pending", message: "Uploading media and metadata to IPFS…" });
+      setUploadReceipt({});
       const form = new FormData();
-      form.append("image", imageFile);
+      if (imageFile) form.append("image", imageFile);
+      if (audioFile) form.append("audio", audioFile);
       form.append("name", name.trim());
       form.append("description", description.trim());
-      form.append("external_url", externalUrl.trim());
+      if (includeExternalUrl) {
+        form.append("external_url", externalUrl.trim());
+      }
       const res = await fetch("/api/ipfs/metadata", { method: "POST", body: form });
-      const payload = await res.json() as { imageUri?: string; metadataUri?: string; error?: string };
-      if (!res.ok || !payload.metadataUri || !payload.imageUri) throw new Error(payload.error || "Upload failed");
-      setImageUri(payload.imageUri);
+      const payload = await res.json() as UploadReceipt & { error?: string };
+      if (!res.ok || !payload.metadataUri) throw new Error(payload.error || "Upload failed");
+      setImageUri(payload.imageUri || "");
+      setAudioUri(payload.audioUri || "");
       setMetadataUri(payload.metadataUri);
+      setUploadReceipt(payload);
       setUploadTx({ status: "success", message: "Uploaded to IPFS. Continuing to mint…" });
       return payload.metadataUri;
     } catch (err) {
@@ -332,7 +475,7 @@ export default function MintClient({
 
   async function onDeployCollection(): Promise<void> {
     if (!account) { setDeployTx({ status: "error", message: "Connect wallet first." }); return; }
-    if (wrongNetwork) { setDeployTx({ status: "error", message: `Switch to ${appChain.name} first.` }); return; }
+    if (wrongNetwork) { setDeployTx({ status: "error", message: `Select ${appChain.name} in the wallet menu first.` }); return; }
     if (!deployName.trim()) { setDeployTx({ status: "error", message: "Collection name is required." }); return; }
     if (!deploySymbol.trim()) { setDeployTx({ status: "error", message: "Symbol is required." }); return; }
 
@@ -401,7 +544,7 @@ export default function MintClient({
 
   async function onRegisterSubname(): Promise<void> {
     if (!account) { setSubnameTx({ status: "error", message: "Connect wallet first." }); return; }
-    if (wrongNetwork) { setSubnameTx({ status: "error", message: `Switch to ${appChain.name} first.` }); return; }
+    if (wrongNetwork) { setSubnameTx({ status: "error", message: `Select ${appChain.name} in the wallet menu first.` }); return; }
     const label = normalizeSubname(registerSubnameLabel);
     if (!label) { setSubnameTx({ status: "error", message: "Enter a subname label." }); return; }
     if (!isValidSubnameLabel(label)) {
@@ -416,10 +559,55 @@ export default function MintClient({
         toHexWei(SUBNAME_FEE_ETH) as `0x${string}`
       );
       await waitForReceipt(txHash);
+      if (isAddress(manageAddress)) {
+        mergeKnownCollections([{
+          contractAddress: manageAddress,
+          ensSubname: label,
+          ownerAddress: account
+        }]);
+      }
       setSubnameTx({ status: "success", hash: txHash, message: `${label}.nftfactory.eth registered.` });
     } catch (err) {
       setSubnameTx({ status: "error", message: err instanceof Error ? err.message : "Registration failed" });
     }
+  }
+
+  function saveCollectionIdentity(): void {
+    if (!account) {
+      setSubnameTx({ status: "error", message: "Connect wallet first." });
+      return;
+    }
+    if (!isAddress(manageAddress)) {
+      setSubnameTx({ status: "error", message: "Select or enter a valid collection first." });
+      return;
+    }
+    const raw = registerSubnameLabel.trim().toLowerCase();
+    if (!raw) {
+      setSubnameTx({ status: "error", message: "Enter a collection identity first." });
+      return;
+    }
+    if (identityMode === "nftfactory") {
+      void onRegisterSubname();
+      return;
+    }
+    if (!isValidEnsReference(raw)) {
+      setSubnameTx({
+        status: "error",
+        message: identityMode === "ens"
+          ? "Enter a full ENS name such as artist.eth."
+          : "Enter a full subname such as studio.example.eth."
+      });
+      return;
+    }
+    mergeKnownCollections([{
+      contractAddress: manageAddress,
+      ensSubname: raw,
+      ownerAddress: account
+    }]);
+    setSubnameTx({
+      status: "success",
+      message: `${raw} saved as the display identity for this collection.`
+    });
   }
 
   // ── Mint / publish ────────────────────────────────────────────────────────
@@ -428,7 +616,7 @@ export default function MintClient({
     e.preventDefault();
     setMintTx({ status: "idle" });
     if (!account) { setMintTx({ status: "error", message: "Connect wallet first." }); return; }
-    if (wrongNetwork) { setMintTx({ status: "error", message: `Switch to ${appChain.name} first.` }); return; }
+    if (wrongNetwork) { setMintTx({ status: "error", message: `Select ${appChain.name} in the wallet menu first.` }); return; }
 
     const amount = Number.parseInt(copies || "1", 10);
     if (standard === "ERC1155" && (!Number.isInteger(amount) || amount <= 0)) {
@@ -436,12 +624,10 @@ export default function MintClient({
       return;
     }
 
-    const subname = normalizeSubname(attributionSubname);
-
     try {
       let effectiveMetadataUri = metadataUri.trim();
-      if (imageFile) {
-        setMintTx({ status: "pending", message: "Uploading metadata, then preparing mint…" });
+      if (!useCustomMetadataUri) {
+        setMintTx({ status: "pending", message: "Publishing metadata to IPFS, then preparing mint…" });
         effectiveMetadataUri = await uploadMetadata();
       }
       if (!effectiveMetadataUri) {
@@ -457,10 +643,10 @@ export default function MintClient({
       if (mintMode === "shared") {
         if (standard === "ERC721") {
           targetNft = config.shared721;
-          mintData = encodePublish721(subname, effectiveMetadataUri) as `0x${string}`;
+          mintData = encodePublish721("", effectiveMetadataUri) as `0x${string}`;
         } else {
           targetNft = config.shared1155;
-          mintData = encodePublish1155(subname, BigInt(amount), effectiveMetadataUri) as `0x${string}`;
+          mintData = encodePublish1155("", BigInt(amount), effectiveMetadataUri) as `0x${string}`;
         }
       } else {
         if (!isAddress(customCollectionAddress)) {
@@ -494,7 +680,7 @@ export default function MintClient({
 
   async function onTransferOwnership(): Promise<void> {
     if (!account) { setTransferTx({ status: "error", message: "Connect wallet first." }); return; }
-    if (wrongNetwork) { setTransferTx({ status: "error", message: `Switch to ${appChain.name} first.` }); return; }
+    if (wrongNetwork) { setTransferTx({ status: "error", message: `Select ${appChain.name} in the wallet menu first.` }); return; }
     if (!isAddress(manageAddress)) { setTransferTx({ status: "error", message: "Enter a valid collection address." }); return; }
     if (!isAddress(transferTarget)) { setTransferTx({ status: "error", message: "Enter a valid new owner address." }); return; }
     try {
@@ -512,7 +698,7 @@ export default function MintClient({
 
   async function onFinalizeUpgrades(): Promise<void> {
     if (!account) { setFinalizeTx({ status: "error", message: "Connect wallet first." }); return; }
-    if (wrongNetwork) { setFinalizeTx({ status: "error", message: `Switch to ${appChain.name} first.` }); return; }
+    if (wrongNetwork) { setFinalizeTx({ status: "error", message: `Select ${appChain.name} in the wallet menu first.` }); return; }
     if (!isAddress(manageAddress)) { setFinalizeTx({ status: "error", message: "Enter a valid collection address." }); return; }
     if (!finalizeConfirmed) { setFinalizeTx({ status: "error", message: "Tick the confirmation box first." }); return; }
     try {
@@ -567,25 +753,17 @@ export default function MintClient({
         {pageMode === "manage" ? (
           <p className="hint">
             Use this mode when you already have a creator collection contract and need to transfer
-            ownership or permanently finalize upgrades.
-          </p>
-        ) : mintMode === "shared" ? (
-          <p className="hint">
-            Shared mode is the fastest path: no deploy step, no custom contract address required, and
-            optional ENS attribution for discoverability.
+            ownership, finalize upgrades, or update the collection identity.
           </p>
         ) : (
           <p className="hint">
-            Custom mode is the full creator flow: deploy or paste your collection, configure metadata
-            lock behavior, and optionally register an ENS subname for storefront identity.
+            This is one unified publish flow. Choose the shared contract or one of your creator collections in step 2,
+            then complete the same metadata and mint sequence.
           </p>
         )}
         <div className="row">
-          <button type="button" className={pageMode === "mint" && mintMode === "shared" ? "presetButton presetActive" : "presetButton"} onClick={() => { setPageMode("mint"); setMintMode("shared"); }}>
-            Shared mint
-          </button>
-          <button type="button" className={pageMode === "mint" && mintMode === "custom" ? "presetButton presetActive" : "presetButton"} onClick={() => { setPageMode("mint"); setMintMode("custom"); }}>
-            Custom collection
+          <button type="button" className={pageMode === "mint" ? "presetButton presetActive" : "presetButton"} onClick={() => setPageMode("mint")}>
+            Mint and publish
           </button>
           <button type="button" className={pageMode === "manage" ? "presetButton presetActive" : "presetButton"} onClick={() => setPageMode("manage")}>
             Manage collection
@@ -604,22 +782,25 @@ export default function MintClient({
           {/* Step 1: Wallet */}
           <div className="card formCard">
             <h3>1. Wallet Status</h3>
-            <p className="hint">The header wallet button controls connect, account selection, and network switching.</p>
-            {wrongNetwork && (
-              <button type="button" onClick={switchToExpectedNetwork}>
-                Switch to {appChain.name}
-              </button>
-            )}
-            <p className="mono">Account: {account || "Not connected"}</p>
-            <p className="mono">Network: {chainId ?? "Unknown"} (expected {appChain.name} / {config.chainId})</p>
+            <p className="hint">The header wallet button controls connect, account selection, and network selection.</p>
+            {wrongNetwork ? (
+              <p className="hint">
+                Use the header wallet button to select {appChain.name}. Minting stays blocked until the selected network
+                matches the configured chain.
+              </p>
+            ) : null}
+            <div className="gridMini">
+              <p className="mono">Account: {account || "Not connected"}</p>
+              <p className="mono">Target network: {appChain.name}</p>
+            </div>
           </div>
 
           {/* Step 2: Collection selection */}
           <div className="card formCard">
-            <h3>2. Choose Your Collection</h3>
+            <h3>2. Collection Target</h3>
             <p className="hint">
-              Pick <strong>shared</strong> if you want the quickest path to publishing. Pick <strong>custom</strong>
-              if you need your own contract, royalties, upgrade controls, and collection ownership.
+              Use one publish form for both paths. Pick the shared contract for the fastest release, or pick one of your
+              creator collections when you want ownership, royalties, and upgrade controls.
             </p>
 
             <label>
@@ -656,25 +837,14 @@ export default function MintClient({
               <div>
                 <p className="hint">
                   <strong>Shared collection:</strong> your token goes into a common contract
-                  anyone can mint into. Great for quick publishing. The contract address is{" "}
-                  {toExplorerAddress(config.chainId, standard === "ERC721" ? config.shared721 : config.shared1155) ? (
-                    <a
-                      href={toExplorerAddress(config.chainId, standard === "ERC721" ? config.shared721 : config.shared1155)!}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="mono"
-                    >
-                      {standard === "ERC721"
-                        ? `${config.shared721.slice(0, 10)}…`
-                        : `${config.shared1155.slice(0, 10)}…`}
-                    </a>
-                  ) : (
-                    <span className="mono">
-                      {standard === "ERC721"
-                        ? `${config.shared721.slice(0, 10)}…`
-                        : `${config.shared1155.slice(0, 10)}…`}
-                    </span>
-                  )}
+                  anyone can mint into. Great for quick publishing.
+                </p>
+                <p className="mono">
+                  {standard === "ERC721" ? config.shared721 : config.shared1155}
+                </p>
+                <p className="hint">
+                  Shared mint publishes immediately. If you want a named creator collection, switch the collection type above
+                  and choose one of your owned collections.
                 </p>
               </div>
             )}
@@ -705,7 +875,7 @@ export default function MintClient({
                       >
                         {knownCollections.map((item) => (
                           <option key={item.contractAddress} value={item.contractAddress}>
-                            {item.ensSubname ? `${item.ensSubname}.nftfactory.eth` : shortenAddress(item.contractAddress)} - {shortenAddress(item.contractAddress)}
+                            {formatCollectionIdentity(item.ensSubname) || shortenAddress(item.contractAddress)} - {shortenAddress(item.contractAddress)}
                           </option>
                         ))}
                       </select>
@@ -728,8 +898,7 @@ export default function MintClient({
                 </div>
                 {isAddress(customCollectionAddress) && (
                   <p className="hint mono">
-                    Using{" "}
-                    {selectedKnownCollection?.ensSubname ? `${selectedKnownCollection.ensSubname}.nftfactory.eth ` : ""}
+                    Using {formatCollectionIdentity(selectedKnownCollection?.ensSubname ?? null) ? `${formatCollectionIdentity(selectedKnownCollection?.ensSubname ?? null)} ` : ""}
                     {toExplorerAddress(config.chainId, customCollectionAddress) ? (
                       <a href={toExplorerAddress(config.chainId, customCollectionAddress)!} target="_blank" rel="noreferrer">
                         {customCollectionAddress.slice(0, 10)}…{customCollectionAddress.slice(-8)}
@@ -796,7 +965,8 @@ export default function MintClient({
                         placeholder="studio"
                       />
                       <span className="hint">
-                        Associates this collection with your ENS identity. Must already be registered (0.001 ETH via step 4).
+                        Adds an identity label to the collection deployment. Collection registration and identity setup now live in the
+                        manage flow after deploy.
                       </span>
                     </label>
                     <label>
@@ -841,37 +1011,83 @@ export default function MintClient({
               Description (optional)
               <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Tell collectors about this work" />
             </label>
-            <label>
-              External URL (optional)
-              <input value={externalUrl} onChange={(e) => setExternalUrl(e.target.value)} placeholder="https://…" />
-            </label>
-            <label>
-              Upload image
-              <input type="file" accept="image/*" onChange={(e) => setImageFile(e.target.files?.[0] ?? null)} />
-            </label>
+            <div className="selectionCard">
+              <span className="flowLabel">Media Inputs</span>
+              <label>
+                Upload image
+                <input type="file" accept="image/*" onChange={(e) => setImageFile(e.target.files?.[0] ?? null)} />
+              </label>
+              <label className="inlineCheck">
+                <input
+                  type="checkbox"
+                  checked={includeAudio}
+                  onChange={(e) => setIncludeAudio(e.target.checked)}
+                />
+                <span>Include audio file</span>
+              </label>
+              {includeAudio ? (
+                <label>
+                  Upload audio
+                  <input type="file" accept="audio/*" onChange={(e) => setAudioFile(e.target.files?.[0] ?? null)} />
+                </label>
+              ) : null}
+              {audioFile ? (
+                <p className="hint mono">Audio: {audioFile.name}</p>
+              ) : null}
+            </div>
             {previewUrl && (
               <div className="previewWrap">
                 <img src={previewUrl} alt={name || "NFT preview"} className="previewImage" />
               </div>
             )}
-            <label>
-              Metadata URI
-              <input
-                value={metadataUri}
-                onChange={(e) => setMetadataUri(e.target.value)}
-                placeholder="ipfs://…/metadata.json"
-              />
-            </label>
             <p className="hint">
-              Choose an image to auto-upload to IPFS during publish, or paste an existing metadata URI manually.
+              Choose an image to auto-upload to IPFS during publish, or add audio below so it is included in the metadata.
             </p>
-            {imageUri && <p className="mono hint">Image: {imageUri}</p>}
+            <div className="selectionCard">
+              <span className="flowLabel">Metadata Options</span>
+              <label className="inlineCheck">
+                <input
+                  type="checkbox"
+                  checked={includeExternalUrl}
+                  onChange={(e) => setIncludeExternalUrl(e.target.checked)}
+                />
+                <span>Include external URL</span>
+              </label>
+              {includeExternalUrl ? (
+                <label>
+                  External URL
+                  <input value={externalUrl} onChange={(e) => setExternalUrl(e.target.value)} placeholder="https://…" />
+                </label>
+              ) : null}
+              <label className="inlineCheck">
+                <input
+                  type="checkbox"
+                  checked={useCustomMetadataUri}
+                  onChange={(e) => setUseCustomMetadataUri(e.target.checked)}
+                />
+                <span>Use custom IPFS metadata URI</span>
+              </label>
+              {useCustomMetadataUri ? (
+                <label>
+                  Custom metadata URI
+                  <input
+                    value={metadataUri}
+                    onChange={(e) => setMetadataUri(e.target.value)}
+                    placeholder="ipfs://…/metadata.json"
+                  />
+                </label>
+              ) : (
+                <p className="hint">
+                  Leave this off to generate metadata automatically from the fields and uploaded media above.
+                </p>
+              )}
+            </div>
             <TxStatus state={uploadTx} />
           </div>
 
           {/* Step 4: Mint settings */}
           <div className="card formCard">
-            <h3>4. Mint Settings</h3>
+            <h3>4. Mint Preview</h3>
             {standard === "ERC1155" && (
               <label>
                 Number of copies (editions)
@@ -879,99 +1095,90 @@ export default function MintClient({
               </label>
             )}
 
-            {mintMode === "shared" ? (
-              <>
-                <label>
-                  ENS subname attribution (optional)
-                  <input
-                    value={attributionSubname}
-                    onChange={(e) => { setAttributionSubname(e.target.value); setSubnameResolved(null); }}
-                    placeholder="studio  or  studio.nftfactory.eth"
-                  />
-                </label>
-                {attributionSubname.trim() && (
-                  <p className="hint">
-                    {subnameResolving
-                      ? "Resolving…"
-                      : subnameResolved
-                        ? `✓ Resolved to ${subnameResolved.slice(0, 10)}…`
-                        : "Subname not found in indexer — mint will still succeed but won't be attributed."}
-                  </p>
-                )}
-                <p className="hint">
-                  If you have a registered subname, enter it here to attribute this token to your creator profile.
-                </p>
-              </>
-            ) : (
+            {mintMode === "custom" ? (
               <p className="hint">
                 Custom collections do not store per-mint ENS attribution. Their creator identity comes from the
                 collection contract and its registered ENS subname.
               </p>
-            )}
+            ) : null}
 
-            {/* NFT preview card */}
-            {(previewUrl || name) ? (
+            {(previewUrl || name || audioFile || metadataUri || uploadReceipt.metadataUri) ? (
               <div className="nftPreviewCard">
                 {previewUrl && <img src={previewUrl} alt={name || "NFT preview"} className="nftPreviewThumb" />}
                 <div className="nftPreviewMeta">
                   <p className="nftPreviewName">{name || "Untitled NFT"}</p>
                   {description && <p className="nftPreviewDesc">{description}</p>}
-                  {metadataUri && (
+                  <div className="compactList">
+                    <p className="hint"><strong>Collection:</strong> {mintMode === "shared" ? "Shared contract" : "Creator collection"}</p>
+                    <p className="hint"><strong>Token type:</strong> {standard === "ERC721" ? "ERC-721 unique mint" : `ERC-1155 with ${copies || "1"} edition${copies === "1" ? "" : "s"}`}</p>
+                    <p className="hint"><strong>Metadata:</strong> {useCustomMetadataUri ? "Custom IPFS metadata" : "Generated from form inputs"}</p>
+                    <p className="hint"><strong>Media:</strong> {imageFile ? "Image attached" : "No image"}{audioFile ? " + audio attached" : ""}</p>
+                    {includeExternalUrl && externalUrl ? <p className="hint"><strong>External link:</strong> included</p> : null}
+                  </div>
+                  {(metadataUri || uploadReceipt.metadataUri) ? (
                     <p className="mono nftPreviewUri">
-                      {metadataUri.length > 48 ? `${metadataUri.slice(0, 48)}…` : metadataUri}
+                      {(uploadReceipt.metadataUri || metadataUri)!.length > 48
+                        ? `${(uploadReceipt.metadataUri || metadataUri)!.slice(0, 48)}…`
+                        : (uploadReceipt.metadataUri || metadataUri)!}
                     </p>
-                  )}
+                  ) : null}
                 </div>
               </div>
             ) : (
-              <p className="hint">Fill in asset details above to see a preview.</p>
+              <p className="hint">Fill in asset details above to build the publish preview.</p>
             )}
           </div>
 
-          {/* Step 5: Register ENS subname (for custom collections) */}
-          {mintMode === "custom" && (
-            <div className="card formCard">
-              <h3>5. Register ENS Subname <span style={{ fontWeight: 400, fontSize: "0.85em" }}>(optional)</span></h3>
-              <p className="hint">
-                Register a subname under <strong>nftfactory.eth</strong> to give your collection a
-                human-readable identity on-chain and in the creator profile pages. Fee: 0.001 ETH / year.
-                Once registered, use the same label in the attribution field above and in Deploy settings.
-              </p>
-              <label>
-                Subname label (e.g. <code>studio</code> → studio.nftfactory.eth)
-                <input
-                  value={registerSubnameLabel}
-                  onChange={(e) => setRegisterSubnameLabel(e.target.value)}
-                  placeholder="studio"
-                />
-              </label>
-              <p className="hint">Allowed: a–z, 0–9, hyphens. 1–63 chars. No leading or trailing hyphen.</p>
-              <button
-                type="button"
-                onClick={onRegisterSubname}
-                disabled={!isConnected || wrongNetwork || subnameTx.status === "pending"}
-              >
-                Register Subname ({SUBNAME_FEE_ETH} ETH)
-              </button>
-              <TxStatus state={subnameTx} />
-            </div>
-          )}
-
-          {/* Step 6: Publish */}
+          {/* Step 5: Publish */}
           <div className="card formCard">
-            <h3>{mintMode === "custom" ? "6" : "5"}. Mint and Publish</h3>
+            <h3>5. Mint and Publish</h3>
             <p className="hint">
               This is the final blockchain transaction for the flow above. Make sure your metadata URI
               and collection choice are correct before you submit. If you selected an image above, this
-              button will upload metadata to IPFS and then mint in one sequence.
+              button will upload media and metadata to IPFS and then mint in one sequence.
             </p>
             <button
               type="submit"
               disabled={!isConnected || wrongNetwork || mintTx.status === "pending" || uploadTx.status === "pending"}
             >
-              {mintTx.status === "pending" || uploadTx.status === "pending" ? "Publishing…" : imageFile ? "Upload and Mint" : "Mint Now"}
+              {mintTx.status === "pending" || uploadTx.status === "pending"
+                ? "Publishing…"
+                : useCustomMetadataUri
+                  ? "Mint With Custom Metadata"
+                  : (imageFile || audioFile)
+                    ? "Upload and Mint"
+                    : "Mint Now"}
             </button>
             <TxStatus state={mintTx} />
+            {(uploadReceipt.metadataUri || mintTx.hash) ? (
+              <div className="selectionCard">
+                <span className="flowLabel">Publish Receipts</span>
+                <div className="compactList">
+                  {mintTx.hash && toExplorerTx(getContractsConfig().chainId, mintTx.hash) ? (
+                    <a href={toExplorerTx(getContractsConfig().chainId, mintTx.hash)!} target="_blank" rel="noreferrer">
+                      View transaction on explorer ↗
+                    </a>
+                  ) : null}
+                  {uploadReceipt.metadataGatewayUrl ? (
+                    <a href={uploadReceipt.metadataGatewayUrl} target="_blank" rel="noreferrer">
+                      View metadata JSON ↗
+                    </a>
+                  ) : uploadReceipt.metadataUri ? (
+                    <p className="mono hint">Metadata: {uploadReceipt.metadataUri}</p>
+                  ) : null}
+                  {uploadReceipt.imageGatewayUrl ? (
+                    <a href={uploadReceipt.imageGatewayUrl} target="_blank" rel="noreferrer">
+                      View image asset ↗
+                    </a>
+                  ) : null}
+                  {uploadReceipt.audioGatewayUrl ? (
+                    <a href={uploadReceipt.audioGatewayUrl} target="_blank" rel="noreferrer">
+                      View audio asset ↗
+                    </a>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
           </div>
         </form>
       )}
@@ -984,22 +1191,52 @@ export default function MintClient({
         <div className="wizard">
 
           <div className="card formCard">
-            <h3>Wallet Status</h3>
-            <p className="hint">The header wallet button controls connect, account selection, and network switching.</p>
-            {wrongNetwork && (
-              <button type="button" onClick={switchToExpectedNetwork}>Switch to {appChain.name}</button>
-            )}
-            <p className="mono">Account: {account || "Not connected"}</p>
-            <p className="mono">Network: {chainId ?? "Unknown"} (expected {appChain.name} / {config.chainId})</p>
+            <h3>Management Flow</h3>
+            <p className="hint">
+              Use this route after your creator collection is deployed. The management flow is: choose the collection,
+              set the collection identity, then handle ownership or finality changes.
+            </p>
+            <div className="gridMini">
+              <p className="hint"><strong>1. Choose collection:</strong> pick from your saved collection dropdown, or use manual entry only if needed.</p>
+              <p className="hint"><strong>2. Set identity:</strong> attach an ENS name or register an <strong>nftfactory.eth</strong> label.</p>
+              <p className="hint"><strong>3. Operate:</strong> transfer ownership or permanently finalize upgrades.</p>
+            </div>
           </div>
 
           <div className="card formCard">
-            <h3>Collection Address</h3>
+            <h3>Wallet Status</h3>
+            <p className="hint">The header wallet button controls connect, account selection, and network selection.</p>
+            {wrongNetwork ? (
+              <p className="hint">
+                Use the header wallet button to select {appChain.name}. Management actions stay blocked until the selected
+                network matches the configured chain.
+              </p>
+            ) : null}
+            <div className="gridMini">
+              <p className="mono">Account: {account || "Not connected"}</p>
+              <p className="mono">Target network: {appChain.name}</p>
+            </div>
+          </div>
+
+          <div className="card formCard">
+            <h3>1. Choose Collection</h3>
             <p className="hint">
               These actions apply to <strong>CreatorCollection</strong> contracts (the ones deployed via
               the factory). You must be the current <code>owner</code> of the contract to call them.
             </p>
             {knownCollections.length > 0 ? (
+              <label>
+                Collection source
+                <select
+                  value={manageSelector}
+                  onChange={(e) => setManageSelector(e.target.value as "saved" | "manual")}
+                >
+                  <option value="saved">Choose from my saved collections</option>
+                  <option value="manual">Enter an address manually</option>
+                </select>
+              </label>
+            ) : null}
+            {knownCollections.length > 0 && manageSelector === "saved" ? (
               <label>
                 Your collection
                 <select
@@ -1009,23 +1246,24 @@ export default function MintClient({
                   <option value="">Select a known collection</option>
                   {knownCollections.map((item) => (
                     <option key={`manage-${item.contractAddress}`} value={item.contractAddress}>
-                      {item.ensSubname ? `${item.ensSubname}.nftfactory.eth` : shortenAddress(item.contractAddress)} - {shortenAddress(item.contractAddress)}
+                      {formatCollectionIdentity(item.ensSubname) || shortenAddress(item.contractAddress)} - {shortenAddress(item.contractAddress)}
                     </option>
                   ))}
                 </select>
               </label>
-            ) : null}
-            <label>
-              {knownCollections.length > 0 ? "Or paste a collection contract address" : "Your collection contract address"}
-              <input
-                value={manageAddress}
-                onChange={(e) => setManageAddress(e.target.value)}
-                placeholder="0x…"
-              />
-            </label>
+            ) : (
+              <label>
+                {knownCollections.length > 0 ? "Collection contract address" : "Your collection contract address"}
+                <input
+                  value={manageAddress}
+                  onChange={(e) => setManageAddress(e.target.value)}
+                  placeholder="0x…"
+                />
+              </label>
+            )}
             {isAddress(manageAddress) && (
               <p className="hint mono">
-                {selectedManageCollection?.ensSubname ? `${selectedManageCollection.ensSubname}.nftfactory.eth ` : ""}
+                {formatCollectionIdentity(selectedManageCollection?.ensSubname ?? null) ? `${formatCollectionIdentity(selectedManageCollection?.ensSubname ?? null)} ` : ""}
                 {toExplorerAddress(config.chainId, manageAddress) ? (
                   <a href={toExplorerAddress(config.chainId, manageAddress)!} target="_blank" rel="noreferrer">
                     View on explorer ↗
@@ -1037,9 +1275,65 @@ export default function MintClient({
             )}
           </div>
 
+          <div className="card formCard">
+            <h3>2. Collection Identity</h3>
+            <p className="hint">
+              Manage the human-readable identity shown for this collection. You can attach an existing ENS name, attach an
+              external subname, or register a new <strong>nftfactory.eth</strong> subname here.
+            </p>
+            <label>
+              Identity mode
+              <select value={identityMode} onChange={(e) => setIdentityMode(e.target.value as "ens" | "subname" | "nftfactory")}>
+                <option value="ens">Use an existing ENS name</option>
+                <option value="subname">Use an existing subname</option>
+                <option value="nftfactory">Register under nftfactory.eth</option>
+              </select>
+            </label>
+            <label>
+              {identityMode === "ens"
+                ? "ENS name"
+                : identityMode === "subname"
+                  ? "Subname"
+                  : "nftfactory label"}
+              <input
+                value={registerSubnameLabel}
+                onChange={(e) => setRegisterSubnameLabel(e.target.value)}
+                placeholder={
+                  identityMode === "ens"
+                    ? "artist.eth"
+                    : identityMode === "subname"
+                      ? "studio.example.eth"
+                      : "studio"
+                }
+              />
+            </label>
+            <p className="hint">
+              {identityMode === "nftfactory"
+                ? `This registers ${normalizeSubname(registerSubnameLabel) || "your-label"}.nftfactory.eth on-chain for ${SUBNAME_FEE_ETH} ETH and saves it to this collection.`
+                : "External ENS names and external subnames are created in your ENS flow, then saved here as this collection's display identity."}
+            </p>
+            <button
+              type="button"
+              onClick={saveCollectionIdentity}
+              disabled={
+                !isConnected ||
+                !isAddress(manageAddress) ||
+                (identityMode === "nftfactory" && wrongNetwork) ||
+                subnameTx.status === "pending"
+              }
+            >
+              {subnameTx.status === "pending"
+                ? "Saving…"
+                : identityMode === "nftfactory"
+                  ? `Register Under nftfactory.eth (${SUBNAME_FEE_ETH} ETH)`
+                  : "Save Collection Identity"}
+            </button>
+            <TxStatus state={subnameTx} />
+          </div>
+
           {/* Transfer ownership */}
           <div className="card formCard">
-            <h3>Transfer Ownership</h3>
+            <h3>3. Transfer Ownership</h3>
             <p className="hint">
               Passes full control of this collection to a new address. The new owner can mint tokens,
               update metadata (if not locked), set royalties, and finalize upgrades. This action
@@ -1065,7 +1359,7 @@ export default function MintClient({
 
           {/* Finalize upgrades */}
           <div className="card formCard">
-            <h3>Finalize Upgrades ⚠️</h3>
+            <h3>4. Finalize Upgrades ⚠️</h3>
             <p className="hint">
               Permanently disables the UUPS upgrade path for this collection contract. Once finalized,
               the logic contract can <strong>never</strong> be replaced — the contract is frozen exactly

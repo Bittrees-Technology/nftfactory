@@ -21,8 +21,8 @@ export default function HomePage() {
           <Link href="/discover" className="ctaLink secondaryLink">
             Browse marketplace
           </Link>
-          <Link href="/profile" className="ctaLink secondaryLink">
-            Creator profiles
+          <Link href="/profile/setup" className="ctaLink secondaryLink">
+            Creator setup
           </Link>
         </div>
       </div>
@@ -40,19 +40,19 @@ export default function HomePage() {
         <Link href="/mint?view=mint&collection=custom" className="card actionCard">
           <h3>Creator Collection</h3>
           <p>
-            Deploy your own ERC-721 or ERC-1155 contract via the factory. Only you can mint into it.
-            Supports royalties (EIP-2981), per-token metadata locking, and upgrade finality.
+            Deploy your own ERC-721 or ERC-1155 contract via the factory, then return to manage identity,
+            transfer ownership, or lock the upgrade path once the collection is ready.
           </p>
           <p className="actionHint">Opens Mint in custom collection mode.</p>
         </Link>
 
-        <Link href="/profile" className="card actionCard">
-          <h3>Creator Profiles</h3>
+        <Link href="/profile/setup" className="card actionCard">
+          <h3>Creator Setup</h3>
           <p>
-            Set up your creator identity, register an <strong>nftfactory.eth</strong> subname, and open
-            a storefront by ENS label.
+            Link an ENS name, link an ENS subdomain, or create an <strong>nftfactory.eth</strong> subname
+            before opening the public creator profile.
           </p>
-          <p className="actionHint">Opens creator onboarding and lookup.</p>
+          <p className="actionHint">Opens creator onboarding and identity setup.</p>
         </Link>
       </div>
 
@@ -76,13 +76,12 @@ export default function HomePage() {
         </Link>
 
         <Link href="/mint?view=manage" className="card actionCard">
-          <h3>Upgrade Finality</h3>
+          <h3>Manage Collection</h3>
           <p>
-            Creator collections use a UUPS proxy and can be upgraded by the owner. Call{" "}
-            <strong>Finalize Upgrades</strong> to permanently disable upgrades — making the contract
-            immutable forever. Only the owner can do this; it cannot be undone.
+            Choose an existing creator collection, attach an ENS identity, transfer ownership, or call{" "}
+            <strong>Finalize Upgrades</strong> when you want the contract frozen permanently.
           </p>
-          <p className="actionHint">Opens collection management directly.</p>
+          <p className="actionHint">Opens the collection management flow directly.</p>
         </Link>
       </div>
 

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 const PINATA_FILE_ENDPOINT = "https://api.pinata.cloud/pinning/pinFileToIPFS";
 const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
+const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
 
 type PinataResponse = {
   IpfsHash: string;
@@ -47,28 +48,65 @@ export async function POST(request: Request) {
 
     const formData = await request.formData();
     const image = formData.get("image");
+    const audio = formData.get("audio");
     const name = String(formData.get("name") || "").trim();
     const description = String(formData.get("description") || "").trim();
     const externalUrl = String(formData.get("external_url") || "").trim();
+    const customMetadataUri = String(formData.get("custom_metadata_uri") || "").trim();
 
-    if (!(image instanceof File)) {
-      return NextResponse.json({ error: "Missing image file" }, { status: 400 });
-    }
-    if (!image.type.startsWith("image/")) {
-      return NextResponse.json({ error: "Image must be a valid image/* file type" }, { status: 400 });
-    }
-    if (image.size <= 0 || image.size > MAX_IMAGE_BYTES) {
-      return NextResponse.json({ error: "Image file size must be between 1 byte and 15MB" }, { status: 400 });
+    if (customMetadataUri) {
+      if (!/^ipfs:\/\/.+/.test(customMetadataUri)) {
+        return NextResponse.json({ error: "custom_metadata_uri must be a valid ipfs:// URI" }, { status: 400 });
+      }
+      return NextResponse.json({
+        metadataUri: customMetadataUri
+      });
     }
 
-    const imageHash = await pinFile(image, image.name || "asset.png", jwt);
-    const imageUri = `ipfs://${imageHash}`;
+    if (image instanceof File) {
+      if (!image.type.startsWith("image/")) {
+        return NextResponse.json({ error: "Image must be a valid image/* file type" }, { status: 400 });
+      }
+      if (image.size <= 0 || image.size > MAX_IMAGE_BYTES) {
+        return NextResponse.json({ error: "Image file size must be between 1 byte and 15MB" }, { status: 400 });
+      }
+    }
+
+    if (audio instanceof File) {
+      if (!audio.type.startsWith("audio/")) {
+        return NextResponse.json({ error: "Audio must be a valid audio/* file type" }, { status: 400 });
+      }
+      if (audio.size <= 0 || audio.size > MAX_AUDIO_BYTES) {
+        return NextResponse.json({ error: "Audio file size must be between 1 byte and 25MB" }, { status: 400 });
+      }
+    }
+
+    let imageHash: string | null = null;
+    let audioHash: string | null = null;
+    let imageUri: string | null = null;
+    let audioUri: string | null = null;
+
+    if (image instanceof File) {
+      imageHash = await pinFile(image, image.name || "asset.png", jwt);
+      imageUri = `ipfs://${imageHash}`;
+    }
+
+    if (audio instanceof File) {
+      audioHash = await pinFile(audio, audio.name || "audio.mp3", jwt);
+      audioUri = `ipfs://${audioHash}`;
+    }
 
     const metadata: Record<string, unknown> = {
       name: name || "Untitled NFT",
-      description,
-      image: imageUri
+      description
     };
+
+    if (imageUri) {
+      metadata.image = imageUri;
+    }
+    if (audioUri) {
+      metadata.animation_url = audioUri;
+    }
 
     if (externalUrl) {
       try {
@@ -90,8 +128,10 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       imageUri,
+      audioUri,
       metadataUri,
-      imageGatewayUrl: `${gateway}/${imageHash}`,
+      imageGatewayUrl: imageHash ? `${gateway}/${imageHash}` : null,
+      audioGatewayUrl: audioHash ? `${gateway}/${audioHash}` : null,
       metadataGatewayUrl: `${gateway}/${metadataHash}`
     });
   } catch (err) {

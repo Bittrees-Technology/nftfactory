@@ -237,16 +237,23 @@ nav {
 .previewWrap {
   border: 1px dashed #d4c1a8;
   border-radius: 12px;
-  padding: 10px;
+  padding: 0;
   background: #fff9f1;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  min-height: 220px;
 }
 
 .previewImage {
   display: block;
-  max-width: 100%;
-  max-height: 360px;
+  width: 100%;
+  height: auto;
+  max-height: 520px;
+  object-fit: contain;
   margin: 0 auto;
-  border-radius: 10px;
+  border-radius: 0;
+  background: #f7efe3;
 }
 
 .nftPreviewCard {
@@ -259,8 +266,9 @@ nav {
 .nftPreviewThumb {
   display: block;
   width: 100%;
-  max-height: 260px;
-  object-fit: cover;
+  max-height: 420px;
+  object-fit: contain;
+  background: #f7efe3;
 }
 
 .nftPreviewMeta {
@@ -336,6 +344,143 @@ nav {
   background: #fff9f1;
 }
 
+.profileShell {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(260px, 0.9fr) minmax(320px, 1.3fr);
+}
+
+.profileIdentityCard,
+.profileFeatureCard {
+  display: grid;
+  gap: 12px;
+}
+
+.profileBannerFrame {
+  border: 1px solid #ead9c5;
+  border-radius: 14px;
+  overflow: hidden;
+  min-height: 180px;
+  background: #fff9f1;
+}
+
+.profileBannerImage {
+  display: block;
+  width: 100%;
+  max-height: 260px;
+  object-fit: cover;
+}
+
+.profileIdentityHead {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px;
+  align-items: center;
+}
+
+.profileIdentityMeta {
+  display: grid;
+  gap: 4px;
+}
+
+.profileIdentityMeta h3 {
+  margin: 0;
+}
+
+.profileAvatarImage,
+.profileAvatarFallback {
+  width: 72px;
+  height: 72px;
+  border-radius: 16px;
+  border: 1px solid #d9b89a;
+  background: #fff3e1;
+}
+
+.profileAvatarImage {
+  object-fit: cover;
+}
+
+.profileAvatarFallback {
+  display: grid;
+  place-items: center;
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #7f220f;
+}
+
+.profileChipRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.profileChip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid #d5b38f;
+  background: #fff9f1;
+  color: #6b2d1c;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.profileIdentityRow {
+  display: grid;
+  gap: 2px;
+  border: 1px solid #ead9c5;
+  border-radius: 10px;
+  padding: 10px;
+  background: #fffaf3;
+}
+
+.profileLinkRow {
+  display: block;
+  border: 1px solid #ead9c5;
+  border-radius: 10px;
+  padding: 10px;
+  background: #fffaf3;
+  font-size: 0.9rem;
+  word-break: break-all;
+}
+
+.profileStatGrid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.profileListingRow {
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
+.profileFeatureMedia {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.profileFeatureImage {
+  display: block;
+  width: 100%;
+  max-height: 360px;
+  border: 1px solid #ead9c5;
+  border-radius: 14px;
+  object-fit: cover;
+  background: #fff9f1;
+}
+
+.profileFeatureAudio {
+  width: 100%;
+}
+
+.profileFeatureEmbed {
+  display: grid;
+  width: 100%;
+}
+
 .compactList {
   display: grid;
   gap: 6px;
@@ -380,6 +525,16 @@ select {
   padding: 10px 12px;
   font: inherit;
   background: #fffcf7;
+}
+
+textarea {
+  border: 1px solid #d4c1a8;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font: inherit;
+  background: #fffcf7;
+  min-height: 104px;
+  resize: vertical;
 }
 
 button {
@@ -430,5 +585,13 @@ button:disabled {
 
   .headerWalletButton {
     align-self: flex-end;
+  }
+
+  .profileShell {
+    grid-template-columns: 1fr;
+  }
+
+  .profileIdentityHead {
+    grid-template-columns: 1fr;
   }
 }

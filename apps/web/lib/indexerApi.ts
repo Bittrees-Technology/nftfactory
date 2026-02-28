@@ -101,11 +101,44 @@ export type ApiModerator = {
 export type ApiProfileResolution = {
   name: string;
   sellers: string[];
+  profiles?: ApiProfileRecord[];
   collections: Array<{
     ensSubname: string | null;
     contractAddress: string;
     ownerAddress: string;
   }>;
+};
+
+export type ApiProfileRecord = {
+  slug: string;
+  fullName: string;
+  source: "ens" | "external-subname" | "nftfactory-subname";
+  ownerAddress: string;
+  collectionAddress: string | null;
+  tagline: string | null;
+  displayName: string | null;
+  bio: string | null;
+  bannerUrl: string | null;
+  avatarUrl: string | null;
+  featuredUrl: string | null;
+  accentColor: string | null;
+  links: string[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ApiOwnedCollections = {
+  ownerAddress: string;
+  collections: Array<{
+    ensSubname: string | null;
+    contractAddress: string;
+    ownerAddress: string;
+  }>;
+};
+
+export type ApiOwnedProfiles = {
+  ownerAddress: string;
+  profiles: ApiProfileRecord[];
 };
 
 export async function fetchHiddenListingIds(): Promise<number[]> {
@@ -200,6 +233,34 @@ export async function updateModerator(payload: {
 
 export async function fetchProfileResolution(name: string): Promise<ApiProfileResolution> {
   return fetchJson<ApiProfileResolution>(`/api/profile/${encodeURIComponent(name)}`);
+}
+
+export async function fetchCollectionsByOwner(ownerAddress: string): Promise<ApiOwnedCollections> {
+  return fetchJson<ApiOwnedCollections>(`/api/collections?owner=${encodeURIComponent(ownerAddress)}`);
+}
+
+export async function fetchProfilesByOwner(ownerAddress: string): Promise<ApiOwnedProfiles> {
+  return fetchJson<ApiOwnedProfiles>(`/api/profiles?owner=${encodeURIComponent(ownerAddress)}`);
+}
+
+export async function linkProfileIdentity(payload: {
+  name: string;
+  source: ApiProfileRecord["source"];
+  ownerAddress: string;
+  collectionAddress?: string;
+  tagline?: string;
+  displayName?: string;
+  bio?: string;
+  bannerUrl?: string;
+  avatarUrl?: string;
+  featuredUrl?: string;
+  accentColor?: string;
+  links?: string[];
+}): Promise<{ ok: boolean; profile: ApiProfileRecord }> {
+  return fetchJson<{ ok: boolean; profile: ApiProfileRecord }>("/api/profiles/link", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
 }
 
 export async function backfillCollectionSubname(payload: {

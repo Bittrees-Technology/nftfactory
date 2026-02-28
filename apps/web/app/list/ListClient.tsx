@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useAccount, useChainId, usePublicClient, useSwitchChain, useWalletClient } from "wagmi";
+import { useAccount, useChainId, usePublicClient, useWalletClient } from "wagmi";
 import type { Address, Hex } from "viem";
 import {
   encodeBuyListing,
@@ -60,7 +60,6 @@ export default function ListClient() {
   const appChain = useMemo(() => getAppChain(config.chainId), [config.chainId]);
   const { isConnected, address } = useAccount();
   const chainId = useChainId();
-  const { switchChainAsync } = useSwitchChain();
   const { data: walletClient } = useWalletClient();
   const publicClient = usePublicClient();
 
@@ -253,14 +252,6 @@ export default function ListClient() {
     }
   }
 
-  async function switchToSepolia(): Promise<void> {
-    try {
-      await switchChainAsync({ chainId: config.chainId });
-    } catch {
-      // Wallet modal handles error display.
-    }
-  }
-
   async function sendTransaction(to: `0x${string}`, data: `0x${string}`, value?: bigint): Promise<`0x${string}`> {
     if (!walletClient || !walletClient.account) throw new Error("Connect wallet first.");
     const hash = await walletClient.sendTransaction({
@@ -288,7 +279,7 @@ export default function ListClient() {
       return;
     }
     if (wrongNetwork) {
-      setState({ status: "error", message: `Switch to ${appChain.name} first.` });
+      setState({ status: "error", message: `Select ${appChain.name} in the wallet menu first.` });
       return;
     }
     if (!isAddress(nftAddress)) {
@@ -375,7 +366,7 @@ export default function ListClient() {
       return;
     }
     if (wrongNetwork) {
-      setState({ status: "error", message: `Switch to ${appChain.name} first.` });
+      setState({ status: "error", message: `Select ${appChain.name} in the wallet menu first.` });
       return;
     }
 
@@ -402,7 +393,7 @@ export default function ListClient() {
       return;
     }
     if (wrongNetwork) {
-      setState({ status: "error", message: `Switch to ${appChain.name} first.` });
+      setState({ status: "error", message: `Select ${appChain.name} in the wallet menu first.` });
       return;
     }
     try {
@@ -523,14 +514,10 @@ export default function ListClient() {
           ) : null}
           {isConnected && wrongNetwork ? (
             <p className="hint">
-              Your wallet is connected to chain {chainId}. Switch to {appChain.name} to create, cancel, or buy listings here.
+              Your wallet is connected to chain {chainId}. Use the header wallet button to select {appChain.name}. This
+              page stays disabled until the selected network matches the configured chain.
             </p>
           ) : null}
-          {wrongNetwork && (
-            <button type="button" onClick={switchToSepolia}>
-              Switch To {appChain.name}
-            </button>
-          )}
           <p className="mono">Account: {address || "Not connected"}</p>
           <p className="mono">Network: {chainId ?? "Unknown"} (expected {appChain.name} / {config.chainId})</p>
           <button type="button" onClick={loadListings} disabled={wrongNetwork || listingsLoading}>

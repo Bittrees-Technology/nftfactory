@@ -52,12 +52,48 @@ type ModeratorRecord = {
   updatedAt: string;
 };
 
+type ProfileLinkSource = "ens" | "external-subname" | "nftfactory-subname";
+
+type ProfileLinkPayload = {
+  name: string;
+  source: ProfileLinkSource;
+  ownerAddress: string;
+  collectionAddress?: string;
+  tagline?: string;
+  displayName?: string;
+  bio?: string;
+  bannerUrl?: string;
+  avatarUrl?: string;
+  featuredUrl?: string;
+  accentColor?: string;
+  links?: string[];
+};
+
+type ProfileRecord = {
+  slug: string;
+  fullName: string;
+  source: ProfileLinkSource;
+  ownerAddress: string;
+  collectionAddress: string | null;
+  tagline: string | null;
+  displayName: string | null;
+  bio: string | null;
+  bannerUrl: string | null;
+  avatarUrl: string | null;
+  featuredUrl: string | null;
+  accentColor: string | null;
+  links: string[];
+  createdAt: string;
+  updatedAt: string;
+};
+
 const CHAIN_ID = Number.parseInt(process.env.CHAIN_ID || "11155111", 10);
 const PORT = Number.parseInt(process.env.INDEXER_PORT || "8787", 10);
 const HOST = process.env.INDEXER_HOST || "127.0.0.1";
 const ADMIN_TOKEN = process.env.INDEXER_ADMIN_TOKEN || "";
 const TRUST_PROXY = process.env.TRUST_PROXY === "true";
 const MODERATOR_FILE = process.env.INDEXER_MODERATOR_FILE || path.join(process.cwd(), "data", "moderators.json");
+const PROFILE_FILE = process.env.INDEXER_PROFILE_FILE || path.join(process.cwd(), "data", "profiles.json");
 const ADMIN_ALLOWLIST = new Set(
   (process.env.INDEXER_ADMIN_ALLOWLIST || "")
     .split(",")
@@ -150,6 +186,109 @@ async function readModeratorRecords(): Promise<ModeratorRecord[]> {
 async function writeModeratorRecords(records: ModeratorRecord[]): Promise<void> {
   await mkdir(path.dirname(MODERATOR_FILE), { recursive: true });
   await writeFile(MODERATOR_FILE, JSON.stringify(records, null, 2), "utf8");
+}
+
+function normalizeProfileInput(name: string, source: ProfileLinkSource): { slug: string; fullName: string } | null {
+  const raw = String(name || "").trim().toLowerCase();
+  if (!raw) return null;
+
+  if (source === "nftfactory-subname") {
+    const slug = normalizeSubname(raw);
+    if (!slug) return null;
+    return {
+      slug,
+      fullName: `${slug}.nftfactory.eth`
+    };
+  }
+
+  const fullName = raw.replace(/\.+/g, ".").replace(/^\./, "").replace(/\.$/, "");
+  const firstLabel = fullName.split(".")[0] || "";
+  const slug = normalizeSubname(firstLabel);
+  if (!fullName || !slug) return null;
+
+  return {
+    slug,
+    fullName
+  };
+}
+
+function toProfileResponse(record: ProfileRecord): ProfileRecord {
+  return {
+    ...record,
+    ownerAddress: record.ownerAddress.toLowerCase(),
+    collectionAddress: record.collectionAddress?.toLowerCase() || null
+  };
+}
+
+function sanitizeProfileText(value: string | undefined, max = 280): string | null {
+  const trimmed = String(value || "").trim();
+  if (!trimmed) return null;
+  return trimmed.slice(0, max);
+}
+
+function sanitizeProfileUrl(value: string | undefined): string | null {
+  const trimmed = String(value || "").trim();
+  if (!trimmed) return null;
+  if (/^https?:\/\//i.test(trimmed) || /^ipfs:\/\//i.test(trimmed)) {
+    return trimmed;
+  }
+  return null;
+}
+
+function sanitizeAccentColor(value: string | undefined): string | null {
+  const trimmed = String(value || "").trim();
+  if (!trimmed) return null;
+  return /^#[a-fA-F0-9]{6}$/.test(trimmed) ? trimmed : null;
+}
+
+function sanitizeProfileLinks(value: string[] | undefined): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => sanitizeProfileUrl(item))
+    .filter((item): item is string => Boolean(item))
+    .slice(0, 8);
+}
+
+async function readProfileRecords(): Promise<ProfileRecord[]> {
+  try {
+    const raw = await readFile(PROFILE_FILE, "utf8");
+    const parsed = JSON.parse(raw) as ProfileRecord[];
+    return parsed
+      .filter((item) => item && isAddress(String(item.ownerAddress || "").toLowerCase()))
+      .map((item) => {
+        const source = (item.source || "nftfactory-subname") as ProfileLinkSource;
+        const normalized = normalizeProfileInput(String(item.fullName || item.slug || ""), source);
+        if (!normalized) {
+          return null;
+        }
+        const collectionAddress = String(item.collectionAddress || "").trim().toLowerCase();
+        return {
+          slug: normalized.slug,
+          fullName: normalized.fullName,
+          source,
+          ownerAddress: item.ownerAddress.toLowerCase(),
+          collectionAddress: collectionAddress && isAddress(collectionAddress) ? collectionAddress : null,
+          tagline: sanitizeProfileText(item.tagline || undefined, 120),
+          displayName: sanitizeProfileText(item.displayName || undefined, 80),
+          bio: sanitizeProfileText(item.bio || undefined, 1200),
+          bannerUrl: sanitizeProfileUrl(item.bannerUrl || undefined),
+          avatarUrl: sanitizeProfileUrl(item.avatarUrl || undefined),
+          featuredUrl: sanitizeProfileUrl(item.featuredUrl || undefined),
+          accentColor: sanitizeAccentColor(item.accentColor || undefined),
+          links: sanitizeProfileLinks(item.links),
+          createdAt: item.createdAt || new Date().toISOString(),
+          updatedAt: item.updatedAt || new Date().toISOString()
+        };
+      })
+      .filter((item: ProfileRecord | null): item is ProfileRecord => Boolean(item));
+  } catch {
+    return [];
+  }
+}
+
+async function writeProfileRecords(records: ProfileRecord[]): Promise<void> {
+  await mkdir(path.dirname(PROFILE_FILE), { recursive: true });
+  await writeFile(PROFILE_FILE, JSON.stringify(records, null, 2), "utf8");
 }
 
 async function getEffectiveAdminAllowlist(
@@ -657,28 +796,235 @@ async function handleRequest(
     return;
   }
 
-  if (req.method === "GET" && /^\/api\/profile\/[^/]+$/.test(path)) {
-    const name = decodeURIComponent(path.split("/")[3] || "");
-    const label = normalizeSubname(name);
+  if (req.method === "GET" && path === "/api/profiles") {
+    const owner = String(url.searchParams.get("owner") || "").trim().toLowerCase();
+    if (!owner || !isAddress(owner)) {
+      sendJson(res, 400, { error: "Valid owner query param is required" });
+      return;
+    }
 
-    if (!label) {
+    const linkedProfiles = (await readProfileRecords())
+      .filter((item) => item.ownerAddress === owner)
+      .map(toProfileResponse);
+
+    const collections = await deps.prisma.collection.findMany({
+      where: { ownerAddress: owner },
+      select: { ownerAddress: true, ensSubname: true, contractAddress: true },
+      orderBy: { createdAt: "desc" }
+    });
+
+    const derivedProfiles = collections
+      .map((item: any) => {
+        const sourceName = String(item.ensSubname || "").trim();
+        if (!sourceName) return null;
+        const normalized = normalizeProfileInput(sourceName, "nftfactory-subname");
+        if (!normalized) return null;
+        return {
+          slug: normalized.slug,
+          fullName: normalized.fullName,
+          source: "nftfactory-subname" as const,
+          ownerAddress: item.ownerAddress.toLowerCase(),
+          collectionAddress: item.contractAddress.toLowerCase(),
+          tagline: null,
+          displayName: null,
+          bio: null,
+          bannerUrl: null,
+          avatarUrl: null,
+          featuredUrl: null,
+          accentColor: null,
+          links: [],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+      })
+      .filter((item: ProfileRecord | null): item is ProfileRecord => Boolean(item));
+
+    const merged = new Map<string, ProfileRecord>();
+    for (const item of [...linkedProfiles, ...derivedProfiles]) {
+      const key = `${item.slug}:${item.ownerAddress}:${item.collectionAddress || ""}:${item.source}`;
+      if (!merged.has(key)) merged.set(key, item);
+    }
+
+    sendJson(res, 200, {
+      ownerAddress: owner,
+      profiles: Array.from(merged.values()).sort((a, b) => a.fullName.localeCompare(b.fullName))
+    });
+    return;
+  }
+
+  if (req.method === "POST" && path === "/api/profiles/link") {
+    if (deps.isRateLimitedImpl(deps.getClientIpImpl(req, config.trustProxy))) {
+      sendJson(res, 429, { error: "Too many requests" });
+      return;
+    }
+    const payload = await readJsonBody<ProfileLinkPayload>(req);
+    const source = payload.source;
+    if (!["ens", "external-subname", "nftfactory-subname"].includes(source)) {
+      sendJson(res, 400, { error: "Invalid profile source" });
+      return;
+    }
+
+    const ownerAddress = String(payload.ownerAddress || "").trim().toLowerCase();
+    if (!isAddress(ownerAddress)) {
+      sendJson(res, 400, { error: "Invalid ownerAddress" });
+      return;
+    }
+
+    const normalized = normalizeProfileInput(payload.name, source);
+    if (!normalized) {
       sendJson(res, 400, { error: "Invalid profile name" });
+      return;
+    }
+
+    const collectionAddress = String(payload.collectionAddress || "").trim().toLowerCase();
+    if (collectionAddress && !isAddress(collectionAddress)) {
+      sendJson(res, 400, { error: "Invalid collectionAddress" });
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const current = await readProfileRecords();
+    const existing = current.find(
+      (item) =>
+        item.slug === normalized.slug &&
+        item.ownerAddress === ownerAddress &&
+        item.source === source &&
+        item.collectionAddress === (collectionAddress || null)
+    );
+    const next = current.filter(
+      (item) =>
+        !(
+          item.slug === normalized.slug &&
+          item.ownerAddress === ownerAddress &&
+          item.source === source &&
+          item.collectionAddress === (collectionAddress || null)
+        )
+    );
+
+    next.push({
+      slug: normalized.slug,
+      fullName: normalized.fullName,
+      source,
+      ownerAddress,
+      collectionAddress: collectionAddress || null,
+      tagline: sanitizeProfileText(payload.tagline, 120) || existing?.tagline || null,
+      displayName: sanitizeProfileText(payload.displayName, 80) || existing?.displayName || null,
+      bio: sanitizeProfileText(payload.bio, 1200) || existing?.bio || null,
+      bannerUrl: sanitizeProfileUrl(payload.bannerUrl) || existing?.bannerUrl || null,
+      avatarUrl: sanitizeProfileUrl(payload.avatarUrl) || existing?.avatarUrl || null,
+      featuredUrl: sanitizeProfileUrl(payload.featuredUrl) || existing?.featuredUrl || null,
+      accentColor: sanitizeAccentColor(payload.accentColor) || existing?.accentColor || null,
+      links: sanitizeProfileLinks(payload.links).length > 0 ? sanitizeProfileLinks(payload.links) : existing?.links || [],
+      createdAt: existing?.createdAt || now,
+      updatedAt: now
+    });
+    next.sort((a, b) => a.fullName.localeCompare(b.fullName));
+    await writeProfileRecords(next);
+
+    sendJson(res, 200, {
+      ok: true,
+      profile: {
+        slug: normalized.slug,
+        fullName: normalized.fullName,
+        source,
+        ownerAddress,
+        collectionAddress: collectionAddress || null,
+        tagline: sanitizeProfileText(payload.tagline, 120) || existing?.tagline || null,
+        displayName: sanitizeProfileText(payload.displayName, 80) || existing?.displayName || null,
+        bio: sanitizeProfileText(payload.bio, 1200) || existing?.bio || null,
+        bannerUrl: sanitizeProfileUrl(payload.bannerUrl) || existing?.bannerUrl || null,
+        avatarUrl: sanitizeProfileUrl(payload.avatarUrl) || existing?.avatarUrl || null,
+        featuredUrl: sanitizeProfileUrl(payload.featuredUrl) || existing?.featuredUrl || null,
+        accentColor: sanitizeAccentColor(payload.accentColor) || existing?.accentColor || null,
+        links: sanitizeProfileLinks(payload.links).length > 0 ? sanitizeProfileLinks(payload.links) : existing?.links || [],
+        createdAt: existing?.createdAt || now,
+        updatedAt: now
+      }
+    });
+    return;
+  }
+
+  if (req.method === "GET" && /^\/api\/profile\/[^/]+$/.test(path)) {
+    const rawName = String(decodeURIComponent(path.split("/")[3] || "")).trim().toLowerCase();
+    const slug = normalizeProfileInput(rawName, rawName.includes(".") ? "external-subname" : "nftfactory-subname")?.slug || "";
+
+    if (!rawName || !slug) {
+      sendJson(res, 400, { error: "Invalid profile name" });
+      return;
+    }
+
+    const linkedProfiles = (await readProfileRecords()).filter(
+      (item) => item.slug === slug || item.fullName.toLowerCase() === rawName
+    );
+
+    const collectionsBySubname = await deps.prisma.collection.findMany({
+      where: {
+        OR: [
+          { ensSubname: slug },
+          { ensSubname: `${slug}.nftfactory.eth` },
+          { ensSubname: rawName }
+        ]
+      },
+      select: { ownerAddress: true, ensSubname: true, contractAddress: true }
+    });
+
+    const linkedOwnerAddresses = Array.from(new Set(linkedProfiles.map((item) => item.ownerAddress)));
+    const collectionsByOwner = linkedOwnerAddresses.length
+      ? await deps.prisma.collection.findMany({
+          where: {
+            ownerAddress: { in: linkedOwnerAddresses }
+          },
+          select: { ownerAddress: true, ensSubname: true, contractAddress: true }
+        })
+      : [];
+
+    const collectionMap = new Map<string, { ownerAddress: string; ensSubname: string | null; contractAddress: string }>();
+    for (const item of [...collectionsBySubname, ...collectionsByOwner]) {
+      collectionMap.set(item.contractAddress.toLowerCase(), {
+        ownerAddress: item.ownerAddress,
+        ensSubname: item.ensSubname,
+        contractAddress: item.contractAddress
+      });
+    }
+
+    const collections = Array.from(collectionMap.values());
+
+    const sellers = Array.from(
+      new Set([
+        ...collections.map((item: any) => item.ownerAddress.toLowerCase()),
+        ...linkedProfiles.map((item) => item.ownerAddress.toLowerCase())
+      ])
+    );
+    sendJson(res, 200, {
+      name: slug,
+      sellers,
+      profiles: linkedProfiles.map(toProfileResponse),
+      collections: collections.map((item: any) => ({
+        ensSubname: item.ensSubname,
+        contractAddress: item.contractAddress,
+        ownerAddress: item.ownerAddress
+      }))
+    });
+    return;
+  }
+
+  if (req.method === "GET" && path === "/api/collections") {
+    const owner = String(url.searchParams.get("owner") || "").trim().toLowerCase();
+    if (!owner || !isAddress(owner)) {
+      sendJson(res, 400, { error: "Valid owner query param is required" });
       return;
     }
 
     const collections = await deps.prisma.collection.findMany({
       where: {
-        OR: [{ ensSubname: label }, { ensSubname: `${label}.nftfactory.eth` }]
+        ownerAddress: owner
       },
-      select: { ownerAddress: true, ensSubname: true, contractAddress: true }
+      select: { ownerAddress: true, ensSubname: true, contractAddress: true },
+      orderBy: { createdAt: "desc" }
     });
 
-    const sellers = Array.from(
-      new Set(collections.map((item: any) => item.ownerAddress.toLowerCase()))
-    );
     sendJson(res, 200, {
-      name: label,
-      sellers,
+      ownerAddress: owner,
       collections: collections.map((item: any) => ({
         ensSubname: item.ensSubname,
         contractAddress: item.contractAddress,

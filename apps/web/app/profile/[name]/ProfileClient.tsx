@@ -17,6 +17,18 @@ function isAddress(value: string): value is Address {
   return /^0x[a-fA-F0-9]{40}$/.test(value);
 }
 
+function getFeaturedMediaKind(url: string | null | undefined): "image" | "audio" | "video" | "link" | null {
+  if (!url) return null;
+  const normalized = url.trim().toLowerCase();
+  if (!normalized) return null;
+  if (/\.(png|jpe?g|gif|webp|avif|svg)(\?|#|$)/.test(normalized)) return "image";
+  if (/\.(mp3|wav|ogg|m4a|flac)(\?|#|$)/.test(normalized)) return "audio";
+  if (/\.(mp4|webm|mov)(\?|#|$)/.test(normalized) || normalized.includes("youtube.com") || normalized.includes("youtu.be")) {
+    return "video";
+  }
+  return "link";
+}
+
 export default function ProfileClient({ name }: { name: string }) {
   const config = useMemo(() => getContractsConfig(), []);
 
@@ -95,6 +107,43 @@ export default function ProfileClient({ name }: { name: string }) {
     [profileResolution]
   );
 
+  const linkedProfiles = useMemo(() => profileResolution?.profiles || [], [profileResolution]);
+  const primaryProfile = useMemo(() => linkedProfiles[0] || null, [linkedProfiles]);
+
+  const primaryProfileName = useMemo(() => {
+    const linked = primaryProfile?.fullName?.trim();
+    if (linked) return linked;
+    const collectionName = profileResolution?.collections?.find((item) => item.ensSubname?.trim())?.ensSubname?.trim();
+    if (collectionName) {
+      return collectionName.includes(".") ? collectionName : `${collectionName}.nftfactory.eth`;
+    }
+    return `${name}.nftfactory.eth`;
+  }, [name, primaryProfile, profileResolution]);
+
+  const mintProfileParam = useMemo(() => {
+    const linked = primaryProfile?.fullName?.trim();
+    if (linked) return linked;
+    return primaryProfileName;
+  }, [primaryProfile, primaryProfileName]);
+
+  const creatorDisplayName = useMemo(() => primaryProfile?.displayName?.trim() || primaryProfileName, [primaryProfile, primaryProfileName]);
+  const creatorTagline = useMemo(() => primaryProfile?.tagline?.trim() || "A creator page built around ENS identity, drops, and live storefront activity.", [primaryProfile]);
+  const creatorBio = useMemo(
+    () =>
+      primaryProfile?.bio?.trim() ||
+      "This creator page blends linked ENS identity, collections, and live listings into one storefront view.",
+    [primaryProfile]
+  );
+  const heroStyle = useMemo(
+    () =>
+      primaryProfile?.accentColor
+        ? {
+            borderColor: primaryProfile.accentColor
+          }
+        : undefined,
+    [primaryProfile]
+  );
+
   const activeSellerAddresses = useMemo(() => {
     if (isAddress(sellerAddress)) return [sellerAddress.toLowerCase()];
     return resolvedSellerAddresses.map((item) => item.toLowerCase());
@@ -120,6 +169,15 @@ export default function ProfileClient({ name }: { name: string }) {
       activeListings: listingCounts.get(item.contractAddress.toLowerCase()) || 0
     }));
   }, [creatorListings, profileResolution]);
+
+  const pinnedCollection = useMemo(() => {
+    const pinnedAddress = primaryProfile?.collectionAddress?.toLowerCase();
+    if (pinnedAddress) {
+      const match = collectionSummaries.find((item) => item.contractAddress.toLowerCase() === pinnedAddress);
+      if (match) return match;
+    }
+    return collectionSummaries[0] || null;
+  }, [collectionSummaries, primaryProfile]);
 
   const stats = useMemo(() => {
     if (creatorListings.length === 0) {
@@ -147,22 +205,36 @@ export default function ProfileClient({ name }: { name: string }) {
     };
   }, [collectionSummaries.length, creatorListings, resolvedSellerAddresses.length]);
 
+  const featuredListing = useMemo(() => {
+    if (creatorListings.length === 0) return null;
+    const ethListings = creatorListings.filter((item) => item.paymentToken === "0x0000000000000000000000000000000000000000");
+    if (ethListings.length > 0) {
+      return ethListings.reduce((min, item) => (item.price < min.price ? item : min), ethListings[0]);
+    }
+    return creatorListings[0];
+  }, [creatorListings]);
+
   const hasResolvedIdentity = resolvedSellerAddresses.length > 0;
   const hasManualWallet = Boolean(sellerAddress.trim());
   const hasProfileData = hasResolvedIdentity || hasManualWallet;
+  const featuredMediaKind = useMemo(() => getFeaturedMediaKind(primaryProfile?.featuredUrl), [primaryProfile]);
 
   return (
     <section className="wizard">
-      <div className="heroCard">
+      <div className="heroCard" style={heroStyle}>
         <p className="eyebrow">Creator Profile</p>
-        <h1>{name}.nftfactory.eth</h1>
-        <p className="heroText">
-          Creator storefront view with live listings, indexed collection mappings, and ENS-based identity
-          resolved through the indexer.
-        </p>
+        <h1>{creatorDisplayName}</h1>
+        <p className="sectionLead">{creatorTagline}</p>
+        <p className="heroText">{creatorBio}</p>
+        <p className="hint">{primaryProfileName}</p>
+        {primaryProfile?.bannerUrl ? (
+          <div className="profileBannerFrame">
+            <img src={primaryProfile.bannerUrl} alt={`${creatorDisplayName} banner`} className="profileBannerImage" />
+          </div>
+        ) : null}
         <div className="row">
           <Link href="/discover" className="ctaLink secondaryLink">Browse marketplace</Link>
-          <Link href="/mint?view=mint&collection=shared" className="ctaLink secondaryLink">Mint with this identity</Link>
+          <Link href={`/mint?view=mint&collection=shared&profile=${encodeURIComponent(mintProfileParam)}`} className="ctaLink secondaryLink">Mint with this identity</Link>
         </div>
         <div className="flowStrip">
           <div className="flowCell">
@@ -180,8 +252,191 @@ export default function ProfileClient({ name }: { name: string }) {
         </div>
       </div>
 
+      <div className="profileShell">
+        <section className="card profileIdentityCard">
+          <p className="eyebrow">Profile Card</p>
+          <div className="profileIdentityHead">
+            {primaryProfile?.avatarUrl ? (
+              <img src={primaryProfile.avatarUrl} alt={`${creatorDisplayName} avatar`} className="profileAvatarImage" />
+            ) : (
+              <div className="profileAvatarFallback">{creatorDisplayName.slice(0, 1).toUpperCase()}</div>
+            )}
+            <div className="profileIdentityMeta">
+              <h3>{creatorDisplayName}</h3>
+              <p className="hint">{primaryProfileName}</p>
+            </div>
+          </div>
+          <p className="sectionLead">
+            {hasResolvedIdentity
+              ? "This creator identity is linked and ready for storefront traffic."
+              : "This creator route is partially set up and still needs a stronger identity link."}
+          </p>
+          <p className="hint">{creatorTagline}</p>
+          <div className="profileChipRow">
+            <span className="profileChip">{hasResolvedIdentity ? "Linked" : "Unresolved"}</span>
+            <span className="profileChip">{stats.resolvedWallets} wallet{stats.resolvedWallets === 1 ? "" : "s"}</span>
+            <span className="profileChip">{stats.uniqueCollections} collection{stats.uniqueCollections === 1 ? "" : "s"}</span>
+            <span className="profileChip">{stats.listings} live listing{stats.listings === 1 ? "" : "s"}</span>
+          </div>
+          {linkedProfiles.length > 0 ? (
+            <div className="compactList">
+              {linkedProfiles.map((profile) => (
+                <div key={`${profile.slug}-${profile.source}-${profile.collectionAddress || "none"}`} className="profileIdentityRow">
+                  <strong>{profile.fullName}</strong>
+                  <span className="hint">{profile.source === "nftfactory-subname" ? "nftfactory subname" : profile.source === "external-subname" ? "linked subdomain" : "linked ENS"}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="hint">No linked identity records were returned. This page is relying on collection ownership or manual wallet resolution.</p>
+          )}
+        </section>
+
+        <section className="card profileFeatureCard">
+          <p className="eyebrow">Featured Drop</p>
+          {primaryProfile?.featuredUrl ? (
+            <div className="profileFeatureMedia">
+              {featuredMediaKind === "image" ? (
+                <img src={primaryProfile.featuredUrl} alt={`${creatorDisplayName} featured media`} className="profileFeatureImage" />
+              ) : null}
+              {featuredMediaKind === "audio" ? (
+                <audio controls preload="none" className="profileFeatureAudio">
+                  <source src={primaryProfile.featuredUrl} />
+                </audio>
+              ) : null}
+              {featuredMediaKind === "video" ? (
+                <div className="profileFeatureEmbed">
+                  <a href={primaryProfile.featuredUrl} target="_blank" rel="noreferrer" className="ctaLink secondaryLink">
+                    Open featured video
+                  </a>
+                </div>
+              ) : null}
+              {featuredMediaKind === "link" ? (
+                <a href={primaryProfile.featuredUrl} target="_blank" rel="noreferrer" className="ctaLink secondaryLink">
+                  Open featured media
+                </a>
+              ) : null}
+            </div>
+          ) : null}
+          {featuredListing ? (
+            <>
+              <h3>Listing #{featuredListing.id}</h3>
+              <p className="sectionLead">
+                {featuredListing.standard} token #{featuredListing.tokenId.toString()} listed for {formatListingPrice(featuredListing)}.
+              </p>
+              <div className="profileStatGrid">
+                <div className="flowCell">
+                  <span className="flowLabel">Collection</span>
+                  <p className="hint mono">{truncateAddress(featuredListing.nft)}</p>
+                </div>
+                <div className="flowCell">
+                  <span className="flowLabel">Seller</span>
+                  <p className="hint mono">{truncateAddress(featuredListing.seller)}</p>
+                </div>
+                <div className="flowCell">
+                  <span className="flowLabel">Amount</span>
+                  <p className="hint">{featuredListing.amount.toString()}</p>
+                </div>
+                <div className="flowCell">
+                  <span className="flowLabel">Pricing</span>
+                  <p className="hint">{featuredListing.paymentToken === "0x0000000000000000000000000000000000000000" ? "ETH" : "ERC-20"}</p>
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <h3>No Featured Listing Yet</h3>
+              <p className="sectionLead">
+                This creator page does not have a live listing to spotlight yet. Mint and list under this identity to give the storefront something to feature.
+              </p>
+              <div className="row">
+                <Link href={`/mint?view=mint&collection=shared&profile=${encodeURIComponent(mintProfileParam)}`} className="ctaLink secondaryLink">Mint from this profile</Link>
+                <Link href="/list" className="ctaLink secondaryLink">Create a listing</Link>
+              </div>
+            </>
+          )}
+        </section>
+      </div>
+
+      <div className="profileShell">
+        <section className="card profileFeatureCard">
+          <p className="eyebrow">About</p>
+          <h3>Creator Wall</h3>
+          <p className="sectionLead">{creatorBio}</p>
+          <div className="profileStatGrid">
+            <div className="flowCell">
+              <span className="flowLabel">Primary Route</span>
+              <p className="hint mono">/profile/{name}</p>
+            </div>
+            <div className="flowCell">
+              <span className="flowLabel">Identity Count</span>
+              <p className="hint">{linkedProfiles.length}</p>
+            </div>
+            <div className="flowCell">
+              <span className="flowLabel">Live Listings</span>
+              <p className="hint">{stats.listings}</p>
+            </div>
+            <div className="flowCell">
+              <span className="flowLabel">Collections</span>
+              <p className="hint">{stats.uniqueCollections}</p>
+            </div>
+          </div>
+        </section>
+
+        <section className="card profileIdentityCard">
+          <p className="eyebrow">Links</p>
+          <h3>Elsewhere</h3>
+          {primaryProfile?.links?.length ? (
+            <div className="compactList">
+              {primaryProfile.links.map((link) => (
+                <a key={link} href={link} target="_blank" rel="noreferrer" className="profileLinkRow">
+                  {link}
+                </a>
+              ))}
+            </div>
+          ) : (
+            <p className="hint">No external links are pinned to this creator page yet.</p>
+          )}
+        </section>
+      </div>
+
       <div className="card formCard">
-        <h3>Lookup Controls</h3>
+        <h3>Pinned Collection</h3>
+        {pinnedCollection ? (
+          <>
+            <p className="sectionLead">
+              {pinnedCollection.ensSubname?.trim()
+                ? `${pinnedCollection.ensSubname}${pinnedCollection.ensSubname.includes(".") ? "" : ".nftfactory.eth"}`
+                : "Primary creator collection"}
+            </p>
+            <div className="profileStatGrid">
+              <div className="flowCell">
+                <span className="flowLabel">Contract</span>
+                {toExplorerAddress(pinnedCollection.contractAddress, config.chainId) ? (
+                  <a href={toExplorerAddress(pinnedCollection.contractAddress, config.chainId)!} target="_blank" rel="noreferrer" className="hint mono">
+                    {pinnedCollection.contractAddress}
+                  </a>
+                ) : (
+                  <p className="hint mono">{pinnedCollection.contractAddress}</p>
+                )}
+              </div>
+              <div className="flowCell">
+                <span className="flowLabel">Owner</span>
+                <p className="hint mono">{truncateAddress(pinnedCollection.ownerAddress)}</p>
+              </div>
+              <div className="flowCell">
+                <span className="flowLabel">Live Listings</span>
+                <p className="hint">{pinnedCollection.activeListings}</p>
+              </div>
+            </div>
+          </>
+        ) : (
+          <p className="hint">No creator collection is pinned yet. Link a collection during profile setup to feature it here.</p>
+        )}
+      </div>
+
+      <div className="card formCard">
+        <h3>View Controls</h3>
         <div className="gridMini">
           <label>
             Creator wallet address
@@ -230,8 +485,8 @@ export default function ProfileClient({ name }: { name: string }) {
             addresses, or after you enter a creator wallet manually above.
           </p>
           <div className="row">
-            <Link href={`/profile?label=${encodeURIComponent(name)}`} className="ctaLink secondaryLink">Complete creator setup</Link>
-            <Link href={`/mint?view=mint&collection=shared&profile=${encodeURIComponent(name)}`} className="ctaLink secondaryLink">Mint with this ENS</Link>
+            <Link href={`/profile/setup?label=${encodeURIComponent(name)}`} className="ctaLink secondaryLink">Open creator setup</Link>
+            <Link href={`/mint?view=mint&collection=shared&profile=${encodeURIComponent(mintProfileParam)}`} className="ctaLink secondaryLink">Mint with this ENS</Link>
             <Link href="/discover" className="ctaLink secondaryLink">Browse all listings</Link>
           </div>
         </div>
@@ -241,12 +496,12 @@ export default function ProfileClient({ name }: { name: string }) {
         <div className="card formCard">
           <h3>Identity Setup</h3>
           <p className="sectionLead">
-            If this creator label is still new, finish profile setup first: register the subname, then
-            publish with ENS attribution so the storefront can resolve automatically.
+            If this creator label is still new, finish profile setup first: link an ENS identity or create
+            an nftfactory.eth subname, then publish so the storefront can resolve automatically.
           </p>
           <div className="row">
-            <Link href={`/profile?label=${encodeURIComponent(name)}`} className="ctaLink secondaryLink">Open setup</Link>
-            <Link href={`/mint?view=mint&collection=shared&profile=${encodeURIComponent(name)}`} className="ctaLink secondaryLink">Launch ENS mint</Link>
+            <Link href={`/profile/setup?label=${encodeURIComponent(name)}`} className="ctaLink secondaryLink">Open setup</Link>
+            <Link href={`/mint?view=mint&collection=shared&profile=${encodeURIComponent(mintProfileParam)}`} className="ctaLink secondaryLink">Launch ENS mint</Link>
           </div>
         </div>
       ) : null}
@@ -271,7 +526,33 @@ export default function ProfileClient({ name }: { name: string }) {
       </div>
 
       <div className="card formCard">
-        <h3>ENS Identity Mapping</h3>
+        <h3>Profile Snapshot</h3>
+        <p className="sectionLead">
+          This is the public identity layer that powers the storefront. It combines linked names, wallet ownership,
+          and indexed creator collections so the same profile can feel like a personal landing page.
+        </p>
+        <div className="profileStatGrid">
+          <div className="flowCell">
+            <span className="flowLabel">Primary Name</span>
+            <p className="hint">{primaryProfileName}</p>
+          </div>
+          <div className="flowCell">
+            <span className="flowLabel">Linked Identities</span>
+            <p className="hint">{linkedProfiles.length || 0}</p>
+          </div>
+          <div className="flowCell">
+            <span className="flowLabel">Wallet Mappings</span>
+            <p className="hint">{resolvedSellerAddresses.length}</p>
+          </div>
+          <div className="flowCell">
+            <span className="flowLabel">Creator Collections</span>
+            <p className="hint">{collectionSummaries.length}</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="card formCard">
+        <h3>Linked Wallets</h3>
         <p className="sectionLead">
           This section shows the wallet addresses and collection mappings currently published by the indexer for this ENS label.
         </p>
@@ -296,7 +577,7 @@ export default function ProfileClient({ name }: { name: string }) {
       </div>
 
       <div className="card formCard">
-        <h3>Indexed Creator Collections</h3>
+        <h3>Creator Collection Wall</h3>
         <p className="sectionLead">
           These are the creator-owned contracts the indexer currently ties to this ENS identity.
         </p>
@@ -329,7 +610,7 @@ export default function ProfileClient({ name }: { name: string }) {
       </div>
 
       <div className="card formCard">
-        <h3>Active Listings</h3>
+        <h3>Storefront Feed</h3>
         <p className="sectionLead">
           Storefront inventory currently visible for the resolved wallets on the configured marketplace.
         </p>
@@ -349,42 +630,43 @@ export default function ProfileClient({ name }: { name: string }) {
             </button>
           </div>
         ) : null}
-      </div>
-
-      <div className="listTable">
-        {creatorListings.map((listing) => (
-          <article key={listing.id} className="listRow">
-            <span>
-              <strong>Listing</strong> #{listing.id}
-            </span>
-            <span>
-              <strong>Standard</strong> {listing.standard}
-            </span>
-            <span>
-              <strong>Token</strong> #{listing.tokenId.toString()}
-            </span>
-            <span>
-              <strong>Amount</strong> {listing.amount.toString()}
-            </span>
-            <span>
-              <strong>Price</strong> {formatListingPrice(listing)}
-            </span>
-            {toExplorerAddress(listing.nft, config.chainId) ? (
-              <a href={toExplorerAddress(listing.nft, config.chainId)!} target="_blank" rel="noreferrer" className="mono">
-                Contract {truncateAddress(listing.nft)}
-              </a>
-            ) : (
-              <span className="mono">Contract {truncateAddress(listing.nft)}</span>
-            )}
-            {toExplorerAddress(listing.seller, config.chainId) ? (
-              <a href={toExplorerAddress(listing.seller, config.chainId)!} target="_blank" rel="noreferrer" className="mono">
-                Seller {truncateAddress(listing.seller)}
-              </a>
-            ) : (
-              <span className="mono">Seller {truncateAddress(listing.seller)}</span>
-            )}
-          </article>
-        ))}
+        {creatorListings.length > 0 ? (
+          <div className="listTable">
+            {creatorListings.map((listing) => (
+              <article key={listing.id} className="listRow profileListingRow">
+                <span>
+                  <strong>Listing</strong> #{listing.id}
+                </span>
+                <span>
+                  <strong>Standard</strong> {listing.standard}
+                </span>
+                <span>
+                  <strong>Token</strong> #{listing.tokenId.toString()}
+                </span>
+                <span>
+                  <strong>Amount</strong> {listing.amount.toString()}
+                </span>
+                <span>
+                  <strong>Price</strong> {formatListingPrice(listing)}
+                </span>
+                {toExplorerAddress(listing.nft, config.chainId) ? (
+                  <a href={toExplorerAddress(listing.nft, config.chainId)!} target="_blank" rel="noreferrer" className="mono">
+                    Contract {truncateAddress(listing.nft)}
+                  </a>
+                ) : (
+                  <span className="mono">Contract {truncateAddress(listing.nft)}</span>
+                )}
+                {toExplorerAddress(listing.seller, config.chainId) ? (
+                  <a href={toExplorerAddress(listing.seller, config.chainId)!} target="_blank" rel="noreferrer" className="mono">
+                    Seller {truncateAddress(listing.seller)}
+                  </a>
+                ) : (
+                  <span className="mono">Seller {truncateAddress(listing.seller)}</span>
+                )}
+              </article>
+            ))}
+          </div>
+        ) : null}
       </div>
     </section>
   );
