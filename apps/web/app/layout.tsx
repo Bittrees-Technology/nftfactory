@@ -17,14 +17,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <main>
             <div className="topBar">
               <nav>
-                <Link href="/">NFTFactory</Link>
-                <Link href="/mint">Mint</Link>
-                <Link href="/list">List</Link>
-                <Link href="/discover">Discover</Link>
-                <Link href="/profile">Profile</Link>
-                <Link href="/admin">Admin</Link>
+                <div className="navLinks">
+                  <Link href="/" className="brandLink">NFTFactory</Link>
+                  <Link href="/mint">Mint</Link>
+                  <Link href="/list">List</Link>
+                  <Link href="/discover">Discover</Link>
+                  <Link href="/profile">Profile</Link>
+                  <Link href="/admin">Admin</Link>
+                </div>
+                <HeaderWalletButton />
               </nav>
-              <HeaderWalletButton />
             </div>
             {children}
           </main>

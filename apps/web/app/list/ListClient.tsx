@@ -491,7 +491,7 @@ export default function ListClient() {
       <form className="wizard" onSubmit={onSubmit}>
         <div className="card formCard">
           <h3>1. Wallet Status</h3>
-          <p className="hint">Use the wallet button in the upper-right corner to connect or switch accounts.</p>
+          <p className="hint">Use the header wallet button to connect, change accounts, or switch networks.</p>
           {!isConnected ? (
             <p className="hint">
               Listing creation and cancel actions stay disabled until a wallet is connected.
