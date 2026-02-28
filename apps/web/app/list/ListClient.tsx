@@ -16,6 +16,7 @@ import { buildBuyPlan } from "../../lib/marketplaceBuy";
 import { getContractsConfig } from "../../lib/contracts";
 import { fetchActiveListingsBatch } from "../../lib/marketplace";
 import { fetchProfileResolution } from "../../lib/indexerApi";
+import { getAppChain } from "../../lib/chains";
 import TxStatus, { type TxState } from "./TxStatus";
 import ListingFilters, { type FilterState, type Preset } from "./ListingFilters";
 import ListingCard, { type ListingRow } from "./ListingCard";
@@ -56,6 +57,7 @@ const DEFAULT_FILTERS: FilterState = {
 
 export default function ListClient() {
   const config = useMemo(() => getContractsConfig(), []);
+  const appChain = useMemo(() => getAppChain(config.chainId), [config.chainId]);
   const { isConnected, address } = useAccount();
   const chainId = useChainId();
   const { switchChainAsync } = useSwitchChain();
@@ -286,7 +288,7 @@ export default function ListClient() {
       return;
     }
     if (wrongNetwork) {
-      setState({ status: "error", message: "Switch to Sepolia first." });
+      setState({ status: "error", message: `Switch to ${appChain.name} first.` });
       return;
     }
     if (!isAddress(nftAddress)) {
@@ -373,7 +375,7 @@ export default function ListClient() {
       return;
     }
     if (wrongNetwork) {
-      setState({ status: "error", message: "Switch to Sepolia first." });
+      setState({ status: "error", message: `Switch to ${appChain.name} first.` });
       return;
     }
 
@@ -400,7 +402,7 @@ export default function ListClient() {
       return;
     }
     if (wrongNetwork) {
-      setState({ status: "error", message: "Switch to Sepolia first." });
+      setState({ status: "error", message: `Switch to ${appChain.name} first.` });
       return;
     }
     try {
@@ -470,38 +472,67 @@ export default function ListClient() {
   }
 
   return (
-    <section>
-      <h1>List NFT</h1>
-      <p>Dedicated listing flow: connect wallet, choose NFT, approve marketplace, and create listing.</p>
-
-      <div className="card formCard">
-        <h3>Two Jobs On This Page</h3>
-        <div className="gridMini">
-          <p className="hint"><strong>Create listing:</strong> use steps 1-4 to approve and submit a sale.</p>
-          <p className="hint"><strong>Manage listings:</strong> use the lower sections to cancel, buy, or filter active listings.</p>
-        </div>
+    <section className="wizard">
+      <div className="heroCard">
+        <p className="eyebrow">Seller Flow</p>
+        <h1>List NFT</h1>
+        <p className="heroText">
+          Seller route for fixed-price listings. This page is for assets you already hold: connect a wallet,
+          prepare a listing, then manage active inventory without leaving the same screen.
+        </p>
         <div className="row">
           <Link href="/discover" className="ctaLink secondaryLink">Read-only browsing</Link>
           <Link href="/mint?view=mint&collection=shared" className="ctaLink secondaryLink">Mint before selling</Link>
+        </div>
+        <div className="flowStrip">
+          <div className="flowCell">
+            <span className="flowLabel">1. Connect</span>
+            <p className="hint">Use the shared header wallet control to pick the correct seller wallet.</p>
+          </div>
+          <div className="flowCell">
+            <span className="flowLabel">2. List</span>
+            <p className="hint">Approve the marketplace, then create a sale for an NFT you already own.</p>
+          </div>
+          <div className="flowCell">
+            <span className="flowLabel">3. Manage</span>
+            <p className="hint">Refresh, cancel, buy, or inspect active listings below.</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="card formCard">
+        <h3>Current Route Scope</h3>
+        <p className="sectionLead">
+          `List` combines seller setup and live marketplace management. Use `Discover` if you want a cleaner
+          feed with no listing form, and use `Mint` if you need to create the NFT first.
+        </p>
+        <div className="gridMini">
+          <p className="hint"><strong>Create listing:</strong> use steps 1-4 to approve and submit a sale.</p>
+          <p className="hint"><strong>Manage listings:</strong> use the lower sections to cancel, buy, or filter active listings.</p>
         </div>
       </div>
 
       <form className="wizard" onSubmit={onSubmit}>
         <div className="card formCard">
           <h3>1. Wallet Status</h3>
-          <p className="hint">Use the wallet button in the upper-right corner to connect or switch accounts.</p>
+          <p className="hint">Use the header wallet button to connect, change accounts, or switch networks.</p>
           {!isConnected ? (
             <p className="hint">
               Listing creation and cancel actions stay disabled until a wallet is connected.
             </p>
           ) : null}
+          {isConnected && wrongNetwork ? (
+            <p className="hint">
+              Your wallet is connected to chain {chainId}. Switch to {appChain.name} to create, cancel, or buy listings here.
+            </p>
+          ) : null}
           {wrongNetwork && (
             <button type="button" onClick={switchToSepolia}>
-              Switch To Sepolia
+              Switch To {appChain.name}
             </button>
           )}
           <p className="mono">Account: {address || "Not connected"}</p>
-          <p className="mono">Network: {chainId ?? "Unknown"} (expected {config.chainId})</p>
+          <p className="mono">Network: {chainId ?? "Unknown"} (expected {appChain.name} / {config.chainId})</p>
           <button type="button" onClick={loadListings} disabled={wrongNetwork || listingsLoading}>
             {listingsLoading ? "Refreshing..." : "Refresh Listings"}
           </button>
@@ -587,6 +618,9 @@ export default function ListClient() {
 
         <div className="card formCard">
           <h3>4. Submit</h3>
+          <p className="hint">
+            This submits a live marketplace approval and listing transaction on {appChain.name}.
+          </p>
           <button type="submit" disabled={!isConnected || wrongNetwork || state.status === "pending"}>
             {state.status === "pending" ? "Submitting..." : "Approve and Create Listing"}
           </button>
@@ -598,6 +632,14 @@ export default function ListClient() {
           <p className="hint">These are listings where your connected wallet is the seller.</p>
           {!isConnected && <p className="hint">Connect wallet to view your listings.</p>}
           {isConnected && myListings.length === 0 && !listingsLoading && <p className="hint">No active listings found.</p>}
+          {isConnected && myListings.length === 0 && !listingsLoading ? (
+            <div className="row">
+              <Link href="/mint?view=mint&collection=shared" className="ctaLink secondaryLink">Mint something first</Link>
+              <button type="button" onClick={loadListings} disabled={listingsLoading}>
+                Refresh Seller State
+              </button>
+            </div>
+          ) : null}
           {myListings.length > 0 && (
             <div className="listTable">
               {myListings.map((item) => (
@@ -633,7 +675,17 @@ export default function ListClient() {
             onPreset={applyPreset}
             subnameHint={ensSubnameHint}
           />
-          {filteredListings.length === 0 && !listingsLoading && <p className="hint">No active listings match filters.</p>}
+          {filteredListings.length === 0 && !listingsLoading ? (
+            <div>
+              <p className="hint">No active listings match filters.</p>
+              <div className="row">
+                <button type="button" onClick={() => setFilters(DEFAULT_FILTERS)}>
+                  Reset Listing Filters
+                </button>
+                <Link href="/discover" className="ctaLink secondaryLink">Open read-only feed</Link>
+              </div>
+            </div>
+          ) : null}
           {filteredListings.length > 0 && (
             <div className="listTable">
               {filteredListings.map((item) => (

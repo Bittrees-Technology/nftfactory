@@ -32,6 +32,9 @@ export default function AdminClient() {
   const [error, setError] = useState("");
   const [pendingDecision, setPendingDecision] = useState<{ reportId: string; decision: Decision } | null>(null);
   const [notesDraft, setNotesDraft] = useState("");
+  const manualListingNumeric = Number.parseInt(manualListingId, 10);
+  const canWrite = Boolean(adminToken || adminAddress);
+  const hasManualListingId = Number.isInteger(manualListingNumeric) && manualListingNumeric >= 0;
 
   async function refresh(): Promise<void> {
     try {
@@ -110,9 +113,24 @@ export default function AdminClient() {
           <Link href="/discover" className="ctaLink secondaryLink">Review the public feed</Link>
           <Link href="/profile" className="ctaLink secondaryLink">Check creator profiles</Link>
         </div>
+        <div className="flowStrip">
+          <div className="flowCell">
+            <span className="flowLabel">Load</span>
+            <p className="hint">Start by confirming the moderation API is reachable and returning live state.</p>
+          </div>
+          <div className="flowCell">
+            <span className="flowLabel">Review</span>
+            <p className="hint">Work from the open queue first, then inspect hidden listings and action history.</p>
+          </div>
+          <div className="flowCell">
+            <span className="flowLabel">Act</span>
+            <p className="hint">Hide, restore, or dismiss only when admin credentials are present and intentional.</p>
+          </div>
+        </div>
       </div>
 
       <div className="card formCard">
+        <h3>Control Surface</h3>
         <p className="hint">
           Read actions may work with just the indexer online. Hide, restore, and resolve actions usually
           require an admin token, an allowed admin address, or both depending on server configuration.
@@ -136,16 +154,19 @@ export default function AdminClient() {
           </label>
         </div>
         <div className="row">
-          <button type="button" onClick={() => setManualHidden(true)}>
+          <button type="button" onClick={() => setManualHidden(true)} disabled={!canWrite || !hasManualListingId}>
             Hide Listing
           </button>
-          <button type="button" onClick={() => setManualHidden(false)}>
+          <button type="button" onClick={() => setManualHidden(false)} disabled={!canWrite || !hasManualListingId}>
             Restore Listing
           </button>
           <button type="button" onClick={() => void refresh()}>
             Refresh Admin Data
           </button>
         </div>
+        {!hasManualListingId ? (
+          <p className="hint">Enter a numeric listing ID to use the manual hide or restore actions.</p>
+        ) : null}
       </div>
 
       {error ? <p className="error">{error}</p> : null}
@@ -153,6 +174,22 @@ export default function AdminClient() {
         <p className="hint">
           No admin token or address supplied. Expect this page to be effectively read-only until credentials are entered.
         </p>
+      ) : null}
+
+      {error ? (
+        <div className="card formCard">
+          <h3>Admin Backend Unavailable</h3>
+          <p className="hint">
+            The indexer did not return moderation data. This usually means the admin API is offline, misconfigured,
+            or rejecting the current credentials.
+          </p>
+          <div className="row">
+            <button type="button" onClick={() => void refresh()}>
+              Retry Admin Data
+            </button>
+            <Link href="/discover" className="ctaLink secondaryLink">Inspect public feed</Link>
+          </div>
+        </div>
       ) : null}
 
       <div className="grid">
@@ -168,10 +205,27 @@ export default function AdminClient() {
           <h3>Action Log Entries</h3>
           <p>{actions.length}</p>
         </article>
+        <article className="card">
+          <h3>Write Access</h3>
+          <p>{canWrite ? "Enabled" : "Read-only"}</p>
+        </article>
       </div>
+
+      {!error && openReports.length === 0 && hiddenListings.length === 0 && actions.length === 0 ? (
+        <div className="card formCard">
+          <h3>Admin Feed Is Clear</h3>
+          <p className="hint">
+            The moderation API is reachable, but there are no open reports, hidden listings, or recorded
+            actions yet. This is the expected empty state for a clean system.
+          </p>
+        </div>
+      ) : null}
 
       <div className="card">
         <h3>Open Moderation Queue</h3>
+        <p className="sectionLead">
+          Reports awaiting review. This is the primary work queue for admin decisions.
+        </p>
         {openReports.length === 0 ? <p className="hint">No open reports.</p> : null}
         <div className="listTable">
           {openReports.map((report) => (
@@ -198,7 +252,7 @@ export default function AdminClient() {
                     onChange={(e) => setNotesDraft(e.target.value)}
                     placeholder="Optional note..."
                   />
-                  <button type="button" className="miniBtn" onClick={() => void confirmDecision()}>
+                  <button type="button" className="miniBtn" disabled={!canWrite} onClick={() => void confirmDecision()}>
                     Confirm {pendingDecision.decision}
                   </button>
                   <button type="button" className="miniBtn" onClick={() => { setPendingDecision(null); setNotesDraft(""); }}>
@@ -207,13 +261,13 @@ export default function AdminClient() {
                 </div>
               ) : (
                 <div className="row">
-                  <button type="button" className="miniBtn" onClick={() => { setPendingDecision({ reportId: report.id, decision: "hide" }); setNotesDraft(""); }}>
+                  <button type="button" className="miniBtn" disabled={!canWrite} onClick={() => { setPendingDecision({ reportId: report.id, decision: "hide" }); setNotesDraft(""); }}>
                     Hide
                   </button>
-                  <button type="button" className="miniBtn" onClick={() => { setPendingDecision({ reportId: report.id, decision: "restore" }); setNotesDraft(""); }}>
+                  <button type="button" className="miniBtn" disabled={!canWrite} onClick={() => { setPendingDecision({ reportId: report.id, decision: "restore" }); setNotesDraft(""); }}>
                     Restore
                   </button>
-                  <button type="button" className="miniBtn" onClick={() => { setPendingDecision({ reportId: report.id, decision: "dismiss" }); setNotesDraft(""); }}>
+                  <button type="button" className="miniBtn" disabled={!canWrite} onClick={() => { setPendingDecision({ reportId: report.id, decision: "dismiss" }); setNotesDraft(""); }}>
                     Dismiss
                   </button>
                 </div>
@@ -225,12 +279,18 @@ export default function AdminClient() {
 
       <div className="card">
         <h3>Hidden Listing IDs</h3>
+        <p className="sectionLead">
+          The current hidden-list snapshot exposed by the moderation API.
+        </p>
         {hiddenListings.length === 0 ? <p className="hint">No hidden listings.</p> : null}
         {hiddenListings.length > 0 ? <p className="mono">{hiddenListings.join(", ")}</p> : null}
       </div>
 
       <div className="card">
         <h3>Action History</h3>
+        <p className="sectionLead">
+          Recorded moderation actions for auditing what has already been changed.
+        </p>
         {actions.length === 0 ? <p className="hint">No actions recorded yet.</p> : null}
         <div className="listTable">
           {actions.map((action) => (

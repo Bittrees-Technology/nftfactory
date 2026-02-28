@@ -31,23 +31,29 @@ main {
 }
 
 .topBar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
   margin-bottom: 24px;
 }
 
 nav {
   display: flex;
-  gap: 16px;
   align-items: center;
-  flex-wrap: wrap;
+  gap: 16px;
   padding: 12px 14px;
   border: 1px solid #e6d7c4;
   border-radius: 14px;
   background: rgba(255, 249, 241, 0.92);
+}
+
+.navLinks {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  flex-wrap: wrap;
   flex: 1;
+}
+
+.brandLink {
+  font-weight: 700;
 }
 
 .headerWalletButton {
@@ -69,9 +75,29 @@ nav {
 }
 
 .walletGlyph {
-  font-size: 1rem;
-  line-height: 1;
-  font-weight: 700;
+  position: relative;
+  width: 14px;
+  height: 14px;
+  display: inline-block;
+}
+
+.walletDot {
+  position: absolute;
+  top: 0;
+  left: 3px;
+  width: 8px;
+  height: 8px;
+  border: 2px solid #fff;
+  border-radius: 999px;
+}
+
+.walletStem {
+  position: absolute;
+  bottom: 0;
+  left: 6px;
+  width: 2px;
+  height: 7px;
+  background: #fff;
 }
 
 .card {
@@ -103,6 +129,37 @@ nav {
   margin: 0;
   max-width: 64ch;
   color: #473a30;
+}
+
+.sectionLead {
+  margin: 0;
+  max-width: 64ch;
+  color: #473a30;
+}
+
+.flowStrip {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.flowCell {
+  border: 1px solid #e6d7c4;
+  border-radius: 12px;
+  padding: 12px;
+  background: #fff9f1;
+}
+
+.flowCell p {
+  margin: 4px 0 0;
+}
+
+.flowLabel {
+  color: #7f220f;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .ctaLink {
@@ -270,6 +327,20 @@ nav {
   font-size: 12px;
 }
 
+.selectionCard {
+  display: grid;
+  gap: 8px;
+  border: 1px solid #e6d7c4;
+  border-radius: 12px;
+  padding: 12px;
+  background: #fff9f1;
+}
+
+.compactList {
+  display: grid;
+  gap: 6px;
+}
+
 .reportInline {
   display: flex;
   gap: 6px;
@@ -345,4 +416,19 @@ button:disabled {
 .success {
   color: #146d2a;
   margin: 0;
+}
+
+@media (max-width: 720px) {
+  nav {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .navLinks {
+    width: 100%;
+  }
+
+  .headerWalletButton {
+    align-self: flex-end;
+  }
 }

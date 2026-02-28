@@ -21,10 +21,28 @@ export default function HomePage() {
             Browse marketplace
           </Link>
         </div>
+        <div className="flowStrip">
+          <div className="flowCell">
+            <span className="flowLabel">1. Publish</span>
+            <p className="hint">Use Mint for shared drops, creator collections, and collection management.</p>
+          </div>
+          <div className="flowCell">
+            <span className="flowLabel">2. Sell</span>
+            <p className="hint">Use List only after the asset already exists in a wallet you control.</p>
+          </div>
+          <div className="flowCell">
+            <span className="flowLabel">3. Review</span>
+            <p className="hint">Use Discover, Profile, and Admin for browsing, identity lookup, and moderation.</p>
+          </div>
+        </div>
       </div>
 
       <div className="card formCard">
-        <h3>How The App Is Organized</h3>
+        <h3>Current Product Scope</h3>
+        <p className="sectionLead">
+          The app is organized around one clear progression: publish first, list second, inspect third.
+          Each route now focuses on a single job instead of mixing seller, collector, and admin actions.
+        </p>
         <div className="gridMini">
           <p className="hint"><strong>Mint</strong> for publishing, deploying, and collection management.</p>
           <p className="hint"><strong>List</strong> for creating and managing fixed-price sales.</p>
@@ -94,6 +112,9 @@ export default function HomePage() {
 
       <div className="card formCard">
         <h3>Operational Routes</h3>
+        <p className="sectionLead">
+          Use these after publishing: `List` for seller actions, `Admin` for moderation only.
+        </p>
         <div className="row">
           <Link href="/list" className="ctaLink secondaryLink">Create or manage listings</Link>
           <Link href="/admin" className="ctaLink secondaryLink">Moderation admin</Link>

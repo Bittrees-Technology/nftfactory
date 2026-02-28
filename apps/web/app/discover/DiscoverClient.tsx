@@ -83,6 +83,16 @@ export default function DiscoverClient() {
   const [reportingId, setReportingId] = useState<number | null>(null);
   const [reportReason, setReportReason] = useState("spam");
 
+  const hasActiveFilters = Boolean(
+    sourceFilter !== "ALL" ||
+    standardFilter !== "ALL" ||
+    maxPriceEth.trim() ||
+    contractFilter.trim() ||
+    sellerFilter.trim() ||
+    sortBy !== "newest"
+  );
+  const canReport = normalizeAddress(reporter);
+
   const refreshHidden = useCallback(async () => {
     try {
       setIndexerStatus("");
@@ -273,18 +283,46 @@ export default function DiscoverClient() {
     }
   }
 
+  function resetFilters(): void {
+    setSourceFilter("ALL");
+    setStandardFilter("ALL");
+    setMaxPriceEth("");
+    setContractFilter("");
+    setSellerFilter("");
+    setSortBy("newest");
+  }
+
   return (
     <section className="wizard">
-      <div>
+      <div className="heroCard">
+        <p className="eyebrow">Marketplace Feed</p>
         <h1>Discover</h1>
-        <p>Collector feed with moderation-aware filtering, fast refresh cache, and pagination.</p>
+        <p className="heroText">
+          Read-only marketplace feed for collectors and reviewers. Use this route to inspect current
+          listings, narrow the feed, and flag suspicious activity without entering seller mode.
+        </p>
         <div className="row">
           <Link href="/profile" className="ctaLink secondaryLink">Open creator profiles</Link>
           <Link href="/list" className="ctaLink secondaryLink">Go to seller tools</Link>
         </div>
+        <div className="flowStrip">
+          <div className="flowCell">
+            <span className="flowLabel">Inspect</span>
+            <p className="hint">Refresh the live feed, then narrow it with source, standard, or price filters.</p>
+          </div>
+          <div className="flowCell">
+            <span className="flowLabel">Verify</span>
+            <p className="hint">Open creator profiles or contract links before acting on suspicious listings.</p>
+          </div>
+          <div className="flowCell">
+            <span className="flowLabel">Report</span>
+            <p className="hint">Submit moderation reports from this screen without leaving the public feed.</p>
+          </div>
+        </div>
       </div>
 
       <div className="card formCard">
+        <h3>Current Route Scope</h3>
         <p className="hint">
           This page is intentionally read-only for browsing. Use List if you want to create or manage your own sale.
         </p>
@@ -356,23 +394,58 @@ export default function DiscoverClient() {
           </label>
         </div>
         {!reporter && !address ? <p className="hint">Connect wallet or enter reporter address manually.</p> : null}
+        {reporter && !canReport ? <p className="hint">Reporter address must be a valid wallet before a report can be submitted.</p> : null}
       </div>
 
       {error ? <p className="error">{error}</p> : null}
       {indexerStatus ? <p className="hint">{indexerStatus}</p> : null}
 
+      {error ? (
+        <div className="card formCard">
+          <h3>Feed Unavailable</h3>
+          <p className="hint">
+            Listing data could not be loaded from the configured chain. Confirm the RPC endpoint and retry
+            refresh before assuming the marketplace is empty.
+          </p>
+          <div className="row">
+            <button type="button" onClick={() => void loadInitial(true)} disabled={isLoading}>
+              {isLoading ? "Retrying..." : "Retry Feed"}
+            </button>
+            <Link href="/list" className="ctaLink secondaryLink">Open seller tools</Link>
+          </div>
+        </div>
+      ) : null}
+
       <div className="card">
         <p className="hint">
           Showing {filtered.length} listing(s). Hidden by moderation: {hiddenListingIds.length}.
         </p>
+        {hasActiveFilters ? (
+          <div className="row">
+            <p className="hint">Filters are active. Clear them if you expected a broader feed.</p>
+            <button type="button" className="miniBtn" onClick={resetFilters}>
+              Clear Filters
+            </button>
+          </div>
+        ) : null}
       </div>
 
       {filtered.length === 0 && !isLoading ? (
         <div className="card formCard">
           <h3>No Listings In View</h3>
           <p className="hint">
-            Try increasing page size, clearing filters, or switching to List if you expected to see your own inventory.
+            {hasActiveFilters
+              ? "Your current filters removed every visible listing. Clear filters or widen the page size to inspect more results."
+              : "No listings are visible right now. Try refreshing, increasing page size, or switching to List if you expected to see your own inventory."}
           </p>
+          <div className="row">
+            {hasActiveFilters ? (
+              <button type="button" onClick={resetFilters}>
+                Reset Filters
+              </button>
+            ) : null}
+            <Link href="/profile" className="ctaLink secondaryLink">Check creator profiles</Link>
+          </div>
         </div>
       ) : null}
 
@@ -419,7 +492,7 @@ export default function DiscoverClient() {
                   <option value="scam">Scam</option>
                   <option value="other">Other</option>
                 </select>
-                <button type="button" className="miniBtn" onClick={() => void submitReport(row)}>
+                <button type="button" className="miniBtn" disabled={!canReport} onClick={() => void submitReport(row)}>
                   Submit
                 </button>
                 <button type="button" className="miniBtn" onClick={() => setReportingId(null)}>

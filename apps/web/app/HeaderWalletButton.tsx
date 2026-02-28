@@ -37,7 +37,8 @@ export default function HeaderWalletButton() {
             title={connected ? "Wallet connected" : "Connect wallet"}
           >
             <span className="walletGlyph" aria-hidden="true">
-              o
+              <span className="walletDot" />
+              <span className="walletStem" />
             </span>
           </button>
         );

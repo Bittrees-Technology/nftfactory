@@ -21,7 +21,7 @@ import {
   type DeployCollectionArgs
 } from "../../lib/creatorCollection";
 import { getContractsConfig } from "../../lib/contracts";
-import { getExplorerBaseUrl } from "../../lib/chains";
+import { getAppChain, getExplorerBaseUrl } from "../../lib/chains";
 import { fetchProfileResolution } from "../../lib/indexerApi";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -67,9 +67,23 @@ function isAddress(value: string): value is `0x${string}` {
   return /^0x[a-fA-F0-9]{40}$/.test(value);
 }
 
+function storageKey(ownerAddress: string): string {
+  return `nftfactory:known-collections:${ownerAddress.toLowerCase()}`;
+}
+
+function shortenAddress(value: string): string {
+  return `${value.slice(0, 8)}…${value.slice(-6)}`;
+}
+
 type MintClientProps = {
   initialPageMode?: PageMode;
   initialMintMode?: MintMode;
+};
+
+type KnownCollection = {
+  contractAddress: string;
+  ensSubname: string | null;
+  ownerAddress: string;
 };
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -79,6 +93,7 @@ export default function MintClient({
   initialMintMode = "shared"
 }: MintClientProps) {
   const config = useMemo(() => getContractsConfig(), []);
+  const appChain = useMemo(() => getAppChain(config.chainId), [config.chainId]);
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
   const publicClient = usePublicClient();
@@ -94,6 +109,8 @@ export default function MintClient({
 
   // Custom collection address (either entered manually or filled after factory deploy)
   const [customCollectionAddress, setCustomCollectionAddress] = useState("");
+  const [collectionSelector, setCollectionSelector] = useState<"saved" | "manual">("saved");
+  const [knownCollections, setKnownCollections] = useState<KnownCollection[]>([]);
   // Whether to show the inline "deploy new collection" sub-form
   const [showDeployForm, setShowDeployForm] = useState(false);
 
@@ -143,6 +160,29 @@ export default function MintClient({
   const wrongNetwork = isConnected && chainId !== config.chainId;
   const account = address ?? "";
 
+  function mergeKnownCollections(nextItems: KnownCollection[]): void {
+    setKnownCollections((prev) => {
+      const merged = new Map<string, KnownCollection>();
+      for (const item of [...prev, ...nextItems]) {
+        const normalizedOwner = item.ownerAddress.toLowerCase();
+        const normalizedContract = item.contractAddress.toLowerCase();
+        if (!isAddress(normalizedContract) || !isAddress(normalizedOwner)) continue;
+        const key = normalizedContract;
+        const existing = merged.get(key);
+        merged.set(key, {
+          contractAddress: item.contractAddress,
+          ensSubname: item.ensSubname || existing?.ensSubname || null,
+          ownerAddress: item.ownerAddress
+        });
+      }
+      const values = [...merged.values()];
+      if (typeof window !== "undefined" && account) {
+        window.localStorage.setItem(storageKey(account), JSON.stringify(values));
+      }
+      return values;
+    });
+  }
+
   // Image preview
   useEffect(() => {
     if (!imageFile) { setPreviewUrl(""); return; }
@@ -168,6 +208,68 @@ export default function MintClient({
       .finally(() => { if (!cancelled) setSubnameResolving(false); });
     return () => { cancelled = true; };
   }, [attributionSubname]);
+
+  useEffect(() => {
+    if (!account || typeof window === "undefined") {
+      setKnownCollections([]);
+      return;
+    }
+    const raw = window.localStorage.getItem(storageKey(account));
+    if (!raw) {
+      setKnownCollections([]);
+      return;
+    }
+    try {
+      const parsed = JSON.parse(raw) as KnownCollection[];
+      const filtered = parsed.filter((item) => isAddress(item.contractAddress) && item.ownerAddress.toLowerCase() === account.toLowerCase());
+      setKnownCollections(filtered);
+    } catch {
+      setKnownCollections([]);
+    }
+  }, [account]);
+
+  useEffect(() => {
+    if (!account || mintMode !== "custom") return;
+    const labels = [
+      normalizeSubname(deploySubname),
+      normalizeSubname(registerSubnameLabel),
+      normalizeSubname(attributionSubname)
+    ].filter(Boolean);
+    const uniqueLabels = [...new Set(labels)];
+    if (uniqueLabels.length === 0) return;
+    let cancelled = false;
+    void Promise.all(uniqueLabels.map((label) => fetchProfileResolution(label).catch(() => null)))
+      .then((results) => {
+        if (cancelled) return;
+        const owned = results
+          .flatMap((result) => result?.collections || [])
+          .filter((item) => item.ownerAddress.toLowerCase() === account.toLowerCase())
+          .map((item) => ({
+            contractAddress: item.contractAddress,
+            ensSubname: item.ensSubname,
+            ownerAddress: item.ownerAddress
+          }));
+        if (owned.length > 0) mergeKnownCollections(owned);
+      });
+    return () => { cancelled = true; };
+  }, [account, attributionSubname, deploySubname, mintMode, registerSubnameLabel]);
+
+  useEffect(() => {
+    if (mintMode !== "custom") return;
+    if (knownCollections.length === 0) {
+      setCollectionSelector("manual");
+      return;
+    }
+    if (collectionSelector === "saved" && !customCollectionAddress) {
+      setCustomCollectionAddress(knownCollections[0].contractAddress);
+    }
+  }, [collectionSelector, customCollectionAddress, knownCollections, mintMode]);
+
+  useEffect(() => {
+    if (!manageAddress && isAddress(customCollectionAddress)) {
+      setManageAddress(customCollectionAddress);
+    }
+  }, [customCollectionAddress, manageAddress]);
 
   // ── Utilities ─────────────────────────────────────────────────────────────
 
@@ -228,7 +330,7 @@ export default function MintClient({
 
   async function onDeployCollection(): Promise<void> {
     if (!account) { setDeployTx({ status: "error", message: "Connect wallet first." }); return; }
-    if (wrongNetwork) { setDeployTx({ status: "error", message: "Switch to the expected network first." }); return; }
+    if (wrongNetwork) { setDeployTx({ status: "error", message: `Switch to ${appChain.name} first.` }); return; }
     if (!deployName.trim()) { setDeployTx({ status: "error", message: "Collection name is required." }); return; }
     if (!deploySymbol.trim()) { setDeployTx({ status: "error", message: "Symbol is required." }); return; }
 
@@ -268,6 +370,13 @@ export default function MintClient({
       const deployed = extractDeployedCollectionAddress(receipt, config.factory);
       if (deployed) {
         setCustomCollectionAddress(deployed);
+        setManageAddress(deployed);
+        setCollectionSelector("saved");
+        mergeKnownCollections([{
+          contractAddress: deployed,
+          ensSubname: ensSubname || null,
+          ownerAddress: account
+        }]);
         setDeployTx({
           status: "success",
           hash: txHash,
@@ -290,7 +399,7 @@ export default function MintClient({
 
   async function onRegisterSubname(): Promise<void> {
     if (!account) { setSubnameTx({ status: "error", message: "Connect wallet first." }); return; }
-    if (wrongNetwork) { setSubnameTx({ status: "error", message: "Switch network first." }); return; }
+    if (wrongNetwork) { setSubnameTx({ status: "error", message: `Switch to ${appChain.name} first.` }); return; }
     const label = normalizeSubname(registerSubnameLabel);
     if (!label) { setSubnameTx({ status: "error", message: "Enter a subname label." }); return; }
     if (!isValidSubnameLabel(label)) {
@@ -317,7 +426,7 @@ export default function MintClient({
     e.preventDefault();
     setMintTx({ status: "idle" });
     if (!account) { setMintTx({ status: "error", message: "Connect wallet first." }); return; }
-    if (wrongNetwork) { setMintTx({ status: "error", message: "Switch to the expected network first." }); return; }
+    if (wrongNetwork) { setMintTx({ status: "error", message: `Switch to ${appChain.name} first.` }); return; }
 
     const amount = Number.parseInt(copies || "1", 10);
     if (standard === "ERC1155" && (!Number.isInteger(amount) || amount <= 0)) {
@@ -383,7 +492,7 @@ export default function MintClient({
 
   async function onTransferOwnership(): Promise<void> {
     if (!account) { setTransferTx({ status: "error", message: "Connect wallet first." }); return; }
-    if (wrongNetwork) { setTransferTx({ status: "error", message: "Switch network first." }); return; }
+    if (wrongNetwork) { setTransferTx({ status: "error", message: `Switch to ${appChain.name} first.` }); return; }
     if (!isAddress(manageAddress)) { setTransferTx({ status: "error", message: "Enter a valid collection address." }); return; }
     if (!isAddress(transferTarget)) { setTransferTx({ status: "error", message: "Enter a valid new owner address." }); return; }
     try {
@@ -401,7 +510,7 @@ export default function MintClient({
 
   async function onFinalizeUpgrades(): Promise<void> {
     if (!account) { setFinalizeTx({ status: "error", message: "Connect wallet first." }); return; }
-    if (wrongNetwork) { setFinalizeTx({ status: "error", message: "Switch network first." }); return; }
+    if (wrongNetwork) { setFinalizeTx({ status: "error", message: `Switch to ${appChain.name} first.` }); return; }
     if (!isAddress(manageAddress)) { setFinalizeTx({ status: "error", message: "Enter a valid collection address." }); return; }
     if (!finalizeConfirmed) { setFinalizeTx({ status: "error", message: "Tick the confirmation box first." }); return; }
     try {
@@ -417,16 +526,39 @@ export default function MintClient({
     }
   }
 
+  const selectedKnownCollection = knownCollections.find(
+    (item) => item.contractAddress.toLowerCase() === customCollectionAddress.toLowerCase()
+  ) || null;
+  const selectedManageCollection = knownCollections.find(
+    (item) => item.contractAddress.toLowerCase() === manageAddress.toLowerCase()
+  ) || null;
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <section>
-      <h1>Create and Publish</h1>
-      <p>
-        Mint into a shared public collection (instant, no setup) or deploy your own
-        collection contract and mint into it. Ownership transfer and upgrade finality
-        are available under <strong>Manage Collection</strong>.
-      </p>
+    <section className="wizard">
+      <div className="heroCard">
+        <p className="eyebrow">Publishing Flow</p>
+        <h1>Create and Publish</h1>
+        <p className="heroText">
+          Use one route for the full publishing flow: pick shared mint or your own creator collection,
+          prepare metadata, then mint. Collection ownership and upgrade finality stay in the manage flow.
+        </p>
+        <div className="flowStrip">
+          <div className="flowCell">
+            <span className="flowLabel">Connect</span>
+            <p className="hint">The wallet button lives in the top-right of the header and controls connect, chain, and account state.</p>
+          </div>
+          <div className="flowCell">
+            <span className="flowLabel">Prepare</span>
+            <p className="hint">Choose shared or creator collection, then provide metadata once.</p>
+          </div>
+          <div className="flowCell">
+            <span className="flowLabel">Publish</span>
+            <p className="hint">One final button uploads to IPFS if needed, then submits the mint transaction.</p>
+          </div>
+        </div>
+      </div>
 
       <div className="card formCard">
         <h3>{pageMode === "manage" ? "Current Flow: Manage Collection" : "Current Flow: Mint NFT"}</h3>
@@ -460,24 +592,6 @@ export default function MintClient({
         </div>
       </div>
 
-      {/* ── Mode switcher ── */}
-      <div className="row" style={{ marginBottom: "1rem" }}>
-        <button
-          type="button"
-          className={pageMode === "mint" ? "presetButton presetActive" : "presetButton"}
-          onClick={() => setPageMode("mint")}
-        >
-          Mint NFT
-        </button>
-        <button
-          type="button"
-          className={pageMode === "manage" ? "presetButton presetActive" : "presetButton"}
-          onClick={() => setPageMode("manage")}
-        >
-          Manage Collection
-        </button>
-      </div>
-
       {/* ════════════════════════════════════════════════════════════════════ */}
       {/* MINT FLOW                                                           */}
       {/* ════════════════════════════════════════════════════════════════════ */}
@@ -488,14 +602,14 @@ export default function MintClient({
           {/* Step 1: Wallet */}
           <div className="card formCard">
             <h3>1. Wallet Status</h3>
-            <p className="hint">Use the wallet button in the upper-right corner to connect or switch accounts.</p>
+            <p className="hint">The header wallet button controls connect, account selection, and network switching.</p>
             {wrongNetwork && (
               <button type="button" onClick={switchToExpectedNetwork}>
-                Switch to correct network
+                Switch to {appChain.name}
               </button>
             )}
             <p className="mono">Account: {account || "Not connected"}</p>
-            <p className="mono">Network: {chainId ?? "Unknown"} (expected {config.chainId})</p>
+            <p className="mono">Network: {chainId ?? "Unknown"} (expected {appChain.name} / {config.chainId})</p>
           </div>
 
           {/* Step 2: Collection selection */}
@@ -520,7 +634,13 @@ export default function MintClient({
 
             <label>
               Collection type
-              <select value={mintMode} onChange={(e) => { setMintMode(e.target.value as MintMode); setShowDeployForm(false); }}>
+              <select
+                value={mintMode}
+                onChange={(e) => {
+                  setMintMode(e.target.value as MintMode);
+                  setShowDeployForm(false);
+                }}
+              >
                 <option value="shared">
                   Shared collection — mint instantly, no setup required
                 </option>
@@ -563,18 +683,51 @@ export default function MintClient({
                   <strong>Your collection:</strong> a contract you exclusively own. Only you can
                   mint into it. Supports royalties, metadata locking, and upgrade finality.
                 </p>
-
-                <label>
-                  Collection contract address
-                  <input
-                    value={customCollectionAddress}
-                    onChange={(e) => setCustomCollectionAddress(e.target.value)}
-                    placeholder="0x… (paste your deployed collection address)"
-                  />
-                </label>
+                <div className="selectionCard">
+                  <label>
+                    Collection source
+                    <select
+                      value={collectionSelector}
+                      onChange={(e) => setCollectionSelector(e.target.value as "saved" | "manual")}
+                    >
+                      {knownCollections.length > 0 ? <option value="saved">Select one of my known collections</option> : null}
+                      <option value="manual">Enter collection address manually</option>
+                    </select>
+                  </label>
+                  {collectionSelector === "saved" && knownCollections.length > 0 ? (
+                    <label>
+                      Creator collection
+                      <select
+                        value={customCollectionAddress}
+                        onChange={(e) => setCustomCollectionAddress(e.target.value)}
+                      >
+                        {knownCollections.map((item) => (
+                          <option key={item.contractAddress} value={item.contractAddress}>
+                            {item.ensSubname ? `${item.ensSubname}.nftfactory.eth` : shortenAddress(item.contractAddress)} - {shortenAddress(item.contractAddress)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : (
+                    <label>
+                      Collection contract address
+                      <input
+                        value={customCollectionAddress}
+                        onChange={(e) => setCustomCollectionAddress(e.target.value)}
+                        placeholder="0x… (paste your deployed collection address)"
+                      />
+                    </label>
+                  )}
+                  {knownCollections.length === 0 ? (
+                    <p className="hint">
+                      Known collections appear here after you deploy from this wallet or after the app learns them from an ENS-linked profile mapping.
+                    </p>
+                  ) : null}
+                </div>
                 {isAddress(customCollectionAddress) && (
                   <p className="hint mono">
                     Using{" "}
+                    {selectedKnownCollection?.ensSubname ? `${selectedKnownCollection.ensSubname}.nftfactory.eth ` : ""}
                     {toExplorerAddress(config.chainId, customCollectionAddress) ? (
                       <a href={toExplorerAddress(config.chainId, customCollectionAddress)!} target="_blank" rel="noreferrer">
                         {customCollectionAddress.slice(0, 10)}…{customCollectionAddress.slice(-8)}
@@ -814,7 +967,7 @@ export default function MintClient({
               type="submit"
               disabled={!isConnected || wrongNetwork || mintTx.status === "pending" || uploadTx.status === "pending"}
             >
-              {mintTx.status === "pending" || uploadTx.status === "pending" ? "Publishing…" : "Upload and Mint"}
+              {mintTx.status === "pending" || uploadTx.status === "pending" ? "Publishing…" : imageFile ? "Upload and Mint" : "Mint Now"}
             </button>
             <TxStatus state={mintTx} />
           </div>
@@ -830,12 +983,12 @@ export default function MintClient({
 
           <div className="card formCard">
             <h3>Wallet Status</h3>
-            <p className="hint">Use the wallet button in the upper-right corner to connect or switch accounts.</p>
+            <p className="hint">The header wallet button controls connect, account selection, and network switching.</p>
             {wrongNetwork && (
-              <button type="button" onClick={switchToExpectedNetwork}>Switch to correct network</button>
+              <button type="button" onClick={switchToExpectedNetwork}>Switch to {appChain.name}</button>
             )}
             <p className="mono">Account: {account || "Not connected"}</p>
-            <p className="mono">Network: {chainId ?? "Unknown"} (expected {config.chainId})</p>
+            <p className="mono">Network: {chainId ?? "Unknown"} (expected {appChain.name} / {config.chainId})</p>
           </div>
 
           <div className="card formCard">
@@ -844,8 +997,24 @@ export default function MintClient({
               These actions apply to <strong>CreatorCollection</strong> contracts (the ones deployed via
               the factory). You must be the current <code>owner</code> of the contract to call them.
             </p>
+            {knownCollections.length > 0 ? (
+              <label>
+                Your collection
+                <select
+                  value={manageAddress}
+                  onChange={(e) => setManageAddress(e.target.value)}
+                >
+                  <option value="">Select a known collection</option>
+                  {knownCollections.map((item) => (
+                    <option key={`manage-${item.contractAddress}`} value={item.contractAddress}>
+                      {item.ensSubname ? `${item.ensSubname}.nftfactory.eth` : shortenAddress(item.contractAddress)} - {shortenAddress(item.contractAddress)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
             <label>
-              Your collection contract address
+              {knownCollections.length > 0 ? "Or paste a collection contract address" : "Your collection contract address"}
               <input
                 value={manageAddress}
                 onChange={(e) => setManageAddress(e.target.value)}
@@ -854,6 +1023,7 @@ export default function MintClient({
             </label>
             {isAddress(manageAddress) && (
               <p className="hint mono">
+                {selectedManageCollection?.ensSubname ? `${selectedManageCollection.ensSubname}.nftfactory.eth ` : ""}
                 {toExplorerAddress(config.chainId, manageAddress) ? (
                   <a href={toExplorerAddress(config.chainId, manageAddress)!} target="_blank" rel="noreferrer">
                     View on explorer ↗

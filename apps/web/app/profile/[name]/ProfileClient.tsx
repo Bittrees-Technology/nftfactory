@@ -147,6 +147,10 @@ export default function ProfileClient({ name }: { name: string }) {
     };
   }, [collectionSummaries.length, creatorListings, resolvedSellerAddresses.length]);
 
+  const hasResolvedIdentity = resolvedSellerAddresses.length > 0;
+  const hasManualWallet = Boolean(sellerAddress.trim());
+  const hasProfileData = hasResolvedIdentity || hasManualWallet;
+
   return (
     <section className="wizard">
       <div className="heroCard">
@@ -160,9 +164,24 @@ export default function ProfileClient({ name }: { name: string }) {
           <Link href="/discover" className="ctaLink secondaryLink">Browse marketplace</Link>
           <Link href="/mint?view=mint&collection=shared" className="ctaLink secondaryLink">Mint with this identity</Link>
         </div>
+        <div className="flowStrip">
+          <div className="flowCell">
+            <span className="flowLabel">Resolve</span>
+            <p className="hint">Start with ENS mapping, then fall back to a manual wallet if needed.</p>
+          </div>
+          <div className="flowCell">
+            <span className="flowLabel">Inspect</span>
+            <p className="hint">Review linked creator collections, wallets, and active storefront listings.</p>
+          </div>
+          <div className="flowCell">
+            <span className="flowLabel">Continue</span>
+            <p className="hint">Jump back into minting or discovery once the creator identity is verified.</p>
+          </div>
+        </div>
       </div>
 
       <div className="card formCard">
+        <h3>Lookup Controls</h3>
         <div className="gridMini">
           <label>
             Creator wallet address
@@ -194,6 +213,31 @@ export default function ProfileClient({ name }: { name: string }) {
 
       <div className="grid">
         <article className="card">
+          <h3>Identity Source</h3>
+          <p>{hasResolvedIdentity ? "Indexer + ENS" : hasManualWallet ? "Manual wallet" : "Unresolved"}</p>
+        </article>
+        <article className="card">
+          <h3>Profile State</h3>
+          <p>{hasProfileData ? "Ready to inspect" : "Needs lookup"}</p>
+        </article>
+      </div>
+
+      {!hasProfileData ? (
+        <div className="card formCard">
+          <h3>Profile Needs A Wallet Mapping</h3>
+          <p className="hint">
+            This route can only show storefront activity after the ENS label resolves to one or more wallet
+            addresses, or after you enter a creator wallet manually above.
+          </p>
+          <div className="row">
+            <Link href="/profile" className="ctaLink secondaryLink">Try another ENS label</Link>
+            <Link href="/discover" className="ctaLink secondaryLink">Browse all listings</Link>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="grid">
+        <article className="card">
           <h3>Active Listings</h3>
           <p>{stats.listings}</p>
         </article>
@@ -213,7 +257,7 @@ export default function ProfileClient({ name }: { name: string }) {
 
       <div className="card formCard">
         <h3>ENS Identity Mapping</h3>
-        <p className="hint">
+        <p className="sectionLead">
           This section shows the wallet addresses and collection mappings currently published by the indexer for this ENS label.
         </p>
         {resolvedSellerAddresses.length === 0 ? (
@@ -238,6 +282,9 @@ export default function ProfileClient({ name }: { name: string }) {
 
       <div className="card formCard">
         <h3>Indexed Creator Collections</h3>
+        <p className="sectionLead">
+          These are the creator-owned contracts the indexer currently ties to this ENS identity.
+        </p>
         {collectionSummaries.length === 0 ? (
           <p className="hint">
             No creator collections are currently indexed for this ENS label. Shared-mint activity can still
@@ -268,11 +315,24 @@ export default function ProfileClient({ name }: { name: string }) {
 
       <div className="card formCard">
         <h3>Active Listings</h3>
+        <p className="sectionLead">
+          Storefront inventory currently visible for the resolved wallets on the configured marketplace.
+        </p>
         {creatorListings.length === 0 ? (
           <p className="hint">
             No active listings were found for the resolved wallets at the current scan depth. Increase the
             scan depth or verify the wallet mapping above.
           </p>
+        ) : null}
+        {creatorListings.length === 0 ? (
+          <div className="row">
+            <button type="button" onClick={() => setScanDepth("500")}>
+              Set Scan Depth To 500
+            </button>
+            <button type="button" onClick={() => void loadListings()} disabled={isLoading}>
+              {isLoading ? "Refreshing..." : "Retry Profile Scan"}
+            </button>
+          </div>
         ) : null}
       </div>
 
