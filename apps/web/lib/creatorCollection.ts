@@ -44,7 +44,7 @@ export type DeployCollectionArgs = {
   /** Address that receives royalty payments. Pass creator address for self. */
   defaultRoyaltyReceiver: `0x${string}`;
   /** Royalty in basis points (0–10 000). 500 = 5 %. */
-  defaultRoyaltyBps: number;
+  defaultRoyaltyBps: bigint;
 };
 
 /**

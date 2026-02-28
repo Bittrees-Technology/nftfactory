@@ -239,7 +239,7 @@ export default function MintClient() {
       tokenSymbol: deploySymbol.trim().toUpperCase(),
       ensSubname,
       defaultRoyaltyReceiver: royaltyReceiver as `0x${string}`,
-      defaultRoyaltyBps: bps
+      defaultRoyaltyBps: BigInt(bps)
     };
 
     try {
@@ -647,29 +647,35 @@ export default function MintClient() {
               </label>
             )}
 
-            {/* ENS subname attribution — available for both shared and custom */}
-            <label>
-              ENS subname attribution (optional)
-              <input
-                value={attributionSubname}
-                onChange={(e) => { setAttributionSubname(e.target.value); setSubnameResolved(null); }}
-                placeholder="studio  or  studio.nftfactory.eth"
-              />
-            </label>
-            {attributionSubname.trim() && (
+            {mintMode === "shared" ? (
+              <>
+                <label>
+                  ENS subname attribution (optional)
+                  <input
+                    value={attributionSubname}
+                    onChange={(e) => { setAttributionSubname(e.target.value); setSubnameResolved(null); }}
+                    placeholder="studio  or  studio.nftfactory.eth"
+                  />
+                </label>
+                {attributionSubname.trim() && (
+                  <p className="hint">
+                    {subnameResolving
+                      ? "Resolving…"
+                      : subnameResolved
+                        ? `✓ Resolved to ${subnameResolved.slice(0, 10)}…`
+                        : "Subname not found in indexer — mint will still succeed but won't be attributed."}
+                  </p>
+                )}
+                <p className="hint">
+                  If you have a registered subname, enter it here to attribute this token to your creator profile.
+                </p>
+              </>
+            ) : (
               <p className="hint">
-                {subnameResolving
-                  ? "Resolving…"
-                  : subnameResolved
-                    ? `✓ Resolved to ${subnameResolved.slice(0, 10)}…`
-                    : "Subname not found in indexer — mint will still succeed but won't be attributed."}
+                Custom collections do not store per-mint ENS attribution. Their creator identity comes from the
+                collection contract and its registered ENS subname.
               </p>
             )}
-            <p className="hint">
-              {mintMode === "shared"
-                ? "If you have a registered subname, enter it here to attribute this token to your creator profile."
-                : "Attributes this mint to your ENS subname in the indexer. The subname must already be registered."}
-            </p>
 
             {/* NFT preview card */}
             {(previewUrl || name) ? (
