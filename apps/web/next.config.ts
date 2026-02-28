@@ -21,7 +21,17 @@ if (process.env.NODE_ENV === "production") {
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  outputFileTracingRoot: path.join(__dirname, "../..")
+  outputFileTracingRoot: path.join(__dirname, "../.."),
+  allowedDevOrigins: ["192.168.1.115", "localhost", "127.0.0.1"],
+  webpack: (config) => {
+    config.resolve = config.resolve || {};
+    config.resolve.alias = {
+      ...(config.resolve.alias || {}),
+      "@react-native-async-storage/async-storage": false,
+      "pino-pretty": false
+    };
+    return config;
+  }
 };
 
 export default nextConfig;
