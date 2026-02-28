@@ -67,9 +67,17 @@ function isAddress(value: string): value is `0x${string}` {
   return /^0x[a-fA-F0-9]{40}$/.test(value);
 }
 
+type MintClientProps = {
+  initialPageMode?: PageMode;
+  initialMintMode?: MintMode;
+};
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function MintClient() {
+export default function MintClient({
+  initialPageMode = "mint",
+  initialMintMode = "shared"
+}: MintClientProps) {
   const config = useMemo(() => getContractsConfig(), []);
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
@@ -78,11 +86,11 @@ export default function MintClient() {
   const { data: walletClient } = useWalletClient();
 
   // ── Top-level page mode ───────────────────────────────────────────────────
-  const [pageMode, setPageMode] = useState<PageMode>("mint");
+  const [pageMode, setPageMode] = useState<PageMode>(initialPageMode);
 
   // ── Mint form state ───────────────────────────────────────────────────────
   const [standard, setStandard] = useState<Standard>("ERC721");
-  const [mintMode, setMintMode] = useState<MintMode>("shared");
+  const [mintMode, setMintMode] = useState<MintMode>(initialMintMode);
 
   // Custom collection address (either entered manually or filled after factory deploy)
   const [customCollectionAddress, setCustomCollectionAddress] = useState("");

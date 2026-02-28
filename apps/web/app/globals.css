@@ -35,6 +35,11 @@ nav {
   gap: 16px;
   align-items: center;
   flex-wrap: wrap;
+  margin-bottom: 24px;
+  padding: 12px 14px;
+  border: 1px solid #e6d7c4;
+  border-radius: 14px;
+  background: rgba(255, 249, 241, 0.92);
 }
 
 .card {
@@ -42,6 +47,68 @@ nav {
   border: 1px solid #e6d7c4;
   border-radius: 16px;
   padding: 16px;
+}
+
+.heroCard {
+  background: linear-gradient(135deg, #fff2d6 0%, #ffe5d8 100%);
+  border: 1px solid #e6d7c4;
+  border-radius: 20px;
+  padding: 20px;
+  display: grid;
+  gap: 12px;
+}
+
+.eyebrow {
+  margin: 0;
+  color: #7f220f;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.heroText {
+  margin: 0;
+  max-width: 64ch;
+  color: #473a30;
+}
+
+.ctaLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid #8c2a14;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+.secondaryLink {
+  background: #f4e3cd;
+  color: #4f2a18;
+  border-color: #c9a986;
+}
+
+.actionCard {
+  display: grid;
+  gap: 10px;
+  cursor: pointer;
+  transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
+}
+
+.actionCard:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 24px rgba(111, 63, 24, 0.08);
+  border-color: #c9a986;
+}
+
+.actionHint {
+  margin: 0;
+  color: #7f220f;
+  font-weight: 600;
 }
 
 .grid {

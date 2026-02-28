@@ -24,6 +24,10 @@ export default function ProfileLandingPage() {
       <div>
         <h1>Creator Profiles</h1>
         <p>Open a creator storefront by ENS subname label (example: creator.nftfactory.eth).</p>
+        <div className="row">
+          <Link href="/discover" className="ctaLink secondaryLink">Browse marketplace first</Link>
+          <Link href="/mint?view=mint&collection=shared" className="ctaLink secondaryLink">Mint with ENS attribution</Link>
+        </div>
       </div>
 
       <form className="card formCard" onSubmit={onSubmit}>
@@ -48,4 +52,3 @@ export default function ProfileLandingPage() {
     </section>
   );
 }
-
