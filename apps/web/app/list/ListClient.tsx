@@ -474,6 +474,14 @@ export default function ListClient() {
       <h1>List NFT</h1>
       <p>Dedicated listing flow: connect wallet, choose NFT, approve marketplace, and create listing.</p>
 
+      <div className="card formCard">
+        <h3>Two Jobs On This Page</h3>
+        <div className="gridMini">
+          <p className="hint"><strong>Create listing:</strong> use steps 1-4 to approve and submit a sale.</p>
+          <p className="hint"><strong>Manage listings:</strong> use the lower sections to cancel, buy, or filter active listings.</p>
+        </div>
+      </div>
+
       <form className="wizard" onSubmit={onSubmit}>
         <div className="card formCard">
           <h3>1. Connect Wallet</h3>
@@ -487,6 +495,10 @@ export default function ListClient() {
           <button type="button" onClick={loadListings} disabled={wrongNetwork || listingsLoading}>
             {listingsLoading ? "Refreshing..." : "Refresh Listings"}
           </button>
+          <p className="hint">
+            Refresh loads the latest visible marketplace state from the configured chain. Increase scan
+            depth if older listings are missing from the browse section below.
+          </p>
           <label>
             Scan depth
             <select value={scanDepth} onChange={(e) => setScanDepth(e.target.value)}>
@@ -570,6 +582,7 @@ export default function ListClient() {
 
         <div className="card formCard">
           <h3>My Active Listings</h3>
+          <p className="hint">These are listings where your connected wallet is the seller.</p>
           {!isConnected && <p className="hint">Connect wallet to view your listings.</p>}
           {isConnected && myListings.length === 0 && !listingsLoading && <p className="hint">No active listings found.</p>}
           {myListings.length > 0 && (
@@ -595,7 +608,11 @@ export default function ListClient() {
         </div>
 
         <div className="card formCard">
-          <h3>Active Marketplace Listings</h3>
+          <h3>Browse Active Marketplace Listings</h3>
+          <p className="hint">
+            This section is the live browse flow. Use filters to inspect listings before buying or
+            jump to Discover if you want a cleaner read-only browsing page.
+          </p>
           <ListingFilters
             filters={filters}
             address={address}

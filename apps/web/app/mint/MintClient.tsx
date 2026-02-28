@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useAccount, useChainId, usePublicClient, useSwitchChain, useWalletClient } from "wagmi";
@@ -413,6 +414,38 @@ export default function MintClient({
         are available under <strong>Manage Collection</strong>.
       </p>
 
+      <div className="card formCard">
+        <h3>{pageMode === "manage" ? "Current Flow: Manage Collection" : "Current Flow: Mint NFT"}</h3>
+        {pageMode === "manage" ? (
+          <p className="hint">
+            Use this mode when you already have a creator collection contract and need to transfer
+            ownership or permanently finalize upgrades.
+          </p>
+        ) : mintMode === "shared" ? (
+          <p className="hint">
+            Shared mode is the fastest path: no deploy step, no custom contract address required, and
+            optional ENS attribution for discoverability.
+          </p>
+        ) : (
+          <p className="hint">
+            Custom mode is the full creator flow: deploy or paste your collection, configure metadata
+            lock behavior, and optionally register an ENS subname for storefront identity.
+          </p>
+        )}
+        <div className="row">
+          <button type="button" className={pageMode === "mint" && mintMode === "shared" ? "presetButton presetActive" : "presetButton"} onClick={() => { setPageMode("mint"); setMintMode("shared"); }}>
+            Shared mint
+          </button>
+          <button type="button" className={pageMode === "mint" && mintMode === "custom" ? "presetButton presetActive" : "presetButton"} onClick={() => { setPageMode("mint"); setMintMode("custom"); }}>
+            Custom collection
+          </button>
+          <button type="button" className={pageMode === "manage" ? "presetButton presetActive" : "presetButton"} onClick={() => setPageMode("manage")}>
+            Manage collection
+          </button>
+          <Link href="/list" className="ctaLink secondaryLink">Go to listings</Link>
+        </div>
+      </div>
+
       {/* ── Mode switcher ── */}
       <div className="row" style={{ marginBottom: "1rem" }}>
         <button
@@ -454,6 +487,10 @@ export default function MintClient({
           {/* Step 2: Collection selection */}
           <div className="card formCard">
             <h3>2. Choose Your Collection</h3>
+            <p className="hint">
+              Pick <strong>shared</strong> if you want the quickest path to publishing. Pick <strong>custom</strong>
+              if you need your own contract, royalties, upgrade controls, and collection ownership.
+            </p>
 
             <label>
               Token type
@@ -755,6 +792,10 @@ export default function MintClient({
           {/* Step 6: Publish */}
           <div className="card formCard">
             <h3>{mintMode === "custom" ? "6" : "5"}. Mint and Publish</h3>
+            <p className="hint">
+              This is the final blockchain transaction for the flow above. Make sure your metadata URI
+              and collection choice are correct before you submit.
+            </p>
             <button
               type="submit"
               disabled={!isConnected || wrongNetwork || mintTx.status === "pending"}
