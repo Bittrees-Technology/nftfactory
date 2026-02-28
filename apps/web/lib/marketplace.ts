@@ -1,6 +1,6 @@
 import { createPublicClient, formatEther, http } from "viem";
-import { sepolia } from "viem/chains";
 import type { Address } from "viem";
+import { getAppChain, getExplorerBaseUrl } from "./chains";
 
 export type MarketplaceListing = {
   id: number;
@@ -43,8 +43,9 @@ export const marketplaceAbi = [
   }
 ] as const;
 
-export function toExplorerAddress(address: string): string {
-  return `https://sepolia.etherscan.io/address/${address}`;
+export function toExplorerAddress(address: string, chainId: number): string | null {
+  const baseUrl = getExplorerBaseUrl(chainId);
+  return baseUrl ? `${baseUrl}/address/${address}` : null;
 }
 
 export function truncateAddress(address: string): string {
@@ -60,15 +61,16 @@ export function formatListingPrice(listing: MarketplaceListing): string {
 }
 
 export async function fetchActiveListingsBatch(params: {
+  chainId: number;
   rpcUrl: string;
   marketplace: Address;
   cursor?: number | null;
   limit: number;
 }): Promise<{ listings: MarketplaceListing[]; nextCursor: number; canLoadMore: boolean }> {
-  const { rpcUrl, marketplace, cursor = null, limit } = params;
+  const { chainId, rpcUrl, marketplace, cursor = null, limit } = params;
 
   const publicClient = createPublicClient({
-    chain: sepolia,
+    chain: getAppChain(chainId),
     transport: http(rpcUrl)
   });
 

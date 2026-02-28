@@ -231,6 +231,7 @@ export default function ListClient() {
     try {
       const limit = Number.isInteger(parsedScanDepth) && parsedScanDepth > 0 ? parsedScanDepth : DEFAULT_SCAN_LIMIT;
       const result = await fetchActiveListingsBatch({
+        chainId: config.chainId,
         rpcUrl: config.rpcUrl,
         marketplace: config.marketplace as Address,
         limit

@@ -34,6 +34,7 @@ export default function ProfileClient({ name }: { name: string }) {
       const parsedDepth = Number.parseInt(scanDepth, 10);
       const limit = Number.isInteger(parsedDepth) && parsedDepth > 0 ? parsedDepth : 250;
       const result = await fetchActiveListingsBatch({
+        chainId: config.chainId,
         rpcUrl: config.rpcUrl,
         marketplace: config.marketplace as Address,
         cursor: null,
@@ -167,12 +168,20 @@ export default function ProfileClient({ name }: { name: string }) {
             <span>
               <strong>Price</strong> {formatListingPrice(listing)}
             </span>
-            <a href={toExplorerAddress(listing.nft)} target="_blank" rel="noreferrer" className="mono">
-              Contract {truncateAddress(listing.nft)}
-            </a>
-            <a href={toExplorerAddress(listing.seller)} target="_blank" rel="noreferrer" className="mono">
-              Seller {truncateAddress(listing.seller)}
-            </a>
+            {toExplorerAddress(listing.nft, config.chainId) ? (
+              <a href={toExplorerAddress(listing.nft, config.chainId)!} target="_blank" rel="noreferrer" className="mono">
+                Contract {truncateAddress(listing.nft)}
+              </a>
+            ) : (
+              <span className="mono">Contract {truncateAddress(listing.nft)}</span>
+            )}
+            {toExplorerAddress(listing.seller, config.chainId) ? (
+              <a href={toExplorerAddress(listing.seller, config.chainId)!} target="_blank" rel="noreferrer" className="mono">
+                Seller {truncateAddress(listing.seller)}
+              </a>
+            ) : (
+              <span className="mono">Seller {truncateAddress(listing.seller)}</span>
+            )}
           </article>
         ))}
       </div>

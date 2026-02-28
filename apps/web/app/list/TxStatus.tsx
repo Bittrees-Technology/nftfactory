@@ -1,6 +1,8 @@
 "use client";
 
 import { truncateHash } from "../../lib/abi";
+import { getContractsConfig } from "../../lib/contracts";
+import { getExplorerBaseUrl } from "../../lib/chains";
 
 export type TxState = {
   status: "idle" | "pending" | "success" | "error";
@@ -8,11 +10,8 @@ export type TxState = {
   message?: string;
 };
 
-function toExplorerTx(hash: string): string {
-  return `https://sepolia.etherscan.io/tx/${hash}`;
-}
-
 export default function TxStatus({ state }: { state: TxState }) {
+  const explorerBase = getExplorerBaseUrl(getContractsConfig().chainId);
   if (state.status === "idle") return null;
   if (state.status === "pending") return <p className="hint">{state.message}</p>;
   if (state.status === "error") return <p className="error">{state.message}</p>;
@@ -20,9 +19,13 @@ export default function TxStatus({ state }: { state: TxState }) {
     return (
       <p className="success">
         {state.message || "Success"}{" "}
-        <a href={toExplorerTx(state.hash)} target="_blank" rel="noreferrer">
-          {truncateHash(state.hash)}
-        </a>
+        {explorerBase ? (
+          <a href={`${explorerBase}/tx/${state.hash}`} target="_blank" rel="noreferrer">
+            {truncateHash(state.hash)}
+          </a>
+        ) : (
+          <span className="mono">{truncateHash(state.hash)}</span>
+        )}
       </p>
     );
   }

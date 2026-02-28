@@ -109,6 +109,7 @@ export default function DiscoverClient() {
         }
 
         const result = await fetchActiveListingsBatch({
+          chainId: config.chainId,
           rpcUrl: config.rpcUrl,
           marketplace: config.marketplace as Address,
           cursor: null,
@@ -143,6 +144,7 @@ export default function DiscoverClient() {
       const limit = Number.isInteger(parsedPageSize) && parsedPageSize > 0 ? parsedPageSize : 50;
 
       const result = await fetchActiveListingsBatch({
+        chainId: config.chainId,
         rpcUrl: config.rpcUrl,
         marketplace: config.marketplace as Address,
         cursor,
@@ -371,12 +373,20 @@ export default function DiscoverClient() {
             <span>
               <strong>Price</strong> {formatListingPrice(row)}
             </span>
-            <a href={toExplorerAddress(row.nft)} target="_blank" rel="noreferrer" className="mono">
-              Contract {truncateAddress(row.nft)}
-            </a>
-            <a href={toExplorerAddress(row.seller)} target="_blank" rel="noreferrer" className="mono">
-              Seller {truncateAddress(row.seller)}
-            </a>
+            {toExplorerAddress(row.nft, config.chainId) ? (
+              <a href={toExplorerAddress(row.nft, config.chainId)!} target="_blank" rel="noreferrer" className="mono">
+                Contract {truncateAddress(row.nft)}
+              </a>
+            ) : (
+              <span className="mono">Contract {truncateAddress(row.nft)}</span>
+            )}
+            {toExplorerAddress(row.seller, config.chainId) ? (
+              <a href={toExplorerAddress(row.seller, config.chainId)!} target="_blank" rel="noreferrer" className="mono">
+                Seller {truncateAddress(row.seller)}
+              </a>
+            ) : (
+              <span className="mono">Seller {truncateAddress(row.seller)}</span>
+            )}
             {reportingId === row.id ? (
               <div className="reportInline">
                 <select

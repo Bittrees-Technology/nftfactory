@@ -21,6 +21,7 @@ import {
   type DeployCollectionArgs
 } from "../../lib/creatorCollection";
 import { getContractsConfig } from "../../lib/contracts";
+import { getExplorerBaseUrl } from "../../lib/chains";
 import { fetchProfileResolution } from "../../lib/indexerApi";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -42,12 +43,14 @@ const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as `0x${string
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function toExplorerTx(hash: string): string {
-  return `https://sepolia.etherscan.io/tx/${hash}`;
+function toExplorerTx(chainId: number, hash: string): string | null {
+  const baseUrl = getExplorerBaseUrl(chainId);
+  return baseUrl ? `${baseUrl}/tx/${hash}` : null;
 }
 
-function toExplorerAddress(address: string): string {
-  return `https://sepolia.etherscan.io/address/${address}`;
+function toExplorerAddress(chainId: number, address: string): string | null {
+  const baseUrl = getExplorerBaseUrl(chainId);
+  return baseUrl ? `${baseUrl}/address/${address}` : null;
 }
 
 function normalizeSubname(label: string): string {
@@ -473,12 +476,24 @@ export default function MintClient() {
                 <p className="hint">
                   <strong>Shared collection:</strong> your token goes into a common contract
                   anyone can mint into. Great for quick publishing. The contract address is{" "}
-                  <a href={toExplorerAddress(standard === "ERC721" ? config.shared721 : config.shared1155)}
-                    target="_blank" rel="noreferrer" className="mono">
-                    {standard === "ERC721"
-                      ? `${config.shared721.slice(0, 10)}…`
-                      : `${config.shared1155.slice(0, 10)}…`}
-                  </a>
+                  {toExplorerAddress(config.chainId, standard === "ERC721" ? config.shared721 : config.shared1155) ? (
+                    <a
+                      href={toExplorerAddress(config.chainId, standard === "ERC721" ? config.shared721 : config.shared1155)!}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mono"
+                    >
+                      {standard === "ERC721"
+                        ? `${config.shared721.slice(0, 10)}…`
+                        : `${config.shared1155.slice(0, 10)}…`}
+                    </a>
+                  ) : (
+                    <span className="mono">
+                      {standard === "ERC721"
+                        ? `${config.shared721.slice(0, 10)}…`
+                        : `${config.shared1155.slice(0, 10)}…`}
+                    </span>
+                  )}
                 </p>
               </div>
             )}
@@ -501,9 +516,13 @@ export default function MintClient() {
                 {isAddress(customCollectionAddress) && (
                   <p className="hint mono">
                     Using{" "}
-                    <a href={toExplorerAddress(customCollectionAddress)} target="_blank" rel="noreferrer">
-                      {customCollectionAddress.slice(0, 10)}…{customCollectionAddress.slice(-8)}
-                    </a>
+                    {toExplorerAddress(config.chainId, customCollectionAddress) ? (
+                      <a href={toExplorerAddress(config.chainId, customCollectionAddress)!} target="_blank" rel="noreferrer">
+                        {customCollectionAddress.slice(0, 10)}…{customCollectionAddress.slice(-8)}
+                      </a>
+                    ) : (
+                      <span>{customCollectionAddress.slice(0, 10)}…{customCollectionAddress.slice(-8)}</span>
+                    )}
                   </p>
                 )}
 
@@ -770,9 +789,13 @@ export default function MintClient() {
             </label>
             {isAddress(manageAddress) && (
               <p className="hint mono">
-                <a href={toExplorerAddress(manageAddress)} target="_blank" rel="noreferrer">
-                  View on Etherscan ↗
-                </a>
+                {toExplorerAddress(config.chainId, manageAddress) ? (
+                  <a href={toExplorerAddress(config.chainId, manageAddress)!} target="_blank" rel="noreferrer">
+                    View on explorer ↗
+                  </a>
+                ) : (
+                  <span>Local chain address loaded</span>
+                )}
               </p>
             )}
           </div>
@@ -856,9 +879,13 @@ function TxStatus({ state }: { state: TxState }) {
     return (
       <p className="success">
         {state.message || "Success"}{" "}
-        <a href={toExplorerTx(state.hash)} target="_blank" rel="noreferrer">
-          {truncateHash(state.hash)}
-        </a>
+        {toExplorerTx(getContractsConfig().chainId, state.hash) ? (
+          <a href={toExplorerTx(getContractsConfig().chainId, state.hash)!} target="_blank" rel="noreferrer">
+            {truncateHash(state.hash)}
+          </a>
+        ) : (
+          <span className="mono">{truncateHash(state.hash)}</span>
+        )}
       </p>
     );
   }
