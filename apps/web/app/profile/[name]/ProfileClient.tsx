@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import type { Address } from "viem";
 import { getContractsConfig } from "../../../lib/contracts";
 import {
@@ -10,7 +11,7 @@ import {
   truncateAddress,
   type MarketplaceListing
 } from "../../../lib/marketplace";
-import { fetchHiddenListingIds, fetchProfileResolution } from "../../../lib/indexerApi";
+import { fetchHiddenListingIds, fetchProfileResolution, type ApiProfileResolution } from "../../../lib/indexerApi";
 
 function isAddress(value: string): value is Address {
   return /^0x[a-fA-F0-9]{40}$/.test(value);
@@ -26,6 +27,8 @@ export default function ProfileClient({ name }: { name: string }) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [resolutionNote, setResolutionNote] = useState("");
+  const [indexerError, setIndexerError] = useState("");
+  const [profileResolution, setProfileResolution] = useState<ApiProfileResolution | null>(null);
 
   const loadListings = useCallback(async (): Promise<void> => {
     setIsLoading(true);
@@ -41,7 +44,12 @@ export default function ProfileClient({ name }: { name: string }) {
         limit
       });
       setAllListings(result.listings);
-      setHiddenListingIds(await fetchHiddenListingIds());
+      try {
+        setHiddenListingIds(await fetchHiddenListingIds());
+      } catch {
+        setHiddenListingIds([]);
+        setIndexerError("Indexer moderation filters are unavailable, so hidden-list filtering is currently disabled.");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load creator data.");
     } finally {
@@ -54,35 +62,73 @@ export default function ProfileClient({ name }: { name: string }) {
   }, [loadListings]);
 
   useEffect(() => {
-    if (sellerAddress) return;
     const run = async (): Promise<void> => {
       try {
+        setIndexerError("");
         const resolution = await fetchProfileResolution(name);
-        const resolvedSeller = resolution.sellers[0];
-        if (resolvedSeller && isAddress(resolvedSeller)) {
+        setProfileResolution(resolution);
+        const resolvedSeller = resolution.sellers.find((item) => isAddress(item));
+        if (!sellerAddress && resolvedSeller && isAddress(resolvedSeller)) {
           setSellerAddress(resolvedSeller);
-          setResolutionNote(`Resolved from indexer profile mapping (${resolution.name})`);
+        }
+        if (resolvedSeller && isAddress(resolvedSeller)) {
+          setResolutionNote(
+            resolution.collections.length > 0
+              ? `Resolved from indexer profile mapping (${resolution.name}) with ${resolution.collections.length} indexed collection${resolution.collections.length === 1 ? "" : "s"}.`
+              : `Resolved from indexer profile mapping (${resolution.name}).`
+          );
         } else {
+          setProfileResolution(resolution);
           setResolutionNote("No backend mapping found yet. Enter wallet manually.");
         }
       } catch {
+        setProfileResolution(null);
+        setIndexerError("Profile resolution is unavailable right now. Manual wallet lookup still works.");
         setResolutionNote("Profile resolution unavailable. Enter wallet manually.");
       }
     };
     void run();
   }, [name, sellerAddress]);
 
+  const resolvedSellerAddresses = useMemo(
+    () => (profileResolution?.sellers || []).filter((item): item is Address => isAddress(item)),
+    [profileResolution]
+  );
+
+  const activeSellerAddresses = useMemo(() => {
+    if (isAddress(sellerAddress)) return [sellerAddress.toLowerCase()];
+    return resolvedSellerAddresses.map((item) => item.toLowerCase());
+  }, [resolvedSellerAddresses, sellerAddress]);
+
   const creatorListings = useMemo(() => {
-    if (!isAddress(sellerAddress)) return [];
+    if (activeSellerAddresses.length === 0) return [];
     const hidden = new Set(hiddenListingIds);
     return allListings.filter(
-      (listing) => listing.seller.toLowerCase() === sellerAddress.toLowerCase() && !hidden.has(listing.id)
+      (listing) => activeSellerAddresses.includes(listing.seller.toLowerCase()) && !hidden.has(listing.id)
     );
-  }, [allListings, hiddenListingIds, sellerAddress]);
+  }, [activeSellerAddresses, allListings, hiddenListingIds]);
+
+  const collectionSummaries = useMemo(() => {
+    const listingCounts = new Map<string, number>();
+    for (const listing of creatorListings) {
+      const key = listing.nft.toLowerCase();
+      listingCounts.set(key, (listingCounts.get(key) || 0) + 1);
+    }
+
+    return (profileResolution?.collections || []).map((item) => ({
+      ...item,
+      activeListings: listingCounts.get(item.contractAddress.toLowerCase()) || 0
+    }));
+  }, [creatorListings, profileResolution]);
 
   const stats = useMemo(() => {
     if (creatorListings.length === 0) {
-      return { listings: 0, uniqueCollections: 0, floorPrice: "-" };
+      return {
+        listings: 0,
+        uniqueCollections: collectionSummaries.length,
+        floorPrice: "-",
+        resolvedWallets: resolvedSellerAddresses.length
+      };
     }
 
     const collections = new Set(creatorListings.map((item) => item.nft.toLowerCase()));
@@ -96,15 +142,24 @@ export default function ProfileClient({ name }: { name: string }) {
     return {
       listings: creatorListings.length,
       uniqueCollections: collections.size,
-      floorPrice: floorListing ? formatListingPrice(floorListing) : "ERC20 only"
+      floorPrice: floorListing ? formatListingPrice(floorListing) : "ERC20 only",
+      resolvedWallets: resolvedSellerAddresses.length
     };
-  }, [creatorListings]);
+  }, [collectionSummaries.length, creatorListings, resolvedSellerAddresses.length]);
 
   return (
     <section className="wizard">
-      <div>
+      <div className="heroCard">
+        <p className="eyebrow">Creator Profile</p>
         <h1>{name}.nftfactory.eth</h1>
-        <p>Creator storefront view with live listings and quick performance stats.</p>
+        <p className="heroText">
+          Creator storefront view with live listings, indexed collection mappings, and ENS-based identity
+          resolved through the indexer.
+        </p>
+        <div className="row">
+          <Link href="/discover" className="ctaLink secondaryLink">Browse marketplace</Link>
+          <Link href="/mint?view=mint&collection=shared" className="ctaLink secondaryLink">Mint with this identity</Link>
+        </div>
       </div>
 
       <div className="card formCard">
@@ -127,10 +182,11 @@ export default function ProfileClient({ name }: { name: string }) {
             {isLoading ? "Loading..." : "Refresh Profile"}
           </button>
         </div>
-        {!isAddress(sellerAddress) ? (
-          <p className="hint">Enter a valid creator wallet address to populate this profile.</p>
+        {activeSellerAddresses.length === 0 ? (
+          <p className="hint">Enter a valid creator wallet address or rely on ENS resolution to populate this profile.</p>
         ) : null}
         {resolutionNote ? <p className="hint">{resolutionNote}</p> : null}
+        {indexerError ? <p className="error">{indexerError}</p> : null}
       </div>
 
       {error ? <p className="error">{error}</p> : null}
@@ -141,6 +197,10 @@ export default function ProfileClient({ name }: { name: string }) {
           <p>{stats.listings}</p>
         </article>
         <article className="card">
+          <h3>Resolved Wallets</h3>
+          <p>{stats.resolvedWallets}</p>
+        </article>
+        <article className="card">
           <h3>Collections</h3>
           <p>{stats.uniqueCollections}</p>
         </article>
@@ -148,6 +208,68 @@ export default function ProfileClient({ name }: { name: string }) {
           <h3>Floor Price</h3>
           <p>{stats.floorPrice}</p>
         </article>
+      </div>
+
+      <div className="card formCard">
+        <h3>ENS Identity Mapping</h3>
+        {resolvedSellerAddresses.length === 0 ? (
+          <p className="hint">No indexed wallet mapping has been published for this ENS label yet.</p>
+        ) : (
+          <div className="listTable">
+            {resolvedSellerAddresses.map((wallet) => (
+              <div key={wallet} className="listRow">
+                <span><strong>Wallet</strong></span>
+                {toExplorerAddress(wallet, config.chainId) ? (
+                  <a href={toExplorerAddress(wallet, config.chainId)!} target="_blank" rel="noreferrer" className="mono">
+                    {wallet}
+                  </a>
+                ) : (
+                  <span className="mono">{wallet}</span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="card formCard">
+        <h3>Indexed Creator Collections</h3>
+        {collectionSummaries.length === 0 ? (
+          <p className="hint">
+            No creator collections are currently indexed for this ENS label. Shared-mint activity can still
+            appear below if listings exist for the resolved wallet.
+          </p>
+        ) : (
+          <div className="listTable">
+            {collectionSummaries.map((collection) => (
+              <div key={collection.contractAddress} className="listRow">
+                <span>
+                  <strong>ENS</strong> {collection.ensSubname || `${name}.nftfactory.eth`}
+                </span>
+                <span>
+                  <strong>Active listings</strong> {collection.activeListings}
+                </span>
+                {toExplorerAddress(collection.contractAddress, config.chainId) ? (
+                  <a href={toExplorerAddress(collection.contractAddress, config.chainId)!} target="_blank" rel="noreferrer" className="mono">
+                    Collection {truncateAddress(collection.contractAddress)}
+                  </a>
+                ) : (
+                  <span className="mono">Collection {truncateAddress(collection.contractAddress)}</span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="card formCard">
+        <h3>Active Listings</h3>
+        {creatorListings.length === 0 ? (
+          <p className="hint">
+            No active listings were found for the resolved wallets at the current scan depth. Increase the
+            scan depth or verify the wallet mapping above.
+          </p>
+        ) : null}
       </div>
 
       <div className="listTable">

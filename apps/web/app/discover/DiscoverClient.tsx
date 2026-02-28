@@ -65,6 +65,7 @@ export default function DiscoverClient() {
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [error, setError] = useState("");
+  const [indexerStatus, setIndexerStatus] = useState("");
 
   const [pageSize, setPageSize] = useState("50");
   const [cursor, setCursor] = useState(0);
@@ -83,9 +84,11 @@ export default function DiscoverClient() {
 
   const refreshHidden = useCallback(async () => {
     try {
+      setIndexerStatus("");
       setHiddenListingIds(await fetchHiddenListingIds());
     } catch {
       setHiddenListingIds([]);
+      setIndexerStatus("Indexer moderation state is unavailable, so hidden-list filtering is temporarily disabled.");
     }
   }, []);
 
@@ -348,6 +351,7 @@ export default function DiscoverClient() {
       </div>
 
       {error ? <p className="error">{error}</p> : null}
+      {indexerStatus ? <p className="hint">{indexerStatus}</p> : null}
 
       <div className="card">
         <p className="hint">

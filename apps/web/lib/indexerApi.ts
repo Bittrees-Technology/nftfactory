@@ -91,6 +91,16 @@ export type ApiModerationAction = {
   createdAt: string;
 };
 
+export type ApiProfileResolution = {
+  name: string;
+  sellers: string[];
+  collections: Array<{
+    ensSubname: string | null;
+    contractAddress: string;
+    ownerAddress: string;
+  }>;
+};
+
 export async function fetchHiddenListingIds(): Promise<number[]> {
   const payload = await fetchJson<{ listingIds: number[] }>("/api/moderation/hidden-listings");
   return payload.listingIds || [];
@@ -156,8 +166,8 @@ export async function fetchModerationActions(): Promise<ApiModerationAction[]> {
   return fetchJson<ApiModerationAction[]>("/api/moderation/actions");
 }
 
-export async function fetchProfileResolution(name: string): Promise<{ name: string; sellers: string[] }> {
-  return fetchJson<{ name: string; sellers: string[] }>(`/api/profile/${encodeURIComponent(name)}`);
+export async function fetchProfileResolution(name: string): Promise<ApiProfileResolution> {
+  return fetchJson<ApiProfileResolution>(`/api/profile/${encodeURIComponent(name)}`);
 }
 
 export async function backfillCollectionSubname(payload: {
