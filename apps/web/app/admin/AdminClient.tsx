@@ -190,7 +190,21 @@ export default function AdminClient() {
           <h3>Action Log Entries</h3>
           <p>{actions.length}</p>
         </article>
+        <article className="card">
+          <h3>Write Access</h3>
+          <p>{canWrite ? "Enabled" : "Read-only"}</p>
+        </article>
       </div>
+
+      {!error && openReports.length === 0 && hiddenListings.length === 0 && actions.length === 0 ? (
+        <div className="card formCard">
+          <h3>Admin Feed Is Clear</h3>
+          <p className="hint">
+            The moderation API is reachable, but there are no open reports, hidden listings, or recorded
+            actions yet. This is the expected empty state for a clean system.
+          </p>
+        </div>
+      ) : null}
 
       <div className="card">
         <h3>Open Moderation Queue</h3>

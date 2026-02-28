@@ -91,6 +91,7 @@ export default function DiscoverClient() {
     sellerFilter.trim() ||
     sortBy !== "newest"
   );
+  const canReport = normalizeAddress(reporter);
 
   const refreshHidden = useCallback(async () => {
     try {
@@ -378,6 +379,7 @@ export default function DiscoverClient() {
           </label>
         </div>
         {!reporter && !address ? <p className="hint">Connect wallet or enter reporter address manually.</p> : null}
+        {reporter && !canReport ? <p className="hint">Reporter address must be a valid wallet before a report can be submitted.</p> : null}
       </div>
 
       {error ? <p className="error">{error}</p> : null}
@@ -475,7 +477,7 @@ export default function DiscoverClient() {
                   <option value="scam">Scam</option>
                   <option value="other">Other</option>
                 </select>
-                <button type="button" className="miniBtn" onClick={() => void submitReport(row)}>
+                <button type="button" className="miniBtn" disabled={!canReport} onClick={() => void submitReport(row)}>
                   Submit
                 </button>
                 <button type="button" className="miniBtn" onClick={() => setReportingId(null)}>

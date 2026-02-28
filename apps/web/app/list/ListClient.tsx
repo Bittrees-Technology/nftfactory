@@ -16,6 +16,7 @@ import { buildBuyPlan } from "../../lib/marketplaceBuy";
 import { getContractsConfig } from "../../lib/contracts";
 import { fetchActiveListingsBatch } from "../../lib/marketplace";
 import { fetchProfileResolution } from "../../lib/indexerApi";
+import { getAppChain } from "../../lib/chains";
 import TxStatus, { type TxState } from "./TxStatus";
 import ListingFilters, { type FilterState, type Preset } from "./ListingFilters";
 import ListingCard, { type ListingRow } from "./ListingCard";
@@ -56,6 +57,7 @@ const DEFAULT_FILTERS: FilterState = {
 
 export default function ListClient() {
   const config = useMemo(() => getContractsConfig(), []);
+  const appChain = useMemo(() => getAppChain(config.chainId), [config.chainId]);
   const { isConnected, address } = useAccount();
   const chainId = useChainId();
   const { switchChainAsync } = useSwitchChain();
@@ -286,7 +288,7 @@ export default function ListClient() {
       return;
     }
     if (wrongNetwork) {
-      setState({ status: "error", message: "Switch to Sepolia first." });
+      setState({ status: "error", message: `Switch to ${appChain.name} first.` });
       return;
     }
     if (!isAddress(nftAddress)) {
@@ -373,7 +375,7 @@ export default function ListClient() {
       return;
     }
     if (wrongNetwork) {
-      setState({ status: "error", message: "Switch to Sepolia first." });
+      setState({ status: "error", message: `Switch to ${appChain.name} first.` });
       return;
     }
 
@@ -400,7 +402,7 @@ export default function ListClient() {
       return;
     }
     if (wrongNetwork) {
-      setState({ status: "error", message: "Switch to Sepolia first." });
+      setState({ status: "error", message: `Switch to ${appChain.name} first.` });
       return;
     }
     try {
@@ -495,13 +497,18 @@ export default function ListClient() {
               Listing creation and cancel actions stay disabled until a wallet is connected.
             </p>
           ) : null}
+          {isConnected && wrongNetwork ? (
+            <p className="hint">
+              Your wallet is connected to chain {chainId}. Switch to {appChain.name} to create, cancel, or buy listings here.
+            </p>
+          ) : null}
           {wrongNetwork && (
             <button type="button" onClick={switchToSepolia}>
-              Switch To Sepolia
+              Switch To {appChain.name}
             </button>
           )}
           <p className="mono">Account: {address || "Not connected"}</p>
-          <p className="mono">Network: {chainId ?? "Unknown"} (expected {config.chainId})</p>
+          <p className="mono">Network: {chainId ?? "Unknown"} (expected {appChain.name} / {config.chainId})</p>
           <button type="button" onClick={loadListings} disabled={wrongNetwork || listingsLoading}>
             {listingsLoading ? "Refreshing..." : "Refresh Listings"}
           </button>
@@ -587,6 +594,9 @@ export default function ListClient() {
 
         <div className="card formCard">
           <h3>4. Submit</h3>
+          <p className="hint">
+            This submits a live marketplace approval and listing transaction on {appChain.name}.
+          </p>
           <button type="submit" disabled={!isConnected || wrongNetwork || state.status === "pending"}>
             {state.status === "pending" ? "Submitting..." : "Approve and Create Listing"}
           </button>
