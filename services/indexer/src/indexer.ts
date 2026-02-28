@@ -288,7 +288,7 @@ async function handleRequest(
     sendJson(
       res,
       200,
-      reports.map((report) => ({
+      reports.map((report: any) => ({
         id: report.id,
         listingId: parseListingId(report.token.listings[0]?.listingId),
         reason: report.reason,
@@ -401,7 +401,7 @@ async function handleRequest(
     sendJson(
       res,
       200,
-      actions.map((action) => ({
+      actions.map((action: any) => ({
         id: action.id,
         action: action.action,
         actor: action.actor,
@@ -524,11 +524,13 @@ async function handleRequest(
       select: { ownerAddress: true, ensSubname: true, contractAddress: true }
     });
 
-    const sellers = Array.from(new Set(collections.map((item) => item.ownerAddress.toLowerCase())));
+    const sellers = Array.from(
+      new Set(collections.map((item: any) => item.ownerAddress.toLowerCase()))
+    );
     sendJson(res, 200, {
       name: label,
       sellers,
-      collections: collections.map((item) => ({
+      collections: collections.map((item: any) => ({
         ensSubname: item.ensSubname,
         contractAddress: item.contractAddress,
         ownerAddress: item.ownerAddress
