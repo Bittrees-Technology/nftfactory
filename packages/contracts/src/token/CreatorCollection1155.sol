@@ -49,6 +49,8 @@ contract CreatorCollection1155 is Initializable, OwnableUpgradeable, UUPSUpgrade
         _tokenUris[tokenId] = newUri;
         metadataLocked[tokenId] = lockMetadata;
         _mint(to, tokenId, amount, "");
+        // EIP-1155 §5.4: URI event MUST be emitted whenever a token URI is set or changed.
+        emit URI(newUri, tokenId);
         emit TokenPublished(to, tokenId, amount, newUri);
     }
 
