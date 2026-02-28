@@ -30,16 +30,48 @@ main {
   padding: 24px;
 }
 
+.topBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
 nav {
   display: flex;
   gap: 16px;
   align-items: center;
   flex-wrap: wrap;
-  margin-bottom: 24px;
   padding: 12px 14px;
   border: 1px solid #e6d7c4;
   border-radius: 14px;
   background: rgba(255, 249, 241, 0.92);
+  flex: 1;
+}
+
+.headerWalletButton {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid #8c2a14;
+  background: var(--accent);
+}
+
+.headerWalletButton.walletConnected {
+  background: #146d2a;
+  border-color: #0f5320;
+}
+
+.walletGlyph {
+  font-size: 1rem;
+  line-height: 1;
+  font-weight: 700;
 }
 
 .card {

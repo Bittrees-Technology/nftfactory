@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useAccount, useChainId, usePublicClient, useSwitchChain, useWalletClient } from "wagmi";
 import type { Address, Hex } from "viem";
 import {
@@ -484,13 +483,14 @@ export default function ListClient() {
 
       <form className="wizard" onSubmit={onSubmit}>
         <div className="card formCard">
-          <h3>1. Connect Wallet</h3>
-          <ConnectButton showBalance={false} chainStatus="name" />
+          <h3>1. Wallet Status</h3>
+          <p className="hint">Use the wallet button in the upper-right corner to connect or switch accounts.</p>
           {wrongNetwork && (
             <button type="button" onClick={switchToSepolia}>
               Switch To Sepolia
             </button>
           )}
+          <p className="mono">Account: {address || "Not connected"}</p>
           <p className="mono">Network: {chainId ?? "Unknown"} (expected {config.chainId})</p>
           <button type="button" onClick={loadListings} disabled={wrongNetwork || listingsLoading}>
             {listingsLoading ? "Refreshing..." : "Refresh Listings"}

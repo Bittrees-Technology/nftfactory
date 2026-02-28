@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useAccount, useChainId, usePublicClient, useSwitchChain, useWalletClient } from "wagmi";
 import type { Address, Hex } from "viem";
 import {
@@ -198,9 +197,12 @@ export default function MintClient({
 
   // ── Upload metadata to IPFS ───────────────────────────────────────────────
 
-  async function onUploadMetadata(): Promise<void> {
-    if (!imageFile) { setUploadTx({ status: "error", message: "Choose an image file first." }); return; }
-    if (!name.trim()) { setUploadTx({ status: "error", message: "Token name is required." }); return; }
+  async function uploadMetadata(): Promise<string> {
+    if (!imageFile) {
+      setUploadTx({ status: "error", message: "Choose an image file first." });
+      throw new Error("Choose an image file first.");
+    }
+    if (!name.trim()) { setUploadTx({ status: "error", message: "Token name is required." }); throw new Error("Token name is required."); }
     try {
       setUploadTx({ status: "pending", message: "Uploading image and metadata to IPFS…" });
       const form = new FormData();
@@ -213,9 +215,12 @@ export default function MintClient({
       if (!res.ok || !payload.metadataUri || !payload.imageUri) throw new Error(payload.error || "Upload failed");
       setImageUri(payload.imageUri);
       setMetadataUri(payload.metadataUri);
-      setUploadTx({ status: "success", message: "Uploaded to IPFS. Ready to mint." });
+      setUploadTx({ status: "success", message: "Uploaded to IPFS. Continuing to mint…" });
+      return payload.metadataUri;
     } catch (err) {
-      setUploadTx({ status: "error", message: err instanceof Error ? err.message : "Upload failed" });
+      const message = err instanceof Error ? err.message : "Upload failed";
+      setUploadTx({ status: "error", message });
+      throw err instanceof Error ? err : new Error(message);
     }
   }
 
@@ -313,7 +318,6 @@ export default function MintClient({
     setMintTx({ status: "idle" });
     if (!account) { setMintTx({ status: "error", message: "Connect wallet first." }); return; }
     if (wrongNetwork) { setMintTx({ status: "error", message: "Switch to the expected network first." }); return; }
-    if (!metadataUri.trim()) { setMintTx({ status: "error", message: "Upload metadata first." }); return; }
 
     const amount = Number.parseInt(copies || "1", 10);
     if (standard === "ERC1155" && (!Number.isInteger(amount) || amount <= 0)) {
@@ -324,6 +328,16 @@ export default function MintClient({
     const subname = normalizeSubname(attributionSubname);
 
     try {
+      let effectiveMetadataUri = metadataUri.trim();
+      if (imageFile) {
+        setMintTx({ status: "pending", message: "Uploading metadata, then preparing mint…" });
+        effectiveMetadataUri = await uploadMetadata();
+      }
+      if (!effectiveMetadataUri) {
+        setMintTx({ status: "error", message: "Provide a metadata URI or choose an image to auto-upload." });
+        return;
+      }
+
       setMintTx({ status: "pending", message: "Submitting mint transaction…" });
 
       let targetNft: `0x${string}`;
@@ -332,10 +346,10 @@ export default function MintClient({
       if (mintMode === "shared") {
         if (standard === "ERC721") {
           targetNft = config.shared721;
-          mintData = encodePublish721(subname, metadataUri.trim()) as `0x${string}`;
+          mintData = encodePublish721(subname, effectiveMetadataUri) as `0x${string}`;
         } else {
           targetNft = config.shared1155;
-          mintData = encodePublish1155(subname, BigInt(amount), metadataUri.trim()) as `0x${string}`;
+          mintData = encodePublish1155(subname, BigInt(amount), effectiveMetadataUri) as `0x${string}`;
         }
       } else {
         if (!isAddress(customCollectionAddress)) {
@@ -343,7 +357,7 @@ export default function MintClient({
         }
         targetNft = customCollectionAddress as `0x${string}`;
         if (standard === "ERC721") {
-          mintData = encodeCreatorPublish721(account as `0x${string}`, metadataUri.trim(), lockMetadata) as `0x${string}`;
+          mintData = encodeCreatorPublish721(account as `0x${string}`, effectiveMetadataUri, lockMetadata) as `0x${string}`;
         } else {
           const tokenId = Number.parseInt(custom1155TokenId || "0", 10);
           if (!Number.isInteger(tokenId) || tokenId <= 0) throw new Error("Token ID must be a positive integer.");
@@ -351,7 +365,7 @@ export default function MintClient({
             account as `0x${string}`,
             BigInt(tokenId),
             BigInt(amount),
-            metadataUri.trim(),
+            effectiveMetadataUri,
             lockMetadata
           ) as `0x${string}`;
         }
@@ -473,8 +487,8 @@ export default function MintClient({
 
           {/* Step 1: Wallet */}
           <div className="card formCard">
-            <h3>1. Connect Wallet</h3>
-            <ConnectButton showBalance={false} chainStatus="name" />
+            <h3>1. Wallet Status</h3>
+            <p className="hint">Use the wallet button in the upper-right corner to connect or switch accounts.</p>
             {wrongNetwork && (
               <button type="button" onClick={switchToExpectedNetwork}>
                 Switch to correct network
@@ -685,18 +699,17 @@ export default function MintClient({
                 <img src={previewUrl} alt={name || "NFT preview"} className="previewImage" />
               </div>
             )}
-            <button type="button" onClick={onUploadMetadata} disabled={uploadTx.status === "pending"}>
-              {uploadTx.status === "pending" ? "Uploading…" : "Upload and Generate Metadata URI"}
-            </button>
             <label>
               Metadata URI
               <input
                 value={metadataUri}
                 onChange={(e) => setMetadataUri(e.target.value)}
                 placeholder="ipfs://…/metadata.json"
-                readOnly={uploadTx.status === "success"}
               />
             </label>
+            <p className="hint">
+              Choose an image to auto-upload to IPFS during publish, or paste an existing metadata URI manually.
+            </p>
             {imageUri && <p className="mono hint">Image: {imageUri}</p>}
             <TxStatus state={uploadTx} />
           </div>
@@ -794,13 +807,14 @@ export default function MintClient({
             <h3>{mintMode === "custom" ? "6" : "5"}. Mint and Publish</h3>
             <p className="hint">
               This is the final blockchain transaction for the flow above. Make sure your metadata URI
-              and collection choice are correct before you submit.
+              and collection choice are correct before you submit. If you selected an image above, this
+              button will upload metadata to IPFS and then mint in one sequence.
             </p>
             <button
               type="submit"
-              disabled={!isConnected || wrongNetwork || mintTx.status === "pending"}
+              disabled={!isConnected || wrongNetwork || mintTx.status === "pending" || uploadTx.status === "pending"}
             >
-              {mintTx.status === "pending" ? "Publishing…" : "Mint and Publish"}
+              {mintTx.status === "pending" || uploadTx.status === "pending" ? "Publishing…" : "Upload and Mint"}
             </button>
             <TxStatus state={mintTx} />
           </div>
@@ -815,11 +829,13 @@ export default function MintClient({
         <div className="wizard">
 
           <div className="card formCard">
-            <h3>Connect Wallet</h3>
-            <ConnectButton showBalance={false} chainStatus="name" />
+            <h3>Wallet Status</h3>
+            <p className="hint">Use the wallet button in the upper-right corner to connect or switch accounts.</p>
             {wrongNetwork && (
               <button type="button" onClick={switchToExpectedNetwork}>Switch to correct network</button>
             )}
+            <p className="mono">Account: {account || "Not connected"}</p>
+            <p className="mono">Network: {chainId ?? "Unknown"} (expected {config.chainId})</p>
           </div>
 
           <div className="card formCard">
