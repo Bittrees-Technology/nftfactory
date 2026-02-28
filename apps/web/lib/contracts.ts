@@ -6,6 +6,8 @@ export type ContractsConfig = {
   shared721: `0x${string}`;
   shared1155: `0x${string}`;
   subnameRegistrar: `0x${string}`;
+  /** CreatorFactory — deploys ERC-1967 proxied ERC-721/1155 creator collections. */
+  factory: `0x${string}`;
 };
 
 function requireEnv(name: string, value: string | undefined): string {
@@ -40,6 +42,10 @@ export function getContractsConfig(): ContractsConfig {
     subnameRegistrar: requireAddress(
       "NEXT_PUBLIC_SUBNAME_REGISTRAR_ADDRESS",
       process.env.NEXT_PUBLIC_SUBNAME_REGISTRAR_ADDRESS
+    ),
+    factory: requireAddress(
+      "NEXT_PUBLIC_FACTORY_ADDRESS",
+      process.env.NEXT_PUBLIC_FACTORY_ADDRESS
     )
   };
 }

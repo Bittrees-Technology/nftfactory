@@ -15,6 +15,7 @@ import {
 import { buildBuyPlan } from "../../lib/marketplaceBuy";
 import { getContractsConfig } from "../../lib/contracts";
 import { fetchActiveListingsBatch } from "../../lib/marketplace";
+import { fetchProfileResolution } from "../../lib/indexerApi";
 import TxStatus, { type TxState } from "./TxStatus";
 import ListingFilters, { type FilterState, type Preset } from "./ListingFilters";
 import ListingCard, { type ListingRow } from "./ListingCard";
@@ -46,6 +47,7 @@ const DEFAULT_FILTERS: FilterState = {
   filterStandard: "ALL",
   filterContract: "",
   filterSeller: "",
+  filterSubname: "",
   filterMinPrice: "",
   filterMaxPrice: "",
   sortBy: "newest",
@@ -79,6 +81,10 @@ export default function ListClient() {
   const [scanDepth, setScanDepth] = useState("200");
   const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS);
 
+  // ENS subname resolution state: resolved wallet addresses + display hint
+  const [ensSubnameAddresses, setEnsSubnameAddresses] = useState<string[]>([]);
+  const [ensSubnameHint, setEnsSubnameHint] = useState("");
+
   const wrongNetwork = isConnected && chainId !== config.chainId;
   const nftAddress = source === "shared" ? (standard === "ERC721" ? config.shared721 : config.shared1155) : customNftAddress;
   const parsedScanDepth = Number.parseInt(scanDepth, 10);
@@ -86,6 +92,36 @@ export default function ListClient() {
   // Load listings once on mount so the feed isn't empty by default.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { void loadListings(); }, []);
+
+  // Debounced ENS subname resolution: when the user types a subname label (e.g. "studio"),
+  // resolve it to one or more wallet addresses via the indexer profile API.
+  useEffect(() => {
+    const label = filters.filterSubname.trim();
+    if (!label) {
+      setEnsSubnameAddresses([]);
+      setEnsSubnameHint("");
+      return;
+    }
+    setEnsSubnameHint("Resolving…");
+    const timer = setTimeout(() => {
+      fetchProfileResolution(label)
+        .then((result) => {
+          const addresses = result.sellers.map((a) => a.toLowerCase());
+          if (addresses.length > 0) {
+            setEnsSubnameAddresses(addresses);
+            setEnsSubnameHint(`→ ${addresses[0]}${addresses.length > 1 ? ` (+${addresses.length - 1} more)` : ""}`);
+          } else {
+            setEnsSubnameAddresses([]);
+            setEnsSubnameHint("subname not found");
+          }
+        })
+        .catch(() => {
+          setEnsSubnameAddresses([]);
+          setEnsSubnameHint("subname not found");
+        });
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [filters.filterSubname]);
 
   const filteredListings = useMemo(() => {
     let rows = allListings;
@@ -111,6 +147,16 @@ export default function ListClient() {
     const sellerFilter = filters.filterSeller.trim().toLowerCase();
     if (sellerFilter) {
       rows = rows.filter((row) => row.seller.toLowerCase().includes(sellerFilter));
+    }
+
+    // ENS subname filter: show only listings from the resolved wallet address(es).
+    // If a subname was typed but no address resolved yet, show nothing (empty while resolving).
+    if (filters.filterSubname.trim()) {
+      if (ensSubnameAddresses.length > 0) {
+        rows = rows.filter((row) => ensSubnameAddresses.includes(row.seller.toLowerCase()));
+      } else {
+        rows = [];
+      }
     }
 
     let minPrice: bigint | null = null;
@@ -157,7 +203,7 @@ export default function ListClient() {
     }
 
     return sorted;
-  }, [allListings, config.shared721, config.shared1155, filters]);
+  }, [allListings, config.shared721, config.shared1155, filters, ensSubnameAddresses]);
 
   function handleFilterChange(updates: Partial<FilterState>): void {
     setFilters((prev) => ({ ...prev, ...updates }));
@@ -554,6 +600,7 @@ export default function ListClient() {
             address={address}
             onFilterChange={handleFilterChange}
             onPreset={applyPreset}
+            subnameHint={ensSubnameHint}
           />
           {filteredListings.length === 0 && !listingsLoading && <p className="hint">No active listings match filters.</p>}
           {filteredListings.length > 0 && (
