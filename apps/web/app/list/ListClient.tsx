@@ -472,19 +472,43 @@ export default function ListClient() {
   }
 
   return (
-    <section>
-      <h1>List NFT</h1>
-      <p>Dedicated listing flow: connect wallet, choose NFT, approve marketplace, and create listing.</p>
-
-      <div className="card formCard">
-        <h3>Two Jobs On This Page</h3>
-        <div className="gridMini">
-          <p className="hint"><strong>Create listing:</strong> use steps 1-4 to approve and submit a sale.</p>
-          <p className="hint"><strong>Manage listings:</strong> use the lower sections to cancel, buy, or filter active listings.</p>
-        </div>
+    <section className="wizard">
+      <div className="heroCard">
+        <p className="eyebrow">Seller Flow</p>
+        <h1>List NFT</h1>
+        <p className="heroText">
+          Seller route for fixed-price listings. This page is for assets you already hold: connect a wallet,
+          prepare a listing, then manage active inventory without leaving the same screen.
+        </p>
         <div className="row">
           <Link href="/discover" className="ctaLink secondaryLink">Read-only browsing</Link>
           <Link href="/mint?view=mint&collection=shared" className="ctaLink secondaryLink">Mint before selling</Link>
+        </div>
+        <div className="flowStrip">
+          <div className="flowCell">
+            <span className="flowLabel">1. Connect</span>
+            <p className="hint">Use the shared header wallet control to pick the correct seller wallet.</p>
+          </div>
+          <div className="flowCell">
+            <span className="flowLabel">2. List</span>
+            <p className="hint">Approve the marketplace, then create a sale for an NFT you already own.</p>
+          </div>
+          <div className="flowCell">
+            <span className="flowLabel">3. Manage</span>
+            <p className="hint">Refresh, cancel, buy, or inspect active listings below.</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="card formCard">
+        <h3>Current Route Scope</h3>
+        <p className="sectionLead">
+          `List` combines seller setup and live marketplace management. Use `Discover` if you want a cleaner
+          feed with no listing form, and use `Mint` if you need to create the NFT first.
+        </p>
+        <div className="gridMini">
+          <p className="hint"><strong>Create listing:</strong> use steps 1-4 to approve and submit a sale.</p>
+          <p className="hint"><strong>Manage listings:</strong> use the lower sections to cancel, buy, or filter active listings.</p>
         </div>
       </div>
 

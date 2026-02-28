@@ -113,9 +113,24 @@ export default function AdminClient() {
           <Link href="/discover" className="ctaLink secondaryLink">Review the public feed</Link>
           <Link href="/profile" className="ctaLink secondaryLink">Check creator profiles</Link>
         </div>
+        <div className="flowStrip">
+          <div className="flowCell">
+            <span className="flowLabel">Load</span>
+            <p className="hint">Start by confirming the moderation API is reachable and returning live state.</p>
+          </div>
+          <div className="flowCell">
+            <span className="flowLabel">Review</span>
+            <p className="hint">Work from the open queue first, then inspect hidden listings and action history.</p>
+          </div>
+          <div className="flowCell">
+            <span className="flowLabel">Act</span>
+            <p className="hint">Hide, restore, or dismiss only when admin credentials are present and intentional.</p>
+          </div>
+        </div>
       </div>
 
       <div className="card formCard">
+        <h3>Control Surface</h3>
         <p className="hint">
           Read actions may work with just the indexer online. Hide, restore, and resolve actions usually
           require an admin token, an allowed admin address, or both depending on server configuration.
@@ -208,6 +223,9 @@ export default function AdminClient() {
 
       <div className="card">
         <h3>Open Moderation Queue</h3>
+        <p className="sectionLead">
+          Reports awaiting review. This is the primary work queue for admin decisions.
+        </p>
         {openReports.length === 0 ? <p className="hint">No open reports.</p> : null}
         <div className="listTable">
           {openReports.map((report) => (
@@ -261,12 +279,18 @@ export default function AdminClient() {
 
       <div className="card">
         <h3>Hidden Listing IDs</h3>
+        <p className="sectionLead">
+          The current hidden-list snapshot exposed by the moderation API.
+        </p>
         {hiddenListings.length === 0 ? <p className="hint">No hidden listings.</p> : null}
         {hiddenListings.length > 0 ? <p className="mono">{hiddenListings.join(", ")}</p> : null}
       </div>
 
       <div className="card">
         <h3>Action History</h3>
+        <p className="sectionLead">
+          Recorded moderation actions for auditing what has already been changed.
+        </p>
         {actions.length === 0 ? <p className="hint">No actions recorded yet.</p> : null}
         <div className="listTable">
           {actions.map((action) => (

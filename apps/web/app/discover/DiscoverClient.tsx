@@ -305,9 +305,24 @@ export default function DiscoverClient() {
           <Link href="/profile" className="ctaLink secondaryLink">Open creator profiles</Link>
           <Link href="/list" className="ctaLink secondaryLink">Go to seller tools</Link>
         </div>
+        <div className="flowStrip">
+          <div className="flowCell">
+            <span className="flowLabel">Inspect</span>
+            <p className="hint">Refresh the live feed, then narrow it with source, standard, or price filters.</p>
+          </div>
+          <div className="flowCell">
+            <span className="flowLabel">Verify</span>
+            <p className="hint">Open creator profiles or contract links before acting on suspicious listings.</p>
+          </div>
+          <div className="flowCell">
+            <span className="flowLabel">Report</span>
+            <p className="hint">Submit moderation reports from this screen without leaving the public feed.</p>
+          </div>
+        </div>
       </div>
 
       <div className="card formCard">
+        <h3>Current Route Scope</h3>
         <p className="hint">
           This page is intentionally read-only for browsing. Use List if you want to create or manage your own sale.
         </p>
