@@ -1,6 +1,8 @@
 import "dotenv/config";
 
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import path from "node:path";
 import { URL } from "node:url";
 import { PrismaClient } from "@prisma/client";
 import { pino } from "pino";
@@ -37,11 +39,25 @@ type BackfillSubnamePayload = {
   contractAddress?: string;
 };
 
+type ModeratorPayload = {
+  address: string;
+  label?: string;
+  enabled?: boolean;
+};
+
+type ModeratorRecord = {
+  address: string;
+  label: string | null;
+  addedAt: string;
+  updatedAt: string;
+};
+
 const CHAIN_ID = Number.parseInt(process.env.CHAIN_ID || "11155111", 10);
 const PORT = Number.parseInt(process.env.INDEXER_PORT || "8787", 10);
 const HOST = process.env.INDEXER_HOST || "127.0.0.1";
 const ADMIN_TOKEN = process.env.INDEXER_ADMIN_TOKEN || "";
 const TRUST_PROXY = process.env.TRUST_PROXY === "true";
+const MODERATOR_FILE = process.env.INDEXER_MODERATOR_FILE || path.join(process.cwd(), "data", "moderators.json");
 const ADMIN_ALLOWLIST = new Set(
   (process.env.INDEXER_ADMIN_ALLOWLIST || "")
     .split(",")
@@ -73,11 +89,47 @@ function assertEnv(name: string): string {
   return value;
 }
 
-function assertAdminRequest(
+async function readModeratorRecords(): Promise<ModeratorRecord[]> {
+  try {
+    const raw = await readFile(MODERATOR_FILE, "utf8");
+    const parsed = JSON.parse(raw) as ModeratorRecord[];
+    return parsed
+      .filter((item) => item && isAddress(String(item.address || "").toLowerCase()))
+      .map((item) => ({
+        address: item.address.toLowerCase(),
+        label: item.label?.trim() || null,
+        addedAt: item.addedAt || new Date().toISOString(),
+        updatedAt: item.updatedAt || new Date().toISOString()
+      }));
+  } catch {
+    return [];
+  }
+}
+
+async function writeModeratorRecords(records: ModeratorRecord[]): Promise<void> {
+  await mkdir(path.dirname(MODERATOR_FILE), { recursive: true });
+  await writeFile(MODERATOR_FILE, JSON.stringify(records, null, 2), "utf8");
+}
+
+async function getEffectiveAdminAllowlist(
+  config: RequestHandlerConfig,
+  includeDynamicModerators: boolean
+): Promise<Set<string>> {
+  const allowlist = new Set(config.adminAllowlist);
+  if (!includeDynamicModerators) return allowlist;
+  const records = await readModeratorRecords();
+  for (const record of records) {
+    allowlist.add(record.address);
+  }
+  return allowlist;
+}
+
+async function assertAdminRequest(
   req: IncomingMessage,
   config: RequestHandlerConfig,
-  actor?: string
-): { ok: true } | { ok: false; error: string } {
+  actor?: string,
+  options?: { includeDynamicModerators?: boolean }
+): Promise<{ ok: true } | { ok: false; error: string }> {
   if (config.adminToken) {
     const authToken = parseBearerToken(req.headers.authorization);
     if (!authToken || authToken !== config.adminToken) {
@@ -85,11 +137,13 @@ function assertAdminRequest(
     }
   }
 
-  if (config.adminAllowlist.size > 0) {
+  const effectiveAllowlist = await getEffectiveAdminAllowlist(config, options?.includeDynamicModerators !== false);
+
+  if (effectiveAllowlist.size > 0) {
     const headerActor = String(req.headers["x-admin-address"] || "").trim().toLowerCase();
     const payloadActor = String(actor || "").trim().toLowerCase();
     const candidate = headerActor || payloadActor;
-    if (!candidate || !isAddress(candidate) || !config.adminAllowlist.has(candidate)) {
+    if (!candidate || !isAddress(candidate) || !effectiveAllowlist.has(candidate)) {
       return { ok: false, error: "Actor is not in admin allowlist" };
     }
   }
@@ -350,7 +404,7 @@ async function handleRequest(
       sendJson(res, 400, { error: "Invalid resolve payload" });
       return;
     }
-    const auth = assertAdminRequest(req, config, payload.actor);
+    const auth = await assertAdminRequest(req, config, payload.actor);
     if (!auth.ok) {
       sendJson(res, 401, { error: auth.error });
       return;
@@ -432,7 +486,7 @@ async function handleRequest(
       sendJson(res, 400, { error: "Invalid visibility payload" });
       return;
     }
-    const auth = assertAdminRequest(req, config, payload.actor);
+    const auth = await assertAdminRequest(req, config, payload.actor);
     if (!auth.ok) {
       sendJson(res, 401, { error: auth.error });
       return;
@@ -460,13 +514,66 @@ async function handleRequest(
     return;
   }
 
+  if (req.method === "GET" && path === "/api/admin/moderators") {
+    if (deps.isRateLimitedImpl(deps.getClientIpImpl(req, config.trustProxy))) {
+      sendJson(res, 429, { error: "Too many requests" });
+      return;
+    }
+    const auth = await assertAdminRequest(req, config, undefined, { includeDynamicModerators: false });
+    if (!auth.ok) {
+      sendJson(res, 401, { error: auth.error });
+      return;
+    }
+
+    const moderators = await readModeratorRecords();
+    sendJson(res, 200, { moderators });
+    return;
+  }
+
+  if (req.method === "POST" && path === "/api/admin/moderators") {
+    if (deps.isRateLimitedImpl(deps.getClientIpImpl(req, config.trustProxy))) {
+      sendJson(res, 429, { error: "Too many requests" });
+      return;
+    }
+    const payload = await readJsonBody<ModeratorPayload>(req);
+    const auth = await assertAdminRequest(req, config, payload.address, { includeDynamicModerators: false });
+    if (!auth.ok) {
+      sendJson(res, 401, { error: auth.error });
+      return;
+    }
+
+    const candidate = String(payload.address || "").trim().toLowerCase();
+    if (!isAddress(candidate)) {
+      sendJson(res, 400, { error: "Invalid moderator address" });
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const current = await readModeratorRecords();
+    const next = current.filter((item) => item.address !== candidate);
+    if (payload.enabled !== false) {
+      const existing = current.find((item) => item.address === candidate);
+      next.push({
+        address: candidate,
+        label: payload.label?.trim() || existing?.label || null,
+        addedAt: existing?.addedAt || now,
+        updatedAt: now
+      });
+    }
+    next.sort((a, b) => a.address.localeCompare(b.address));
+    await writeModeratorRecords(next);
+
+    sendJson(res, 200, { ok: true, moderators: next });
+    return;
+  }
+
   if (req.method === "POST" && path === "/api/admin/collections/backfill-subname") {
     if (deps.isRateLimitedImpl(deps.getClientIpImpl(req, config.trustProxy))) {
       sendJson(res, 429, { error: "Too many requests" });
       return;
     }
     const payload = await readJsonBody<BackfillSubnamePayload>(req);
-    const auth = assertAdminRequest(req, config);
+    const auth = await assertAdminRequest(req, config);
     if (!auth.ok) {
       sendJson(res, 401, { error: auth.error });
       return;

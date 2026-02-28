@@ -4,11 +4,12 @@ export default function HomePage() {
   return (
     <section className="wizard">
       <div className="heroCard">
-        <p className="eyebrow">Creator Toolkit</p>
-        <h1>nftfactory.eth</h1>
+        <p className="eyebrow">nftfactory.eth</p>
+        <h1>Publish, List, and Discover</h1>
         <p className="heroText">
           Mint instantly into shared contracts, deploy your own creator collection, list work for sale,
-          and resolve creator storefronts by ENS subname.
+          and browse the marketplace. Use the profile route for creator onboarding, ENS identity setup,
+          and storefront lookup.
         </p>
         <div className="row">
           <Link href="/mint?view=mint&collection=shared" className="ctaLink">
@@ -20,34 +21,9 @@ export default function HomePage() {
           <Link href="/discover" className="ctaLink secondaryLink">
             Browse marketplace
           </Link>
-        </div>
-        <div className="flowStrip">
-          <div className="flowCell">
-            <span className="flowLabel">1. Publish</span>
-            <p className="hint">Use Mint for shared drops, creator collections, and collection management.</p>
-          </div>
-          <div className="flowCell">
-            <span className="flowLabel">2. Sell</span>
-            <p className="hint">Use List only after the asset already exists in a wallet you control.</p>
-          </div>
-          <div className="flowCell">
-            <span className="flowLabel">3. Review</span>
-            <p className="hint">Use Discover, Profile, and Admin for browsing, identity lookup, and moderation.</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="card formCard">
-        <h3>Current Product Scope</h3>
-        <p className="sectionLead">
-          The app is organized around one clear progression: publish first, list second, inspect third.
-          Each route now focuses on a single job instead of mixing seller, collector, and admin actions.
-        </p>
-        <div className="gridMini">
-          <p className="hint"><strong>Mint</strong> for publishing, deploying, and collection management.</p>
-          <p className="hint"><strong>List</strong> for creating and managing fixed-price sales.</p>
-          <p className="hint"><strong>Discover</strong> for read-only browsing and report submission.</p>
-          <p className="hint"><strong>Profile</strong> for opening creator storefronts by ENS label.</p>
+          <Link href="/profile" className="ctaLink secondaryLink">
+            Creator profiles
+          </Link>
         </div>
       </div>
 
@@ -71,12 +47,12 @@ export default function HomePage() {
         </Link>
 
         <Link href="/profile" className="card actionCard">
-          <h3>ENS Identity</h3>
+          <h3>Creator Profiles</h3>
           <p>
-            Register a subname under <strong>nftfactory.eth</strong> (e.g. studio.nftfactory.eth) to link
-            your wallet to a human-readable creator profile. Works in both shared and custom collections.
+            Set up your creator identity, register an <strong>nftfactory.eth</strong> subname, and open
+            a storefront by ENS label.
           </p>
-          <p className="actionHint">Opens creator profile lookup.</p>
+          <p className="actionHint">Opens creator onboarding and lookup.</p>
         </Link>
       </div>
 
@@ -112,9 +88,6 @@ export default function HomePage() {
 
       <div className="card formCard">
         <h3>Operational Routes</h3>
-        <p className="sectionLead">
-          Use these after publishing: `List` for seller actions, `Admin` for moderation only.
-        </p>
         <div className="row">
           <Link href="/list" className="ctaLink secondaryLink">Create or manage listings</Link>
           <Link href="/admin" className="ctaLink secondaryLink">Moderation admin</Link>

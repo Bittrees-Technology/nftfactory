@@ -91,6 +91,13 @@ export type ApiModerationAction = {
   createdAt: string;
 };
 
+export type ApiModerator = {
+  address: string;
+  label: string | null;
+  addedAt: string;
+  updatedAt: string;
+};
+
 export type ApiProfileResolution = {
   name: string;
   sellers: string[];
@@ -164,6 +171,31 @@ export async function setListingVisibility(payload: {
 
 export async function fetchModerationActions(): Promise<ApiModerationAction[]> {
   return fetchJson<ApiModerationAction[]>("/api/moderation/actions");
+}
+
+export async function fetchModerators(auth?: AdminAuth): Promise<ApiModerator[]> {
+  const payload = await fetchJson<{ moderators: ApiModerator[] }>("/api/admin/moderators", {
+    headers: adminHeaders(auth)
+  });
+  return payload.moderators || [];
+}
+
+export async function updateModerator(payload: {
+  address: string;
+  label?: string;
+  enabled?: boolean;
+  auth?: AdminAuth;
+}): Promise<ApiModerator[]> {
+  const response = await fetchJson<{ moderators: ApiModerator[] }>("/api/admin/moderators", {
+    method: "POST",
+    headers: adminHeaders(payload.auth),
+    body: JSON.stringify({
+      address: payload.address,
+      label: payload.label,
+      enabled: payload.enabled
+    })
+  });
+  return response.moderators || [];
 }
 
 export async function fetchProfileResolution(name: string): Promise<ApiProfileResolution> {

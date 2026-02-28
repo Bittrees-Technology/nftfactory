@@ -230,8 +230,23 @@ export default function ProfileClient({ name }: { name: string }) {
             addresses, or after you enter a creator wallet manually above.
           </p>
           <div className="row">
-            <Link href="/profile" className="ctaLink secondaryLink">Try another ENS label</Link>
+            <Link href={`/profile?label=${encodeURIComponent(name)}`} className="ctaLink secondaryLink">Complete creator setup</Link>
+            <Link href={`/mint?view=mint&collection=shared&profile=${encodeURIComponent(name)}`} className="ctaLink secondaryLink">Mint with this ENS</Link>
             <Link href="/discover" className="ctaLink secondaryLink">Browse all listings</Link>
+          </div>
+        </div>
+      ) : null}
+
+      {!hasResolvedIdentity ? (
+        <div className="card formCard">
+          <h3>Identity Setup</h3>
+          <p className="sectionLead">
+            If this creator label is still new, finish profile setup first: register the subname, then
+            publish with ENS attribution so the storefront can resolve automatically.
+          </p>
+          <div className="row">
+            <Link href={`/profile?label=${encodeURIComponent(name)}`} className="ctaLink secondaryLink">Open setup</Link>
+            <Link href={`/mint?view=mint&collection=shared&profile=${encodeURIComponent(name)}`} className="ctaLink secondaryLink">Launch ENS mint</Link>
           </div>
         </div>
       ) : null}

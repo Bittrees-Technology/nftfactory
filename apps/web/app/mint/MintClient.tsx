@@ -78,6 +78,7 @@ function shortenAddress(value: string): string {
 type MintClientProps = {
   initialPageMode?: PageMode;
   initialMintMode?: MintMode;
+  initialProfileLabel?: string;
 };
 
 type KnownCollection = {
@@ -90,7 +91,8 @@ type KnownCollection = {
 
 export default function MintClient({
   initialPageMode = "mint",
-  initialMintMode = "shared"
+  initialMintMode = "shared",
+  initialProfileLabel = ""
 }: MintClientProps) {
   const config = useMemo(() => getContractsConfig(), []);
   const appChain = useMemo(() => getAppChain(config.chainId), [config.chainId]);
@@ -117,7 +119,7 @@ export default function MintClient({
   // Deploy-new-collection form fields
   const [deployName, setDeployName] = useState("");
   const [deploySymbol, setDeploySymbol] = useState("");
-  const [deploySubname, setDeploySubname] = useState("");
+  const [deploySubname, setDeploySubname] = useState(initialProfileLabel);
   const [deployRoyaltyReceiver, setDeployRoyaltyReceiver] = useState("");
   const [deployRoyaltyBps, setDeployRoyaltyBps] = useState("500");
   const [deployTx, setDeployTx] = useState<TxState>({ status: "idle" });
@@ -137,9 +139,9 @@ export default function MintClient({
   const [lockMetadata, setLockMetadata] = useState(true);
 
   // ENS attribution subname (for shared mints, attributes mint to a registered subname)
-  const [attributionSubname, setAttributionSubname] = useState("");
+  const [attributionSubname, setAttributionSubname] = useState(initialProfileLabel);
   // Register subname flow (for custom collections)
-  const [registerSubnameLabel, setRegisterSubnameLabel] = useState("");
+  const [registerSubnameLabel, setRegisterSubnameLabel] = useState(initialProfileLabel);
 
   // Transaction state
   const [uploadTx, setUploadTx] = useState<TxState>({ status: "idle" });

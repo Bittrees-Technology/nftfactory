@@ -4,10 +4,13 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
   fetchHiddenListingIds,
+  fetchModerators,
   fetchModerationActions,
   fetchModerationReports,
   resolveModerationReport,
   setListingVisibility,
+  updateModerator,
+  type ApiModerator,
   type ApiModerationAction,
   type ApiModerationReport
 } from "../../lib/indexerApi";
@@ -28,8 +31,12 @@ export default function AdminClient() {
   const [reports, setReports] = useState<ApiModerationReport[]>([]);
   const [actions, setActions] = useState<ApiModerationAction[]>([]);
   const [hiddenListings, setHiddenListings] = useState<number[]>([]);
+  const [moderators, setModerators] = useState<ApiModerator[]>([]);
   const [manualListingId, setManualListingId] = useState("");
+  const [moderatorAddress, setModeratorAddress] = useState("");
+  const [moderatorLabel, setModeratorLabel] = useState("");
   const [error, setError] = useState("");
+  const [moderatorError, setModeratorError] = useState("");
   const [pendingDecision, setPendingDecision] = useState<{ reportId: string; decision: Decision } | null>(null);
   const [notesDraft, setNotesDraft] = useState("");
   const manualListingNumeric = Number.parseInt(manualListingId, 10);
@@ -47,6 +54,20 @@ export default function AdminClient() {
       setReports(openReports);
       setActions(actionHistory);
       setHiddenListings(hidden);
+      if (canWrite) {
+        try {
+          setModerators(await fetchModerators({
+            adminToken,
+            adminAddress: adminAddress || actor
+          }));
+          setModeratorError("");
+        } catch (err) {
+          setModeratorError(err instanceof Error ? err.message : "Failed to load moderators.");
+        }
+      } else {
+        setModerators([]);
+        setModeratorError("");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load moderation state.");
     }
@@ -97,6 +118,32 @@ export default function AdminClient() {
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update visibility.");
+    }
+  }
+
+  async function saveModerator(enabled: boolean): Promise<void> {
+    if (!moderatorAddress.trim()) {
+      setModeratorError("Enter a moderator wallet address.");
+      return;
+    }
+    try {
+      setModeratorError("");
+      const next = await updateModerator({
+        address: moderatorAddress.trim(),
+        label: moderatorLabel.trim() || undefined,
+        enabled,
+        auth: {
+          adminToken,
+          adminAddress: adminAddress || actor
+        }
+      });
+      setModerators(next);
+      if (enabled) {
+        setModeratorAddress("");
+        setModeratorLabel("");
+      }
+    } catch (err) {
+      setModeratorError(err instanceof Error ? err.message : "Failed to update moderators.");
     }
   }
 
@@ -209,6 +256,10 @@ export default function AdminClient() {
           <h3>Write Access</h3>
           <p>{canWrite ? "Enabled" : "Read-only"}</p>
         </article>
+        <article className="card">
+          <h3>Moderators</h3>
+          <p>{moderators.length}</p>
+        </article>
       </div>
 
       {!error && openReports.length === 0 && hiddenListings.length === 0 && actions.length === 0 ? (
@@ -220,6 +271,55 @@ export default function AdminClient() {
           </p>
         </div>
       ) : null}
+
+      <div className="card formCard">
+        <h3>Moderator List</h3>
+        <p className="sectionLead">
+          The root admin for nftfactory.eth can maintain a reusable moderator allowlist here. Saved moderators
+          are treated as approved operators for moderation actions, but only the root admin can edit this list.
+        </p>
+        <div className="gridMini">
+          <label>
+            Moderator address
+            <input
+              value={moderatorAddress}
+              onChange={(e) => setModeratorAddress(e.target.value)}
+              placeholder="0xmoderator..."
+            />
+          </label>
+          <label>
+            Label
+            <input
+              value={moderatorLabel}
+              onChange={(e) => setModeratorLabel(e.target.value)}
+              placeholder="community-moderator"
+            />
+          </label>
+        </div>
+        <div className="row">
+          <button type="button" onClick={() => void saveModerator(true)} disabled={!canWrite}>
+            Add Or Update Moderator
+          </button>
+          <button type="button" onClick={() => void saveModerator(false)} disabled={!canWrite}>
+            Remove Moderator
+          </button>
+        </div>
+        {moderatorError ? <p className="error">{moderatorError}</p> : null}
+        {!canWrite ? <p className="hint">Enter root admin credentials above to edit the moderator list.</p> : null}
+        {moderators.length === 0 ? (
+          <p className="hint">No saved moderators yet.</p>
+        ) : (
+          <div className="listTable">
+            {moderators.map((moderator) => (
+              <article key={moderator.address} className="listRow">
+                <span><strong>Address</strong> {moderator.address}</span>
+                <span><strong>Label</strong> {moderator.label || "-"}</span>
+                <span><strong>Updated</strong> {formatIso(moderator.updatedAt)}</span>
+              </article>
+            ))}
+          </div>
+        )}
+      </div>
 
       <div className="card">
         <h3>Open Moderation Queue</h3>
