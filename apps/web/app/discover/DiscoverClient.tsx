@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Address } from "viem";
 import { useAccount } from "wagmi";
@@ -277,9 +278,16 @@ export default function DiscoverClient() {
       <div>
         <h1>Discover</h1>
         <p>Collector feed with moderation-aware filtering, fast refresh cache, and pagination.</p>
+        <div className="row">
+          <Link href="/profile" className="ctaLink secondaryLink">Open creator profiles</Link>
+          <Link href="/list" className="ctaLink secondaryLink">Go to seller tools</Link>
+        </div>
       </div>
 
       <div className="card formCard">
+        <p className="hint">
+          This page is intentionally read-only for browsing. Use List if you want to create or manage your own sale.
+        </p>
         <div className="row">
           <label>
             Page size
@@ -358,6 +366,15 @@ export default function DiscoverClient() {
           Showing {filtered.length} listing(s). Hidden by moderation: {hiddenListingIds.length}.
         </p>
       </div>
+
+      {filtered.length === 0 && !isLoading ? (
+        <div className="card formCard">
+          <h3>No Listings In View</h3>
+          <p className="hint">
+            Try increasing page size, clearing filters, or switching to List if you expected to see your own inventory.
+          </p>
+        </div>
+      ) : null}
 
       <div className="listTable">
         {filtered.map((row) => (

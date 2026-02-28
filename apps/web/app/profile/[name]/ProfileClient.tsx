@@ -181,6 +181,7 @@ export default function ProfileClient({ name }: { name: string }) {
           <button type="button" onClick={() => void loadListings()} disabled={isLoading}>
             {isLoading ? "Loading..." : "Refresh Profile"}
           </button>
+          <Link href="/discover" className="ctaLink secondaryLink">Browse all listings</Link>
         </div>
         {activeSellerAddresses.length === 0 ? (
           <p className="hint">Enter a valid creator wallet address or rely on ENS resolution to populate this profile.</p>
@@ -212,6 +213,9 @@ export default function ProfileClient({ name }: { name: string }) {
 
       <div className="card formCard">
         <h3>ENS Identity Mapping</h3>
+        <p className="hint">
+          This section shows the wallet addresses and collection mappings currently published by the indexer for this ENS label.
+        </p>
         {resolvedSellerAddresses.length === 0 ? (
           <p className="hint">No indexed wallet mapping has been published for this ENS label yet.</p>
         ) : (

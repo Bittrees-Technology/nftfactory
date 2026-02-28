@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
   fetchHiddenListingIds,
@@ -98,12 +99,24 @@ export default function AdminClient() {
 
   return (
     <section className="wizard">
-      <div>
+      <div className="heroCard">
+        <p className="eyebrow">Operations</p>
         <h1>Admin</h1>
-        <p>Shared moderation queue backed by indexer API and Prisma data.</p>
+        <p className="heroText">
+          Moderation console for reports, hidden listings, and action history. This page is operational
+          tooling and depends on a reachable indexer plus valid admin credentials for write actions.
+        </p>
+        <div className="row">
+          <Link href="/discover" className="ctaLink secondaryLink">Review the public feed</Link>
+          <Link href="/profile" className="ctaLink secondaryLink">Check creator profiles</Link>
+        </div>
       </div>
 
       <div className="card formCard">
+        <p className="hint">
+          Read actions may work with just the indexer online. Hide, restore, and resolve actions usually
+          require an admin token, an allowed admin address, or both depending on server configuration.
+        </p>
         <div className="gridMini">
           <label>
             Actor label
@@ -136,6 +149,11 @@ export default function AdminClient() {
       </div>
 
       {error ? <p className="error">{error}</p> : null}
+      {!adminToken && !adminAddress ? (
+        <p className="hint">
+          No admin token or address supplied. Expect this page to be effectively read-only until credentials are entered.
+        </p>
+      ) : null}
 
       <div className="grid">
         <article className="card">

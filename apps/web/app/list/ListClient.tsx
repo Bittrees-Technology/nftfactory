@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useAccount, useChainId, usePublicClient, useSwitchChain, useWalletClient } from "wagmi";
 import type { Address, Hex } from "viem";
 import {
@@ -479,12 +480,21 @@ export default function ListClient() {
           <p className="hint"><strong>Create listing:</strong> use steps 1-4 to approve and submit a sale.</p>
           <p className="hint"><strong>Manage listings:</strong> use the lower sections to cancel, buy, or filter active listings.</p>
         </div>
+        <div className="row">
+          <Link href="/discover" className="ctaLink secondaryLink">Read-only browsing</Link>
+          <Link href="/mint?view=mint&collection=shared" className="ctaLink secondaryLink">Mint before selling</Link>
+        </div>
       </div>
 
       <form className="wizard" onSubmit={onSubmit}>
         <div className="card formCard">
           <h3>1. Wallet Status</h3>
           <p className="hint">Use the wallet button in the upper-right corner to connect or switch accounts.</p>
+          {!isConnected ? (
+            <p className="hint">
+              Listing creation and cancel actions stay disabled until a wallet is connected.
+            </p>
+          ) : null}
           {wrongNetwork && (
             <button type="button" onClick={switchToSepolia}>
               Switch To Sepolia
@@ -513,6 +523,9 @@ export default function ListClient() {
 
         <div className="card formCard">
           <h3>2. NFT Details</h3>
+          <p className="hint">
+            This page is for assets you already hold. If you need to mint first, use the Mint route.
+          </p>
           <label>
             Standard
             <select value={standard} onChange={(e) => setStandard(e.target.value as Standard)}>
