@@ -598,6 +598,14 @@ export default function ListClient() {
           <p className="hint">These are listings where your connected wallet is the seller.</p>
           {!isConnected && <p className="hint">Connect wallet to view your listings.</p>}
           {isConnected && myListings.length === 0 && !listingsLoading && <p className="hint">No active listings found.</p>}
+          {isConnected && myListings.length === 0 && !listingsLoading ? (
+            <div className="row">
+              <Link href="/mint?view=mint&collection=shared" className="ctaLink secondaryLink">Mint something first</Link>
+              <button type="button" onClick={loadListings} disabled={listingsLoading}>
+                Refresh Seller State
+              </button>
+            </div>
+          ) : null}
           {myListings.length > 0 && (
             <div className="listTable">
               {myListings.map((item) => (
@@ -633,7 +641,17 @@ export default function ListClient() {
             onPreset={applyPreset}
             subnameHint={ensSubnameHint}
           />
-          {filteredListings.length === 0 && !listingsLoading && <p className="hint">No active listings match filters.</p>}
+          {filteredListings.length === 0 && !listingsLoading ? (
+            <div>
+              <p className="hint">No active listings match filters.</p>
+              <div className="row">
+                <button type="button" onClick={() => setFilters(DEFAULT_FILTERS)}>
+                  Reset Listing Filters
+                </button>
+                <Link href="/discover" className="ctaLink secondaryLink">Open read-only feed</Link>
+              </div>
+            </div>
+          ) : null}
           {filteredListings.length > 0 && (
             <div className="listTable">
               {filteredListings.map((item) => (

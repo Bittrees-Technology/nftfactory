@@ -11,19 +11,23 @@ function normalizeLabel(value: string): string {
 export default function ProfileLandingPage() {
   const router = useRouter();
   const [label, setLabel] = useState("");
+  const normalized = normalizeLabel(label);
 
   function onSubmit(e: FormEvent): void {
     e.preventDefault();
-    const normalized = normalizeLabel(label);
     if (!normalized) return;
     router.push(`/profile/${encodeURIComponent(normalized)}`);
   }
 
   return (
     <section className="wizard">
-      <div>
+      <div className="heroCard">
+        <p className="eyebrow">Creator Lookup</p>
         <h1>Creator Profiles</h1>
-        <p>Open a creator storefront by ENS subname label (example: creator.nftfactory.eth).</p>
+        <p className="heroText">
+          Open a creator storefront by ENS subname label. This route is for identity lookup first, then
+          storefront review after the indexer resolves the creator mapping.
+        </p>
         <div className="row">
           <Link href="/discover" className="ctaLink secondaryLink">Browse marketplace first</Link>
           <Link href="/mint?view=mint&collection=shared" className="ctaLink secondaryLink">Mint with ENS attribution</Link>
@@ -39,11 +43,20 @@ export default function ProfileLandingPage() {
             placeholder="creator"
           />
         </label>
-        <button type="submit">Open Profile</button>
+        <button type="submit" disabled={!normalized}>Open Profile</button>
+        <p className="hint">
+          {normalized
+            ? `Profile route: /profile/${normalized}`
+            : "Enter a subname like creator or studio. The .nftfactory.eth suffix is optional."}
+        </p>
       </form>
 
       <div className="card formCard">
         <h3>Quick Links</h3>
+        <p className="hint">
+          Use these examples to confirm the profile route itself is navigating correctly before testing a
+          real creator mapping.
+        </p>
         <div className="row">
           <Link href="/profile/creator">/profile/creator</Link>
           <Link href="/profile/studio">/profile/studio</Link>

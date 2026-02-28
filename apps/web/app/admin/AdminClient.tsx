@@ -32,6 +32,9 @@ export default function AdminClient() {
   const [error, setError] = useState("");
   const [pendingDecision, setPendingDecision] = useState<{ reportId: string; decision: Decision } | null>(null);
   const [notesDraft, setNotesDraft] = useState("");
+  const manualListingNumeric = Number.parseInt(manualListingId, 10);
+  const canWrite = Boolean(adminToken || adminAddress);
+  const hasManualListingId = Number.isInteger(manualListingNumeric) && manualListingNumeric >= 0;
 
   async function refresh(): Promise<void> {
     try {
@@ -136,16 +139,19 @@ export default function AdminClient() {
           </label>
         </div>
         <div className="row">
-          <button type="button" onClick={() => setManualHidden(true)}>
+          <button type="button" onClick={() => setManualHidden(true)} disabled={!canWrite || !hasManualListingId}>
             Hide Listing
           </button>
-          <button type="button" onClick={() => setManualHidden(false)}>
+          <button type="button" onClick={() => setManualHidden(false)} disabled={!canWrite || !hasManualListingId}>
             Restore Listing
           </button>
           <button type="button" onClick={() => void refresh()}>
             Refresh Admin Data
           </button>
         </div>
+        {!hasManualListingId ? (
+          <p className="hint">Enter a numeric listing ID to use the manual hide or restore actions.</p>
+        ) : null}
       </div>
 
       {error ? <p className="error">{error}</p> : null}
@@ -153,6 +159,22 @@ export default function AdminClient() {
         <p className="hint">
           No admin token or address supplied. Expect this page to be effectively read-only until credentials are entered.
         </p>
+      ) : null}
+
+      {error ? (
+        <div className="card formCard">
+          <h3>Admin Backend Unavailable</h3>
+          <p className="hint">
+            The indexer did not return moderation data. This usually means the admin API is offline, misconfigured,
+            or rejecting the current credentials.
+          </p>
+          <div className="row">
+            <button type="button" onClick={() => void refresh()}>
+              Retry Admin Data
+            </button>
+            <Link href="/discover" className="ctaLink secondaryLink">Inspect public feed</Link>
+          </div>
+        </div>
       ) : null}
 
       <div className="grid">
@@ -198,7 +220,7 @@ export default function AdminClient() {
                     onChange={(e) => setNotesDraft(e.target.value)}
                     placeholder="Optional note..."
                   />
-                  <button type="button" className="miniBtn" onClick={() => void confirmDecision()}>
+                  <button type="button" className="miniBtn" disabled={!canWrite} onClick={() => void confirmDecision()}>
                     Confirm {pendingDecision.decision}
                   </button>
                   <button type="button" className="miniBtn" onClick={() => { setPendingDecision(null); setNotesDraft(""); }}>
@@ -207,13 +229,13 @@ export default function AdminClient() {
                 </div>
               ) : (
                 <div className="row">
-                  <button type="button" className="miniBtn" onClick={() => { setPendingDecision({ reportId: report.id, decision: "hide" }); setNotesDraft(""); }}>
+                  <button type="button" className="miniBtn" disabled={!canWrite} onClick={() => { setPendingDecision({ reportId: report.id, decision: "hide" }); setNotesDraft(""); }}>
                     Hide
                   </button>
-                  <button type="button" className="miniBtn" onClick={() => { setPendingDecision({ reportId: report.id, decision: "restore" }); setNotesDraft(""); }}>
+                  <button type="button" className="miniBtn" disabled={!canWrite} onClick={() => { setPendingDecision({ reportId: report.id, decision: "restore" }); setNotesDraft(""); }}>
                     Restore
                   </button>
-                  <button type="button" className="miniBtn" onClick={() => { setPendingDecision({ reportId: report.id, decision: "dismiss" }); setNotesDraft(""); }}>
+                  <button type="button" className="miniBtn" disabled={!canWrite} onClick={() => { setPendingDecision({ reportId: report.id, decision: "dismiss" }); setNotesDraft(""); }}>
                     Dismiss
                   </button>
                 </div>

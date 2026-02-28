@@ -147,6 +147,10 @@ export default function ProfileClient({ name }: { name: string }) {
     };
   }, [collectionSummaries.length, creatorListings, resolvedSellerAddresses.length]);
 
+  const hasResolvedIdentity = resolvedSellerAddresses.length > 0;
+  const hasManualWallet = Boolean(sellerAddress.trim());
+  const hasProfileData = hasResolvedIdentity || hasManualWallet;
+
   return (
     <section className="wizard">
       <div className="heroCard">
@@ -191,6 +195,31 @@ export default function ProfileClient({ name }: { name: string }) {
       </div>
 
       {error ? <p className="error">{error}</p> : null}
+
+      <div className="grid">
+        <article className="card">
+          <h3>Identity Source</h3>
+          <p>{hasResolvedIdentity ? "Indexer + ENS" : hasManualWallet ? "Manual wallet" : "Unresolved"}</p>
+        </article>
+        <article className="card">
+          <h3>Profile State</h3>
+          <p>{hasProfileData ? "Ready to inspect" : "Needs lookup"}</p>
+        </article>
+      </div>
+
+      {!hasProfileData ? (
+        <div className="card formCard">
+          <h3>Profile Needs A Wallet Mapping</h3>
+          <p className="hint">
+            This route can only show storefront activity after the ENS label resolves to one or more wallet
+            addresses, or after you enter a creator wallet manually above.
+          </p>
+          <div className="row">
+            <Link href="/profile" className="ctaLink secondaryLink">Try another ENS label</Link>
+            <Link href="/discover" className="ctaLink secondaryLink">Browse all listings</Link>
+          </div>
+        </div>
+      ) : null}
 
       <div className="grid">
         <article className="card">
@@ -273,6 +302,16 @@ export default function ProfileClient({ name }: { name: string }) {
             No active listings were found for the resolved wallets at the current scan depth. Increase the
             scan depth or verify the wallet mapping above.
           </p>
+        ) : null}
+        {creatorListings.length === 0 ? (
+          <div className="row">
+            <button type="button" onClick={() => setScanDepth("500")}>
+              Set Scan Depth To 500
+            </button>
+            <button type="button" onClick={() => void loadListings()} disabled={isLoading}>
+              {isLoading ? "Refreshing..." : "Retry Profile Scan"}
+            </button>
+          </div>
         ) : null}
       </div>
 
