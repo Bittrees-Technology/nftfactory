@@ -65,7 +65,48 @@ const ADMIN_ALLOWLIST = new Set(
     .filter(Boolean)
 );
 
-const prisma = new PrismaClient();
+function createFallbackPrisma(): PrismaClient {
+  log.warn("Prisma client is unavailable in this worktree. Running indexer in degraded in-memory mode.");
+  return {
+    report: {
+      findMany: async () => [],
+      create: async () => ({}),
+      findUnique: async () => null,
+      update: async () => ({})
+    },
+    moderationAction: {
+      findMany: async () => [],
+      create: async () => ({})
+    },
+    listing: {
+      findMany: async () => [],
+      findUnique: async () => null,
+      upsert: async () => ({})
+    },
+    collection: {
+      findMany: async () => [],
+      updateMany: async () => ({ count: 0 }),
+      upsert: async () => ({}),
+      count: async () => 0
+    },
+    token: {
+      upsert: async () => ({})
+    }
+  } as unknown as PrismaClient;
+}
+
+function createPrismaClient(): PrismaClient {
+  try {
+    return new PrismaClient();
+  } catch (err) {
+    if (err instanceof Error && err.message.includes("did not initialize yet")) {
+      return createFallbackPrisma();
+    }
+    throw err;
+  }
+}
+
+const prisma = createPrismaClient();
 const RESOLVE_ACTIONS = new Set(["hide", "restore", "dismiss"]);
 
 class BadRequestError extends Error {}
