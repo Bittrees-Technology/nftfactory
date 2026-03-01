@@ -31,6 +31,7 @@ contract SubnameRegistrar is Owned {
     error NotAuthorizedMinter();
     error SubnameActive();
     error InvalidLabel();
+    error RenewalNotRequired();
 
     constructor(address initialOwner, address initialTreasury) Owned(initialOwner) {
         treasury = initialTreasury;
@@ -73,10 +74,10 @@ contract SubnameRegistrar is Owned {
         if (!rec.exists) revert UnknownSubname();
         if (rec.owner != msg.sender) revert NotSubnameOwner();
 
-        // Renewal is required only for subnames with no minted NFTs.
-        if (rec.mintedCount == 0) {
-            rec.expiresAt = block.timestamp + RENEWAL_PERIOD;
-        }
+        // Once a subname has been used for minting, there is no renewal path today.
+        if (rec.mintedCount > 0) revert RenewalNotRequired();
+
+        rec.expiresAt = block.timestamp + RENEWAL_PERIOD;
 
         (bool ok,) = treasury.call{value: msg.value}("");
         require(ok, "TREASURY_TRANSFER_FAILED");

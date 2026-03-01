@@ -171,6 +171,47 @@ contract MarketplaceTest is Test {
         marketplace.buy{value: 0.1 ether}(0);
     }
 
+    function testCreateListingNormalizesStandard() external {
+        vm.startPrank(seller);
+        nft721.mint(seller, 1);
+        nft721.setApprovalForAll(address(marketplace), true);
+        marketplace.createListing(address(nft721), 1, 1, "ERC721", address(0), 0.1 ether, 7);
+        vm.stopPrank();
+
+        (,,,, string memory standard,,,,) = marketplace.listings(0);
+        assertEq(standard, "ERC721");
+    }
+
+    function testCreateListingRevertsForInvalidStandard() external {
+        vm.startPrank(seller);
+        nft721.mint(seller, 1);
+        nft721.setApprovalForAll(address(marketplace), true);
+        vm.expectRevert(Marketplace.UnsupportedStandard.selector);
+        marketplace.createListing(address(nft721), 1, 1, "erc721", address(0), 0.1 ether, 7);
+        vm.stopPrank();
+    }
+
+    function testBuySplitsProtocolFeeForEthSales() external {
+        vm.prank(admin);
+        registry.setProtocolFeeBps(500);
+
+        vm.startPrank(seller);
+        nft721.mint(seller, 1);
+        nft721.setApprovalForAll(address(marketplace), true);
+        marketplace.createListing(address(nft721), 1, 1, "ERC721", address(0), 1 ether, 7);
+        vm.stopPrank();
+
+        uint256 sellerBalanceBefore = seller.balance;
+        uint256 treasuryBalanceBefore = treasury.balance;
+
+        vm.prank(buyer);
+        marketplace.buy{value: 1 ether}(0);
+
+        assertEq(treasury.balance - treasuryBalanceBefore, 0.05 ether);
+        assertEq(seller.balance - sellerBalanceBefore, 0.95 ether);
+        assertEq(nft721.ownerOf(1), buyer);
+    }
+
     function testNonReentrantBuyBlocksNestedBuy() external {
         vm.startPrank(seller);
         nft721.mint(seller, 1);

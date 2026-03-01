@@ -106,4 +106,21 @@ contract SubnameRegistrarTest is Test {
         vm.expectRevert(SubnameRegistrar.InvalidLabel.selector);
         registrar.registerSubname{value: 0.001 ether}("Alice");
     }
+
+    function testRenewSubnameRevertsWhenMintedCountIsPositive() external {
+        vm.deal(creator, 1 ether);
+
+        vm.prank(creator);
+        registrar.registerSubname{value: 0.001 ether}("alice");
+
+        vm.prank(admin);
+        registrar.setAuthorizedMinter(minter, true);
+
+        vm.prank(minter);
+        registrar.recordMint("alice");
+
+        vm.prank(creator);
+        vm.expectRevert(SubnameRegistrar.RenewalNotRequired.selector);
+        registrar.renewSubname{value: 0.001 ether}("alice");
+    }
 }

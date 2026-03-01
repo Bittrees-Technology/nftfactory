@@ -46,4 +46,31 @@ contract NftFactoryRegistryTest is Test {
         vm.expectRevert(NftFactoryRegistry.CreatorContractAlreadyRegistered.selector);
         registry.registerCreatorContract(creator, address(0x1111), "alice", "ERC721", true);
     }
+
+    function testRegisterCreatorContractRevertsForZeroCreator() external {
+        vm.prank(admin);
+        registry.setFactoryAuthorization(factory, true);
+
+        vm.prank(factory);
+        vm.expectRevert(NftFactoryRegistry.InvalidCreator.selector);
+        registry.registerCreatorContract(address(0), address(0x1111), "alice", "ERC721", true);
+    }
+
+    function testRegisterCreatorContractRevertsForZeroContract() external {
+        vm.prank(admin);
+        registry.setFactoryAuthorization(factory, true);
+
+        vm.prank(factory);
+        vm.expectRevert(NftFactoryRegistry.InvalidCreatorContract.selector);
+        registry.registerCreatorContract(creator, address(0), "alice", "ERC721", true);
+    }
+
+    function testRegisterCreatorContractRevertsForInvalidStandard() external {
+        vm.prank(admin);
+        registry.setFactoryAuthorization(factory, true);
+
+        vm.prank(factory);
+        vm.expectRevert(NftFactoryRegistry.InvalidStandard.selector);
+        registry.registerCreatorContract(creator, address(0x1111), "alice", "erc721", true);
+    }
 }

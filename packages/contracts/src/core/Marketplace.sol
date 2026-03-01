@@ -86,7 +86,7 @@ contract Marketplace is Owned {
         if (price == 0) revert InvalidPrice();
         if (durationDays == 0 || durationDays > MAX_LISTING_DURATION_DAYS) revert InvalidDuration();
 
-        bytes32 key = keccak256(bytes(standard));
+        bytes32 key = _standardKey(standard);
         if (key == keccak256("ERC721")) {
             if (amount != 1) revert InvalidAmount();
             if (IERC721Lite(nft).ownerOf(tokenId) != msg.sender) revert NotSeller();
@@ -105,7 +105,7 @@ contract Marketplace is Owned {
             nft: nft,
             tokenId: tokenId,
             amount: amount,
-            standard: standard,
+            standard: key == keccak256("ERC721") ? "ERC721" : "ERC1155",
             paymentToken: paymentToken,
             price: price,
             expiresAt: expiresAt,
@@ -133,35 +133,54 @@ contract Marketplace is Owned {
                 || blockedCollection[listing.nft]
         ) revert Sanctioned();
 
-        bytes32 key = keccak256(bytes(listing.standard));
+        bytes32 key = _standardKey(listing.standard);
         if (key == keccak256("ERC721")) {
             if (!IERC721Lite(listing.nft).isApprovedForAll(listing.seller, address(this))) revert NotApproved();
-        } else if (key == keccak256("ERC1155")) {
-            if (!IERC1155Lite(listing.nft).isApprovedForAll(listing.seller, address(this))) revert NotApproved();
         } else {
-            revert UnsupportedStandard();
+            if (!IERC1155Lite(listing.nft).isApprovedForAll(listing.seller, address(this))) revert NotApproved();
         }
 
         listing.active = false;
 
+        uint256 protocolFee = _protocolFee(listing.price);
+        uint256 sellerProceeds = listing.price - protocolFee;
+        address feeTreasury = registry.treasury();
+
         if (listing.paymentToken == address(0)) {
             if (msg.value != listing.price) revert PaymentMismatch();
-            (bool ok,) = listing.seller.call{value: listing.price}("");
+            if (protocolFee > 0) {
+                (bool feeOk,) = feeTreasury.call{value: protocolFee}("");
+                require(feeOk, "FEE_TRANSFER_FAILED");
+            }
+            (bool ok,) = listing.seller.call{value: sellerProceeds}("");
             require(ok, "ETH_TRANSFER_FAILED");
         } else {
             if (msg.value != 0) revert PaymentMismatch();
-            bool ok = IERC20(listing.paymentToken).transferFrom(msg.sender, listing.seller, listing.price);
+            if (protocolFee > 0) {
+                bool feeOk = IERC20(listing.paymentToken).transferFrom(msg.sender, feeTreasury, protocolFee);
+                require(feeOk, "ERC20_FEE_TRANSFER_FAILED");
+            }
+            bool ok = IERC20(listing.paymentToken).transferFrom(msg.sender, listing.seller, sellerProceeds);
             require(ok, "ERC20_TRANSFER_FAILED");
         }
 
         if (key == keccak256("ERC721")) {
             IERC721Lite(listing.nft).safeTransferFrom(listing.seller, msg.sender, listing.tokenId);
-        } else if (key == keccak256("ERC1155")) {
-            IERC1155Lite(listing.nft).safeTransferFrom(listing.seller, msg.sender, listing.tokenId, listing.amount, "");
         } else {
-            revert UnsupportedStandard();
+            IERC1155Lite(listing.nft).safeTransferFrom(listing.seller, msg.sender, listing.tokenId, listing.amount, "");
         }
 
         emit Sale(listingId, msg.sender, listing.price, listing.paymentToken);
+    }
+
+    function _standardKey(string memory standard) internal pure returns (bytes32 key) {
+        key = keccak256(bytes(standard));
+        if (key != keccak256("ERC721") && key != keccak256("ERC1155")) revert UnsupportedStandard();
+    }
+
+    function _protocolFee(uint256 price) internal view returns (uint256) {
+        uint256 feeBps = registry.protocolFeeBps();
+        if (feeBps == 0) return 0;
+        return (price * feeBps) / 10_000;
     }
 }

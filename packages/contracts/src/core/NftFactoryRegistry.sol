@@ -35,6 +35,9 @@ contract NftFactoryRegistry is Owned {
     error FeeTooHigh();
     error NotAuthorizedFactory();
     error CreatorContractAlreadyRegistered();
+    error InvalidCreator();
+    error InvalidCreatorContract();
+    error InvalidStandard();
 
     constructor(address initialOwner, address initialTreasury) Owned(initialOwner) {
         treasury = initialTreasury;
@@ -69,6 +72,9 @@ contract NftFactoryRegistry is Owned {
         bool isFactoryCreated
     ) external {
         if (!authorizedFactory[msg.sender] && msg.sender != owner) revert NotAuthorizedFactory();
+        if (creator == address(0)) revert InvalidCreator();
+        if (contractAddress == address(0)) revert InvalidCreatorContract();
+        _validateStandard(standard);
         if (creatorContractRegistered[creator][contractAddress]) revert CreatorContractAlreadyRegistered();
 
         creatorContractRegistered[creator][contractAddress] = true;
@@ -88,5 +94,10 @@ contract NftFactoryRegistry is Owned {
 
     function creatorContracts(address creator) external view returns (CreatorRecord[] memory) {
         return creators[creator];
+    }
+
+    function _validateStandard(string calldata standard) internal pure {
+        bytes32 key = keccak256(bytes(standard));
+        if (key != keccak256("ERC721") && key != keccak256("ERC1155")) revert InvalidStandard();
     }
 }
