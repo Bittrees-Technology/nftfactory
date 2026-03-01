@@ -51,14 +51,12 @@ export default function ProfileSelectorClient() {
   const router = useRouter();
   const { address, isConnected } = useAccount();
   const [profiles, setProfiles] = useState<ApiProfileRecord[]>([]);
-  const [selectedSlug, setSelectedSlug] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [note, setNote] = useState("");
 
   useEffect(() => {
     if (!address || !isConnected) {
       setProfiles([]);
-      setSelectedSlug("");
       setNote("");
       return;
     }
@@ -85,13 +83,6 @@ export default function ProfileSelectorClient() {
         const nextProfiles = dedupeProfiles([...linkedProfiles, ...derivedProfiles]);
         setProfiles(nextProfiles);
 
-        if (nextProfiles.length === 1) {
-          router.replace(`/profile/${encodeURIComponent(nextProfiles[0].slug)}`);
-          return;
-        }
-
-        setSelectedSlug(nextProfiles[0]?.slug || "");
-
         if (nextProfiles.length === 0) {
           if (profileResult.status === "rejected" && collectionResult.status === "rejected") {
             const reason =
@@ -110,13 +101,17 @@ export default function ProfileSelectorClient() {
         if (profileResult.status === "rejected" && collectionResult.status === "fulfilled") {
           const reason =
             profileResult.reason instanceof Error ? profileResult.reason.message : "Direct profile lookup failed";
-          setNote(`Loaded profile options from owned collections because direct profile lookup failed (${reason}).`);
+          setNote(`Loaded the profile from owned collection data because direct profile lookup failed (${reason}).`);
+          return;
+        }
+
+        if (nextProfiles.length > 1) {
+          setNote("Multiple legacy profile records were found for this wallet. Showing the primary profile.");
         }
       })
       .catch((err) => {
         if (!cancelled) {
           setProfiles([]);
-          setSelectedSlug("");
           const reason = err instanceof Error ? err.message : "Indexer request failed";
           setNote(`Profile lookup is unavailable right now (${reason}). Open setup to continue with manual creator onboarding.`);
         }
@@ -128,12 +123,13 @@ export default function ProfileSelectorClient() {
     return () => {
       cancelled = true;
     };
-  }, [address, isConnected, router]);
+  }, [address, isConnected]);
 
-  function openSelectedProfile(): void {
-    if (!selectedSlug) return;
-    router.push(`/profile/${encodeURIComponent(selectedSlug)}`);
+  function openProfile(slug: string): void {
+    router.push(`/profile/${encodeURIComponent(slug)}`);
   }
+
+  const primaryProfile = profiles[0] || null;
 
   return (
     <section className="wizard">
@@ -143,27 +139,13 @@ export default function ProfileSelectorClient() {
           <p className="hint">Connect a wallet from the header to load linked creator profiles.</p>
         ) : isLoading ? (
           <p className="hint">Loading linked profiles...</p>
-        ) : profiles.length > 1 ? (
-          <>
-            <label>
-              Linked profiles
-              <select value={selectedSlug} onChange={(e) => setSelectedSlug(e.target.value)}>
-                {profiles.map((profile) => (
-                  <option key={`${profile.slug}-${profile.source}-${profile.collectionAddress || "none"}`} value={profile.slug}>
-                    {profile.fullName}
-                  </option>
-                ))}
-              </select>
-            </label>
+        ) : primaryProfile ? (
+          <div className="stack">
+            <p className="hint">Linked profile</p>
+            <strong>{primaryProfile.fullName}</strong>
             <div className="row">
-              <button type="button" onClick={openSelectedProfile} disabled={!selectedSlug}>Open Profile</button>
-              <Link href="/profile/setup" className="ctaLink secondaryLink">Open creator setup</Link>
+              <button type="button" onClick={() => openProfile(primaryProfile.slug)}>Open Profile</button>
             </div>
-          </>
-        ) : profiles.length === 1 ? (
-          <div className="row">
-            <p className="hint">Redirecting to {profiles[0].fullName}...</p>
-            <Link href={`/profile/${encodeURIComponent(profiles[0].slug)}`} className="ctaLink secondaryLink">Open now</Link>
           </div>
         ) : (
           <div className="row">
