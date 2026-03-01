@@ -23,6 +23,7 @@ import {
 import { getContractsConfig } from "../../lib/contracts";
 import { getAppChain, getExplorerBaseUrl } from "../../lib/chains";
 import { fetchCollectionsByOwner, fetchProfileResolution } from "../../lib/indexerApi";
+import { verifyOwnedCollectionsOnChain } from "../../lib/onchainCollections";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -158,6 +159,7 @@ export default function MintClient({
   const [customCollectionAddress, setCustomCollectionAddress] = useState("");
   const [collectionSelector, setCollectionSelector] = useState<"saved" | "manual">("saved");
   const [knownCollections, setKnownCollections] = useState<KnownCollection[]>([]);
+  const [verifiedKnownCollections, setVerifiedKnownCollections] = useState<KnownCollection[]>([]);
   // Whether to show the inline "deploy new collection" sub-form
   const [showDeployForm, setShowDeployForm] = useState(false);
   const [selectedCollectionName, setSelectedCollectionName] = useState("");
@@ -259,6 +261,7 @@ export default function MintClient({
   useEffect(() => {
     if (!account || typeof window === "undefined") {
       setKnownCollections([]);
+      setVerifiedKnownCollections([]);
       return;
     }
     const raw = window.localStorage.getItem(storageKey(account));
@@ -274,6 +277,33 @@ export default function MintClient({
       setKnownCollections([]);
     }
   }, [account]);
+
+  useEffect(() => {
+    if (!account) {
+      setVerifiedKnownCollections([]);
+      return;
+    }
+    if (knownCollections.length === 0 || !publicClient) {
+      setVerifiedKnownCollections([]);
+      return;
+    }
+
+    let cancelled = false;
+    void verifyOwnedCollectionsOnChain(publicClient, account, knownCollections).then((verified) => {
+      if (cancelled) return;
+      setVerifiedKnownCollections(
+        verified.map((item) => ({
+          contractAddress: item.contractAddress,
+          ensSubname: item.ensSubname,
+          ownerAddress: item.ownerAddress
+        }))
+      );
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [account, knownCollections, publicClient]);
 
   useEffect(() => {
     if (!account) return;
@@ -403,14 +433,14 @@ export default function MintClient({
 
   useEffect(() => {
     if (mintMode !== "custom") return;
-    if (knownCollections.length === 0) {
+    if (verifiedKnownCollections.length === 0) {
       setCollectionSelector("manual");
       return;
     }
     if (collectionSelector === "saved" && !customCollectionAddress) {
-      setCustomCollectionAddress(knownCollections[0].contractAddress);
+      setCustomCollectionAddress(verifiedKnownCollections[0].contractAddress);
     }
-  }, [collectionSelector, customCollectionAddress, knownCollections, mintMode]);
+  }, [collectionSelector, customCollectionAddress, mintMode, verifiedKnownCollections]);
 
   useEffect(() => {
     if (!manageAddress && isAddress(customCollectionAddress)) {
@@ -450,14 +480,14 @@ export default function MintClient({
   }, [customCollectionAddress, mintMode, publicClient]);
 
   useEffect(() => {
-    if (knownCollections.length === 0) {
+    if (verifiedKnownCollections.length === 0) {
       setManageSelector("manual");
       return;
     }
     if (manageSelector === "saved" && !manageAddress) {
-      setManageAddress(knownCollections[0].contractAddress);
+      setManageAddress(verifiedKnownCollections[0].contractAddress);
     }
-  }, [knownCollections, manageAddress, manageSelector]);
+  }, [manageAddress, manageSelector, verifiedKnownCollections]);
 
   // ── Utilities ─────────────────────────────────────────────────────────────
 
@@ -773,10 +803,10 @@ export default function MintClient({
     }
   }
 
-  const selectedKnownCollection = knownCollections.find(
+  const selectedKnownCollection = verifiedKnownCollections.find(
     (item) => item.contractAddress.toLowerCase() === customCollectionAddress.toLowerCase()
   ) || null;
-  const selectedManageCollection = knownCollections.find(
+  const selectedManageCollection = verifiedKnownCollections.find(
     (item) => item.contractAddress.toLowerCase() === manageAddress.toLowerCase()
   ) || null;
 
@@ -925,18 +955,18 @@ export default function MintClient({
                       value={collectionSelector}
                       onChange={(e) => setCollectionSelector(e.target.value as "saved" | "manual")}
                     >
-                      {knownCollections.length > 0 ? <option value="saved">Select one of my known collections</option> : null}
+                      {verifiedKnownCollections.length > 0 ? <option value="saved">Select one of my on-chain collections</option> : null}
                       <option value="manual">Enter collection address manually</option>
                     </select>
                   </label>
-                  {collectionSelector === "saved" && knownCollections.length > 0 ? (
+                  {collectionSelector === "saved" && verifiedKnownCollections.length > 0 ? (
                     <label>
                       Creator collection
                       <select
                         value={customCollectionAddress}
                         onChange={(e) => setCustomCollectionAddress(e.target.value)}
                       >
-                        {knownCollections.map((item) => (
+                        {verifiedKnownCollections.map((item) => (
                           <option key={item.contractAddress} value={item.contractAddress}>
                             {formatCollectionIdentity(item.ensSubname) || shortenAddress(item.contractAddress)} - {shortenAddress(item.contractAddress)}
                           </option>
@@ -953,9 +983,9 @@ export default function MintClient({
                       />
                     </label>
                   )}
-                  {knownCollections.length === 0 ? (
+                  {verifiedKnownCollections.length === 0 ? (
                     <p className="hint">
-                      Known collections appear here after you deploy from this wallet or after the app learns them from an ENS-linked profile mapping.
+                      On-chain collections appear here after the app confirms ownership from your wallet. Indexed and cached data only provide candidate addresses.
                     </p>
                   ) : null}
                 </div>
@@ -1325,27 +1355,27 @@ export default function MintClient({
               These actions apply to <strong>CreatorCollection</strong> contracts (the ones deployed via
               the factory). You must be the current <code>owner</code> of the contract to call them.
             </p>
-            {knownCollections.length > 0 ? (
+            {verifiedKnownCollections.length > 0 ? (
               <label>
                 Collection source
                 <select
                   value={manageSelector}
                   onChange={(e) => setManageSelector(e.target.value as "saved" | "manual")}
                 >
-                  <option value="saved">Choose from my saved collections</option>
+                  <option value="saved">Choose from my on-chain collections</option>
                   <option value="manual">Enter an address manually</option>
                 </select>
               </label>
             ) : null}
-            {knownCollections.length > 0 && manageSelector === "saved" ? (
+            {verifiedKnownCollections.length > 0 && manageSelector === "saved" ? (
               <label>
                 Your collection
                 <select
                   value={manageAddress}
                   onChange={(e) => setManageAddress(e.target.value)}
                 >
-                  <option value="">Select a known collection</option>
-                  {knownCollections.map((item) => (
+                  <option value="">Select an on-chain collection</option>
+                  {verifiedKnownCollections.map((item) => (
                     <option key={`manage-${item.contractAddress}`} value={item.contractAddress}>
                       {formatCollectionIdentity(item.ensSubname) || shortenAddress(item.contractAddress)} - {shortenAddress(item.contractAddress)}
                     </option>
@@ -1354,7 +1384,7 @@ export default function MintClient({
               </label>
             ) : (
               <label>
-                {knownCollections.length > 0 ? "Collection contract address" : "Your collection contract address"}
+                {verifiedKnownCollections.length > 0 ? "Collection contract address" : "Your collection contract address"}
                 <input
                   value={manageAddress}
                   onChange={(e) => setManageAddress(e.target.value)}

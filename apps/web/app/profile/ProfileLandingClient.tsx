@@ -16,6 +16,7 @@ import {
   type ApiOwnedCollections,
   type ApiProfileRecord
 } from "../../lib/indexerApi";
+import { verifyOwnedCollectionsOnChain } from "../../lib/onchainCollections";
 
 const SUBNAME_FEE_ETH = "0.001";
 
@@ -62,6 +63,7 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
   const [profiles, setProfiles] = useState<ApiProfileRecord[]>([]);
   const [selectedProfileSlug, setSelectedProfileSlug] = useState("");
   const [collections, setCollections] = useState<ApiOwnedCollections["collections"]>([]);
+  const [verifiedCollections, setVerifiedCollections] = useState<ApiOwnedCollections["collections"]>([]);
   const [selectedCollection, setSelectedCollection] = useState("");
   const [tagline, setTagline] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -123,6 +125,38 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
       cancelled = true;
     };
   }, [address, isConnected]);
+
+  useEffect(() => {
+    if (!address) {
+      setVerifiedCollections([]);
+      return;
+    }
+    if (collections.length === 0 || !publicClient) {
+      setVerifiedCollections([]);
+      return;
+    }
+
+    let cancelled = false;
+    void verifyOwnedCollectionsOnChain(publicClient, address, collections).then((verified) => {
+      if (cancelled) return;
+      const nextCollections = verified.map((item) => ({
+        ensSubname: item.ensSubname,
+        contractAddress: item.contractAddress,
+        ownerAddress: item.ownerAddress
+      }));
+      setVerifiedCollections(nextCollections);
+      setSelectedCollection((current) => {
+        if (current && nextCollections.some((item) => item.contractAddress.toLowerCase() === current.toLowerCase())) {
+          return current;
+        }
+        return nextCollections[0]?.contractAddress || "";
+      });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [address, collections, publicClient]);
 
   useEffect(() => {
     if (!slug) {
@@ -356,13 +390,18 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
             Linked collection (optional)
             <select value={selectedCollection} onChange={(e) => setSelectedCollection(e.target.value)}>
               <option value="">No collection linked</option>
-              {collections.map((collection) => (
+              {verifiedCollections.map((collection) => (
                 <option key={collection.contractAddress} value={collection.contractAddress}>
                   {collection.ensSubname?.trim() || collection.contractAddress}
                 </option>
               ))}
             </select>
           </label>
+          {isConnected && verifiedCollections.length === 0 ? (
+            <p className="hint">
+              No owned collections are confirmed on-chain for this wallet yet. Indexed and cached data may still suggest candidates, but only on-chain-owned collections appear here.
+            </p>
+          ) : null}
           <div className="selectionCard">
             <span className="flowLabel">Wallet Status</span>
             <p className="hint">{address || "Connect a wallet from the header to link a creator profile."}</p>

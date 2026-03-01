@@ -82,7 +82,9 @@ The current product routes are:
 
 ## Indexer layer
 
-The indexer is the authoritative application data source for:
+The blockchain is the source of truth for ownership, collection state, and contract-level facts.
+
+The indexer is the primary application mirror of that on-chain state and is the main service layer for:
 
 - creator profile resolution
 - owner-based collection lookup
@@ -107,17 +109,25 @@ The current build intentionally supports degraded local operation:
 
 - if Prisma is unavailable, the indexer can still boot in a reduced mode
 - profile and moderator registries can be persisted in JSON-backed local files
-- local UI caches remain a fallback, not the primary source of truth
+- local UI caches remain a convenience fallback, not the primary source of truth
+
+These fallbacks exist to keep local development moving. They do not replace chain truth.
 
 ## Data-source strategy
 
 For most user-facing dropdowns and selectors, the intended precedence is:
 
-1. indexer-backed data
-2. local cached data
-3. targeted on-chain reads only for confirmation or direct contract actions
+1. on-chain reads for ownership and contract-state confirmation
+2. indexer-backed data as the application mirror of chain state
+3. local cached data as a convenience fallback
 
 The browser should not attempt to discover full creator state by scanning the chain directly.
+
+The intended model is:
+
+- use indexed and cached data to discover likely candidates quickly
+- use the chain to confirm the currently relevant collection, owner, or contract fact
+- treat Prisma and local cache as materialized views of blockchain state, not as stronger truth than the chain
 
 ## Related pages
 
