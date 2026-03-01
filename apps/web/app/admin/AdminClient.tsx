@@ -149,33 +149,6 @@ export default function AdminClient() {
 
   return (
     <section className="wizard">
-      <div className="heroCard">
-        <p className="eyebrow">Operations</p>
-        <h1>Admin</h1>
-        <p className="heroText">
-          Moderation console for reports, hidden listings, and action history. This page is operational
-          tooling and depends on a reachable indexer plus valid admin credentials for write actions.
-        </p>
-        <div className="row">
-          <Link href="/discover" className="ctaLink secondaryLink">Review the public feed</Link>
-          <Link href="/profile" className="ctaLink secondaryLink">Check creator profiles</Link>
-        </div>
-        <div className="flowStrip">
-          <div className="flowCell">
-            <span className="flowLabel">Load</span>
-            <p className="hint">Start by confirming the moderation API is reachable and returning live state.</p>
-          </div>
-          <div className="flowCell">
-            <span className="flowLabel">Review</span>
-            <p className="hint">Work from the open queue first, then inspect hidden listings and action history.</p>
-          </div>
-          <div className="flowCell">
-            <span className="flowLabel">Act</span>
-            <p className="hint">Hide, restore, or dismiss only when admin credentials are present and intentional.</p>
-          </div>
-        </div>
-      </div>
-
       <div className="card formCard">
         <h3>Control Surface</h3>
         <p className="hint">

@@ -464,29 +464,6 @@ export default function ListClient() {
 
   return (
     <section className="wizard">
-      <div className="heroCard">
-        <p className="eyebrow">Seller Flow</p>
-        <h1>List NFT</h1>
-        <p className="heroText">
-          Fixed-price selling route for assets you already hold. Connect the seller wallet, create a listing,
-          then manage live inventory from the same page without jumping between routes.
-        </p>
-        <div className="flowStrip">
-          <div className="flowCell">
-            <span className="flowLabel">1. Connect seller</span>
-            <p className="hint">Use the shared header wallet control to choose the wallet that owns the NFT.</p>
-          </div>
-          <div className="flowCell">
-            <span className="flowLabel">2. Create listing</span>
-            <p className="hint">Approve the marketplace, then publish a sale for the asset you already hold.</p>
-          </div>
-          <div className="flowCell">
-            <span className="flowLabel">3. Manage inventory</span>
-            <p className="hint">Refresh, cancel, inspect, or buy live listings once they are active.</p>
-          </div>
-        </div>
-      </div>
-
       <form className="wizard" onSubmit={onSubmit}>
         <div className="card formCard">
           <h3>1. Wallet Status</h3>

@@ -1103,7 +1103,7 @@ export default function MintClient({
               </label>
             )}
             <div className="selectionCard">
-              <span className="flowLabel">Media Inputs</span>
+              <span className="detailLabel">Media Inputs</span>
               <label>
                 Upload image
                 <input type="file" accept="image/*" onChange={(e) => setImageFile(e.target.files?.[0] ?? null)} />
@@ -1132,7 +1132,7 @@ export default function MintClient({
               </div>
             )}
             <div className="selectionCard">
-              <span className="flowLabel">Metadata Options</span>
+              <span className="detailLabel">Metadata Options</span>
               <label className="inlineCheck">
                 <input
                   type="checkbox"
@@ -1244,7 +1244,7 @@ export default function MintClient({
             <TxStatus state={mintTx} />
             {(uploadReceipt.metadataUri || mintTx.hash) ? (
               <div className="selectionCard">
-                <span className="flowLabel">Publish Receipts</span>
+                <span className="detailLabel">Publish Receipts</span>
                 <div className="compactList">
                   {mintTx.hash && toExplorerTx(getContractsConfig().chainId, mintTx.hash) ? (
                     <a href={toExplorerTx(getContractsConfig().chainId, mintTx.hash)!} target="_blank" rel="noreferrer">

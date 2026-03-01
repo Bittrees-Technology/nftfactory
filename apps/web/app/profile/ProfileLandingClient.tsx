@@ -317,34 +317,6 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
 
   return (
     <section className="wizard">
-      <div className="heroCard">
-        <p className="eyebrow">Creator Toolkit</p>
-        <h1>Profile Setup</h1>
-        <p className="heroText">
-          Build a creator identity around ENS: link an existing ENS name, link an ENS subdomain, or create
-          a new nftfactory.eth subname. Then publish from the same profile and route the public storefront
-          through a single creator page.
-        </p>
-        <div className="row">
-          <Link href="/discover" className="ctaLink secondaryLink">Browse marketplace first</Link>
-          <Link href="/mint?view=mint&collection=custom" className="ctaLink secondaryLink">Deploy a creator collection</Link>
-        </div>
-        <div className="flowStrip">
-          <div className="flowCell">
-            <span className="flowLabel">1. Claim</span>
-            <p className="hint">Link an ENS name, link an ENS subdomain, or create a new nftfactory.eth subname for this identity.</p>
-          </div>
-          <div className="flowCell">
-            <span className="flowLabel">2. Publish</span>
-            <p className="hint">Use the linked identity in the mint flow so the creator profile and storefront stay in sync.</p>
-          </div>
-          <div className="flowCell">
-            <span className="flowLabel">3. Open</span>
-            <p className="hint">Once linked, the profile route becomes the creator page and can evolve into a richer public layout.</p>
-          </div>
-        </div>
-      </div>
-
       <div className="card formCard">
         <h3>Select Profile</h3>
         {!isConnected ? (
@@ -403,7 +375,7 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
             </p>
           ) : null}
           <div className="selectionCard">
-            <span className="flowLabel">Wallet Status</span>
+            <span className="detailLabel">Wallet Status</span>
             <p className="hint">{address || "Connect a wallet from the header to link a creator profile."}</p>
             <p className="hint">Target network: {appChain.name}</p>
             {wrongNetwork ? (

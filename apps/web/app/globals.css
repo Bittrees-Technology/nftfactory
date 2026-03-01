@@ -477,6 +477,13 @@ nav {
   gap: 12px;
 }
 
+.profileBannerShell {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 14px;
+}
+
 .profileBannerFrame {
   border: 1px solid #ead9c5;
   border-radius: 14px;
@@ -571,6 +578,34 @@ nav {
   display: grid;
   gap: 10px;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.detailGrid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.detailItem {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid #ead9c5;
+  border-radius: 12px;
+  background: #fffaf3;
+}
+
+.detailLabel {
+  color: #7f220f;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.detailValue {
+  margin: 0;
+  color: #4b4138;
 }
 
 .profileListingRow {
@@ -757,15 +792,6 @@ button:disabled {
   line-height: 1.6;
 }
 
-.wikiToc {
-  display: grid;
-  gap: 10px;
-  padding: 12px 14px;
-  border: 1px solid #ead9c5;
-  border-radius: 12px;
-  background: #fff6ea;
-}
-
 .wikiTocTitle {
   margin: 0;
   color: #7f220f;
@@ -778,6 +804,12 @@ button:disabled {
 .wikiTocList {
   display: grid;
   gap: 8px;
+}
+
+.wikiTocInline {
+  display: grid;
+  gap: 10px;
+  padding-top: 4px;
 }
 
 .wikiTocLink {

@@ -221,40 +221,17 @@ export default function ProfileClient({ name }: { name: string }) {
 
   return (
     <section className="wizard">
-      <div className="heroCard" style={heroStyle}>
-        <p className="eyebrow">Creator Profile</p>
-        <h1>{creatorDisplayName}</h1>
-        <p className="sectionLead">{creatorTagline}</p>
-        <p className="heroText">{creatorBio}</p>
-        <p className="hint">{primaryProfileName}</p>
-        {primaryProfile?.bannerUrl ? (
-          <div className="profileBannerFrame">
-            <img src={primaryProfile.bannerUrl} alt={`${creatorDisplayName} banner`} className="profileBannerImage" />
-          </div>
-        ) : null}
-        <div className="row">
-          <Link href="/discover" className="ctaLink secondaryLink">Browse marketplace</Link>
-          <Link href={`/mint?view=mint&collection=shared&profile=${encodeURIComponent(mintProfileParam)}`} className="ctaLink secondaryLink">Mint with this identity</Link>
-        </div>
-        <div className="flowStrip">
-          <div className="flowCell">
-            <span className="flowLabel">Resolve</span>
-            <p className="hint">Start with ENS mapping, then fall back to a manual wallet if needed.</p>
-          </div>
-          <div className="flowCell">
-            <span className="flowLabel">Inspect</span>
-            <p className="hint">Review linked creator collections, wallets, and active storefront listings.</p>
-          </div>
-          <div className="flowCell">
-            <span className="flowLabel">Continue</span>
-            <p className="hint">Jump back into minting or discovery once the creator identity is verified.</p>
-          </div>
-        </div>
-      </div>
-
       <div className="profileShell">
         <section className="card profileIdentityCard">
           <p className="eyebrow">Profile Card</p>
+          <div className="profileBannerShell" style={heroStyle}>
+            {primaryProfile?.bannerUrl ? (
+              <div className="profileBannerFrame">
+                <img src={primaryProfile.bannerUrl} alt={`${creatorDisplayName} banner`} className="profileBannerImage" />
+              </div>
+            ) : null}
+            <p className="hint">{primaryProfileName}</p>
+          </div>
           <div className="profileIdentityHead">
             {primaryProfile?.avatarUrl ? (
               <img src={primaryProfile.avatarUrl} alt={`${creatorDisplayName} avatar`} className="profileAvatarImage" />
@@ -324,22 +301,22 @@ export default function ProfileClient({ name }: { name: string }) {
               <p className="sectionLead">
                 {featuredListing.standard} token #{featuredListing.tokenId.toString()} listed for {formatListingPrice(featuredListing)}.
               </p>
-              <div className="profileStatGrid">
-                <div className="flowCell">
-                  <span className="flowLabel">Collection</span>
-                  <p className="hint mono">{truncateAddress(featuredListing.nft)}</p>
+              <div className="detailGrid">
+                <div className="detailItem">
+                  <span className="detailLabel">Collection</span>
+                  <p className="detailValue mono">{truncateAddress(featuredListing.nft)}</p>
                 </div>
-                <div className="flowCell">
-                  <span className="flowLabel">Seller</span>
-                  <p className="hint mono">{truncateAddress(featuredListing.seller)}</p>
+                <div className="detailItem">
+                  <span className="detailLabel">Seller</span>
+                  <p className="detailValue mono">{truncateAddress(featuredListing.seller)}</p>
                 </div>
-                <div className="flowCell">
-                  <span className="flowLabel">Amount</span>
-                  <p className="hint">{featuredListing.amount.toString()}</p>
+                <div className="detailItem">
+                  <span className="detailLabel">Amount</span>
+                  <p className="detailValue">{featuredListing.amount.toString()}</p>
                 </div>
-                <div className="flowCell">
-                  <span className="flowLabel">Pricing</span>
-                  <p className="hint">{featuredListing.paymentToken === "0x0000000000000000000000000000000000000000" ? "ETH" : "ERC-20"}</p>
+                <div className="detailItem">
+                  <span className="detailLabel">Pricing</span>
+                  <p className="detailValue">{featuredListing.paymentToken === "0x0000000000000000000000000000000000000000" ? "ETH" : "ERC-20"}</p>
                 </div>
               </div>
             </>
@@ -363,22 +340,22 @@ export default function ProfileClient({ name }: { name: string }) {
           <p className="eyebrow">About</p>
           <h3>Creator Wall</h3>
           <p className="sectionLead">{creatorBio}</p>
-          <div className="profileStatGrid">
-            <div className="flowCell">
-              <span className="flowLabel">Primary Route</span>
-              <p className="hint mono">/profile/{name}</p>
+          <div className="detailGrid">
+            <div className="detailItem">
+              <span className="detailLabel">Primary Route</span>
+              <p className="detailValue mono">/profile/{name}</p>
             </div>
-            <div className="flowCell">
-              <span className="flowLabel">Identity Count</span>
-              <p className="hint">{linkedProfiles.length}</p>
+            <div className="detailItem">
+              <span className="detailLabel">Identity Count</span>
+              <p className="detailValue">{linkedProfiles.length}</p>
             </div>
-            <div className="flowCell">
-              <span className="flowLabel">Live Listings</span>
-              <p className="hint">{stats.listings}</p>
+            <div className="detailItem">
+              <span className="detailLabel">Live Listings</span>
+              <p className="detailValue">{stats.listings}</p>
             </div>
-            <div className="flowCell">
-              <span className="flowLabel">Collections</span>
-              <p className="hint">{stats.uniqueCollections}</p>
+            <div className="detailItem">
+              <span className="detailLabel">Collections</span>
+              <p className="detailValue">{stats.uniqueCollections}</p>
             </div>
           </div>
         </section>
@@ -409,24 +386,24 @@ export default function ProfileClient({ name }: { name: string }) {
                 ? `${pinnedCollection.ensSubname}${pinnedCollection.ensSubname.includes(".") ? "" : ".nftfactory.eth"}`
                 : "Primary creator collection"}
             </p>
-            <div className="profileStatGrid">
-              <div className="flowCell">
-                <span className="flowLabel">Contract</span>
+            <div className="detailGrid">
+              <div className="detailItem">
+                <span className="detailLabel">Contract</span>
                 {toExplorerAddress(pinnedCollection.contractAddress, config.chainId) ? (
-                  <a href={toExplorerAddress(pinnedCollection.contractAddress, config.chainId)!} target="_blank" rel="noreferrer" className="hint mono">
+                  <a href={toExplorerAddress(pinnedCollection.contractAddress, config.chainId)!} target="_blank" rel="noreferrer" className="detailValue mono">
                     {pinnedCollection.contractAddress}
                   </a>
                 ) : (
-                  <p className="hint mono">{pinnedCollection.contractAddress}</p>
+                  <p className="detailValue mono">{pinnedCollection.contractAddress}</p>
                 )}
               </div>
-              <div className="flowCell">
-                <span className="flowLabel">Owner</span>
-                <p className="hint mono">{truncateAddress(pinnedCollection.ownerAddress)}</p>
+              <div className="detailItem">
+                <span className="detailLabel">Owner</span>
+                <p className="detailValue mono">{truncateAddress(pinnedCollection.ownerAddress)}</p>
               </div>
-              <div className="flowCell">
-                <span className="flowLabel">Live Listings</span>
-                <p className="hint">{pinnedCollection.activeListings}</p>
+              <div className="detailItem">
+                <span className="detailLabel">Live Listings</span>
+                <p className="detailValue">{pinnedCollection.activeListings}</p>
               </div>
             </div>
           </>
@@ -531,22 +508,22 @@ export default function ProfileClient({ name }: { name: string }) {
           This is the public identity layer that powers the storefront. It combines linked names, wallet ownership,
           and indexed creator collections so the same profile can feel like a personal landing page.
         </p>
-        <div className="profileStatGrid">
-          <div className="flowCell">
-            <span className="flowLabel">Primary Name</span>
-            <p className="hint">{primaryProfileName}</p>
+        <div className="detailGrid">
+          <div className="detailItem">
+            <span className="detailLabel">Primary Name</span>
+            <p className="detailValue">{primaryProfileName}</p>
           </div>
-          <div className="flowCell">
-            <span className="flowLabel">Linked Identities</span>
-            <p className="hint">{linkedProfiles.length || 0}</p>
+          <div className="detailItem">
+            <span className="detailLabel">Linked Identities</span>
+            <p className="detailValue">{linkedProfiles.length || 0}</p>
           </div>
-          <div className="flowCell">
-            <span className="flowLabel">Wallet Mappings</span>
-            <p className="hint">{resolvedSellerAddresses.length}</p>
+          <div className="detailItem">
+            <span className="detailLabel">Wallet Mappings</span>
+            <p className="detailValue">{resolvedSellerAddresses.length}</p>
           </div>
-          <div className="flowCell">
-            <span className="flowLabel">Creator Collections</span>
-            <p className="hint">{collectionSummaries.length}</p>
+          <div className="detailItem">
+            <span className="detailLabel">Creator Collections</span>
+            <p className="detailValue">{collectionSummaries.length}</p>
           </div>
         </div>
       </div>

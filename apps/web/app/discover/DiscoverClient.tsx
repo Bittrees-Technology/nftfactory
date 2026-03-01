@@ -483,35 +483,6 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
 
   return (
     <section className="wizard">
-      {mode === "mod" ? (
-        <div className="heroCard">
-          <p className="eyebrow">Moderation</p>
-          <h1>Mod</h1>
-          <p className="heroText">
-            Review the active listing stream, verify creator and contract context, and submit moderation
-            reports without leaving the marketplace feed.
-          </p>
-          <div className="row">
-            <Link href="/discover" className="ctaLink secondaryLink">Open the mint feed</Link>
-            <Link href="/admin" className="ctaLink secondaryLink">Open admin actions</Link>
-          </div>
-          <div className="flowStrip">
-            <div className="flowCell">
-              <span className="flowLabel">Inspect</span>
-              <p className="hint">Review fresh listings as they appear and use filters to narrow the queue.</p>
-            </div>
-            <div className="flowCell">
-              <span className="flowLabel">Verify</span>
-              <p className="hint">Open creator profiles and contract links before acting on suspicious listings.</p>
-            </div>
-            <div className="flowCell">
-              <span className="flowLabel">Report</span>
-              <p className="hint">Submit a report from the same feed when a listing needs review.</p>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
       <div className="card formCard">
         <h3>{mode === "feed" ? "Mint Feed" : "Moderation Feed"}</h3>
         <p className="hint">

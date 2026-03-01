@@ -32,9 +32,9 @@ export default async function WikiPage(props: Props) {
             </div>
           </div>
           {headings.length > 0 ? (
-            <div className="wikiToc">
-              <p className="wikiTocTitle">On This Page</p>
-              <nav className="wikiTocList">
+            <nav className="wikiTocInline" aria-label="On this page">
+              <span className="wikiTocTitle">On This Page</span>
+              <div className="wikiTocList">
                 {headings.map((heading) => (
                   <a
                     key={heading.id}
@@ -44,8 +44,8 @@ export default async function WikiPage(props: Props) {
                     {heading.text}
                   </a>
                 ))}
-              </nav>
-            </div>
+              </div>
+            </nav>
           ) : null}
           <WikiMarkdown content={page.content} />
         </div>

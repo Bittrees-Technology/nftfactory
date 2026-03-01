@@ -62,15 +62,6 @@ export default function ProfileSelectorClient() {
 
   return (
     <section className="wizard">
-      <div className="heroCard">
-        <p className="eyebrow">Creator Profiles</p>
-        <h1>Select Profile</h1>
-        <p className="heroText">
-          Choose an existing creator identity for this wallet, or continue into setup to link an ENS
-          name, link an ENS subdomain, or create a new nftfactory.eth identity.
-        </p>
-      </div>
-
       <div className="card formCard">
         <h3>Select Profile</h3>
         {!isConnected ? (
