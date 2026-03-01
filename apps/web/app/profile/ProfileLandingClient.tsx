@@ -37,6 +37,13 @@ function normalizeSlug(value: string): string {
   return normalizeLabel(first);
 }
 
+function normalizeIdentityFullName(value: string, mode: "ens" | "external-subname" | "nftfactory-subname"): string {
+  const raw = String(value || "").trim().toLowerCase();
+  if (!raw) return "";
+  if (mode === "nftfactory-subname") return `${normalizeLabel(raw)}.nftfactory.eth`;
+  return raw;
+}
+
 function isAddress(value: string): value is `0x${string}` {
   return /^0x[a-fA-F0-9]{40}$/.test(value);
 }
@@ -71,6 +78,7 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
   const explorerBase = getExplorerBaseUrl(config.chainId);
   const wrongNetwork = isConnected && chainId !== config.chainId;
   const slug = normalizeSlug(identityName);
+  const normalizedFullName = normalizeIdentityFullName(identityName, identityMode);
 
   useEffect(() => {
     if (!address || !isConnected) {
@@ -147,7 +155,7 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
   }, [address, collections, publicClient]);
 
   useEffect(() => {
-    if (!slug) {
+    if (!slug || !normalizedFullName) {
       setLookupNote("");
       return;
     }
@@ -155,26 +163,41 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
     void fetchProfileResolution(slug)
       .then((resolution) => {
         if (cancelled) return;
+
+        const exactProfileMatch = (resolution.profiles || []).some(
+          (profile) => profile.fullName.trim().toLowerCase() === normalizedFullName
+        );
+        const exactCollectionMatch = resolution.collections.some((collection) => {
+          const rawName = String(collection.ensSubname || "").trim().toLowerCase();
+          if (!rawName) return false;
+          const fullName = rawName.includes(".") ? rawName : `${rawName}.nftfactory.eth`;
+          return fullName === normalizedFullName;
+        });
+
+        if (exactProfileMatch || exactCollectionMatch) {
+          setLookupNote(`${normalizedFullName} is already linked in NFTFactory and is not available here.`);
+          return;
+        }
+
         const walletCount = resolution.sellers.filter((item) => isAddress(item)).length;
         if (walletCount > 0) {
           setLookupNote(
-            `${slug} already resolves to ${walletCount} wallet${walletCount === 1 ? "" : "s"} in the current profile graph.`
+            `${normalizedFullName} is not linked directly, but /profile/${slug} already resolves to ${walletCount} wallet${walletCount === 1 ? "" : "s"}. Choose a different first label if you need a distinct profile.`
           );
           return;
         }
-        setLookupNote(
-          `${slug} is not linked yet. Choose an identity action below to attach this name to your creator profile.`
-        );
+
+        setLookupNote(`${normalizedFullName} is currently available in NFTFactory.`);
       })
       .catch(() => {
         if (!cancelled) {
-          setLookupNote("Profile lookup is unavailable right now. You can still link the identity and continue.");
+          setLookupNote("Profile lookup is unavailable right now. You can still continue.");
         }
       });
     return () => {
       cancelled = true;
     };
-  }, [slug]);
+  }, [identityMode, normalizedFullName, slug]);
 
   const identityLabel = useMemo(() => {
     if (identityMode === "ens") return "ENS name";
@@ -198,6 +221,45 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
       return;
     }
     await createNftFactorySubname();
+  }
+
+  async function checkIdentityAvailability(): Promise<void> {
+    if (!slug || !normalizedFullName) {
+      setLookupNote("Enter a name first.");
+      return;
+    }
+
+    try {
+      const resolution = await fetchProfileResolution(slug);
+
+      const requested = normalizedFullName;
+      const exactProfileMatch = (resolution.profiles || []).some(
+        (profile) => profile.fullName.trim().toLowerCase() === requested
+      );
+      const exactCollectionMatch = resolution.collections.some((collection) => {
+        const rawName = String(collection.ensSubname || "").trim().toLowerCase();
+        if (!rawName) return false;
+        const fullName = rawName.includes(".") ? rawName : `${rawName}.nftfactory.eth`;
+        return fullName === requested;
+      });
+
+      if (exactProfileMatch || exactCollectionMatch) {
+        setLookupNote(`${requested} is already linked in NFTFactory and is not available here.`);
+        return;
+      }
+
+      const walletCount = resolution.sellers.filter((item) => isAddress(item)).length;
+      if (walletCount > 0) {
+        setLookupNote(
+          `${requested} is not linked directly, but /profile/${slug} already resolves to ${walletCount} wallet${walletCount === 1 ? "" : "s"}. Choose a different first label if you need a distinct profile.`
+        );
+        return;
+      }
+
+      setLookupNote(`${requested} is currently available in NFTFactory.`);
+    } catch {
+      setLookupNote("Profile lookup is unavailable right now. You can still continue.");
+    }
   }
 
   async function linkIdentity(source: ApiProfileRecord["source"], options?: { launchMint?: boolean }): Promise<void> {
@@ -312,12 +374,8 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
             <Link href={`/profile/${encodeURIComponent(profiles[0].slug)}`}>the profile page</Link> to edit display details.
           </p>
         ) : null}
-        <div className="gridMini">
-          <label>
-            {identityLabel}
-            <input value={identityName} onChange={(e) => setIdentityName(e.target.value)} />
-          </label>
-          <label>
+        <div className="profileIdentityControlRow">
+          <label className="profileIdentityControlLeft">
             Identity action
             <select
               value={identityMode}
@@ -330,6 +388,18 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
               <option value="nftfactory-subname">Create nftfactory subname</option>
             </select>
           </label>
+          <label className="profileIdentityControlCenter">
+            {identityLabel}
+            <input value={identityName} onChange={(e) => setIdentityName(e.target.value)} />
+          </label>
+          <div className="profileIdentityControlRight">
+            <span className="detailLabel">Name check</span>
+            <button type="button" onClick={() => void checkIdentityAvailability()} disabled={!slug || !normalizedFullName}>
+              {identityMode === "nftfactory-subname" ? "Check label" : "Check ENS name"}
+            </button>
+          </div>
+        </div>
+        <div className="gridMini">
           <label>
             Linked collection (optional)
             <select value={selectedCollection} onChange={(e) => setSelectedCollection(e.target.value)}>

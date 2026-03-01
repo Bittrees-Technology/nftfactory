@@ -928,6 +928,24 @@ button:disabled {
   margin: 0;
 }
 
+.profileIdentityControlRow {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(180px, 0.9fr) minmax(240px, 1.4fr) minmax(180px, 0.9fr);
+  align-items: end;
+}
+
+.profileIdentityControlLeft,
+.profileIdentityControlCenter,
+.profileIdentityControlRight {
+  min-width: 0;
+}
+
+.profileIdentityControlRight {
+  display: grid;
+  gap: 8px;
+}
+
 @media (max-width: 720px) {
   nav {
     align-items: flex-start;
@@ -960,5 +978,9 @@ button:disabled {
 
   .wikiSidebar {
     position: static;
+  }
+
+  .profileIdentityControlRow {
+    grid-template-columns: 1fr;
   }
 }
