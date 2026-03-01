@@ -64,6 +64,7 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
   const [collections, setCollections] = useState<ApiOwnedCollections["collections"]>([]);
   const [verifiedCollections, setVerifiedCollections] = useState<ApiOwnedCollections["collections"]>([]);
   const [selectedCollection, setSelectedCollection] = useState("");
+  const [identityMode, setIdentityMode] = useState<"ens" | "external-subname" | "nftfactory-subname">("ens");
   const [lookupNote, setLookupNote] = useState("");
   const [setupState, setSetupState] = useState<SetupState>({ status: "idle" });
 
@@ -75,7 +76,6 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
     if (!address || !isConnected) {
       setProfiles([]);
       setCollections([]);
-      setSelectedProfileSlug("");
       setSelectedCollection("");
       return;
     }
@@ -176,6 +176,30 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
     };
   }, [slug]);
 
+  const identityLabel = useMemo(() => {
+    if (identityMode === "ens") return "ENS name";
+    if (identityMode === "external-subname") return "ENS subname";
+    return "nftfactory label";
+  }, [identityMode]);
+
+  const identityHint = useMemo(() => {
+    if (identityMode === "ens") return "Use a full ENS name like artist.eth. This routes into mint with that identity.";
+    if (identityMode === "external-subname") return "Use a full subname like music.artist.eth to link an existing ENS subname.";
+    return "Use a plain label like artist to create artist.nftfactory.eth on-chain.";
+  }, [identityMode]);
+
+  async function runIdentityAction(): Promise<void> {
+    if (identityMode === "ens") {
+      await linkIdentity("ens", { launchMint: true });
+      return;
+    }
+    if (identityMode === "external-subname") {
+      await linkIdentity("external-subname");
+      return;
+    }
+    await createNftFactorySubname();
+  }
+
   async function linkIdentity(source: ApiProfileRecord["source"], options?: { launchMint?: boolean }): Promise<void> {
     if (!slug) {
       setSetupState({ status: "error", message: "Enter an ENS name, subdomain, or nftfactory label first." });
@@ -267,6 +291,15 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
   return (
     <section className="wizard">
       <div className="card formCard">
+        <h3>Wallet</h3>
+        <p className="hint">{address || "Connect a wallet from the header to link a creator profile."}</p>
+        <p className="hint">Network: {appChain.name}</p>
+        {wrongNetwork ? (
+          <p className="hint">Use the header wallet button to select {appChain.name} before creating an nftfactory subname.</p>
+        ) : null}
+      </div>
+
+      <div className="card formCard">
         <h3>Creator Identity</h3>
         <p className="sectionLead">
           Enter the identity you want to use. Use a full ENS name like <span className="mono">artist.eth</span>,
@@ -281,11 +314,21 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
         ) : null}
         <div className="gridMini">
           <label>
-            Identity name
-            <input
-              value={identityName}
-              onChange={(e) => setIdentityName(e.target.value)}
-            />
+            {identityLabel}
+            <input value={identityName} onChange={(e) => setIdentityName(e.target.value)} />
+          </label>
+          <label>
+            Identity action
+            <select
+              value={identityMode}
+              onChange={(e) =>
+                setIdentityMode(e.target.value as "ens" | "external-subname" | "nftfactory-subname")
+              }
+            >
+              <option value="ens">Mint with ENS</option>
+              <option value="external-subname">Link ENS subname</option>
+              <option value="nftfactory-subname">Create nftfactory subname</option>
+            </select>
           </label>
           <label>
             Linked collection (optional)
@@ -298,31 +341,26 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
               ))}
             </select>
           </label>
-          {isConnected && verifiedCollections.length === 0 ? (
-            <p className="hint">
-              No owned collections are confirmed on-chain for this wallet yet. Indexed and cached data may still suggest candidates, but only on-chain-owned collections appear here.
-            </p>
-          ) : null}
-          <div className="selectionCard">
-            <span className="detailLabel">Wallet Status</span>
-            <p className="hint">{address || "Connect a wallet from the header to link a creator profile."}</p>
-            <p className="hint">Target network: {appChain.name}</p>
-            {wrongNetwork ? (
-              <p className="hint">
-                Use the header wallet button to select {appChain.name}. Only nftfactory.eth subname creation requires an on-chain transaction here.
-              </p>
-            ) : null}
-          </div>
         </div>
+        <p className="hint">{identityHint}</p>
         <div className="row">
-          <button type="button" onClick={() => void linkIdentity("ens", { launchMint: true })} disabled={!slug || !isConnected || setupState.status === "pending"}>
-            Mint ENS
-          </button>
-          <button type="button" onClick={() => void linkIdentity("external-subname")} disabled={!slug || !isConnected || setupState.status === "pending"}>
-            Create Subname
-          </button>
-          <button type="button" onClick={() => void createNftFactorySubname()} disabled={!slug || !isConnected || wrongNetwork || setupState.status === "pending"}>
-            {setupState.status === "pending" ? "Working..." : "Create nftfactory subname"}
+          <button
+            type="button"
+            onClick={() => void runIdentityAction()}
+            disabled={
+              !slug ||
+              !isConnected ||
+              setupState.status === "pending" ||
+              (identityMode === "nftfactory-subname" && wrongNetwork)
+            }
+          >
+            {setupState.status === "pending"
+              ? "Working..."
+              : identityMode === "ens"
+                ? "Mint with ENS"
+                : identityMode === "external-subname"
+                  ? "Link ENS subname"
+                  : "Create nftfactory subname"}
           </button>
         </div>
         <p className="hint">
