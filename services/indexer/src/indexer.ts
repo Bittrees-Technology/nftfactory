@@ -126,6 +126,7 @@ function createFallbackPrisma(): PrismaClient {
       count: async () => 0
     },
     token: {
+      findMany: async () => [],
       upsert: async () => ({})
     }
   } as unknown as PrismaClient;
@@ -840,7 +841,10 @@ async function handleRequest(
       .filter((item: ProfileRecord | null): item is ProfileRecord => Boolean(item));
 
     const merged = new Map<string, ProfileRecord>();
-    for (const item of [...linkedProfiles, ...derivedProfiles]) {
+    const allProfiles = [...linkedProfiles, ...derivedProfiles].filter(
+      (item): item is ProfileRecord => Boolean(item)
+    );
+    for (const item of allProfiles) {
       const key = `${item.slug}:${item.ownerAddress}:${item.collectionAddress || ""}:${item.source}`;
       if (!merged.has(key)) merged.set(key, item);
     }
@@ -1003,6 +1007,83 @@ async function handleRequest(
         ensSubname: item.ensSubname,
         contractAddress: item.contractAddress,
         ownerAddress: item.ownerAddress
+      }))
+    });
+    return;
+  }
+
+  if (req.method === "GET" && path === "/api/feed") {
+    const limitRaw = Number.parseInt(String(url.searchParams.get("limit") || "50"), 10);
+    const cursorRaw = Number.parseInt(String(url.searchParams.get("cursor") || "0"), 10);
+    const limit = Number.isInteger(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 100) : 50;
+    const cursor = Number.isInteger(cursorRaw) && cursorRaw >= 0 ? cursorRaw : 0;
+
+    const items = await deps.prisma.token.findMany({
+      take: limit,
+      skip: cursor,
+      orderBy: [{ mintedAt: "desc" }, { id: "desc" }],
+      select: {
+        id: true,
+        tokenId: true,
+        creatorAddress: true,
+        ownerAddress: true,
+        metadataCid: true,
+        mediaCid: true,
+        immutable: true,
+        mintedAt: true,
+        collection: {
+          select: {
+            chainId: true,
+            contractAddress: true,
+            ownerAddress: true,
+            ensSubname: true,
+            standard: true,
+            isFactoryCreated: true
+          }
+        },
+        listings: {
+          where: { active: true },
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          select: {
+            listingId: true,
+            sellerAddress: true,
+            paymentToken: true,
+            priceRaw: true
+          }
+        }
+      }
+    });
+
+    sendJson(res, 200, {
+      cursor,
+      nextCursor: cursor + items.length,
+      canLoadMore: items.length === limit,
+      items: items.map((item: any) => ({
+        id: item.id,
+        tokenId: item.tokenId,
+        creatorAddress: item.creatorAddress,
+        ownerAddress: item.ownerAddress,
+        metadataCid: item.metadataCid,
+        mediaCid: item.mediaCid,
+        immutable: item.immutable,
+        mintedAt: item.mintedAt,
+        collection: {
+          chainId: item.collection.chainId,
+          contractAddress: item.collection.contractAddress,
+          ownerAddress: item.collection.ownerAddress,
+          ensSubname: item.collection.ensSubname,
+          standard: item.collection.standard,
+          isFactoryCreated: item.collection.isFactoryCreated
+        },
+        activeListing: item.listings?.[0]
+          ? {
+              listingId: item.listings[0].listingId,
+              sellerAddress: item.listings[0].sellerAddress,
+              paymentToken: item.listings[0].paymentToken,
+              priceRaw: item.listings[0].priceRaw
+            }
+          : null
       }))
     });
     return;

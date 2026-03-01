@@ -141,6 +141,38 @@ export type ApiOwnedProfiles = {
   profiles: ApiProfileRecord[];
 };
 
+export type ApiMintFeedItem = {
+  id: string;
+  tokenId: string;
+  creatorAddress: string;
+  ownerAddress: string;
+  metadataCid: string;
+  mediaCid: string | null;
+  immutable: boolean;
+  mintedAt: string;
+  collection: {
+    chainId: number;
+    contractAddress: string;
+    ownerAddress: string;
+    ensSubname: string | null;
+    standard: string;
+    isFactoryCreated: boolean;
+  };
+  activeListing: {
+    listingId: string;
+    sellerAddress: string;
+    paymentToken: string;
+    priceRaw: string;
+  } | null;
+};
+
+export type ApiMintFeedResponse = {
+  cursor: number;
+  nextCursor: number;
+  canLoadMore: boolean;
+  items: ApiMintFeedItem[];
+};
+
 export async function fetchHiddenListingIds(): Promise<number[]> {
   const payload = await fetchJson<{ listingIds: number[] }>("/api/moderation/hidden-listings");
   return payload.listingIds || [];
@@ -241,6 +273,12 @@ export async function fetchCollectionsByOwner(ownerAddress: string): Promise<Api
 
 export async function fetchProfilesByOwner(ownerAddress: string): Promise<ApiOwnedProfiles> {
   return fetchJson<ApiOwnedProfiles>(`/api/profiles?owner=${encodeURIComponent(ownerAddress)}`);
+}
+
+export async function fetchMintFeed(cursor = 0, limit = 50): Promise<ApiMintFeedResponse> {
+  return fetchJson<ApiMintFeedResponse>(
+    `/api/feed?cursor=${encodeURIComponent(String(cursor))}&limit=${encodeURIComponent(String(limit))}`
+  );
 }
 
 export async function linkProfileIdentity(payload: {
