@@ -134,6 +134,33 @@ const namedContractAbi = [
   }
 ] as const;
 
+const interfaceProbeAbi = [
+  {
+    type: "function",
+    name: "supportsInterface",
+    stateMutability: "view",
+    inputs: [{ name: "interfaceId", type: "bytes4" }],
+    outputs: [{ name: "", type: "bool" }]
+  }
+] as const;
+
+const factoryImplementationAbi = [
+  {
+    type: "function",
+    name: "implementation721",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }]
+  },
+  {
+    type: "function",
+    name: "implementation1155",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }]
+  }
+] as const;
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function MintClient({
@@ -205,6 +232,8 @@ export default function MintClient({
   // ── Collection management state ───────────────────────────────────────────
   const [manageAddress, setManageAddress] = useState("");
   const [manageSelector, setManageSelector] = useState<"saved" | "manual">("saved");
+  const [manageCollectionStandard, setManageCollectionStandard] = useState<Standard | "">("");
+  const [manageImplementationAddress, setManageImplementationAddress] = useState("");
   const [transferTarget, setTransferTarget] = useState("");
   const [transferTx, setTransferTx] = useState<TxState>({ status: "idle" });
   const [finalizeTx, setFinalizeTx] = useState<TxState>({ status: "idle" });
@@ -488,6 +517,58 @@ export default function MintClient({
       setManageAddress(verifiedKnownCollections[0].contractAddress);
     }
   }, [manageAddress, manageSelector, verifiedKnownCollections]);
+
+  useEffect(() => {
+    if (!isAddress(manageAddress) || !publicClient) {
+      setManageCollectionStandard("");
+      setManageImplementationAddress("");
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadVerificationState(): Promise<void> {
+      const [is721, is1155] = await Promise.all([
+        publicClient.readContract({
+          address: manageAddress as Address,
+          abi: interfaceProbeAbi,
+          functionName: "supportsInterface",
+          args: ["0x80ac58cd"]
+        }).catch(() => false),
+        publicClient.readContract({
+          address: manageAddress as Address,
+          abi: interfaceProbeAbi,
+          functionName: "supportsInterface",
+          args: ["0xd9b67a26"]
+        }).catch(() => false)
+      ]);
+
+      if (cancelled) return;
+
+      const nextStandard: Standard | "" = is721 ? "ERC721" : is1155 ? "ERC1155" : "";
+      setManageCollectionStandard(nextStandard);
+
+      if (!nextStandard) {
+        setManageImplementationAddress("");
+        return;
+      }
+
+      const implementation = await publicClient.readContract({
+        address: config.factory,
+        abi: factoryImplementationAbi,
+        functionName: nextStandard === "ERC721" ? "implementation721" : "implementation1155"
+      }).catch(() => null);
+
+      if (cancelled) return;
+      setManageImplementationAddress(typeof implementation === "string" ? implementation : "");
+    }
+
+    void loadVerificationState();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [config.factory, manageAddress, publicClient]);
 
   // ── Utilities ─────────────────────────────────────────────────────────────
 
@@ -1361,7 +1442,44 @@ export default function MintClient({
           </div>
 
           <div className="card formCard">
-            <h3>2. Collection Identity</h3>
+            <h3>2. Verification</h3>
+            <p className="hint">
+              Creator collections are deployed as upgradeable proxy contracts. Explorers often show the proxy address
+              first, so use the links below to inspect both the collection proxy and the current factory implementation.
+            </p>
+            <div className="selectionCard">
+              <p><strong>Collection proxy</strong></p>
+              {isAddress(manageAddress) && toExplorerAddress(config.chainId, manageAddress) ? (
+                <p className="hint mono">
+                  <a href={toExplorerAddress(config.chainId, manageAddress)!} target="_blank" rel="noreferrer">
+                    {manageAddress}
+                  </a>
+                </p>
+              ) : (
+                <p className="hint">Select a collection above to inspect it on the explorer.</p>
+              )}
+              <p className="hint">
+                Detected standard: <strong>{manageCollectionStandard || "Unknown"}</strong>
+              </p>
+              {manageImplementationAddress && toExplorerAddress(config.chainId, manageImplementationAddress) ? (
+                <>
+                  <p><strong>Current factory implementation</strong></p>
+                  <p className="hint mono">
+                    <a href={toExplorerAddress(config.chainId, manageImplementationAddress)!} target="_blank" rel="noreferrer">
+                      {manageImplementationAddress}
+                    </a>
+                  </p>
+                </>
+              ) : (
+                <p className="hint">
+                  The implementation link appears once the app confirms the selected collection standard on-chain.
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="card formCard">
+            <h3>3. Collection Identity</h3>
             <p className="hint">
               Manage the human-readable identity shown for this collection. You can attach an existing ENS name, attach an
               external subname, or register a new <strong>nftfactory.eth</strong> subname here.
@@ -1411,7 +1529,7 @@ export default function MintClient({
 
           {/* Transfer ownership */}
           <div className="card formCard">
-            <h3>3. Transfer Ownership</h3>
+            <h3>4. Transfer Ownership</h3>
             <p className="hint">
               Passes full control of this collection to a new address. The new owner can mint tokens,
               update metadata (if not locked), set royalties, and finalize upgrades. This action
@@ -1436,7 +1554,7 @@ export default function MintClient({
 
           {/* Finalize upgrades */}
           <div className="card formCard">
-            <h3>4. Finalize Upgrades ⚠️</h3>
+            <h3>5. Finalize Upgrades ⚠️</h3>
             <p className="hint">
               Permanently disables the UUPS upgrade path for this collection contract. Once finalized,
               the logic contract can <strong>never</strong> be replaced — the contract is frozen exactly
