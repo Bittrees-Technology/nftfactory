@@ -662,6 +662,7 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
                       standard: row.collection.standard,
                       paymentToken: row.activeListing.paymentToken as Address,
                       price: BigInt(row.activeListing.priceRaw),
+                      expiresAt: 0n,
                       active: true
                     })}`
                   : "Listed (ERC20)"
