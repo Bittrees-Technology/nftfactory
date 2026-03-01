@@ -206,7 +206,7 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
   }, [identityMode]);
 
   const identityHint = useMemo(() => {
-    if (identityMode === "ens") return "Use a full ENS name like artist.eth. This routes into mint with that identity.";
+    if (identityMode === "ens") return "Use a full ENS name like artist.eth. This links the name here, then routes into mint with that identity.";
     if (identityMode === "external-subname") return "Use a full subname like music.artist.eth to link an existing ENS subname.";
     return "Use a plain label like artist to create artist.nftfactory.eth on-chain.";
   }, [identityMode]);
@@ -383,7 +383,7 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
                 setIdentityMode(e.target.value as "ens" | "external-subname" | "nftfactory-subname")
               }
             >
-              <option value="ens">Mint with ENS</option>
+              <option value="ens">Link ENS and continue</option>
               <option value="external-subname">Link ENS subname</option>
               <option value="nftfactory-subname">Create nftfactory subname</option>
             </select>
@@ -395,7 +395,7 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
           <div className="profileIdentityControlRight">
             <span className="detailLabel">Name check</span>
             <button type="button" onClick={() => void checkIdentityAvailability()} disabled={!slug || !normalizedFullName}>
-              {identityMode === "nftfactory-subname" ? "Check label" : "Check ENS name"}
+              {identityMode === "nftfactory-subname" ? "Check label" : "Check in NFTFactory"}
             </button>
           </div>
         </div>
@@ -427,7 +427,7 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
             {setupState.status === "pending"
               ? "Working..."
               : identityMode === "ens"
-                ? "Mint with ENS"
+                ? "Link ENS and continue"
                 : identityMode === "external-subname"
                   ? "Link ENS subname"
                   : "Create nftfactory subname"}
