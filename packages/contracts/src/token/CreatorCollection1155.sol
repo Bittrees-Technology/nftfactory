@@ -14,6 +14,7 @@ contract CreatorCollection1155 is Initializable, OwnableUpgradeable, UUPSUpgrade
     bool public upgradesFinalized;
 
     mapping(uint256 => string) private _tokenUris;
+    mapping(uint256 => bool) public tokenExists;
     mapping(uint256 => bool) public metadataLocked;
 
     event TokenPublished(address indexed creator, uint256 indexed tokenId, uint256 amount, string uri);
@@ -22,6 +23,8 @@ contract CreatorCollection1155 is Initializable, OwnableUpgradeable, UUPSUpgrade
 
     error MetadataLocked();
     error UpgradesFinalized();
+    error TokenAlreadyMinted();
+    error InvalidAmount();
 
     function initialize(
         address creator,
@@ -46,6 +49,9 @@ contract CreatorCollection1155 is Initializable, OwnableUpgradeable, UUPSUpgrade
     }
 
     function publish(address to, uint256 tokenId, uint256 amount, string calldata newUri, bool lockMetadata) external onlyOwner {
+        if (tokenExists[tokenId]) revert TokenAlreadyMinted();
+        if (amount == 0) revert InvalidAmount();
+        tokenExists[tokenId] = true;
         _tokenUris[tokenId] = newUri;
         metadataLocked[tokenId] = lockMetadata;
         _mint(to, tokenId, amount, "");

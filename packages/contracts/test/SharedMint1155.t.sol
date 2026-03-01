@@ -100,6 +100,12 @@ contract SharedMint1155Test is Test {
         assertEq(nft.nextTokenId(), 2);
     }
 
+    function testPublishRevertsForZeroAmount() external {
+        vm.prank(creator);
+        vm.expectRevert(SharedMint1155.InvalidAmount.selector);
+        nft.publish("", 0, "ipfs://zero");
+    }
+
     function testPublishEmitsTransferSingleFromZero() external {
         vm.prank(creator);
         vm.expectEmit(true, true, true, true);

@@ -90,4 +90,20 @@ contract SubnameRegistrarTest is Test {
         vm.expectRevert();
         registrar.ownerSubnames(creator, 0);
     }
+
+    function testRegisterSubnameRevertsForEmptyLabel() external {
+        vm.deal(creator, 1 ether);
+
+        vm.prank(creator);
+        vm.expectRevert(SubnameRegistrar.InvalidLabel.selector);
+        registrar.registerSubname{value: 0.001 ether}("");
+    }
+
+    function testRegisterSubnameRevertsForInvalidCharacters() external {
+        vm.deal(creator, 1 ether);
+
+        vm.prank(creator);
+        vm.expectRevert(SubnameRegistrar.InvalidLabel.selector);
+        registrar.registerSubname{value: 0.001 ether}("Alice");
+    }
 }

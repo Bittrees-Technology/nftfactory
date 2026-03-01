@@ -92,6 +92,7 @@ contract SharedMint1155 is Owned {
     error InsufficientBalance();
     error ArrayLengthMismatch();
     error InvalidOwner();
+    error InvalidAmount();
 
     // ── Constructor ───────────────────────────────────────────────────────────
 
@@ -210,6 +211,7 @@ contract SharedMint1155 is Owned {
         external
         returns (uint256 tokenId)
     {
+        if (amount == 0) revert InvalidAmount();
         tokenId = ++nextTokenId;
         _balances[msg.sender][tokenId] += amount;
         _uris[tokenId] = newUri;
