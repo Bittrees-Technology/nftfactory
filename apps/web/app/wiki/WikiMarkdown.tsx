@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { toHeadingId } from "../../lib/wiki";
 
 type Props = {
   content: string;
@@ -196,13 +197,13 @@ export default function WikiMarkdown({ content }: Props) {
         );
       } else if (level === 2) {
         blocks.push(
-          <h2 key={`h2-${blocks.length}`} className="wikiH2">
+          <h2 key={`h2-${blocks.length}`} id={toHeadingId(text)} className="wikiH2">
             {renderInline(text, `h2-${blocks.length}`)}
           </h2>
         );
       } else {
         blocks.push(
-          <h3 key={`h3-${blocks.length}`} className="wikiH3">
+          <h3 key={`h3-${blocks.length}`} id={toHeadingId(text)} className="wikiH3">
             {renderInline(text, `h3-${blocks.length}`)}
           </h3>
         );

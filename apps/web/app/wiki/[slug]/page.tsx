@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getWikiPageBySlug, listWikiPages } from "../../../lib/wiki";
+import { extractWikiHeadings, getWikiPageBySlug, listWikiPages } from "../../../lib/wiki";
 import WikiMarkdown from "../WikiMarkdown";
 import WikiSidebar from "../WikiSidebar";
 
@@ -17,6 +17,7 @@ export default async function WikiPage(props: Props) {
   if (!page) {
     notFound();
   }
+  const headings = extractWikiHeadings(page.content);
 
   return (
     <section className="wizard">
@@ -30,6 +31,22 @@ export default async function WikiPage(props: Props) {
               <Link href="/wiki" className="ctaLink secondaryLink">Wiki Home</Link>
             </div>
           </div>
+          {headings.length > 0 ? (
+            <div className="wikiToc">
+              <p className="wikiTocTitle">On This Page</p>
+              <nav className="wikiTocList">
+                {headings.map((heading) => (
+                  <a
+                    key={heading.id}
+                    href={`#${heading.id}`}
+                    className={`wikiTocLink${heading.level === 3 ? " wikiTocLinkNested" : ""}`}
+                  >
+                    {heading.text}
+                  </a>
+                ))}
+              </nav>
+            </div>
+          ) : null}
           <WikiMarkdown content={page.content} />
         </div>
       </div>

@@ -757,6 +757,41 @@ button:disabled {
   line-height: 1.6;
 }
 
+.wikiToc {
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid #ead9c5;
+  border-radius: 12px;
+  background: #fff6ea;
+}
+
+.wikiTocTitle {
+  margin: 0;
+  color: #7f220f;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.wikiTocList {
+  display: grid;
+  gap: 8px;
+}
+
+.wikiTocLink {
+  color: #5d3825;
+  font-size: 0.93rem;
+  font-weight: 600;
+}
+
+.wikiTocLinkNested {
+  padding-left: 12px;
+  font-size: 0.88rem;
+  font-weight: 500;
+}
+
 .wikiH1,
 .wikiH2,
 .wikiH3 {
