@@ -6,6 +6,7 @@ import path from "node:path";
 import { URL } from "node:url";
 import { PrismaClient } from "@prisma/client";
 import { pino } from "pino";
+import { createPublicClient, http } from "viem";
 import { isAddress, isZeroAddress, normalizeSubname, parseBearerToken, getClientIp, isRateLimited } from "./utils.js";
 
 const log = pino({ level: process.env.LOG_LEVEL || "info" });
@@ -115,6 +116,7 @@ const PORT = Number.parseInt(process.env.INDEXER_PORT || "8787", 10);
 const HOST = process.env.INDEXER_HOST || "127.0.0.1";
 const ADMIN_TOKEN = process.env.INDEXER_ADMIN_TOKEN || "";
 const TRUST_PROXY = process.env.TRUST_PROXY === "true";
+const MODERATOR_REGISTRY_ADDRESS = process.env.MODERATOR_REGISTRY_ADDRESS || "";
 const MODERATOR_FILE = process.env.INDEXER_MODERATOR_FILE || path.join(process.cwd(), "data", "moderators.json");
 const PROFILE_FILE = process.env.INDEXER_PROFILE_FILE || path.join(process.cwd(), "data", "profiles.json");
 const PAYMENT_TOKEN_FILE = process.env.INDEXER_PAYMENT_TOKEN_FILE || path.join(process.cwd(), "data", "payment-tokens.json");
@@ -176,9 +178,11 @@ const RESOLVE_ACTIONS = new Set(["hide", "restore", "dismiss"]);
 class BadRequestError extends Error {}
 type RequestHandlerConfig = {
   chainId: number;
+  rpcUrl: string;
   adminToken: string;
   adminAllowlist: Set<string>;
   trustProxy: boolean;
+  moderatorRegistryAddress: `0x${string}` | null;
 };
 type IndexerDeps = {
   prisma: PrismaClient;
@@ -209,6 +213,85 @@ async function readModeratorRecords(): Promise<ModeratorRecord[]> {
   } catch {
     return [];
   }
+}
+
+const moderatorRegistryAbi = [
+  {
+    type: "function",
+    name: "moderatorCount",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }]
+  },
+  {
+    type: "function",
+    name: "getModeratorAt",
+    stateMutability: "view",
+    inputs: [{ name: "index", type: "uint256" }],
+    outputs: [
+      {
+        type: "tuple",
+        components: [
+          { name: "account", type: "address" },
+          { name: "label", type: "string" },
+          { name: "active", type: "bool" }
+        ]
+      }
+    ]
+  }
+] as const;
+
+async function readOnchainModeratorRecords(config: RequestHandlerConfig): Promise<ModeratorRecord[]> {
+  if (!config.moderatorRegistryAddress) return [];
+
+  try {
+    const client = createPublicClient({
+      transport: http(config.rpcUrl)
+    });
+
+    const count = await client.readContract({
+      address: config.moderatorRegistryAddress,
+      abi: moderatorRegistryAbi,
+      functionName: "moderatorCount"
+    });
+
+    const now = new Date().toISOString();
+    const records: ModeratorRecord[] = [];
+
+    for (let i = 0n; i < count; i++) {
+      const entry = await client.readContract({
+        address: config.moderatorRegistryAddress,
+        abi: moderatorRegistryAbi,
+        functionName: "getModeratorAt",
+        args: [i]
+      });
+
+      const account = String(entry.account || "").toLowerCase();
+      if (!isAddress(account) || !entry.active) continue;
+      records.push({
+        address: account,
+        label: String(entry.label || "").trim() || "On-chain moderator",
+        addedAt: now,
+        updatedAt: now
+      });
+    }
+
+    return records;
+  } catch (err) {
+    log.warn({ err, moderatorRegistry: config.moderatorRegistryAddress }, "Failed to read ModeratorRegistry");
+    return [];
+  }
+}
+
+async function readEffectiveModeratorRecords(config: RequestHandlerConfig): Promise<ModeratorRecord[]> {
+  const local = await readModeratorRecords();
+  const onchain = await readOnchainModeratorRecords(config);
+  const merged = new Map<string, ModeratorRecord>();
+
+  for (const item of local) merged.set(item.address, item);
+  for (const item of onchain) merged.set(item.address, item);
+
+  return Array.from(merged.values()).sort((a, b) => a.address.localeCompare(b.address));
 }
 
 async function writeModeratorRecords(records: ModeratorRecord[]): Promise<void> {
@@ -355,7 +438,7 @@ async function getEffectiveAdminAllowlist(
 ): Promise<Set<string>> {
   const allowlist = new Set(config.adminAllowlist);
   if (!includeDynamicModerators) return allowlist;
-  const records = await readModeratorRecords();
+  const records = await readEffectiveModeratorRecords(config);
   for (const record of records) {
     allowlist.add(record.address);
   }
@@ -799,8 +882,12 @@ async function handleRequest(
       return;
     }
 
-    const moderators = await readModeratorRecords();
-    sendJson(res, 200, { moderators });
+    const moderators = await readEffectiveModeratorRecords(config);
+    sendJson(res, 200, {
+      moderators,
+      source: config.moderatorRegistryAddress ? "onchain+local" : "local",
+      moderatorRegistryAddress: config.moderatorRegistryAddress
+    });
     return;
   }
 
@@ -855,6 +942,13 @@ async function handleRequest(
     const auth = await assertAdminRequest(req, config, payload.address, { includeDynamicModerators: false });
     if (!auth.ok) {
       sendJson(res, 401, { error: auth.error });
+      return;
+    }
+    if (config.moderatorRegistryAddress) {
+      sendJson(res, 400, {
+        error: "ModeratorRegistry is configured. Update moderators on-chain through the registry contract.",
+        moderatorRegistryAddress: config.moderatorRegistryAddress
+      });
       return;
     }
 
@@ -1457,7 +1551,7 @@ async function handleRequest(
         listHiddenListingIds(deps),
         readProfileRecords(),
         readPaymentTokenRecords(),
-        readModeratorRecords()
+        readEffectiveModeratorRecords(config)
       ]);
 
     sendJson(res, 200, {
@@ -1659,9 +1753,14 @@ export async function main() {
     },
     {
       chainId: CHAIN_ID,
+      rpcUrl,
       adminToken: ADMIN_TOKEN,
       adminAllowlist: ADMIN_ALLOWLIST,
-      trustProxy: TRUST_PROXY
+      trustProxy: TRUST_PROXY,
+      moderatorRegistryAddress:
+        MODERATOR_REGISTRY_ADDRESS && isAddress(MODERATOR_REGISTRY_ADDRESS.toLowerCase())
+          ? (MODERATOR_REGISTRY_ADDRESS.toLowerCase() as `0x${string}`)
+          : null
     }
   );
   const server = createServer(handler);

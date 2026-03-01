@@ -59,6 +59,8 @@ Admin mutation paths can be gated with:
 
 The current build supports a moderator list managed through the admin workflow. In local or degraded environments, that list can be persisted in JSON-backed storage.
 
+When `MODERATOR_REGISTRY_ADDRESS` is configured in the indexer, the contract-backed moderator list should be treated as canonical for reads and allowlist enforcement.
+
 ## Safe-based production posture
 
 The intended production posture is:

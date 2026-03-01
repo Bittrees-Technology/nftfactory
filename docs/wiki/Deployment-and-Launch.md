@@ -82,6 +82,7 @@ Before deployment or release validation, confirm:
 - Safe addresses are defined
 - RPC endpoints are valid
 - contract addresses are consistent across services
+- `MODERATOR_REGISTRY_ADDRESS` is configured when using the contract-backed moderator flow
 - IPFS upload credentials are configured
 - indexer and web env files match the intended chain
 
