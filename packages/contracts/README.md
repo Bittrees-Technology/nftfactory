@@ -4,7 +4,7 @@ First-pass Solidity implementation for NFTFactory:
 - `NftFactoryRegistry`
 - `RoyaltySplitRegistry`
 - `SubnameRegistrar`
-- `MarketplaceFixedPrice`
+- `Marketplace`
 - `SharedMint721` (shared publishing contract)
 - `SharedMint1155`
 - `CreatorCollection721` (UUPS upgradeable, finalizable)

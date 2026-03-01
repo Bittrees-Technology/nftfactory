@@ -17,7 +17,7 @@ The full generated dependency dump belongs in the archive. The active wiki shoul
 
 This is the deploy-time hinge between the registry and creator-owned collections.
 
-### `MarketplaceFixedPrice`
+### `Marketplace`
 
 - depends on `NftFactoryRegistry`
 - uses `IERC721Lite`

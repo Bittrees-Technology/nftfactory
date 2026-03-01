@@ -14,7 +14,7 @@ That said, the practical release posture now depends on three categories:
 
 ### Highest-risk contracts
 
-- `MarketplaceFixedPrice`
+- `Marketplace`
   - settlement logic
   - payment routing
   - approval assumptions

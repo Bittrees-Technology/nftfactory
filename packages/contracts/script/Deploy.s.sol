@@ -11,7 +11,7 @@ import {SharedMint1155} from "../src/token/SharedMint1155.sol";
 import {CreatorCollection721} from "../src/token/CreatorCollection721.sol";
 import {CreatorCollection1155} from "../src/token/CreatorCollection1155.sol";
 import {CreatorFactory} from "../src/core/CreatorFactory.sol";
-import {MarketplaceFixedPrice} from "../src/core/MarketplaceFixedPrice.sol";
+import {Marketplace} from "../src/core/Marketplace.sol";
 
 contract DeployScript is Script {
     function run() external {
@@ -32,7 +32,7 @@ contract DeployScript is Script {
         CreatorCollection1155 impl1155 = new CreatorCollection1155();
 
         CreatorFactory factory = new CreatorFactory(deployer, address(registry));
-        MarketplaceFixedPrice marketplace = new MarketplaceFixedPrice(deployer, address(registry));
+        Marketplace marketplace = new Marketplace(deployer, address(registry));
 
         factory.setImplementations(address(impl721), address(impl1155));
         registry.setFactoryAuthorization(address(factory), true);
@@ -50,6 +50,6 @@ contract DeployScript is Script {
         console2.log("CreatorCollection721 impl", address(impl721));
         console2.log("CreatorCollection1155 impl", address(impl1155));
         console2.log("CreatorFactory", address(factory));
-        console2.log("MarketplaceFixedPrice", address(marketplace));
+        console2.log("Marketplace", address(marketplace));
     }
 }

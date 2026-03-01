@@ -7,7 +7,7 @@ import {IERC721Lite} from "../interfaces/IERC721Lite.sol";
 import {IERC1155Lite} from "../interfaces/IERC1155Lite.sol";
 import {NftFactoryRegistry} from "./NftFactoryRegistry.sol";
 
-contract MarketplaceFixedPrice is Owned {
+contract Marketplace is Owned {
     struct Listing {
         address seller;
         address nft;

@@ -14,7 +14,7 @@ These are the validated Sepolia addresses from the current deployment set used d
 | `CreatorCollection721` implementation | `0x5a32693d05c3904a199157a370c0cbac7001a25a` |
 | `CreatorCollection1155` implementation | `0x6db8041980debcba3fcfbcfa94289bf89432e45c` |
 | `CreatorFactory` | `0x3a734889c9308d0907698793931f98e3fe834c0d` |
-| `MarketplaceFixedPrice` | `0xd92fdd08d788b1ed23a4ddffed8bf1a195f2a11d` |
+| `Marketplace` | `0xd92fdd08d788b1ed23a4ddffed8bf1a195f2a11d` |
 
 ## Contract families
 
@@ -114,9 +114,9 @@ It supports:
 
 It does **not** create arbitrary external ENS names or external ENS subdomains.
 
-## MarketplaceFixedPrice
+## Marketplace
 
-`MarketplaceFixedPrice` provides:
+`Marketplace` provides:
 
 - listing creation
 - cancellation

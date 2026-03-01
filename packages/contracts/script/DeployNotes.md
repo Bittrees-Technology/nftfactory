@@ -9,7 +9,7 @@ Deploy order:
 6. CreatorCollection721 implementation
 7. CreatorCollection1155 implementation
 8. CreatorFactory
-9. MarketplaceFixedPrice
+9. Marketplace
 
 Post deploy:
 - authorize CreatorFactory in registry

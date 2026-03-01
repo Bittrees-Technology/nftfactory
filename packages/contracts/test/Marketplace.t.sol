@@ -3,7 +3,7 @@ pragma solidity ^0.8.24;
 
 import {Test} from "forge-std/Test.sol";
 import {NftFactoryRegistry} from "../src/core/NftFactoryRegistry.sol";
-import {MarketplaceFixedPrice} from "../src/core/MarketplaceFixedPrice.sol";
+import {Marketplace} from "../src/core/Marketplace.sol";
 
 contract Mock721 {
     mapping(uint256 => address) public ownerOf;
@@ -49,12 +49,12 @@ contract Mock1155 {
 }
 
 contract ReentrantERC20 {
-    MarketplaceFixedPrice public marketplace;
+    Marketplace public marketplace;
     uint256 public targetListing;
     bool public reenterOnTransferFrom;
 
     constructor(address marketplaceAddress) {
-        marketplace = MarketplaceFixedPrice(marketplaceAddress);
+        marketplace = Marketplace(marketplaceAddress);
     }
 
     function setReentry(uint256 listingId, bool enabled) external {
@@ -71,9 +71,9 @@ contract ReentrantERC20 {
     }
 }
 
-contract MarketplaceFixedPriceTest is Test {
+contract MarketplaceTest is Test {
     NftFactoryRegistry internal registry;
-    MarketplaceFixedPrice internal marketplace;
+    Marketplace internal marketplace;
     Mock721 internal nft721;
     Mock1155 internal nft1155;
     ReentrantERC20 internal reentrantToken;
@@ -87,7 +87,7 @@ contract MarketplaceFixedPriceTest is Test {
         vm.prank(admin);
         registry = new NftFactoryRegistry(admin, treasury);
         vm.prank(admin);
-        marketplace = new MarketplaceFixedPrice(admin, address(registry));
+        marketplace = new Marketplace(admin, address(registry));
 
         nft721 = new Mock721();
         nft1155 = new Mock1155();
@@ -101,7 +101,7 @@ contract MarketplaceFixedPriceTest is Test {
         nft721.mint(seller, 1);
 
         vm.prank(seller);
-        vm.expectRevert(MarketplaceFixedPrice.NotApproved.selector);
+        vm.expectRevert(Marketplace.NotApproved.selector);
         marketplace.createListing(address(nft721), 1, 1, "ERC721", address(0), 0.1 ether);
     }
 
@@ -110,7 +110,7 @@ contract MarketplaceFixedPriceTest is Test {
         nft1155.mint(seller, 7, 3);
 
         vm.prank(seller);
-        vm.expectRevert(MarketplaceFixedPrice.NotApproved.selector);
+        vm.expectRevert(Marketplace.NotApproved.selector);
         marketplace.createListing(address(nft1155), 7, 2, "ERC1155", address(0), 0.1 ether);
     }
 
@@ -118,7 +118,7 @@ contract MarketplaceFixedPriceTest is Test {
         vm.startPrank(seller);
         nft721.mint(seller, 1);
         nft721.setApprovalForAll(address(marketplace), true);
-        vm.expectRevert(MarketplaceFixedPrice.InvalidPrice.selector);
+        vm.expectRevert(Marketplace.InvalidPrice.selector);
         marketplace.createListing(address(nft721), 1, 1, "ERC721", address(0), 0);
         vm.stopPrank();
     }
@@ -132,7 +132,7 @@ contract MarketplaceFixedPriceTest is Test {
         vm.stopPrank();
 
         vm.prank(buyer);
-        vm.expectRevert(MarketplaceFixedPrice.NotApproved.selector);
+        vm.expectRevert(Marketplace.NotApproved.selector);
         marketplace.buy{value: 0.1 ether}(0);
 
         (,,,,,,, bool active) = marketplace.listings(0);

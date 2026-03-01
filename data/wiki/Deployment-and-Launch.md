@@ -68,7 +68,7 @@ Use this order for the current contract suite:
 4. `SharedMint721`
 5. `SharedMint1155`
 6. `CreatorFactory`
-7. `MarketplaceFixedPrice`
+7. `Marketplace`
 
 ## Environment readiness
 

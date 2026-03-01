@@ -51,7 +51,7 @@ The current contract system is built around:
   - creator-owned, upgradeable collection contracts
 - `SharedMint721` / `SharedMint1155`
   - low-friction shared publish contracts
-- `MarketplaceFixedPrice`
+- `Marketplace`
   - fixed-price listing and settlement
 - `RoyaltySplitRegistry`
   - royalty split metadata

@@ -16,7 +16,7 @@ These should be treated as protocol governance endpoints:
 - `NftFactoryRegistry`
 - `RoyaltySplitRegistry`
 - `SubnameRegistrar`
-- `MarketplaceFixedPrice`
+- `Marketplace`
 - `CreatorFactory`
 
 These are the places where protocol-wide policy, identity namespace, deployment behavior, and marketplace rules can change.
