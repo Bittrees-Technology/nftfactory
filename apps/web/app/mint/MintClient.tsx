@@ -950,7 +950,6 @@ export default function MintClient({
                       <input
                         value={customCollectionAddress}
                         onChange={(e) => setCustomCollectionAddress(e.target.value)}
-                        placeholder="0x… (paste your deployed collection address)"
                       />
                     </label>
                   )}
@@ -989,7 +988,6 @@ export default function MintClient({
                       value={custom1155TokenId}
                       onChange={(e) => setCustom1155TokenId(e.target.value)}
                       inputMode="numeric"
-                      placeholder="1"
                     />
                   </label>
                 )}
@@ -1027,14 +1025,14 @@ export default function MintClient({
                     </p>
                     <label>
                       Collection name (contract)
-                      <input value={deployName} onChange={(e) => setDeployName(e.target.value)} placeholder="Grow Collection" />
+                      <input value={deployName} onChange={(e) => setDeployName(e.target.value)} />
                       <span className="hint">
                         This becomes the collection&apos;s on-chain <code>name()</code> value and is what explorers use as the collection label.
                       </span>
                     </label>
                     <label>
                       Collection symbol (contract ticker)
-                      <input value={deploySymbol} onChange={(e) => setDeploySymbol(e.target.value)} placeholder="GROW" />
+                      <input value={deploySymbol} onChange={(e) => setDeploySymbol(e.target.value)} />
                       <span className="hint">
                         This becomes the collection&apos;s on-chain <code>symbol()</code> value.
                       </span>
@@ -1044,7 +1042,6 @@ export default function MintClient({
                       <input
                         value={deploySubname}
                         onChange={(e) => setDeploySubname(e.target.value)}
-                        placeholder="studio"
                       />
                       <span className="hint">
                         Adds an identity label to the collection deployment. Collection registration and identity setup now live in the
@@ -1056,7 +1053,6 @@ export default function MintClient({
                       <input
                         value={deployRoyaltyReceiver}
                         onChange={(e) => setDeployRoyaltyReceiver(e.target.value)}
-                        placeholder={account || "0x… (defaults to your wallet)"}
                       />
                     </label>
                     <label>
@@ -1065,7 +1061,6 @@ export default function MintClient({
                         value={deployRoyaltyBps}
                         onChange={(e) => setDeployRoyaltyBps(e.target.value)}
                         inputMode="numeric"
-                        placeholder="500"
                       />
                     </label>
                     <button
@@ -1090,16 +1085,16 @@ export default function MintClient({
             </p>
             <label>
               Name (required)
-              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Grow #2" />
+              <input value={name} onChange={(e) => setName(e.target.value)} />
             </label>
             <label>
               Description (optional)
-              <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Tell collectors about this work" />
+              <input value={description} onChange={(e) => setDescription(e.target.value)} />
             </label>
             {standard === "ERC1155" && (
               <label>
                 Number of copies
-                <input value={copies} onChange={(e) => setCopies(e.target.value)} inputMode="numeric" placeholder="10" />
+                <input value={copies} onChange={(e) => setCopies(e.target.value)} inputMode="numeric" />
               </label>
             )}
             <div className="selectionCard">
@@ -1144,7 +1139,7 @@ export default function MintClient({
               {includeExternalUrl ? (
                 <label>
                   External URL
-                  <input value={externalUrl} onChange={(e) => setExternalUrl(e.target.value)} placeholder="https://…" />
+                  <input value={externalUrl} onChange={(e) => setExternalUrl(e.target.value)} />
                 </label>
               ) : null}
               <label className="inlineCheck">
@@ -1161,7 +1156,6 @@ export default function MintClient({
                   <input
                     value={metadataUri}
                     onChange={(e) => setMetadataUri(e.target.value)}
-                    placeholder="ipfs://…/metadata.json"
                   />
                 </label>
               ) : (
@@ -1349,7 +1343,6 @@ export default function MintClient({
                 <input
                   value={manageAddress}
                   onChange={(e) => setManageAddress(e.target.value)}
-                  placeholder="0x…"
                 />
               </label>
             )}
@@ -1390,13 +1383,6 @@ export default function MintClient({
               <input
                 value={registerSubnameLabel}
                 onChange={(e) => setRegisterSubnameLabel(e.target.value)}
-                placeholder={
-                  identityMode === "ens"
-                    ? "artist.eth"
-                    : identityMode === "subname"
-                      ? "studio.example.eth"
-                      : "studio"
-                }
               />
             </label>
             <p className="hint">
@@ -1436,7 +1422,6 @@ export default function MintClient({
               <input
                 value={transferTarget}
                 onChange={(e) => setTransferTarget(e.target.value)}
-                placeholder="0x…"
               />
             </label>
             <button
