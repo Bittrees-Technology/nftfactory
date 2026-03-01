@@ -14,6 +14,7 @@ import {
   updateModerator,
   type ApiPaymentTokenRecord,
   type ApiModerator,
+  type ApiModeratorsResponse,
   type ApiModerationAction,
   type ApiModerationReport
 } from "../../lib/indexerApi";
@@ -35,6 +36,8 @@ export default function AdminClient() {
   const [actions, setActions] = useState<ApiModerationAction[]>([]);
   const [hiddenListings, setHiddenListings] = useState<number[]>([]);
   const [moderators, setModerators] = useState<ApiModerator[]>([]);
+  const [moderatorSource, setModeratorSource] = useState<ApiModeratorsResponse["source"]>("local");
+  const [moderatorRegistryAddress, setModeratorRegistryAddress] = useState<string | null>(null);
   const [paymentTokens, setPaymentTokens] = useState<ApiPaymentTokenRecord[]>([]);
   const [manualListingId, setManualListingId] = useState("");
   const [moderatorAddress, setModeratorAddress] = useState("");
@@ -49,6 +52,7 @@ export default function AdminClient() {
   const [notesDraft, setNotesDraft] = useState("");
   const manualListingNumeric = Number.parseInt(manualListingId, 10);
   const canWrite = Boolean(adminToken || adminAddress);
+  const canEditModerators = canWrite && moderatorSource !== "onchain+local";
   const hasManualListingId = Number.isInteger(manualListingNumeric) && manualListingNumeric >= 0;
 
   async function refresh(): Promise<void> {
@@ -68,11 +72,13 @@ export default function AdminClient() {
             adminToken,
             adminAddress: adminAddress || actor
           };
-          const [moderatorRows, paymentTokenRows] = await Promise.all([
+          const [moderatorState, paymentTokenRows] = await Promise.all([
             fetchModerators(auth),
             fetchTrackedPaymentTokens(auth)
           ]);
-          setModerators(moderatorRows);
+          setModerators(moderatorState.moderators);
+          setModeratorSource(moderatorState.source || "local");
+          setModeratorRegistryAddress(moderatorState.moderatorRegistryAddress || null);
           setPaymentTokens(paymentTokenRows);
           setModeratorError("");
           setPaymentTokenError("");
@@ -83,6 +89,8 @@ export default function AdminClient() {
         }
       } else {
         setModerators([]);
+        setModeratorSource("local");
+        setModeratorRegistryAddress(null);
         setPaymentTokens([]);
         setModeratorError("");
         setPaymentTokenError("");
@@ -296,9 +304,15 @@ export default function AdminClient() {
       <div className="card formCard">
         <h3>Moderator List</h3>
         <p className="sectionLead">
-          The root admin for nftfactory.eth can maintain a reusable moderator allowlist here. Saved moderators
-          are treated as approved operators for moderation actions, but only the root admin can edit this list.
+          {moderatorSource === "onchain+local"
+            ? "The moderator allowlist is being read from the on-chain ModeratorRegistry. Local moderator edits are disabled while contract-backed moderation is active."
+            : "The root admin for nftfactory.eth can maintain a reusable moderator allowlist here. Saved moderators are treated as approved operators for moderation actions, but only the root admin can edit this list."}
         </p>
+        {moderatorRegistryAddress ? (
+          <p className="hint mono">
+            ModeratorRegistry: {moderatorRegistryAddress}
+          </p>
+        ) : null}
         <div className="gridMini">
           <label>
             Moderator address
@@ -306,6 +320,7 @@ export default function AdminClient() {
               value={moderatorAddress}
               onChange={(e) => setModeratorAddress(e.target.value)}
               placeholder="0xmoderator..."
+              disabled={!canEditModerators}
             />
           </label>
           <label>
@@ -314,21 +329,27 @@ export default function AdminClient() {
               value={moderatorLabel}
               onChange={(e) => setModeratorLabel(e.target.value)}
               placeholder="community-moderator"
+              disabled={!canEditModerators}
             />
           </label>
         </div>
         <div className="row">
-          <button type="button" onClick={() => void saveModerator(true)} disabled={!canWrite}>
+          <button type="button" onClick={() => void saveModerator(true)} disabled={!canEditModerators}>
             Add Or Update Moderator
           </button>
-          <button type="button" onClick={() => void saveModerator(false)} disabled={!canWrite}>
+          <button type="button" onClick={() => void saveModerator(false)} disabled={!canEditModerators}>
             Remove Moderator
           </button>
         </div>
         {moderatorError ? <p className="error">{moderatorError}</p> : null}
-        {!canWrite ? <p className="hint">Enter root admin credentials above to edit the moderator list.</p> : null}
+        {!canWrite ? <p className="hint">Enter root admin credentials above to view or edit the moderator list.</p> : null}
+        {canWrite && !canEditModerators ? (
+          <p className="hint">Use the ModeratorRegistry contract for moderator updates while contract-backed moderation is enabled.</p>
+        ) : null}
         {moderators.length === 0 ? (
-          <p className="hint">No saved moderators yet.</p>
+          <p className="hint">
+            {moderatorSource === "onchain+local" ? "No active on-chain moderators are configured yet." : "No saved moderators yet."}
+          </p>
         ) : (
           <div className="listTable">
             {moderators.map((moderator) => (

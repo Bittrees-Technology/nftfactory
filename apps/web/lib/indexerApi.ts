@@ -98,6 +98,12 @@ export type ApiModerator = {
   updatedAt: string;
 };
 
+export type ApiModeratorsResponse = {
+  moderators: ApiModerator[];
+  source?: "local" | "onchain+local";
+  moderatorRegistryAddress?: string | null;
+};
+
 export type ApiPaymentTokenRecord = {
   tokenAddress: string;
   firstSeenAt: string;
@@ -346,11 +352,15 @@ export async function fetchModerationActions(): Promise<ApiModerationAction[]> {
   return fetchJson<ApiModerationAction[]>("/api/moderation/actions");
 }
 
-export async function fetchModerators(auth?: AdminAuth): Promise<ApiModerator[]> {
-  const payload = await fetchJson<{ moderators: ApiModerator[] }>("/api/admin/moderators", {
+export async function fetchModerators(auth?: AdminAuth): Promise<ApiModeratorsResponse> {
+  const payload = await fetchJson<ApiModeratorsResponse>("/api/admin/moderators", {
     headers: adminHeaders(auth)
   });
-  return payload.moderators || [];
+  return {
+    moderators: payload.moderators || [],
+    source: payload.source || "local",
+    moderatorRegistryAddress: payload.moderatorRegistryAddress || null
+  };
 }
 
 export async function updateModerator(payload: {
