@@ -896,17 +896,12 @@ export default function MintClient({
   return (
     <section className="wizard">
       <div className="card formCard">
-        <h3>{pageMode === "manage" ? "Current Flow: Manage Collection" : "Current Flow: Mint NFT"}</h3>
-        {pageMode === "manage" ? (
-          <p className="hint">
-            Use this mode when you already have a creator collection contract and need to transfer
-            ownership, finalize upgrades, or update the collection identity.
-          </p>
-        ) : (
-          <p className="hint">
-            One publish flow for both shared and creator collections.
-          </p>
-        )}
+        <h3>{pageMode === "manage" ? "Manage Collection" : "Mint NFT"}</h3>
+        <p className="hint">
+          {pageMode === "manage"
+            ? "Manage an existing creator collection."
+            : "Mint into the shared contract or your own collection."}
+        </p>
         <div className="row">
           <button type="button" className={pageMode === "mint" ? "presetButton presetActive" : "presetButton"} onClick={() => setPageMode("mint")}>
             Mint and publish
@@ -927,17 +922,13 @@ export default function MintClient({
 
           {/* Step 1: Wallet */}
           <div className="card formCard">
-            <h3>1. Wallet Status</h3>
-            <p className="hint">Use the header wallet button to connect and choose the network.</p>
+            <h3>1. Wallet</h3>
             {wrongNetwork ? (
-              <p className="hint">
-                Use the header wallet button to select {appChain.name}. Minting stays blocked until the selected network
-                matches the configured chain.
-              </p>
+              <p className="hint">Select {appChain.name} in the header wallet menu to continue.</p>
             ) : null}
             <div className="gridMini">
               <p className="mono">Account: {account || "Not connected"}</p>
-              <p className="mono">Target network: {appChain.name}</p>
+              <p className="mono">Network: {appChain.name}</p>
             </div>
           </div>
 
@@ -1358,30 +1349,18 @@ export default function MintClient({
         <div className="wizard">
 
           <div className="card formCard">
-            <h3>Management Flow</h3>
-            <p className="hint">
-              Use this route after your creator collection is deployed. The management flow is: choose the collection,
-              set the collection identity, then handle ownership or finality changes.
-            </p>
-            <div className="gridMini">
-              <p className="hint"><strong>1. Choose collection:</strong> pick from your saved collection dropdown, or use manual entry only if needed.</p>
-              <p className="hint"><strong>2. Set identity:</strong> attach an ENS name or register an <strong>nftfactory.eth</strong> label.</p>
-              <p className="hint"><strong>3. Operate:</strong> transfer ownership or permanently finalize upgrades.</p>
-            </div>
+            <h3>Manage Collection</h3>
+            <p className="hint">Choose a collection, verify it, then update identity or contract settings.</p>
           </div>
 
           <div className="card formCard">
-            <h3>Wallet Status</h3>
-            <p className="hint">The header wallet button controls connect, account selection, and network selection.</p>
+            <h3>Wallet</h3>
             {wrongNetwork ? (
-              <p className="hint">
-                Use the header wallet button to select {appChain.name}. Management actions stay blocked until the selected
-                network matches the configured chain.
-              </p>
+              <p className="hint">Select {appChain.name} in the header wallet menu to continue.</p>
             ) : null}
             <div className="gridMini">
               <p className="mono">Account: {account || "Not connected"}</p>
-              <p className="mono">Target network: {appChain.name}</p>
+              <p className="mono">Network: {appChain.name}</p>
             </div>
           </div>
 
