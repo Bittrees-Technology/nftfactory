@@ -814,28 +814,6 @@ export default function MintClient({
 
   return (
     <section className="wizard">
-      <div className="heroCard">
-        <p className="eyebrow">Publishing Flow</p>
-        <h1>Create and Publish</h1>
-        <p className="heroText">
-          One route for the full publish flow: choose a collection, prepare the asset, then mint.
-        </p>
-        <div className="flowStrip">
-          <div className="flowCell">
-            <span className="flowLabel">Connect</span>
-            <p className="hint">Use the header wallet button.</p>
-          </div>
-          <div className="flowCell">
-            <span className="flowLabel">Prepare</span>
-            <p className="hint">Choose a collection and set the asset.</p>
-          </div>
-          <div className="flowCell">
-            <span className="flowLabel">Publish</span>
-            <p className="hint">Upload to IPFS if needed, then mint.</p>
-          </div>
-        </div>
-      </div>
-
       <div className="card formCard">
         <h3>{pageMode === "manage" ? "Current Flow: Manage Collection" : "Current Flow: Mint NFT"}</h3>
         {pageMode === "manage" ? (
