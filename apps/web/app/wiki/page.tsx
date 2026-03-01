@@ -8,19 +8,17 @@ export default async function WikiHomePage() {
 
   return (
     <section className="wizard">
-      <div className="heroCard">
-        <p className="eyebrow">Knowledge Base</p>
-        <h1>Wiki</h1>
-        <p className="heroText">
-          Product, architecture, operations, and launch guidance sourced from the in-repo wiki files under <code>data/wiki</code>.
-        </p>
-      </div>
-
       <div className="wikiLayout">
         <WikiSidebar pages={pages} currentSlug="home" />
         {home ? (
-          <div className="card formCard">
-            <h3>{home.title}</h3>
+          <div className="card formCard wikiPageCard">
+            <div className="wikiPageHeader">
+              <p className="eyebrow">Knowledge Base</p>
+              <h1>{home.title}</h1>
+              <p className="wikiPageLead">
+                Product, architecture, operations, and launch guidance sourced from the in-repo wiki files under <code>data/wiki</code>.
+              </p>
+            </div>
             <WikiMarkdown content={home.content} />
           </div>
         ) : null}

@@ -21,6 +21,7 @@ export async function listWikiPages(): Promise<WikiPage[]> {
   const files = await readdir(WIKI_DIR);
   return files
     .filter((file) => file.toLowerCase().endsWith(".md"))
+    .filter((file) => file !== "Archive.md")
     .sort((a, b) => {
       if (a === "Home.md") return -1;
       if (b === "Home.md") return 1;
