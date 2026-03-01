@@ -73,6 +73,7 @@ contract SharedMint721 is Owned {
 
     error Unauthorized();
     error InvalidRecipient();
+    error InvalidApproval();
     error NonexistentToken();
 
     // ── Constructor ───────────────────────────────────────────────────────────
@@ -124,6 +125,8 @@ contract SharedMint721 is Owned {
     /// @param tokenId The token to approve for.
     function approve(address to, uint256 tokenId) external {
         address tokenOwner = _ownerOf[tokenId];
+        if (tokenOwner == address(0)) revert NonexistentToken();
+        if (to == tokenOwner) revert InvalidApproval();
         if (msg.sender != tokenOwner && !isApprovedForAll[tokenOwner][msg.sender]) revert Unauthorized();
         _approvals[tokenId] = to;
         emit Approval(tokenOwner, to, tokenId);
@@ -194,6 +197,7 @@ contract SharedMint721 is Owned {
     ///      Validates caller authority, clears per-token approval, updates state, emits Transfer.
     function _transfer(address from, address to, uint256 tokenId) internal {
         address tokenOwner = _ownerOf[tokenId];
+        if (tokenOwner == address(0)) revert NonexistentToken();
         if (tokenOwner != from) revert Unauthorized();
         if (msg.sender != from && !isApprovedForAll[from][msg.sender] && _approvals[tokenId] != msg.sender) {
             revert Unauthorized();

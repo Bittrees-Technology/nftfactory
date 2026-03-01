@@ -134,6 +134,21 @@ contract SharedMint721Test is Test {
         nft.approve(other, tokenId);
     }
 
+    function testApproveRevertsForNonexistentToken() external {
+        vm.prank(creator);
+        vm.expectRevert(SharedMint721.NonexistentToken.selector);
+        nft.approve(other, 999);
+    }
+
+    function testApproveRevertsWhenApprovingCurrentOwner() external {
+        vm.prank(creator);
+        uint256 tokenId = nft.publish("", "ipfs://test");
+
+        vm.prank(creator);
+        vm.expectRevert(SharedMint721.InvalidApproval.selector);
+        nft.approve(creator, tokenId);
+    }
+
     function testApprovedOperatorCanSetApprovalOnBehalfOfOwner() external {
         vm.prank(creator);
         uint256 tokenId = nft.publish("", "ipfs://test");
@@ -285,6 +300,12 @@ contract SharedMint721Test is Test {
         vm.prank(creator);
         vm.expectRevert(SharedMint721.InvalidRecipient.selector);
         nft.safeTransferFrom(creator, address(0), tokenId);
+    }
+
+    function testTransferRevertsForNonexistentToken() external {
+        vm.prank(creator);
+        vm.expectRevert(SharedMint721.NonexistentToken.selector);
+        nft.transferFrom(creator, other, 999);
     }
 
     // ── setApprovalForAll ─────────────────────────────────────────────────────
