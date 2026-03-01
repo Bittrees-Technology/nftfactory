@@ -23,6 +23,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   <Link href="/list">List</Link>
                   <Link href="/discover">Discover</Link>
                   <Link href="/profile">Profile</Link>
+                  <Link href="/mod">Mod</Link>
                   <Link href="/admin">Admin</Link>
                 </div>
                 <HeaderWalletButton />

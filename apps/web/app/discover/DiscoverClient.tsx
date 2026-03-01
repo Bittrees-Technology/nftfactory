@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Address } from "viem";
 import { useAccount } from "wagmi";
 import { getContractsConfig } from "../../lib/contracts";
@@ -57,9 +57,14 @@ function normalizeAddress(value: string): value is Address {
   return /^0x[a-fA-F0-9]{40}$/.test(value);
 }
 
-export default function DiscoverClient() {
+type DiscoverClientProps = {
+  mode?: "feed" | "mod";
+};
+
+export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
   const config = useMemo(() => getContractsConfig(), []);
   const { address } = useAccount();
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   const [allListings, setAllListings] = useState<MarketplaceListing[]>([]);
   const [hiddenListingIds, setHiddenListingIds] = useState<number[]>([]);
@@ -82,6 +87,7 @@ export default function DiscoverClient() {
   const [reporter, setReporter] = useState("");
   const [reportingId, setReportingId] = useState<number | null>(null);
   const [reportReason, setReportReason] = useState("spam");
+  const [showFilters, setShowFilters] = useState(false);
 
   const hasActiveFilters = Boolean(
     sourceFilter !== "ALL" ||
@@ -197,6 +203,26 @@ export default function DiscoverClient() {
     }
   }, [address, reporter]);
 
+  useEffect(() => {
+    if (mode !== "feed") return;
+    const node = sentinelRef.current;
+    if (!node || !canLoadMore || isLoadingMore || isLoading) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            void loadMore();
+          }
+        }
+      },
+      { rootMargin: "300px 0px" }
+    );
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [canLoadMore, isLoading, isLoadingMore, loadMore, mode]);
+
   const filtered = useMemo(() => {
     const shared721 = config.shared721.toLowerCase();
     const shared1155 = config.shared1155.toLowerCase();
@@ -294,107 +320,123 @@ export default function DiscoverClient() {
 
   return (
     <section className="wizard">
-      <div className="heroCard">
-        <p className="eyebrow">Marketplace Feed</p>
-        <h1>Discover</h1>
-        <p className="heroText">
-          Read-only marketplace feed for collectors and reviewers. Use this route to inspect current
-          listings, narrow the feed, and flag suspicious activity without entering seller mode.
-        </p>
-        <div className="row">
-          <Link href="/profile" className="ctaLink secondaryLink">Open creator profiles</Link>
-          <Link href="/list" className="ctaLink secondaryLink">Go to seller tools</Link>
+      {mode === "mod" ? (
+        <div className="heroCard">
+          <p className="eyebrow">Moderation</p>
+          <h1>Mod</h1>
+          <p className="heroText">
+            Review the active listing stream, verify creator and contract context, and submit moderation
+            reports without leaving the marketplace feed.
+          </p>
+          <div className="row">
+            <Link href="/discover" className="ctaLink secondaryLink">Open the mint feed</Link>
+            <Link href="/admin" className="ctaLink secondaryLink">Open admin actions</Link>
+          </div>
+          <div className="flowStrip">
+            <div className="flowCell">
+              <span className="flowLabel">Inspect</span>
+              <p className="hint">Review fresh listings as they appear and use filters to narrow the queue.</p>
+            </div>
+            <div className="flowCell">
+              <span className="flowLabel">Verify</span>
+              <p className="hint">Open creator profiles and contract links before acting on suspicious listings.</p>
+            </div>
+            <div className="flowCell">
+              <span className="flowLabel">Report</span>
+              <p className="hint">Submit a report from the same feed when a listing needs review.</p>
+            </div>
+          </div>
         </div>
-        <div className="flowStrip">
-          <div className="flowCell">
-            <span className="flowLabel">Inspect</span>
-            <p className="hint">Refresh the live feed, then narrow it with source, standard, or price filters.</p>
-          </div>
-          <div className="flowCell">
-            <span className="flowLabel">Verify</span>
-            <p className="hint">Open creator profiles or contract links before acting on suspicious listings.</p>
-          </div>
-          <div className="flowCell">
-            <span className="flowLabel">Report</span>
-            <p className="hint">Submit moderation reports from this screen without leaving the public feed.</p>
-          </div>
-        </div>
-      </div>
+      ) : null}
 
       <div className="card formCard">
-        <h3>Current Route Scope</h3>
+        <h3>{mode === "feed" ? "Mint Feed" : "Moderation Feed"}</h3>
         <p className="hint">
-          This page is intentionally read-only for browsing. Use List if you want to create or manage your own sale.
+          {mode === "feed"
+            ? "Continuous public feed of active marketplace listings. Scroll through drops, open creator profiles, and narrow the stream only when you need to."
+            : "Moderation-focused view of the same live listing stream. Keep filters tight, validate context, and report from here before moving to admin actions."}
         </p>
         <div className="row">
-          <label>
-            Page size
-            <input value={pageSize} onChange={(e) => setPageSize(e.target.value)} inputMode="numeric" placeholder="50" />
-          </label>
+          <button type="button" onClick={() => setShowFilters((value) => !value)}>
+            Filters
+          </button>
           <button type="button" onClick={() => void loadInitial(true)} disabled={isLoading}>
             {isLoading ? "Loading..." : "Refresh"}
           </button>
-          {canLoadMore ? (
+          {mode === "mod" && canLoadMore ? (
             <button type="button" onClick={() => void loadMore()} disabled={isLoadingMore}>
               {isLoadingMore ? "Loading more..." : "Load More"}
             </button>
-          ) : (
-            <p className="hint">End of feed</p>
-          )}
+          ) : null}
+          {mode === "feed" ? <Link href="/list" className="ctaLink secondaryLink">Go to seller tools</Link> : null}
+          {mode === "feed" ? <Link href="/profile" className="ctaLink secondaryLink">Open creator profiles</Link> : null}
         </div>
 
-        <div className="gridMini">
-          <label>
-            Source
-            <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value as SourceFilter)}>
-              <option value="ALL">All</option>
-              <option value="SHARED">NFTFactory shared</option>
-              <option value="CUSTOM">Creator collections</option>
-            </select>
-          </label>
+        {showFilters ? (
+          <>
+            <div className="gridMini">
+              <label>
+                Source
+                <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value as SourceFilter)}>
+                  <option value="ALL">All listings</option>
+                  <option value="SHARED">Shared mints only</option>
+                  <option value="CUSTOM">Creator collections only</option>
+                </select>
+              </label>
 
-          <label>
-            Standard
-            <select value={standardFilter} onChange={(e) => setStandardFilter(e.target.value as StandardFilter)}>
-              <option value="ALL">All</option>
-              <option value="ERC721">ERC-721</option>
-              <option value="ERC1155">ERC-1155</option>
-            </select>
-          </label>
+              <label>
+                Standard
+                <select value={standardFilter} onChange={(e) => setStandardFilter(e.target.value as StandardFilter)}>
+                  <option value="ALL">All standards</option>
+                  <option value="ERC721">ERC-721</option>
+                  <option value="ERC1155">ERC-1155</option>
+                </select>
+              </label>
 
-          <label>
-            Max price (ETH only)
-            <input value={maxPriceEth} onChange={(e) => setMaxPriceEth(e.target.value)} placeholder="0.05" />
-          </label>
+              <label>
+                Max price (ETH only)
+                <input value={maxPriceEth} onChange={(e) => setMaxPriceEth(e.target.value)} placeholder="0.05" />
+              </label>
 
-          <label>
-            Contract contains
-            <input value={contractFilter} onChange={(e) => setContractFilter(e.target.value)} placeholder="0xabc..." />
-          </label>
+              <label>
+                Collection contract
+                <input value={contractFilter} onChange={(e) => setContractFilter(e.target.value)} placeholder="0xabc..." />
+              </label>
 
-          <label>
-            Seller
-            <input value={sellerFilter} onChange={(e) => setSellerFilter(e.target.value)} placeholder="0xseller..." />
-          </label>
+              <label>
+                Seller wallet
+                <input value={sellerFilter} onChange={(e) => setSellerFilter(e.target.value)} placeholder="0xseller..." />
+              </label>
 
-          <label>
-            Sort
-            <select value={sortBy} onChange={(e) => setSortBy(e.target.value as SortBy)}>
-              <option value="newest">Newest</option>
-              <option value="priceAsc">Price low to high</option>
-              <option value="priceDesc">Price high to low</option>
-            </select>
-          </label>
-        </div>
+              <label>
+                Sort
+                <select value={sortBy} onChange={(e) => setSortBy(e.target.value as SortBy)}>
+                  <option value="newest">Newest first</option>
+                  <option value="priceAsc">Price low to high</option>
+                  <option value="priceDesc">Price high to low</option>
+                </select>
+              </label>
 
-        <div className="row">
-          <label>
-            Reporter address
-            <input value={reporter} onChange={(e) => setReporter(e.target.value)} placeholder="0xreporter..." />
-          </label>
-        </div>
-        {!reporter && !address ? <p className="hint">Connect wallet or enter reporter address manually.</p> : null}
-        {reporter && !canReport ? <p className="hint">Reporter address must be a valid wallet before a report can be submitted.</p> : null}
+              <label>
+                Page size
+                <input value={pageSize} onChange={(e) => setPageSize(e.target.value)} inputMode="numeric" placeholder="50" />
+              </label>
+            </div>
+
+            {mode === "mod" ? (
+              <>
+                <div className="row">
+                  <label>
+                    Reporter address
+                    <input value={reporter} onChange={(e) => setReporter(e.target.value)} placeholder="0xreporter..." />
+                  </label>
+                </div>
+                {!reporter && !address ? <p className="hint">Connect wallet or enter reporter address manually.</p> : null}
+                {reporter && !canReport ? <p className="hint">Reporter address must be a valid wallet before a report can be submitted.</p> : null}
+              </>
+            ) : null}
+          </>
+        ) : null}
       </div>
 
       {error ? <p className="error">{error}</p> : null}
@@ -444,7 +486,7 @@ export default function DiscoverClient() {
                 Reset Filters
               </button>
             ) : null}
-            <Link href="/profile" className="ctaLink secondaryLink">Check creator profiles</Link>
+            {mode === "feed" ? <Link href="/profile" className="ctaLink secondaryLink">Check creator profiles</Link> : null}
           </div>
         </div>
       ) : null}
@@ -481,31 +523,44 @@ export default function DiscoverClient() {
             ) : (
               <span className="mono">Seller {truncateAddress(row.seller)}</span>
             )}
-            {reportingId === row.id ? (
-              <div className="reportInline">
-                <select
-                  value={reportReason}
-                  onChange={(e) => setReportReason(e.target.value)}
-                >
-                  <option value="spam">Spam</option>
-                  <option value="abuse">Abuse</option>
-                  <option value="scam">Scam</option>
-                  <option value="other">Other</option>
-                </select>
-                <button type="button" className="miniBtn" disabled={!canReport} onClick={() => void submitReport(row)}>
-                  Submit
+            {mode === "mod" ? (
+              reportingId === row.id ? (
+                <div className="reportInline">
+                  <select
+                    value={reportReason}
+                    onChange={(e) => setReportReason(e.target.value)}
+                  >
+                    <option value="spam">Spam</option>
+                    <option value="abuse">Abuse</option>
+                    <option value="scam">Scam</option>
+                    <option value="other">Other</option>
+                  </select>
+                  <button type="button" className="miniBtn" disabled={!canReport} onClick={() => void submitReport(row)}>
+                    Submit
+                  </button>
+                  <button type="button" className="miniBtn" onClick={() => setReportingId(null)}>
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button type="button" className="miniBtn" onClick={() => setReportingId(row.id)}>
+                  Report
                 </button>
-                <button type="button" className="miniBtn" onClick={() => setReportingId(null)}>
-                  Cancel
-                </button>
-              </div>
-            ) : (
-              <button type="button" className="miniBtn" onClick={() => setReportingId(row.id)}>
-                Report
-              </button>
-            )}
+              )
+            ) : null}
           </article>
         ))}
+      </div>
+      <div ref={sentinelRef} className="card">
+        <p className="hint">
+          {canLoadMore
+            ? mode === "feed"
+              ? isLoadingMore
+                ? "Loading more listings..."
+                : "Keep scrolling to load more listings."
+              : "Use Load More to continue reviewing the moderation feed."
+            : "End of feed"}
+        </p>
       </div>
     </section>
   );
