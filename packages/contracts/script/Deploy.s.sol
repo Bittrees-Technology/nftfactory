@@ -12,6 +12,7 @@ import {CreatorCollection721} from "../src/token/CreatorCollection721.sol";
 import {CreatorCollection1155} from "../src/token/CreatorCollection1155.sol";
 import {CreatorFactory} from "../src/core/CreatorFactory.sol";
 import {Marketplace} from "../src/core/Marketplace.sol";
+import {ModeratorRegistry} from "../src/core/ModeratorRegistry.sol";
 
 contract DeployScript is Script {
     function run() external {
@@ -24,6 +25,7 @@ contract DeployScript is Script {
         NftFactoryRegistry registry = new NftFactoryRegistry(deployer, treasury);
         RoyaltySplitRegistry splitRegistry = new RoyaltySplitRegistry(deployer);
         SubnameRegistrar registrar = new SubnameRegistrar(deployer, treasury);
+        ModeratorRegistry moderatorRegistry = new ModeratorRegistry(deployer);
 
         SharedMint721 shared721 = new SharedMint721(deployer, address(registrar), "NFTFactory Shared 721", "NFS721");
         SharedMint1155 shared1155 = new SharedMint1155(deployer, address(registrar), "NFTFactory Shared 1155", "NFS1155");
@@ -45,6 +47,7 @@ contract DeployScript is Script {
         console2.log("Registry", address(registry));
         console2.log("RoyaltySplitRegistry", address(splitRegistry));
         console2.log("SubnameRegistrar", address(registrar));
+        console2.log("ModeratorRegistry", address(moderatorRegistry));
         console2.log("SharedMint721", address(shared721));
         console2.log("SharedMint1155", address(shared1155));
         console2.log("CreatorCollection721 impl", address(impl721));
