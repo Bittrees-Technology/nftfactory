@@ -571,9 +571,6 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
         ) : null}
       </div>
 
-      {error ? <p className="error">{error}</p> : null}
-      {indexerStatus ? <p className="hint">{indexerStatus}</p> : null}
-
       <div className="card">
         <p className="hint">
           {mode === "feed"
