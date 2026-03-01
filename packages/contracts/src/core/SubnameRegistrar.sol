@@ -30,6 +30,7 @@ contract SubnameRegistrar is Owned {
     error UnknownSubname();
     error NotAuthorizedMinter();
     error SubnameActive();
+    error InvalidLabel();
 
     constructor(address initialOwner, address initialTreasury) Owned(initialOwner) {
         treasury = initialTreasury;
@@ -37,6 +38,7 @@ contract SubnameRegistrar is Owned {
 
     function registerSubname(string calldata label) external payable {
         if (msg.value != SUBNAME_FEE) revert WrongFee();
+        _validateLabel(label);
 
         bytes32 key = keccak256(bytes(label));
         SubnameRecord storage rec = subnames[key];
@@ -64,6 +66,7 @@ contract SubnameRegistrar is Owned {
 
     function renewSubname(string calldata label) external payable {
         if (msg.value != SUBNAME_FEE) revert WrongFee();
+        _validateLabel(label);
 
         bytes32 key = keccak256(bytes(label));
         SubnameRecord storage rec = subnames[key];
@@ -88,6 +91,7 @@ contract SubnameRegistrar is Owned {
 
     function recordMint(string calldata label) external {
         if (!authorizedMinter[msg.sender] && msg.sender != owner) revert NotAuthorizedMinter();
+        _validateLabel(label);
         bytes32 key = keccak256(bytes(label));
         SubnameRecord storage rec = subnames[key];
         if (!rec.exists) revert UnknownSubname();
@@ -111,6 +115,21 @@ contract SubnameRegistrar is Owned {
                 keys.pop();
                 return;
             }
+        }
+    }
+
+    function _validateLabel(string calldata label) internal pure {
+        bytes calldata raw = bytes(label);
+        uint256 length = raw.length;
+        if (length == 0 || length > 63) revert InvalidLabel();
+
+        for (uint256 i = 0; i < length; i++) {
+            bytes1 char = raw[i];
+            bool isDigit = char >= 0x30 && char <= 0x39;
+            bool isLower = char >= 0x61 && char <= 0x7a;
+            bool isHyphen = char == 0x2d;
+            if (!isDigit && !isLower && !isHyphen) revert InvalidLabel();
+            if ((i == 0 || i == length - 1) && isHyphen) revert InvalidLabel();
         }
     }
 }
