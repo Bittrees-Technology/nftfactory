@@ -18,6 +18,7 @@ contract NftFactoryRegistry is Owned {
     mapping(address => bool) public blocked;
     mapping(address => bool) public authorizedFactory;
     mapping(address => CreatorRecord[]) public creators;
+    mapping(address => mapping(address => bool)) public creatorContractRegistered;
 
     event TreasuryUpdated(address indexed treasury);
     event ProtocolFeeUpdated(uint256 feeBps);
@@ -33,6 +34,7 @@ contract NftFactoryRegistry is Owned {
 
     error FeeTooHigh();
     error NotAuthorizedFactory();
+    error CreatorContractAlreadyRegistered();
 
     constructor(address initialOwner, address initialTreasury) Owned(initialOwner) {
         treasury = initialTreasury;
@@ -67,6 +69,9 @@ contract NftFactoryRegistry is Owned {
         bool isFactoryCreated
     ) external {
         if (!authorizedFactory[msg.sender] && msg.sender != owner) revert NotAuthorizedFactory();
+        if (creatorContractRegistered[creator][contractAddress]) revert CreatorContractAlreadyRegistered();
+
+        creatorContractRegistered[creator][contractAddress] = true;
 
         creators[creator].push(
             CreatorRecord({
