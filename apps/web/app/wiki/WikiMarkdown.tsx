@@ -1,8 +1,36 @@
+import Link from "next/link";
 import type { ReactNode } from "react";
 
 type Props = {
   content: string;
 };
+
+function resolveWikiHref(href: string): { href: string; external: boolean } {
+  const trimmed = href.trim();
+  if (!trimmed) {
+    return { href: "#", external: false };
+  }
+
+  if (/^(https?:)?\/\//i.test(trimmed) || /^ipfs:\/\//i.test(trimmed) || /^mailto:/i.test(trimmed)) {
+    return { href: trimmed, external: true };
+  }
+
+  const normalized = trimmed
+    .replace(/^\.?\//, "")
+    .replace(/^docs\/wiki\//i, "")
+    .replace(/^data\/wiki\//i, "")
+    .replace(/\.md$/i, "");
+
+  if (!normalized) {
+    return { href: "/wiki", external: false };
+  }
+
+  const slug = normalized.toLowerCase();
+  return {
+    href: slug === "home" ? "/wiki" : `/wiki/${slug}`,
+    external: false
+  };
+}
 
 function renderInline(text: string, keyPrefix: string): ReactNode[] {
   const nodes: ReactNode[] = [];
@@ -23,16 +51,27 @@ function renderInline(text: string, keyPrefix: string): ReactNode[] {
         </code>
       );
     } else if (match[2]) {
+      const target = resolveWikiHref(match[4]);
       nodes.push(
-        <a
-          key={`${keyPrefix}-link-${part}`}
-          href={match[4]}
-          target="_blank"
-          rel="noreferrer"
-          className="wikiInlineLink"
-        >
-          {match[3]}
-        </a>
+        target.external ? (
+          <a
+            key={`${keyPrefix}-link-${part}`}
+            href={target.href}
+            target="_blank"
+            rel="noreferrer"
+            className="wikiInlineLink"
+          >
+            {match[3]}
+          </a>
+        ) : (
+          <Link
+            key={`${keyPrefix}-link-${part}`}
+            href={target.href}
+            className="wikiInlineLink"
+          >
+            {match[3]}
+          </Link>
+        )
       );
     }
 
