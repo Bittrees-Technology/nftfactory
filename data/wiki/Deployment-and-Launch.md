@@ -65,14 +65,21 @@ Use this order for the current contract suite:
 1. `NftFactoryRegistry`
 2. `RoyaltySplitRegistry`
 3. `SubnameRegistrar`
-4. `SharedMint721`
-5. `SharedMint1155`
-6. `CreatorFactory`
-7. `Marketplace`
+4. `ModeratorRegistry`
+5. `SharedMint721`
+6. `SharedMint1155`
+7. `CreatorFactory`
+8. `Marketplace`
 
 For verification and deployment scripts, the marketplace contract now resolves as:
 
 - `src/core/Marketplace.sol:Marketplace`
+
+After deploying `ModeratorRegistry`:
+
+- seed the initial moderator set on-chain
+- set `MODERATOR_REGISTRY_ADDRESS` in `services/indexer/.env`
+- restart the indexer before validating admin and moderation flows
 
 ## Environment readiness
 
