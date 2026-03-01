@@ -31,4 +31,8 @@ Use the archive when you need:
 - old release framing
 - point-in-time operational notes
 
+Start with the archive index:
+
+- [docs/archive/README.md](../archive/README.md)
+
 Do not use the archive as the primary source when documenting current behavior. The current source of truth should be the active wiki pages linked from [Home](./Home.md).
