@@ -45,10 +45,21 @@ contract MarketplaceFixedPrice is Owned {
     error Sanctioned();
     error UnsupportedStandard();
     error InvalidAmount();
+    error InvalidPrice();
     error NotApproved();
+    error Reentrancy();
+
+    uint256 private _entered;
 
     constructor(address initialOwner, address registryAddress) Owned(initialOwner) {
         registry = NftFactoryRegistry(registryAddress);
+    }
+
+    modifier nonReentrant() {
+        if (_entered == 1) revert Reentrancy();
+        _entered = 1;
+        _;
+        _entered = 0;
     }
 
     function setBlockedCollection(address collection, bool isBlocked) external onlyOwner {
@@ -65,6 +76,7 @@ contract MarketplaceFixedPrice is Owned {
         uint256 price
     ) external {
         if (registry.blocked(msg.sender) || registry.blocked(nft) || blockedCollection[nft]) revert Sanctioned();
+        if (price == 0) revert InvalidPrice();
 
         bytes32 key = keccak256(bytes(standard));
         if (key == keccak256("ERC721")) {
@@ -102,7 +114,7 @@ contract MarketplaceFixedPrice is Owned {
         emit Cancelled(listingId);
     }
 
-    function buy(uint256 listingId) external payable {
+    function buy(uint256 listingId) external payable nonReentrant {
         Listing storage listing = listings[listingId];
         if (!listing.active) revert NotActive();
         if (
@@ -112,10 +124,8 @@ contract MarketplaceFixedPrice is Owned {
 
         bytes32 key = keccak256(bytes(listing.standard));
         if (key == keccak256("ERC721")) {
-            if (IERC721Lite(listing.nft).ownerOf(listing.tokenId) != listing.seller) revert NotSeller();
             if (!IERC721Lite(listing.nft).isApprovedForAll(listing.seller, address(this))) revert NotApproved();
         } else if (key == keccak256("ERC1155")) {
-            if (IERC1155Lite(listing.nft).balanceOf(listing.seller, listing.tokenId) < listing.amount) revert NotSeller();
             if (!IERC1155Lite(listing.nft).isApprovedForAll(listing.seller, address(this))) revert NotApproved();
         } else {
             revert UnsupportedStandard();
