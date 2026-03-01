@@ -326,6 +326,127 @@ nav {
   background: #fff9f1;
 }
 
+.feedCard {
+  display: grid;
+  gap: 14px;
+  border: 1px solid #e6d7c4;
+  border-radius: 16px;
+  padding: 16px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.86), rgba(255, 247, 236, 0.96));
+  box-shadow: 0 10px 28px rgba(111, 63, 24, 0.06);
+}
+
+.feedCardTop {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.feedCardStamp {
+  margin: 0;
+  color: #725744;
+  font-size: 0.85rem;
+}
+
+.feedCardStatus {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #fff0dc;
+  border: 1px solid #e8c7a3;
+  color: #7f220f;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.feedCardBody {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(220px, 1.2fr) minmax(240px, 1fr);
+}
+
+.feedCardMain {
+  display: grid;
+  gap: 6px;
+}
+
+.feedCardEyebrow {
+  margin: 0;
+  color: #9b5c2e;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.feedCardTitle {
+  margin: 0;
+  font-size: 1.2rem;
+  line-height: 1.2;
+}
+
+.feedCardTitle span {
+  color: #9b5c2e;
+  font-weight: 600;
+}
+
+.feedCardMetaLine {
+  margin: 0;
+  color: #4b4138;
+  font-size: 0.92rem;
+}
+
+.feedCardFacts {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
+.feedFact {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid #ead9c5;
+  background: #fffaf2;
+}
+
+.feedFactLabel {
+  color: #7f220f;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.feedCardLinks {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.feedLinkPill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 38px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid #d6b38c;
+  background: #fff6ea;
+  color: #5f3720;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.feedLinkPill.muted {
+  background: #f4e3cd;
+  color: #6e523d;
+}
+
 .miniBtn {
   padding: 4px 8px;
   border-radius: 8px;
@@ -592,6 +713,10 @@ button:disabled {
   }
 
   .profileIdentityHead {
+    grid-template-columns: 1fr;
+  }
+
+  .feedCardBody {
     grid-template-columns: 1fr;
   }
 }

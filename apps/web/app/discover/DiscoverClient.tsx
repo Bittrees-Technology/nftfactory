@@ -697,55 +697,84 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
                 : "Not listed";
 
               return (
-                <article key={row.id} className="listRow">
-                  <span>
-                    <strong>Minted</strong> {mintedAtLabel}
-                  </span>
-                  <span>
-                    <strong>Collection</strong> {ensLabel || (row.collection.isFactoryCreated ? "NFTFactory shared" : "Creator collection")}
-                  </span>
-                  <span>
-                    <strong>Standard</strong> {row.collection.standard}
-                  </span>
-                  <span>
-                    <strong>Token</strong> #{row.tokenId}
-                  </span>
-                  <span>
-                    <strong>Status</strong> {priceLabel}
-                  </span>
-                  {contractExplorer ? (
-                    <a href={contractExplorer} target="_blank" rel="noreferrer" className="mono">
-                      Contract {truncateAddress(row.collection.contractAddress)}
-                    </a>
-                  ) : (
-                    <span className="mono">Contract {truncateAddress(row.collection.contractAddress)}</span>
-                  )}
-                  {ownerExplorer ? (
-                    <a href={ownerExplorer} target="_blank" rel="noreferrer" className="mono">
-                      Owner {truncateAddress(row.ownerAddress)}
-                    </a>
-                  ) : (
-                    <span className="mono">Owner {truncateAddress(row.ownerAddress)}</span>
-                  )}
-                  {creatorExplorer ? (
-                    <a href={creatorExplorer} target="_blank" rel="noreferrer" className="mono">
-                      Creator {truncateAddress(row.creatorAddress)}
-                    </a>
-                  ) : (
-                    <span className="mono">Creator {truncateAddress(row.creatorAddress)}</span>
-                  )}
-                  {metadataLink ? (
-                    <a href={metadataLink} target="_blank" rel="noreferrer">
-                      View metadata
-                    </a>
-                  ) : (
-                    <span className="hint">Metadata pending</span>
-                  )}
-                  {mediaLink ? (
-                    <a href={mediaLink} target="_blank" rel="noreferrer">
-                      View media
-                    </a>
-                  ) : null}
+                <article key={row.id} className="feedCard">
+                  <div className="feedCardTop">
+                    <p className="feedCardStamp">{mintedAtLabel}</p>
+                    <span className="feedCardStatus">{priceLabel}</span>
+                  </div>
+
+                  <div className="feedCardBody">
+                    <div className="feedCardMain">
+                      <p className="feedCardEyebrow">
+                        {row.collection.isFactoryCreated ? "NFTFactory shared mint" : "Creator collection mint"}
+                      </p>
+                      <h3 className="feedCardTitle">
+                        {ensLabel || "Untitled collection"} <span>#{row.tokenId}</span>
+                      </h3>
+                      <p className="feedCardMetaLine">
+                        {row.collection.standard} minted on chain {row.collection.chainId}
+                      </p>
+                    </div>
+
+                    <div className="feedCardFacts">
+                      <div className="feedFact">
+                        <span className="feedFactLabel">Contract</span>
+                        {contractExplorer ? (
+                          <a href={contractExplorer} target="_blank" rel="noreferrer" className="mono">
+                            {truncateAddress(row.collection.contractAddress)}
+                          </a>
+                        ) : (
+                          <span className="mono">{truncateAddress(row.collection.contractAddress)}</span>
+                        )}
+                      </div>
+
+                      <div className="feedFact">
+                        <span className="feedFactLabel">Owner</span>
+                        {ownerExplorer ? (
+                          <a href={ownerExplorer} target="_blank" rel="noreferrer" className="mono">
+                            {truncateAddress(row.ownerAddress)}
+                          </a>
+                        ) : (
+                          <span className="mono">{truncateAddress(row.ownerAddress)}</span>
+                        )}
+                      </div>
+
+                      <div className="feedFact">
+                        <span className="feedFactLabel">Creator</span>
+                        {creatorExplorer ? (
+                          <a href={creatorExplorer} target="_blank" rel="noreferrer" className="mono">
+                            {truncateAddress(row.creatorAddress)}
+                          </a>
+                        ) : (
+                          <span className="mono">{truncateAddress(row.creatorAddress)}</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="feedCardLinks">
+                    {metadataLink ? (
+                      <a href={metadataLink} target="_blank" rel="noreferrer" className="feedLinkPill">
+                        View metadata
+                      </a>
+                    ) : (
+                      <span className="feedLinkPill muted">Metadata pending</span>
+                    )}
+                    {mediaLink ? (
+                      <a href={mediaLink} target="_blank" rel="noreferrer" className="feedLinkPill">
+                        View media
+                      </a>
+                    ) : null}
+                    {row.activeListing ? (
+                      <Link href="/list" className="feedLinkPill muted">
+                        Open listing tools
+                      </Link>
+                    ) : (
+                      <Link href="/mint" className="feedLinkPill muted">
+                        Mint more
+                      </Link>
+                    )}
+                  </div>
                 </article>
               );
             })
