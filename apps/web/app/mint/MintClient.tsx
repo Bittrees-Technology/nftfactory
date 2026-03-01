@@ -88,6 +88,11 @@ function metadataDraftKey(ownerAddress: string): string {
   return `nftfactory:mint-draft:${ownerAddress.toLowerCase()}`;
 }
 
+function clearMetadataDraft(ownerAddress: string): void {
+  if (typeof window === "undefined" || !ownerAddress) return;
+  window.localStorage.removeItem(metadataDraftKey(ownerAddress));
+}
+
 function shortenAddress(value: string): string {
   return `${value.slice(0, 8)}…${value.slice(-6)}`;
 }
@@ -186,6 +191,20 @@ export default function MintClient({
 
   const wrongNetwork = isConnected && chainId !== config.chainId;
   const account = address ?? "";
+
+  function resetMetadataInputs(): void {
+    setName("");
+    setDescription("");
+    setIncludeExternalUrl(false);
+    setExternalUrl("");
+    setUseCustomMetadataUri(false);
+    setMetadataUri("");
+    setImageFile(null);
+    setIncludeAudio(false);
+    setAudioFile(null);
+    setImageUri("");
+    setAudioUri("");
+  }
 
   function mergeKnownCollections(nextItems: KnownCollection[]): void {
     setKnownCollections((prev) => {
@@ -323,9 +342,6 @@ export default function MintClient({
         useCustomMetadataUri?: boolean;
         metadataUri?: string;
         includeAudio?: boolean;
-        imageUri?: string;
-        audioUri?: string;
-        uploadReceipt?: UploadReceipt;
       };
       if (parsed.name) setName(parsed.name);
       if (parsed.description) setDescription(parsed.description);
@@ -334,9 +350,6 @@ export default function MintClient({
       if (typeof parsed.useCustomMetadataUri === "boolean") setUseCustomMetadataUri(parsed.useCustomMetadataUri);
       if (parsed.metadataUri) setMetadataUri(parsed.metadataUri);
       if (typeof parsed.includeAudio === "boolean") setIncludeAudio(parsed.includeAudio);
-      if (parsed.imageUri) setImageUri(parsed.imageUri);
-      if (parsed.audioUri) setAudioUri(parsed.audioUri);
-      if (parsed.uploadReceipt) setUploadReceipt(parsed.uploadReceipt);
     } catch {
       // Ignore malformed local drafts.
     }
@@ -354,24 +367,18 @@ export default function MintClient({
         includeExternalUrl,
         externalUrl,
         useCustomMetadataUri,
-        metadataUri,
-        includeAudio,
-        imageUri,
-        audioUri,
-        uploadReceipt
+        metadataUri: useCustomMetadataUri ? metadataUri : "",
+        includeAudio
       })
     );
   }, [
     account,
-    audioUri,
     description,
     externalUrl,
-    imageUri,
     includeAudio,
     includeExternalUrl,
     metadataUri,
     name,
-    uploadReceipt,
     useCustomMetadataUri
   ]);
 
@@ -671,6 +678,8 @@ export default function MintClient({
       const txHash = await sendTransaction(targetNft, mintData);
       await waitForReceipt(txHash);
       setMintTx({ status: "success", hash: txHash, message: "Minted successfully." });
+      clearMetadataDraft(account);
+      resetMetadataInputs();
     } catch (err) {
       setMintTx({ status: "error", message: err instanceof Error ? err.message : "Publish failed" });
     }
