@@ -1,128 +1,120 @@
 # ENS Integration
 
-nftfactory uses Ethereum Name Service (ENS) subnames under `nftfactory.eth` to give creators a human-readable identity that links to their wallet and minted tokens.
+## Core principle
 
----
+NFTFactory uses ENS as a creator-facing identity layer, but the current build intentionally separates:
 
-## How subnames work
+- **what is created on-chain by NFTFactory**
+- **what is linked in the app as identity metadata**
 
-A subname is a label registered under the parent name `nftfactory.eth`. For example, if you register the label `studio`, your full ENS name becomes `studio.nftfactory.eth`.
+This distinction matters because the current contracts do **not** manage arbitrary ENS names.
 
-The subname:
-- resolves to your wallet address on-chain via standard ENS resolution
-- lets collectors search for your work by name instead of a raw address
-- appears in the indexer's profile API: `GET /api/profile/:label`
+## What NFTFactory creates on-chain today
 
----
+The only native ENS creation flow currently supported by the contracts is:
 
-## SubnameRegistrar contract
+- a subname under `nftfactory.eth`
 
-`SubnameRegistrar` (`0x040695EA634b6999b4F785d7FdBE56C0eaB7F646`) handles registration and mint attribution.
+This is handled by `SubnameRegistrar`.
 
-### Registering a subname
+Example:
 
-```solidity
-function registerSubname(string calldata label) external payable;
-```
+- input label: `studio`
+- resulting name: `studio.nftfactory.eth`
 
-- **Cost:** 0.001 ETH, valid for 365 days
-- **Effect:** Records the label → `msg.sender` mapping on-chain
-- **One label per wallet:** A wallet can register multiple labels, but each label maps to one address
+## What NFTFactory links at the app level
 
-Call this once from the mint UI or directly on-chain. You only need to do this once per label.
+The profile system can also link:
 
-### Mint attribution (`recordMint`)
+- an external ENS name
+  - example: `artist.eth`
+- an external ENS subname
+  - example: `drops.artist.eth`
 
-```solidity
-function recordMint(string calldata label) external;
-```
+These are valid product identities, but they are **not** minted or managed by NFTFactory contracts. They are linked through the profile registry and surfaced in the UI and indexer.
 
-- Increments the `mintedCount` for a label
-- Can only be called by addresses in `authorizedMinter` mapping (currently the two SharedMint contracts)
-- **Does not verify** that `msg.sender` owns the subname — it only checks that the label `exists` in the registry
+## SubnameRegistrar
 
-`SharedMint721.publish()` and `SharedMint1155.publish()` call `recordMint` inside a `try/catch`. If the subname is unregistered or the call fails, the mint still succeeds — attribution is optional.
+`SubnameRegistrar` is responsible for:
 
-> **Important:** ENS attribution in shared mints is advisory. A caller can pass any subname label at mint time; the contract will try to record the mint but will silently ignore failures. Ownership of the subname is not enforced at the contract level.
+- registering `nftfactory.eth` subnames
+- storing label-to-owner mappings for that namespace
+- supporting shared-mint attribution with `recordMint`
 
----
+It should be treated as the authoritative contract for the NFTFactory-managed subname namespace only.
 
 ## Shared mint attribution
 
-When calling `SharedMint721.publish()` or `SharedMint1155.publish()`:
+Shared mint contracts accept an optional subname label during publish.
 
-```solidity
-function publish(string calldata creatorSubname, string calldata uri) external returns (uint256 tokenId);
-```
+Current behavior:
 
-- Pass `creatorSubname = ""` to skip attribution entirely
-- Pass your registered label (e.g. `"studio"`) to have the mint counted against your profile
-- The `Published` event includes the subname: `Published(address creator, uint256 tokenId, string creatorSubname, string uri)`
-- The indexer reads this event and updates the creator profile
+- the creator can pass a label
+- the shared mint contract attempts to call `recordMint`
+- failures do not block the mint
 
----
+This means attribution is:
 
-## Creator collection attribution
+- useful for discovery
+- optional
+- not currently a hard ownership gate for minting
 
-When deploying a collection via `CreatorFactory.deployCollection()`:
+## Creator collection identity
 
-```solidity
-struct DeployRequest {
-    string  standard;               // "ERC721" or "ERC1155"
-    address creator;
-    string  tokenName;
-    string  tokenSymbol;
-    string  ensSubname;             // e.g. "studio"
-    address defaultRoyaltyReceiver;
-    uint96  defaultRoyaltyBps;
-}
-```
+Creator collections can carry ENS-related identity metadata in the product, but collection identity and full creator-profile presentation are currently driven by:
 
-The `ensSubname` field is stored in `NftFactoryRegistry` as part of the `CreatorRecord`. It is **cosmetic metadata only** — it does not register the subname, does not call `recordMint`, and is not validated against `SubnameRegistrar`. Register your subname separately before or after deploying.
+- indexer-backed profile records
+- linked collection metadata
+- owner-based lookups
 
----
+The collection contract itself is not the canonical source for the full public profile.
 
-## Profile API (indexer)
+## Current profile resolution model
 
-The off-chain indexer exposes:
+The current build resolves creators through the indexer using:
 
-```
-GET /api/profile/:label
-```
+- linked ENS names
+- linked ENS subnames
+- linked `nftfactory.eth` subnames
+- creator profile slugs
 
-Returns:
-```json
-{
-  "name": "studio",
-  "sellers": ["0xabc..."]
-}
-```
+That means:
 
-`sellers` is the list of wallet addresses associated with the label. The marketplace filter uses this to let users type a subname and find all listings from that creator.
+- `/profile`
+  - uses owner-based profile lookup
+- `/profile/setup`
+  - links or creates the creator identity
+- `/profile/[name]`
+  - resolves the public creator page
 
----
+## Marketplace and discovery
 
-## ENS in the marketplace filter
+ENS-linked identity is also used to make discovery more human-readable:
 
-In the listing browser (`/list`), the **Creator (ENS subname)** filter:
-1. Accepts a subname label (e.g. `studio`)
-2. After a 400 ms debounce, calls `GET /api/profile/studio`
-3. Resolves the returned wallet address(es)
-4. Filters listings to only show sellers that match
+- the profile APIs resolve creator identities to wallets
+- discovery and profile surfaces can display creator identity without requiring raw address input
 
-The hint below the input shows the resolved address or "subname not found" if the indexer has no record for that label.
+## Current limits
 
----
+The current build does **not**:
 
-## End-to-end flow
+- mint arbitrary `.eth` names
+- manage external ENS parent domains
+- prove external ENS ownership on-chain inside NFTFactory contracts
 
-```
-Creator UI                  SubnameRegistrar           SharedMint721
-───────────                 ────────────────           ─────────────
-1. registerSubname("studio")  →  stores label→wallet
-2. publish("studio", ipfsUri)                     →  publish()
-                                                     recordMint("studio") ──→ increments mintedCount
-                                                     emit Published(...)
-3. Indexer picks up Published event, updates profile for "studio"
-4. Collector searches "studio" in marketplace filter → resolves to wallet → sees listings
-```
+Those identity modes are currently product-level links, not protocol-owned ENS mutation paths.
+
+## Recommended future direction
+
+If NFTFactory later needs stronger external ENS verification, that should be added as:
+
+- explicit off-chain validation in the indexer or app
+- or new chain-specific integrations
+
+It should not be implied by the current contracts.
+
+## Related pages
+
+- [Profiles and Identity](./Profiles-and-Identity.md)
+- [Contracts](./Contracts.md)
+- [Architecture](./Architecture.md)

@@ -2,43 +2,60 @@
 
 ## Scope
 
-`CreatorCollection721` and `CreatorCollection1155` are deployed as UUPS proxies via `CreatorFactory`.
+This runbook applies to:
 
-These collections can be upgraded by the owner until `finalizeUpgrades()` is called.
+- `CreatorCollection721`
+- `CreatorCollection1155`
 
-## Architecture
+These are the only contracts in the current product that use the creator-owned UUPS upgrade path.
+
+## Important context
+
+The current product direction should prefer:
+
+- minimal upgrades
+- explicit collection ownership
+- deliberate finalization once a collection is stable
+
+Upgrades are a maintenance path, not a routine product feature.
+
+## Upgrade boundary
+
+The creator-collection path is:
 
 ```text
-CreatorFactory
-  -> deploys ERC1967Proxy
-  -> proxy points to CreatorCollection implementation
+CreatorFactory -> ERC1967Proxy -> CreatorCollection implementation
 ```
 
-- Proxy holds state
-- Implementation holds logic
-- `_authorizeUpgrade()` enforces ownership and finality rules
+This means:
 
-## When to upgrade
+- state lives in the proxy
+- logic lives in the implementation
+- the collection owner controls upgrades until finalization
 
-Valid reasons to upgrade include:
+## When an upgrade is justified
 
-- logic bug fixes
-- security patches
-- additive creator-collection features
+Valid upgrade reasons include:
 
-Do not upgrade after `finalizeUpgrades()`; that path is intentionally closed forever.
+- a security fix
+- a serious logic bug
+- a narrowly scoped additive feature that requires a contract change
 
-## Pre-upgrade checklist
+Avoid upgrading for cosmetic or product-layer changes that can be handled in the app or indexer.
 
-- new implementation is tested
-- storage layout is compatible
-- implementation is deployed
-- owner signer is available
-- `upgradesFinalized()` is still `false`
+## Preconditions
 
-## Execution flow
+Before upgrading:
 
-### 1. Deploy the new implementation
+- test the new implementation thoroughly
+- confirm storage compatibility
+- deploy the new implementation
+- confirm the proxy has **not** been finalized
+- ensure the correct owner or Safe is the signer
+
+## Execution
+
+### 1. Deploy the implementation
 
 ```bash
 cd packages/contracts
@@ -66,22 +83,32 @@ cast send $PROXY_ADDRESS \
 cast storage $PROXY_ADDRESS 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc --rpc-url $RPC_URL
 ```
 
-### 4. Smoke test the upgraded collection
+### 4. Smoke test immediately
 
-- mint or publish a test token
-- verify token URI behavior
-- verify royalties
-- verify existing state still resolves correctly
+Verify:
 
-## Safety rules
+- minting still works
+- token metadata resolves correctly
+- royalty behavior still matches expectations
+- existing state remains intact
 
-- never reorder or remove existing storage slots
-- do not perform upgrades from a personal wallet in production
-- document every implementation change and owner action
-- finalize upgrades only after the collection is intentionally frozen
+## After the upgrade
+
+Document:
+
+- implementation address
+- reason for upgrade
+- owner who executed it
+- whether the collection remains upgradeable or should be finalized next
+
+## Finality interaction
+
+Once `finalizeUpgrades()` has been called, this runbook no longer applies to that collection.
+
+That is the intended end state for collections that are ready to be frozen.
 
 ## Related pages
 
 - [Finality](./Finality.md)
-- [Operations and Governance](./Operations-and-Governance.md)
 - [Contracts](./Contracts.md)
+- [Operations and Governance](./Operations-and-Governance.md)

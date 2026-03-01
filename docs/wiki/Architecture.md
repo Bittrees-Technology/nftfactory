@@ -2,55 +2,95 @@
 
 ## Overview
 
-NFTFactory is organized around three product layers:
+NFTFactory is a Sepolia-first, Ethereum-native creator platform with three core layers:
 
-1. Contracts
-2. Web application
-3. Indexer and admin services
+1. **Smart contracts**
+2. **Web application**
+3. **Indexer and moderation services**
 
-The product is currently centered on Ethereum, with Sepolia as the primary test environment before mainnet rollout.
+The system is designed so that contracts remain the source of on-chain truth, while the indexer is the primary source of product-facing query data for discovery, profile resolution, and operational tooling.
 
-## Contract system
+## Environment model
+
+### Local development
+
+Used for rapid iteration:
+
+- Anvil can be used as the local chain
+- the web app can run against local contract addresses
+- the indexer may run in a degraded mode if Prisma is unavailable
+- local browser caches are acceptable as a fallback for drafts and recent selections
+
+### Sepolia validation
+
+Used for realistic end-to-end testing:
+
+- wallet actions use real Sepolia transactions
+- explorer links and contract receipts matter
+- contract addresses should match the validated deployment set
+- profile, mint, listing, and moderation flows should be verified here before mainnet
+
+### Mainnet
+
+Mainnet is the release target, not the iteration target. The recommended path is:
+
+1. local UX iteration
+2. Sepolia functional validation
+3. Safe ownership transfer and final operational checks
+4. mainnet deployment
+
+## Contract layer
+
+The current contract system is built around:
 
 - `NftFactoryRegistry`
-  - protocol treasury configuration
-  - fee basis points
-  - sanctions and blocklist controls
-  - creator collection registry
+  - registry and policy state
 - `CreatorFactory`
   - deploys creator-owned ERC-1967 proxy collections
-  - registers deployed collections in the registry
+- `CreatorCollection721` / `CreatorCollection1155`
+  - creator-owned, upgradeable collection contracts
 - `SharedMint721` / `SharedMint1155`
-  - shared publish surface for low-friction minting
+  - low-friction shared publish contracts
 - `MarketplaceFixedPrice`
-  - fixed-price listing, cancellation, and purchase flows
+  - fixed-price listing and settlement
 - `RoyaltySplitRegistry`
-  - royalty split bookkeeping
+  - royalty split metadata
 - `SubnameRegistrar`
-  - `nftfactory.eth` subname registration and attribution support
+  - `nftfactory.eth` subname registration and shared-mint attribution
 
-## Product routes
+## Web application layer
+
+The current product routes are:
 
 - `/`
-  - landing page and product entry point
+  - landing page and product entry
 - `/mint`
-  - shared mint, creator collection mint, and collection management
+  - unified mint and publish flow
+  - collection management flow
 - `/discover`
-  - listing and creator discovery
+  - browse listings and creator activity
+- `/list`
+  - seller-side listing operations
 - `/profile`
   - profile selector and redirect surface
 - `/profile/setup`
-  - creator profile and ENS-linked setup
+  - creator identity and public-profile setup
 - `/profile/[name]`
   - public creator page
 - `/admin`
-  - moderation and operational controls
+  - moderation and operational tools
 
-## Indexer API
+## Indexer layer
 
-The indexer is the primary application data source for discovery, profile resolution, moderation, and owner-based collection lookups.
+The indexer is the authoritative application data source for:
 
-Core routes include:
+- creator profile resolution
+- owner-based collection lookup
+- moderation queues and hidden state
+- action history
+- listing and discovery APIs
+
+Current important routes include:
 
 - `GET /api/profile/:name`
 - `GET /api/profiles?owner=<address>`
@@ -61,24 +101,28 @@ Core routes include:
 - `GET /api/moderation/actions`
 - `GET /api/moderation/hidden-listings`
 
-## Admin auth model
+### Fallback behavior
 
-Admin mutation routes can be protected with:
+The current build intentionally supports degraded local operation:
 
-- `INDEXER_ADMIN_TOKEN`
-  - request bearer token
-- `INDEXER_ADMIN_ALLOWLIST`
-  - wallet allowlist for admin actions
+- if Prisma is unavailable, the indexer can still boot in a reduced mode
+- profile and moderator registries can be persisted in JSON-backed local files
+- local UI caches remain a fallback, not the primary source of truth
 
-## Moderation model
+## Data-source strategy
 
-- Reports can hide content from discovery
-- Admin actions can restore, dismiss, or keep content hidden
-- On-chain ownership remains unchanged; moderation affects product visibility
+For most user-facing dropdowns and selectors, the intended precedence is:
+
+1. indexer-backed data
+2. local cached data
+3. targeted on-chain reads only for confirmation or direct contract actions
+
+The browser should not attempt to discover full creator state by scanning the chain directly.
 
 ## Related pages
 
 - [Contracts](./Contracts.md)
+- [Profiles and Identity](./Profiles-and-Identity.md)
 - [ENS Integration](./ENS-Integration.md)
-- [Operations and Governance](./Operations-and-Governance.md)
 - [Deployment and Launch](./Deployment-and-Launch.md)
+- [Testing and Validation](./Testing-and-Validation.md)

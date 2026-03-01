@@ -1,69 +1,92 @@
 # Finality
 
-nftfactory creator collections support two irreversible finality actions that collectors can verify on-chain. These actions remove trust assumptions — once called, neither the owner nor anyone else can undo them.
+## Overview
 
----
+NFTFactory creator collections expose explicit irreversible actions so collectors can verify what has been frozen and what has not.
 
-## 1. `finalizeUpgrades()` — permanently disable contract upgrades
+These finality controls apply to creator-owned collections, not the shared mint contracts.
 
-**Applies to:** `CreatorCollection721`, `CreatorCollection1155` (not SharedMint contracts)
+## `finalizeUpgrades()`
 
-**Who can call it:** The current collection `owner` only.
+### Applies to
 
-**What it does:**
-- Permanently sets an internal `upgradesFinalized` flag to `true`
-- Overrides `_authorizeUpgrade()` to always revert, blocking all future UUPS proxy upgrades
-- **This action is irreversible.** Once called, the contract logic is frozen forever — even the owner cannot upgrade it.
+- `CreatorCollection721`
+- `CreatorCollection1155`
 
-**On-chain verification:** Call `upgradesFinalized()` (a public getter) on the collection contract. If it returns `true`, the contract is immutable.
+### Effect
 
-**Why this matters for collectors:** Creator collections are deployed as ERC-1967 UUPS proxies. By default, the owner can upgrade the implementation contract, which could change token behavior, URI resolution, or royalty routing. After `finalizeUpgrades()`, that trust assumption is eliminated — what you see is what you get, forever.
+- permanently disables future UUPS upgrades
+- freezes the collection logic at the current implementation
+- cannot be undone
 
-**UI:** Available in the **Manage Collection** tab of the Mint page. Enter the collection address, check the confirmation box (which explains the action is irreversible), and click "Finalize Upgrades (Irreversible)".
+### Why it matters
 
----
+Before finalization, a collection owner can change collection logic through the proxy upgrade path.
 
-## 2. `setMetadataLock(uint256 tokenId, bool locked)` — freeze a token's metadata URI
+After finalization:
 
-**Applies to:** `CreatorCollection721`, `CreatorCollection1155` (not SharedMint contracts)
+- that upgrade trust assumption is removed
+- collectors can verify that no further implementation changes are possible
 
-**Who can call it:** The collection `owner`.
+### How it is used in the product
 
-**What it does:**
-- Sets `metadataLocked[tokenId] = true`
-- Once locked, any call to `setTokenURI(tokenId, ...)` reverts
-- **Per-token, irreversible.** Individual tokens can be locked independently. Locking cannot be undone.
+This action belongs in the collection-management flow on `/mint` under the manage path.
 
-**At mint time:** Pass `lockMetadata = true` to `mint()` to lock the token's URI at the same time it's minted. This is the recommended approach for collectors who want provable immutability from day one.
+It should be treated as a deliberate, explicit “I am freezing upgrade authority” step.
 
-**On-chain verification:** Call `metadataLocked(tokenId)` on the collection contract. If it returns `true`, the token's metadata URI will never change.
+## Metadata locking
 
-**Why this matters for collectors:** NFT metadata stored off-chain (IPFS) can be changed after minting by whoever controls the contract, unless the metadata is locked. With `lockMetadata = true` at mint, the URI is frozen to its IPFS hash permanently.
+### Applies to
 
----
+- creator-owned collections only
 
-## SharedMint — no finality actions needed
+### Effect
 
-SharedMint contracts (`SharedMint721`, `SharedMint1155`) are:
-- **Not upgradeable** — there is no proxy; the contract is immutable by design
-- **Metadata immutable by design** — `tokenURI` is set in `publish()` and there is no setter function; the URI can never change
+- prevents later token-URI mutation for the affected token
+- can be set at mint time
+- should be treated as irreversible once enabled
 
-For SharedMint tokens, no finality action is needed because there is nothing to finalize. The contract itself is already immutable.
+### Why it matters
 
----
+For collectors, metadata locking is the stronger guarantee around content immutability. Even if collection ownership remains transferable, a locked token should keep the same metadata URI.
 
-## Summary table
+## Shared mint finality
 
-| Action | Contract | Caller | Reversible? |
-|--------|----------|--------|-------------|
-| `finalizeUpgrades()` | CreatorCollection only | Owner | No |
-| `setMetadataLock(tokenId, true)` | CreatorCollection only | Owner | No |
-| N/A — already immutable | SharedMint | — | — |
+Shared mint contracts are already the “final by design” path:
 
----
+- no proxy upgrade path
+- no metadata setter path
 
-## Transferring ownership before finalizing
+For that reason:
 
-If you want to hand your collection to a DAO, multisig, or a different address before finalizing, call `transferOwnership(newOwner)` first. The new owner then decides whether and when to call `finalizeUpgrades()`.
+- there is no `finalizeUpgrades()` equivalent
+- there is no separate metadata-lock flow
 
-`transferOwnership` is inherited from OpenZeppelin's `OwnableUpgradeable`. It is reversible — the new owner can call it again to pass control elsewhere. Only `finalizeUpgrades()` is irreversible.
+The shared path is simpler, but less configurable.
+
+## Practical collector interpretation
+
+The current trust model is:
+
+- **shared mint**
+  - simpler
+  - lower configurability
+  - already effectively frozen
+- **creator collections**
+  - more control
+  - more flexibility
+  - stronger creator-side governance until the owner explicitly finalizes
+
+## Recommended creator guidance
+
+Creators should:
+
+1. finish any needed upgrades first
+2. transfer ownership if a Safe or DAO should hold final control
+3. call `finalizeUpgrades()` only when the collection logic is truly ready to freeze
+
+## Related pages
+
+- [Contracts](./Contracts.md)
+- [Upgrade Runbook](./Upgrade-Runbook.md)
+- [Operations and Governance](./Operations-and-Governance.md)

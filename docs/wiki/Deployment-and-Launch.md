@@ -1,10 +1,51 @@
 # Deployment And Launch
 
-## Recommended deployment sequence
+## Deployment posture
 
-Sepolia should remain the primary pre-mainnet proving ground.
+NFTFactory should be operated as:
 
-### Contract deployment order
+1. local iteration first
+2. Sepolia validation second
+3. mainnet only after operational and product checks pass
+
+## Local development
+
+### Purpose
+
+Local development is for:
+
+- UI and flow iteration
+- local-chain testing with Anvil
+- indexer and admin workflow testing
+
+### Acceptable local compromises
+
+In local development, it is acceptable to use:
+
+- Anvil instead of Sepolia
+- local JSON-backed fallback state if Prisma is unavailable
+- local caches for drafts and recent selections
+
+These are development conveniences, not production guarantees.
+
+## Sepolia validation
+
+Sepolia is the canonical proving ground for current builds.
+
+Before considering a release ready, validate on Sepolia:
+
+- wallet connectivity
+- IPFS upload flow
+- shared mint publish
+- creator collection deploy and mint
+- collection management actions
+- profile setup and resolution
+- listing and buy paths
+- moderation report and visibility flows
+
+## Contract deployment order
+
+Use this order for the current contract suite:
 
 1. `NftFactoryRegistry`
 2. `RoyaltySplitRegistry`
@@ -16,54 +57,38 @@ Sepolia should remain the primary pre-mainnet proving ground.
 
 ## Environment readiness
 
-Before deployment or app validation, confirm:
+Before deployment or release validation, confirm:
 
 - deployer wallet is funded
-- Safe addresses are prepared
-- `RPC_URL` / `SEPOLIA_RPC_URL` are valid
-- `ETHERSCAN_API_KEY` is set if verification is required
-- `DATABASE_URL` is valid for the indexer
-- web app env includes all required `NEXT_PUBLIC_*` addresses and URLs
-
-## App readiness
-
-### Indexer
-
-- generate Prisma client
-- apply migrations where applicable
-- start the indexer
-- verify `/health`
-
-### Web
-
-- verify typecheck passes
-- verify build passes
-- confirm wallet and IPFS environment variables are present
+- Safe addresses are defined
+- RPC endpoints are valid
+- contract addresses are consistent across services
+- IPFS upload credentials are configured
+- indexer and web env files match the intended chain
 
 ## Operational launch gates
 
-Use these as the active go/no-go checks:
+Treat these as the real go/no-go checks:
 
-- typechecks pass
-- tests pass
-- web production build passes
-- Sepolia smoke matrix passes
-- ownership/admin roles are transferred to Safe
-- profile and ENS-linked flows resolve as expected
-- moderation flows behave correctly
+- contracts compile and tests pass
+- web typecheck and build pass
+- indexer typecheck passes
+- current Sepolia deployment addresses are validated
+- profile and ENS-linked flows resolve correctly
+- moderator and admin controls are usable
+- ownership/admin surfaces are transferred to Safe where required
 
-## Mainnet readiness
+## Mainnet go criteria
 
-Mainnet should only proceed after:
+Mainnet should wait until:
 
-- Sepolia soak testing is complete
-- Safe ownership has been validated
+- Sepolia flows are stable
+- ownership transfer is complete
 - deployment addresses are documented
-- final go/no-go review is complete
+- release confidence is based on current code, not stale docs or stale branches
 
 ## Related pages
 
-- [Architecture](./Architecture.md)
-- [Security and Audit](./Security-and-Audit.md)
+- [Contracts](./Contracts.md)
+- [Testing and Validation](./Testing-and-Validation.md)
 - [Operations and Governance](./Operations-and-Governance.md)
-- [Archive](./Archive.md)

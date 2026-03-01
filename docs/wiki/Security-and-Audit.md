@@ -1,18 +1,30 @@
 # Security And Audit
 
-## Audit scope
+## Security focus
 
-The primary audit scope is the smart contract suite in `packages/contracts/src`.
+The highest-value security work in NFTFactory is still in the smart contract layer.
+
+That said, the practical release posture now depends on three categories:
+
+1. contract safety
+2. operational correctness
+3. product-flow validation
+
+## Contract audit priorities
 
 ### Highest-risk contracts
 
 - `MarketplaceFixedPrice`
-  - handles ETH and token settlement
-  - listing execution and transfers
+  - settlement logic
+  - payment routing
+  - approval assumptions
+  - stale listing behavior
 - `SubnameRegistrar`
-  - accepts ETH fees and forwards them to treasury
+  - fee handling
+  - treasury forwarding
+  - subname registration rules
 
-### Standard-risk contracts
+### Medium-risk contracts
 
 - `NftFactoryRegistry`
 - `CreatorFactory`
@@ -20,59 +32,67 @@ The primary audit scope is the smart contract suite in `packages/contracts/src`.
 - `CreatorCollection1155`
 - `RoyaltySplitRegistry`
 
-### Lightweight contracts
+### Lower-risk but still important
 
 - `SharedMint721`
 - `SharedMint1155`
 - `Owned`
 
-## Primary review areas
+## Current review themes
 
-### Marketplace
+### Marketplace correctness
 
-- reentrancy and ordering of state updates
-- payment validation
-- stale listing behavior
-- sanctions and blocklist enforcement
-- listing lifecycle correctness
+- listing lifecycle integrity
+- stale or revoked listing behavior
+- approval and balance preflights
+- value transfer ordering
 
-### Creator collections
+### Creator collection safety
 
-- initialization safety
-- upgrade authorization
-- metadata locking guarantees
+- initialization correctness
+- UUPS authorization boundaries
+- finality and metadata guarantees
 
-### Factory
+### Identity and attribution correctness
 
-- atomic deploy-and-initialize behavior
-- deployment authorization
+- subname registration behavior
+- advisory nature of shared-mint attribution
+- separation between on-chain ENS creation and off-chain linked identity
 
-### Subname registrar
+## Non-contract release risks
 
-- exact fee enforcement
-- treasury transfer behavior
-- renewal and expiry rules
+Even when contracts are correct, the product can still fail operationally through:
 
-### Shared mint contracts
+- bad env wiring
+- wrong chain configuration
+- stale indexer data
+- broken IPFS upload credentials
+- mismatched contract addresses between web and indexer
 
-- intentional standards deviations
-- attribution behavior
-- transfer and approval expectations
-
-## Out of scope
-
-- frontend application code
-- indexer and backend services
-- upstream OpenZeppelin internals
+Those are release risks, even if they are not contract vulnerabilities.
 
 ## Practical security posture
 
-- prefer Safe-based ownership in production
-- treat shared mint attribution as advisory unless strengthened on-chain
-- validate every release with tests, smoke checks, and deployment verification
+The current recommended posture is:
+
+- Safe-based ownership for protocol contracts
+- receipt-confirmed transaction flows in the UI
+- explicit Sepolia validation before mainnet
+- strict env review before deployment
+- conservative assumptions around external ENS claims
+
+## What is not implied
+
+The current build should not be documented as if it already provides:
+
+- arbitrary ENS-name minting
+- strong on-chain validation of external ENS ownership
+- production-grade chain indexing beyond the current indexer behavior
+
+Those may be future improvements, but they are not current guarantees.
 
 ## Related pages
 
 - [Contracts](./Contracts.md)
-- [Operations and Governance](./Operations-and-Governance.md)
 - [Deployment and Launch](./Deployment-and-Launch.md)
+- [Testing and Validation](./Testing-and-Validation.md)

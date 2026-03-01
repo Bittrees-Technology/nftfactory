@@ -23,8 +23,12 @@ Production-grade monorepo scaffold for `nftfactory.eth`.
 ## Docs quicklinks
 - `docs/wiki/Home.md`
   - Main documentation entry point and wiki index.
+- `docs/wiki/Profiles-and-Identity.md`
+  - Current profile setup, ENS-linked identity model, and public creator page routing.
 - `docs/wiki/Operations-and-Governance.md`
   - Ownership, privileged surfaces, governance posture, and operational control boundaries.
+- `docs/wiki/Testing-and-Validation.md`
+  - Practical release and environment validation flow for the current build.
 - `docs/wiki/Contract-Dependencies.md`
   - High-level Solidity dependency map and regeneration guidance.
 - `docs/wiki/Security-and-Audit.md`
