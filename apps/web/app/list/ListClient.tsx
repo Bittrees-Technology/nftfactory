@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { useAccount, useChainId, usePublicClient, useWalletClient } from "wagmi";
 import type { Address, Hex } from "viem";
 import {
@@ -12,8 +11,8 @@ import {
 } from "../../lib/abi";
 import { getContractsConfig } from "../../lib/contracts";
 import { fetchActiveListingsBatch } from "../../lib/marketplace";
-import { fetchMintFeed, type ApiMintFeedItem } from "../../lib/indexerApi";
-import { getAppChain, getExplorerBaseUrl } from "../../lib/chains";
+import { fetchMintFeed, logPaymentTokenUsage } from "../../lib/indexerApi";
+import { getAppChain } from "../../lib/chains";
 import TxStatus, { type TxState } from "./TxStatus";
 import ListingCard, { type ListingRow } from "./ListingCard";
 
@@ -21,6 +20,7 @@ type Standard = "ERC721" | "ERC1155";
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const DEFAULT_SCAN_LIMIT = 200;
+const MAX_LISTING_DAYS = 365;
 
 type OwnedMintRow = {
   key: string;
@@ -87,13 +87,11 @@ export default function ListClient() {
   const [listingsError, setListingsError] = useState("");
   const [cancelingId, setCancelingId] = useState<number | null>(null);
   const [copiedKey, setCopiedKey] = useState("");
-  const [scanDepth, setScanDepth] = useState("200");
   const [ownedMints, setOwnedMints] = useState<OwnedMintRow[]>([]);
   const [mintInventoryLoading, setMintInventoryLoading] = useState(false);
   const [mintInventoryError, setMintInventoryError] = useState("");
 
   const wrongNetwork = isConnected && chainId !== config.chainId;
-  const parsedScanDepth = Number.parseInt(scanDepth, 10);
   const ipfsGateway = process.env.NEXT_PUBLIC_IPFS_GATEWAY || "https://gateway.pinata.cloud/ipfs";
 
   useEffect(() => {
@@ -175,6 +173,11 @@ export default function ListClient() {
   }, [config, filteredOwnedMints]);
 
   useEffect(() => {
+    if (source === "shared") {
+      setSelectedContract(standard === "ERC721" ? config.shared721 : config.shared1155);
+      setSelectedTokenKeys([]);
+      return;
+    }
     if (contractOptions.length === 0) {
       setSelectedContract("");
       setSelectedTokenKeys([]);
@@ -183,7 +186,7 @@ export default function ListClient() {
     if (!selectedContract || !contractOptions.some((item) => item.address.toLowerCase() === selectedContract.toLowerCase())) {
       setSelectedContract(contractOptions[0].address);
     }
-  }, [contractOptions, selectedContract]);
+  }, [config.shared1155, config.shared721, contractOptions, selectedContract, source, standard]);
 
   useEffect(() => {
     setSelectedTokenKeys([]);
@@ -214,12 +217,11 @@ export default function ListClient() {
     setListingsLoading(true);
     setListingsError("");
     try {
-      const limit = Number.isInteger(parsedScanDepth) && parsedScanDepth > 0 ? parsedScanDepth : DEFAULT_SCAN_LIMIT;
       const result = await fetchActiveListingsBatch({
         chainId: config.chainId,
         rpcUrl: config.rpcUrl,
         marketplace: config.marketplace as Address,
-        limit
+        limit: DEFAULT_SCAN_LIMIT
       });
       const active = result.listings;
       if (address) {
@@ -291,8 +293,8 @@ export default function ListClient() {
     }
 
     const parsedDays = Number.parseInt(listingDays, 10);
-    if (!Number.isInteger(parsedDays) || parsedDays <= 0) {
-      setState({ status: "error", message: "Listing length must be at least 1 day." });
+    if (!Number.isInteger(parsedDays) || parsedDays <= 0 || parsedDays > MAX_LISTING_DAYS) {
+      setState({ status: "error", message: `Listing length must be between 1 and ${MAX_LISTING_DAYS} days.` });
       return;
     }
 
@@ -357,6 +359,18 @@ export default function ListClient() {
         await waitForReceipt(listingTx);
       }
 
+      if (paymentTokenType === "ERC20" && paymentToken !== ZERO_ADDRESS) {
+        try {
+          await logPaymentTokenUsage({
+            tokenAddress: paymentToken,
+            sellerAddress: address || "",
+            listingIds: selectedTokens.map((item) => item.tokenId)
+          });
+        } catch {
+          // Token logging is best-effort and should not fail the listing flow.
+        }
+      }
+
       setState({
         status: "success",
         hash: latestHash,
@@ -408,12 +422,9 @@ export default function ListClient() {
       // no-op
     }
   }
-
   const selectedContractLabel = selectedContract
     ? formatContractLabel(selectedContract, availableTokens, config)
     : "";
-
-  const explorerBase = getExplorerBaseUrl(config.chainId);
 
   return (
     <section className="wizard">
@@ -436,15 +447,6 @@ export default function ListClient() {
                 <option value="custom">Custom collection</option>
               </select>
             </label>
-            <label>
-              Scan depth
-              <select value={scanDepth} onChange={(e) => setScanDepth(e.target.value)}>
-                <option value="100">Last 100</option>
-                <option value="200">Last 200</option>
-                <option value="500">Last 500</option>
-                <option value="1000">Last 1000</option>
-              </select>
-            </label>
           </div>
           <p className="hint">
             {isConnected
@@ -452,30 +454,30 @@ export default function ListClient() {
               : "Connect a wallet from the header to load owned NFTs that can be listed."}
           </p>
           {wrongNetwork ? <p className="hint">Use the header wallet button to select {appChain.name} before listing.</p> : null}
-          <div className="compactList">
-            {contractOptions.length > 0 ? (
-              contractOptions.map((option) => {
-                const isActive = option.address.toLowerCase() === selectedContract.toLowerCase();
-                return (
-                  <button
-                    key={option.address}
-                    type="button"
-                    className={`selectionButton${isActive ? " selectionButtonActive" : ""}`}
-                    onClick={() => setSelectedContract(option.address)}
-                  >
-                    <strong>{option.label}</strong>
-                    <span className="mono">{option.address}</span>
-                  </button>
-                );
-              })
-            ) : (
-              <p className="hint">
-                {mintInventoryLoading
-                  ? "Loading owned NFTs..."
-                  : "No indexed owned NFTs match this source and standard yet. Mint first, then return here to list."}
-              </p>
-            )}
-          </div>
+          {source === "shared" ? (
+            <div className="selectionCard">
+              <span className="detailLabel">Collection Contract</span>
+              <p className="detailValue">{standard === "ERC721" ? "NFTFactory Shared ERC-721" : "NFTFactory Shared ERC-1155"}</p>
+              <p className="mono">{selectedContract || (standard === "ERC721" ? config.shared721 : config.shared1155)}</p>
+            </div>
+          ) : contractOptions.length > 0 ? (
+            <label>
+              Creator collection
+              <select value={selectedContract} onChange={(e) => setSelectedContract(e.target.value)}>
+                {contractOptions.map((option) => (
+                  <option key={option.address} value={option.address}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : (
+            <p className="hint">
+              {mintInventoryLoading
+                ? "Loading owned NFTs..."
+                : "No owned custom collections with indexed NFTs match this standard yet."}
+            </p>
+          )}
           {mintInventoryError ? <p className="error">{mintInventoryError}</p> : null}
           {selectedContract ? (
             <>
@@ -534,35 +536,42 @@ export default function ListClient() {
 
         <div className="card formCard">
           <h3>2. Create Listing</h3>
-          <p className="hint">Set a fixed price, choose how long the listing should stay live, then publish one or more listings.</p>
-          <label>
-            Payment token
-            <select value={paymentTokenType} onChange={(e) => setPaymentTokenType(e.target.value as "ETH" | "ERC20")}>
-              <option value="ETH">ETH</option>
-              <option value="ERC20">ERC20</option>
-            </select>
-          </label>
-          {paymentTokenType === "ERC20" ? (
+          <p className="hint">Set the payment asset, choose the fixed price, and choose how long the listing should stay live.</p>
+          <div className="gridMini">
             <label>
-              ERC20 token address
-              <input value={erc20TokenAddress} onChange={(e) => setErc20TokenAddress(e.target.value)} placeholder="0x..." />
+              Payment asset
+              <select value={paymentTokenType} onChange={(e) => setPaymentTokenType(e.target.value as "ETH" | "ERC20")}>
+                <option value="ETH">ETH</option>
+                <option value="ERC20">Custom ERC20</option>
+              </select>
             </label>
-          ) : null}
-          <label>
-            {paymentTokenType === "ETH" ? "Price (ETH)" : "Price (raw ERC20 units)"}
-            <input
-              value={priceInput}
-              onChange={(e) => setPriceInput(e.target.value)}
-              placeholder={paymentTokenType === "ETH" ? "0.01" : "1000000"}
-            />
-          </label>
-          <label>
-            Listing length (days)
-            <input value={listingDays} onChange={(e) => setListingDays(e.target.value)} inputMode="numeric" placeholder="7" />
-          </label>
+            {paymentTokenType === "ERC20" ? (
+              <label>
+                ERC20 contract
+                <input value={erc20TokenAddress} onChange={(e) => setErc20TokenAddress(e.target.value)} placeholder="0x..." />
+              </label>
+            ) : null}
+            <label>
+              {paymentTokenType === "ETH" ? "Price per NFT (ETH)" : "Price per NFT (token units)"}
+              <input
+                value={priceInput}
+                onChange={(e) => setPriceInput(e.target.value)}
+                placeholder={paymentTokenType === "ETH" ? "0.01" : "1000000"}
+              />
+            </label>
+            <label>
+              Listing length (days)
+              <input value={listingDays} onChange={(e) => setListingDays(e.target.value)} inputMode="numeric" placeholder="7" />
+            </label>
+          </div>
           <p className="hint">
-            Expiration: {listingExpiryDate ? listingExpiryDate.toLocaleString() : "Enter a valid duration"}
+            Expiration: {listingExpiryDate ? listingExpiryDate.toLocaleString() : "Enter a valid duration"} (minimum 1 day, maximum {MAX_LISTING_DAYS} days)
           </p>
+          {paymentTokenType === "ERC20" ? (
+            <p className="hint">
+              Custom ERC20 payment tokens are logged automatically so trusted tokens can be approved and suspicious ones can be flagged in admin.
+            </p>
+          ) : null}
           <button type="submit" disabled={!isConnected || wrongNetwork || state.status === "pending" || selectedTokens.length === 0}>
             {state.status === "pending"
               ? "Submitting..."
@@ -583,10 +592,7 @@ export default function ListClient() {
           {!isConnected ? <p className="hint">Connect a wallet to view and manage live listings for this address.</p> : null}
           {listingsError ? <p className="error">{listingsError}</p> : null}
           {isConnected && myListings.length === 0 && !listingsLoading ? (
-            <div className="row">
-              <p className="hint">No active listings are live for this wallet yet.</p>
-              <Link href="/mint?view=mint" className="ctaLink secondaryLink">Create and publish first</Link>
-            </div>
+            <p className="hint">No active listings are live for this wallet yet.</p>
           ) : null}
           {myListings.length > 0 ? (
             <div className="listTable">
@@ -608,7 +614,7 @@ export default function ListClient() {
               ))}
             </div>
           ) : null}
-          {myListings.length > 0 && explorerBase ? (
+          {myListings.length > 0 ? (
             <p className="hint">
               Each listing stays independent, so any single listing can be canceled by ID even if it was created in the same batch.
             </p>

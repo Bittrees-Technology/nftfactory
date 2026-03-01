@@ -132,6 +132,15 @@ contract MarketplaceTest is Test {
         vm.stopPrank();
     }
 
+    function testCreateListingRevertsWhenDurationExceedsMaximum() external {
+        vm.startPrank(seller);
+        nft721.mint(seller, 1);
+        nft721.setApprovalForAll(address(marketplace), true);
+        vm.expectRevert(Marketplace.InvalidDuration.selector);
+        marketplace.createListing(address(nft721), 1, 1, "ERC721", address(0), 0.1 ether, 366);
+        vm.stopPrank();
+    }
+
     function testBuyRevertsWhenApprovalRevoked() external {
         vm.startPrank(seller);
         nft721.mint(seller, 1);

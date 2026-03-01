@@ -3,13 +3,16 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
+  fetchTrackedPaymentTokens,
   fetchHiddenListingIds,
   fetchModerators,
   fetchModerationActions,
   fetchModerationReports,
+  reviewTrackedPaymentToken,
   resolveModerationReport,
   setListingVisibility,
   updateModerator,
+  type ApiPaymentTokenRecord,
   type ApiModerator,
   type ApiModerationAction,
   type ApiModerationReport
@@ -32,11 +35,16 @@ export default function AdminClient() {
   const [actions, setActions] = useState<ApiModerationAction[]>([]);
   const [hiddenListings, setHiddenListings] = useState<number[]>([]);
   const [moderators, setModerators] = useState<ApiModerator[]>([]);
+  const [paymentTokens, setPaymentTokens] = useState<ApiPaymentTokenRecord[]>([]);
   const [manualListingId, setManualListingId] = useState("");
   const [moderatorAddress, setModeratorAddress] = useState("");
   const [moderatorLabel, setModeratorLabel] = useState("");
+  const [paymentTokenAddress, setPaymentTokenAddress] = useState("");
+  const [paymentTokenStatus, setPaymentTokenStatus] = useState<"pending" | "approved" | "flagged">("approved");
+  const [paymentTokenNotes, setPaymentTokenNotes] = useState("");
   const [error, setError] = useState("");
   const [moderatorError, setModeratorError] = useState("");
+  const [paymentTokenError, setPaymentTokenError] = useState("");
   const [pendingDecision, setPendingDecision] = useState<{ reportId: string; decision: Decision } | null>(null);
   const [notesDraft, setNotesDraft] = useState("");
   const manualListingNumeric = Number.parseInt(manualListingId, 10);
@@ -56,17 +64,28 @@ export default function AdminClient() {
       setHiddenListings(hidden);
       if (canWrite) {
         try {
-          setModerators(await fetchModerators({
+          const auth = {
             adminToken,
             adminAddress: adminAddress || actor
-          }));
+          };
+          const [moderatorRows, paymentTokenRows] = await Promise.all([
+            fetchModerators(auth),
+            fetchTrackedPaymentTokens(auth)
+          ]);
+          setModerators(moderatorRows);
+          setPaymentTokens(paymentTokenRows);
           setModeratorError("");
+          setPaymentTokenError("");
         } catch (err) {
           setModeratorError(err instanceof Error ? err.message : "Failed to load moderators.");
+          setPaymentTokens([]);
+          setPaymentTokenError(err instanceof Error ? err.message : "Failed to load tracked payment tokens.");
         }
       } else {
         setModerators([]);
+        setPaymentTokens([]);
         setModeratorError("");
+        setPaymentTokenError("");
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load moderation state.");
@@ -144,6 +163,31 @@ export default function AdminClient() {
       }
     } catch (err) {
       setModeratorError(err instanceof Error ? err.message : "Failed to update moderators.");
+    }
+  }
+
+  async function savePaymentTokenReview(): Promise<void> {
+    if (!paymentTokenAddress.trim()) {
+      setPaymentTokenError("Enter a tracked ERC20 token address.");
+      return;
+    }
+    try {
+      setPaymentTokenError("");
+      const next = await reviewTrackedPaymentToken({
+        tokenAddress: paymentTokenAddress.trim(),
+        status: paymentTokenStatus,
+        notes: paymentTokenNotes.trim() || undefined,
+        auth: {
+          adminToken,
+          adminAddress: adminAddress || actor
+        }
+      });
+      setPaymentTokens(next);
+      setPaymentTokenAddress("");
+      setPaymentTokenStatus("approved");
+      setPaymentTokenNotes("");
+    } catch (err) {
+      setPaymentTokenError(err instanceof Error ? err.message : "Failed to update token review.");
     }
   }
 
@@ -233,6 +277,10 @@ export default function AdminClient() {
           <h3>Moderators</h3>
           <p>{moderators.length}</p>
         </article>
+        <article className="card">
+          <h3>Tracked ERC20s</h3>
+          <p>{paymentTokens.length}</p>
+        </article>
       </div>
 
       {!error && openReports.length === 0 && hiddenListings.length === 0 && actions.length === 0 ? (
@@ -288,6 +336,61 @@ export default function AdminClient() {
                 <span><strong>Address</strong> {moderator.address}</span>
                 <span><strong>Label</strong> {moderator.label || "-"}</span>
                 <span><strong>Updated</strong> {formatIso(moderator.updatedAt)}</span>
+              </article>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="card formCard">
+        <h3>Tracked Payment Tokens</h3>
+        <p className="sectionLead">
+          Custom ERC20s used in listings are recorded here so trusted tokens can be approved and suspicious ones can be flagged.
+        </p>
+        <div className="gridMini">
+          <label>
+            Token address
+            <input
+              value={paymentTokenAddress}
+              onChange={(e) => setPaymentTokenAddress(e.target.value)}
+              placeholder="0xtoken..."
+            />
+          </label>
+          <label>
+            Review status
+            <select value={paymentTokenStatus} onChange={(e) => setPaymentTokenStatus(e.target.value as "pending" | "approved" | "flagged")}>
+              <option value="approved">Approved</option>
+              <option value="pending">Pending</option>
+              <option value="flagged">Flagged</option>
+            </select>
+          </label>
+          <label>
+            Notes
+            <input
+              value={paymentTokenNotes}
+              onChange={(e) => setPaymentTokenNotes(e.target.value)}
+              placeholder="Why this token is approved or flagged"
+            />
+          </label>
+        </div>
+        <div className="row">
+          <button type="button" onClick={() => void savePaymentTokenReview()} disabled={!canWrite}>
+            Save Token Review
+          </button>
+        </div>
+        {paymentTokenError ? <p className="error">{paymentTokenError}</p> : null}
+        {!canWrite ? <p className="hint">Enter root admin credentials above to review tracked payment tokens.</p> : null}
+        {paymentTokens.length === 0 ? (
+          <p className="hint">No custom ERC20 payment tokens have been logged yet.</p>
+        ) : (
+          <div className="listTable">
+            {paymentTokens.map((token) => (
+              <article key={token.tokenAddress} className="listRow">
+                <span className="mono"><strong>Token</strong> {token.tokenAddress}</span>
+                <span><strong>Status</strong> {token.status}</span>
+                <span><strong>Uses</strong> {token.useCount}</span>
+                <span className="mono"><strong>Last Seller</strong> {token.lastSellerAddress}</span>
+                <span><strong>Last Seen</strong> {formatIso(token.lastSeenAt)}</span>
               </article>
             ))}
           </div>

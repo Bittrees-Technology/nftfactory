@@ -8,6 +8,8 @@ import {IERC1155Lite} from "../interfaces/IERC1155Lite.sol";
 import {NftFactoryRegistry} from "./NftFactoryRegistry.sol";
 
 contract Marketplace is Owned {
+    uint256 public constant MAX_LISTING_DURATION_DAYS = 365;
+
     struct Listing {
         address seller;
         address nft;
@@ -82,7 +84,7 @@ contract Marketplace is Owned {
     ) external {
         if (registry.blocked(msg.sender) || registry.blocked(nft) || blockedCollection[nft]) revert Sanctioned();
         if (price == 0) revert InvalidPrice();
-        if (durationDays == 0) revert InvalidDuration();
+        if (durationDays == 0 || durationDays > MAX_LISTING_DURATION_DAYS) revert InvalidDuration();
 
         bytes32 key = keccak256(bytes(standard));
         if (key == keccak256("ERC721")) {

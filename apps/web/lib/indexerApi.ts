@@ -98,6 +98,17 @@ export type ApiModerator = {
   updatedAt: string;
 };
 
+export type ApiPaymentTokenRecord = {
+  tokenAddress: string;
+  firstSeenAt: string;
+  lastSeenAt: string;
+  firstSellerAddress: string;
+  lastSellerAddress: string;
+  useCount: number;
+  status: "pending" | "approved" | "flagged";
+  notes: string | null;
+};
+
 export type ApiProfileResolution = {
   name: string;
   sellers: string[];
@@ -261,6 +272,43 @@ export async function updateModerator(payload: {
     })
   });
   return response.moderators || [];
+}
+
+export async function logPaymentTokenUsage(payload: {
+  tokenAddress: string;
+  sellerAddress: string;
+  listingIds?: Array<number | string>;
+}): Promise<ApiPaymentTokenRecord[]> {
+  const response = await fetchJson<{ tokens: ApiPaymentTokenRecord[] }>("/api/payment-tokens/log", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+  return response.tokens || [];
+}
+
+export async function fetchTrackedPaymentTokens(auth?: AdminAuth): Promise<ApiPaymentTokenRecord[]> {
+  const response = await fetchJson<{ tokens: ApiPaymentTokenRecord[] }>("/api/admin/payment-tokens", {
+    headers: adminHeaders(auth)
+  });
+  return response.tokens || [];
+}
+
+export async function reviewTrackedPaymentToken(payload: {
+  tokenAddress: string;
+  status?: "pending" | "approved" | "flagged";
+  notes?: string;
+  auth?: AdminAuth;
+}): Promise<ApiPaymentTokenRecord[]> {
+  const response = await fetchJson<{ tokens: ApiPaymentTokenRecord[] }>("/api/admin/payment-tokens", {
+    method: "POST",
+    headers: adminHeaders(payload.auth),
+    body: JSON.stringify({
+      tokenAddress: payload.tokenAddress,
+      status: payload.status,
+      notes: payload.notes
+    })
+  });
+  return response.tokens || [];
 }
 
 export async function fetchProfileResolution(name: string): Promise<ApiProfileResolution> {

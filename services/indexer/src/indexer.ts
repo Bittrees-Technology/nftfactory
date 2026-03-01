@@ -87,6 +87,29 @@ type ProfileRecord = {
   updatedAt: string;
 };
 
+type PaymentTokenLogPayload = {
+  tokenAddress: string;
+  sellerAddress: string;
+  listingIds?: Array<number | string>;
+};
+
+type PaymentTokenRecord = {
+  tokenAddress: string;
+  firstSeenAt: string;
+  lastSeenAt: string;
+  firstSellerAddress: string;
+  lastSellerAddress: string;
+  useCount: number;
+  status: "pending" | "approved" | "flagged";
+  notes: string | null;
+};
+
+type PaymentTokenReviewPayload = {
+  tokenAddress: string;
+  status?: "pending" | "approved" | "flagged";
+  notes?: string;
+};
+
 const CHAIN_ID = Number.parseInt(process.env.CHAIN_ID || "11155111", 10);
 const PORT = Number.parseInt(process.env.INDEXER_PORT || "8787", 10);
 const HOST = process.env.INDEXER_HOST || "127.0.0.1";
@@ -94,6 +117,7 @@ const ADMIN_TOKEN = process.env.INDEXER_ADMIN_TOKEN || "";
 const TRUST_PROXY = process.env.TRUST_PROXY === "true";
 const MODERATOR_FILE = process.env.INDEXER_MODERATOR_FILE || path.join(process.cwd(), "data", "moderators.json");
 const PROFILE_FILE = process.env.INDEXER_PROFILE_FILE || path.join(process.cwd(), "data", "profiles.json");
+const PAYMENT_TOKEN_FILE = process.env.INDEXER_PAYMENT_TOKEN_FILE || path.join(process.cwd(), "data", "payment-tokens.json");
 const ADMIN_ALLOWLIST = new Set(
   (process.env.INDEXER_ADMIN_ALLOWLIST || "")
     .split(",")
@@ -187,6 +211,36 @@ async function readModeratorRecords(): Promise<ModeratorRecord[]> {
 async function writeModeratorRecords(records: ModeratorRecord[]): Promise<void> {
   await mkdir(path.dirname(MODERATOR_FILE), { recursive: true });
   await writeFile(MODERATOR_FILE, JSON.stringify(records, null, 2), "utf8");
+}
+
+async function readPaymentTokenRecords(): Promise<PaymentTokenRecord[]> {
+  try {
+    const raw = await readFile(PAYMENT_TOKEN_FILE, "utf8");
+    const parsed = JSON.parse(raw) as PaymentTokenRecord[];
+    return parsed
+      .filter((item) => item && isAddress(String(item.tokenAddress || "").toLowerCase()))
+      .map((item) => ({
+        tokenAddress: item.tokenAddress.toLowerCase(),
+        firstSeenAt: item.firstSeenAt || new Date().toISOString(),
+        lastSeenAt: item.lastSeenAt || new Date().toISOString(),
+        firstSellerAddress: isAddress(String(item.firstSellerAddress || "").toLowerCase())
+          ? item.firstSellerAddress.toLowerCase()
+          : "0x0000000000000000000000000000000000000000",
+        lastSellerAddress: isAddress(String(item.lastSellerAddress || "").toLowerCase())
+          ? item.lastSellerAddress.toLowerCase()
+          : "0x0000000000000000000000000000000000000000",
+        useCount: Number.isInteger(item.useCount) && item.useCount > 0 ? item.useCount : 1,
+        status: item.status === "approved" || item.status === "flagged" ? item.status : "pending",
+        notes: item.notes?.trim() || null
+      }));
+  } catch {
+    return [];
+  }
+}
+
+async function writePaymentTokenRecords(records: PaymentTokenRecord[]): Promise<void> {
+  await mkdir(path.dirname(PAYMENT_TOKEN_FILE), { recursive: true });
+  await writeFile(PAYMENT_TOKEN_FILE, JSON.stringify(records, null, 2), "utf8");
 }
 
 function normalizeProfileInput(name: string, source: ProfileLinkSource): { slug: string; fullName: string } | null {
@@ -711,6 +765,48 @@ async function handleRequest(
     return;
   }
 
+  if (req.method === "POST" && path === "/api/payment-tokens/log") {
+    if (deps.isRateLimitedImpl(deps.getClientIpImpl(req, config.trustProxy))) {
+      sendJson(res, 429, { error: "Too many requests" });
+      return;
+    }
+
+    const payload = await readJsonBody<PaymentTokenLogPayload>(req);
+    const tokenAddress = String(payload.tokenAddress || "").trim().toLowerCase();
+    const sellerAddress = String(payload.sellerAddress || "").trim().toLowerCase();
+    if (!isAddress(tokenAddress)) {
+      sendJson(res, 400, { error: "Invalid tokenAddress" });
+      return;
+    }
+    if (!isAddress(sellerAddress)) {
+      sendJson(res, 400, { error: "Invalid sellerAddress" });
+      return;
+    }
+    if (isZeroAddress(tokenAddress)) {
+      sendJson(res, 400, { error: "Use ETH listings do not need token logging" });
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const current = await readPaymentTokenRecords();
+    const existing = current.find((item) => item.tokenAddress === tokenAddress);
+    const next = current.filter((item) => item.tokenAddress !== tokenAddress);
+    next.push({
+      tokenAddress,
+      firstSeenAt: existing?.firstSeenAt || now,
+      lastSeenAt: now,
+      firstSellerAddress: existing?.firstSellerAddress || sellerAddress,
+      lastSellerAddress: sellerAddress,
+      useCount: (existing?.useCount || 0) + 1,
+      status: existing?.status || "pending",
+      notes: existing?.notes || null
+    });
+    next.sort((a, b) => b.lastSeenAt.localeCompare(a.lastSeenAt));
+    await writePaymentTokenRecords(next);
+    sendJson(res, 200, { ok: true, tokens: next });
+    return;
+  }
+
   if (req.method === "POST" && path === "/api/admin/moderators") {
     if (deps.isRateLimitedImpl(deps.getClientIpImpl(req, config.trustProxy))) {
       sendJson(res, 429, { error: "Too many requests" });
@@ -745,6 +841,57 @@ async function handleRequest(
     await writeModeratorRecords(next);
 
     sendJson(res, 200, { ok: true, moderators: next });
+    return;
+  }
+
+  if (req.method === "GET" && path === "/api/admin/payment-tokens") {
+    if (deps.isRateLimitedImpl(deps.getClientIpImpl(req, config.trustProxy))) {
+      sendJson(res, 429, { error: "Too many requests" });
+      return;
+    }
+    const auth = await assertAdminRequest(req, config, undefined, { includeDynamicModerators: false });
+    if (!auth.ok) {
+      sendJson(res, 401, { error: auth.error });
+      return;
+    }
+    const tokens = await readPaymentTokenRecords();
+    sendJson(res, 200, { tokens });
+    return;
+  }
+
+  if (req.method === "POST" && path === "/api/admin/payment-tokens") {
+    if (deps.isRateLimitedImpl(deps.getClientIpImpl(req, config.trustProxy))) {
+      sendJson(res, 429, { error: "Too many requests" });
+      return;
+    }
+    const payload = await readJsonBody<PaymentTokenReviewPayload>(req);
+    const auth = await assertAdminRequest(req, config, undefined, { includeDynamicModerators: false });
+    if (!auth.ok) {
+      sendJson(res, 401, { error: auth.error });
+      return;
+    }
+    const tokenAddress = String(payload.tokenAddress || "").trim().toLowerCase();
+    if (!isAddress(tokenAddress) || isZeroAddress(tokenAddress)) {
+      sendJson(res, 400, { error: "Invalid tokenAddress" });
+      return;
+    }
+    const current = await readPaymentTokenRecords();
+    const existing = current.find((item) => item.tokenAddress === tokenAddress);
+    if (!existing) {
+      sendJson(res, 404, { error: "Tracked token not found" });
+      return;
+    }
+    const next = current
+      .filter((item) => item.tokenAddress !== tokenAddress)
+      .concat({
+        ...existing,
+        status: payload.status === "approved" || payload.status === "flagged" ? payload.status : "pending",
+        notes: payload.notes?.trim() || null,
+        lastSeenAt: existing.lastSeenAt
+      })
+      .sort((a, b) => b.lastSeenAt.localeCompare(a.lastSeenAt));
+    await writePaymentTokenRecords(next);
+    sendJson(res, 200, { ok: true, tokens: next });
     return;
   }
 
