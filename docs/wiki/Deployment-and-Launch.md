@@ -8,6 +8,21 @@ NFTFactory should be operated as:
 2. Sepolia validation second
 3. mainnet only after operational and product checks pass
 
+## Current environment model
+
+The repo supports two practical operating environments today:
+
+- **Local development**
+  - Anvil for fast contract iteration
+  - local Next.js and indexer services
+  - local caches and fallback modes are acceptable
+- **Sepolia validation**
+  - canonical pre-mainnet proving ground
+  - real wallets, real confirmations, and explorer verification
+  - the place to validate end-to-end creator, listing, and moderation flows
+
+Mainnet should be treated as a release target only after the Sepolia validation path is stable.
+
 ## Local development
 
 ### Purpose
@@ -83,6 +98,7 @@ Treat these as the real go/no-go checks:
 Mainnet should wait until:
 
 - Sepolia flows are stable
+- the mint, list, discover, and profile pages are visually and behaviorally locked
 - ownership transfer is complete
 - deployment addresses are documented
 - release confidence is based on current code, not stale docs or stale branches

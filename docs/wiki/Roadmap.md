@@ -2,62 +2,71 @@
 
 ## Purpose
 
-This page captures the near-future direction for NFTFactory without overstating what is already complete in the current build.
+This page tracks the path from the current Sepolia-ready build toward a mainnet-ready product without overstating what is already complete.
 
 Use it to distinguish:
 
 - what is live now
-- what is in active product shaping
+- what is actively being locked down
 - what should wait until after Sepolia validation and operational hardening
 
-## Current build priorities
+## Current build validation
 
-The current product is centered on stabilizing:
+The current build has already landed these major structural pieces:
 
-1. unified mint and publish
-2. creator collection management
-3. ENS-linked creator profiles
-4. discovery and moderation
+- [x] unified mint and publish flow
+- [x] creator collection management flow
+- [x] ENS-linked creator profile setup and public profile routes
+- [x] public mint feed separated from moderation feed
+- [x] in-app wiki sourced from `data/wiki`
 
-These flows should remain the primary build focus until the Sepolia acceptance path is consistently reliable.
+These are no longer the open structural questions. The remaining work is quality, consistency, and release readiness.
 
-## Near-future scope
+## Mainnet UI lock
 
-### Creator profiles
+The active milestone is to lock down the user-facing experience of the core pages before mainnet:
 
-The next meaningful profile enhancements are:
+- [ ] Mint page final polish
+  - tighten copy and reduce lingering redundancy
+  - make contract vs metadata state fully obvious
+  - keep receipts, previews, and failure states predictable
+- [ ] List page polish
+  - make seller flow clearer
+  - improve state handling when listings are empty, stale, or unreachable
+- [ ] Discover page polish
+  - continue evolving the mint feed into a stronger visual stream
+  - make empty, loading, and backend-unavailable states clearer
+- [ ] Profile page polish
+  - continue tightening the public creator page into a more intentional, professional presentation
+  - keep setup and public profile routes cleanly separated
 
-- stronger page theming and layout cohesion
-- more expressive creator-page presentation
-- richer featured media treatment
-- better multi-profile handling for a single wallet
-- improved collection pinning and profile-to-collection relationships
+## Near-term product work
 
 ### Identity and ENS
 
-Likely next improvements:
+Expected next improvements:
 
-- stronger validation around linked external ENS names
-- clearer differentiation between on-chain `nftfactory.eth` subnames and off-chain linked ENS identities
-- better identity ownership checks in the product layer
+- [ ] stronger validation around linked external ENS names
+- [ ] clearer ownership checks for linked identities
+- [ ] clearer distinction between on-chain `nftfactory.eth` subnames and off-chain linked ENS identities
 
 These should be implemented carefully so the product does not imply capabilities that the contracts do not yet provide.
 
 ### Discovery and marketplace
 
-Expected follow-on work:
+Expected next improvements:
 
-- stronger discovery ranking and filters
-- richer creator-centric browsing
-- clearer marketplace state handling for stale or moderated content
+- [ ] stronger discovery ranking and filters
+- [ ] richer creator-centric browsing
+- [ ] clearer marketplace state handling for stale or moderated content
 
 ### Admin and moderation
 
-Expected follow-on work:
+Expected next improvements:
 
-- better moderator visibility and auditability
-- clearer operational status indicators
-- stronger admin workflow ergonomics
+- [ ] better moderator visibility and auditability
+- [ ] clearer operational status indicators
+- [ ] stronger admin workflow ergonomics
 
 ## Release gating
 
@@ -65,10 +74,11 @@ The roadmap should not outrun the release process.
 
 Before expanding the product scope significantly, the current stack should be solid on:
 
-- environment wiring
-- Sepolia validation
-- Safe ownership and admin posture
-- end-to-end creator, listing, and moderation flows
+- [ ] environment wiring
+- [ ] Sepolia validation
+- [ ] Safe ownership and admin posture
+- [ ] end-to-end creator, listing, and moderation flows
+- [ ] visual and behavioral stability of mint, list, discover, and profile
 
 ## Deferred scope
 

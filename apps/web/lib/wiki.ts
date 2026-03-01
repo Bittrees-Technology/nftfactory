@@ -54,6 +54,7 @@ export async function listWikiPages(): Promise<WikiPage[]> {
   return files
     .filter((file) => file.toLowerCase().endsWith(".md"))
     .filter((file) => file !== "Archive.md")
+    .filter((file) => file !== "Roadmap.md")
     .sort((a, b) => {
       if (a === "Home.md") return -1;
       if (b === "Home.md") return 1;

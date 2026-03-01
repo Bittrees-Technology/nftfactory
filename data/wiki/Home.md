@@ -2,15 +2,15 @@
 
 This wiki is the active documentation surface for NFTFactory.
 
-Use this as the canonical entry point for the current product, deployment, and operational model. Older point-in-time notes and superseded standalone documents live under `docs/archive`.
+Use this as the canonical entry point for the current product, release posture, and operational model. Older point-in-time notes and superseded standalone documents live under `docs/archive`.
 
-## Product scope
+## Current build scope
 
-NFTFactory is currently built around four connected product flows:
+NFTFactory is currently organized around four connected product flows that are intended to reach mainnet in a stable, production-ready state:
 
 1. **Mint and publish**
-   - publish to the shared contracts immediately
-   - or mint into a creator-owned collection
+   - one unified publish flow
+   - choose the shared contracts or a creator-owned collection inside the same sequence
    - upload media and metadata to IPFS from the web app
 2. **Manage creator collections**
    - choose a known collection
@@ -23,9 +23,28 @@ NFTFactory is currently built around four connected product flows:
    - create an on-chain `nftfactory.eth` subname
    - publish a richer public creator page
 4. **Discovery and moderation**
-   - browse listings
+   - browse the public mint feed
+   - review the moderation feed separately
    - resolve creators by ENS-linked identity
    - report and hide content through the moderation flow
+
+## Current release focus
+
+The current release objective is not broad feature expansion.
+
+The immediate goal is to lock down the user-facing quality, consistency, and reliability of these pages before mainnet:
+
+- Mint
+- List
+- Discover
+- Profile
+
+For practical purposes, that means:
+
+- the flows should feel intentional and coherent
+- the copy should match what the contracts and backend actually do
+- the routes should degrade clearly when services are unavailable
+- the Sepolia path should behave as the final proving ground before mainnet
 
 ## Start here
 
@@ -43,9 +62,9 @@ NFTFactory is currently built around four connected product flows:
 |------|---------|
 | [Operations and Governance](./Operations-and-Governance.md) | Ownership boundaries, admin controls, moderator model, and production control surfaces |
 | [Deployment and Launch](./Deployment-and-Launch.md) | Local, Sepolia, and mainnet rollout guidance |
+| [UI Lockdown Plan](./UI-Lockdown-Plan.md) | Page-by-page criteria for locking Mint, List, Discover, and Profile before mainnet |
 | [Upgrade Runbook](./Upgrade-Runbook.md) | UUPS upgrade path for creator collections |
 | [Testing and Validation](./Testing-and-Validation.md) | Recommended verification flow for contracts, app wiring, and release readiness |
-| [Roadmap](./Roadmap.md) | Near-future build scope and intentionally deferred work |
 
 ## Reference
 
@@ -54,18 +73,3 @@ NFTFactory is currently built around four connected product flows:
 | [Security and Audit](./Security-and-Audit.md) | Security review focus areas and practical risk posture |
 | [Contract Dependencies](./Contract-Dependencies.md) | High-level dependency map and generation notes |
 | [Archive](./Archive.md) | Historical and superseded documentation |
-
-## Current environment model
-
-The repo supports two practical environments today:
-
-- **Local development**
-  - Anvil for fast contract iteration
-  - local Next.js and indexer services
-  - local caches and fallback modes are acceptable
-- **Sepolia validation**
-  - canonical pre-mainnet proving ground
-  - real wallets, real confirmations, and explorer verification
-  - the place to validate end-to-end creator, listing, and moderation flows
-
-Mainnet should be treated as a release target only after the Sepolia validation path is stable.
