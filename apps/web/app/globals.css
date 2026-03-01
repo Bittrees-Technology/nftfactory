@@ -689,6 +689,45 @@ button:disabled {
   gap: 12px;
 }
 
+.wikiLayout {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(220px, 0.72fr) minmax(0, 1.6fr);
+  align-items: start;
+}
+
+.wikiSidebar {
+  position: sticky;
+  top: 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.wikiSidebar h3 {
+  margin: 0;
+}
+
+.wikiSidebarNav {
+  display: grid;
+  gap: 8px;
+}
+
+.wikiSidebarLink {
+  display: block;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #ead9c5;
+  background: #fffaf2;
+  color: #4b4138;
+  font-weight: 600;
+}
+
+.wikiSidebarLinkActive {
+  border-color: #c87d4a;
+  background: #fff0dc;
+  color: #7f220f;
+}
+
 .wikiH1,
 .wikiH2,
 .wikiH3 {
@@ -723,6 +762,20 @@ button:disabled {
   display: grid;
   gap: 8px;
   color: #3f382f;
+}
+
+.wikiOrderedList {
+  padding-left: 24px;
+}
+
+.wikiBlockquote {
+  margin: 0;
+  padding: 12px 14px;
+  border-left: 4px solid #c87d4a;
+  border-radius: 0 12px 12px 0;
+  background: #fff4e4;
+  color: #4b4138;
+  line-height: 1.6;
 }
 
 .wikiCodeBlock {
@@ -785,5 +838,13 @@ button:disabled {
 
   .feedCardBody {
     grid-template-columns: 1fr;
+  }
+
+  .wikiLayout {
+    grid-template-columns: 1fr;
+  }
+
+  .wikiSidebar {
+    position: static;
   }
 }

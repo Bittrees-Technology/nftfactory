@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getWikiPageBySlug, listWikiPages } from "../../../lib/wiki";
 import WikiMarkdown from "../WikiMarkdown";
+import WikiSidebar from "../WikiSidebar";
 
 type Props = {
   params: Promise<{
@@ -35,8 +36,11 @@ export default async function WikiPage(props: Props) {
         </div>
       </div>
 
-      <div className="card formCard">
-        <WikiMarkdown content={page.content} />
+      <div className="wikiLayout">
+        <WikiSidebar pages={pages} currentSlug={page.slug} />
+        <div className="card formCard">
+          <WikiMarkdown content={page.content} />
+        </div>
       </div>
     </section>
   );

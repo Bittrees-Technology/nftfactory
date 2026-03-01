@@ -91,6 +91,8 @@ export default function WikiMarkdown({ content }: Props) {
   const blocks: ReactNode[] = [];
   let paragraph: string[] = [];
   let listItems: string[] = [];
+  let listType: "ul" | "ol" | null = null;
+  let blockquote: string[] = [];
   let codeLines: string[] = [];
   let inCode = false;
 
@@ -108,15 +110,36 @@ export default function WikiMarkdown({ content }: Props) {
   };
 
   const flushList = () => {
-    if (listItems.length === 0) return;
+    if (listItems.length === 0 || !listType) return;
+    const items = listItems.map((item, index) => (
+      <li key={`li-${blocks.length}-${index}`}>{renderInline(item, `li-${blocks.length}-${index}`)}</li>
+    ));
     blocks.push(
-      <ul key={`ul-${blocks.length}`} className="wikiList">
-        {listItems.map((item, index) => (
-          <li key={`li-${blocks.length}-${index}`}>{renderInline(item, `li-${blocks.length}-${index}`)}</li>
-        ))}
-      </ul>
+      listType === "ol" ? (
+        <ol key={`ol-${blocks.length}`} className="wikiList wikiOrderedList">
+          {items}
+        </ol>
+      ) : (
+        <ul key={`ul-${blocks.length}`} className="wikiList">
+          {items}
+        </ul>
+      )
     );
     listItems = [];
+    listType = null;
+  };
+
+  const flushBlockquote = () => {
+    if (blockquote.length === 0) return;
+    const text = blockquote.join(" ").trim();
+    if (text) {
+      blocks.push(
+        <blockquote key={`blockquote-${blocks.length}`} className="wikiBlockquote">
+          {renderInline(text, `blockquote-${blocks.length}`)}
+        </blockquote>
+      );
+    }
+    blockquote = [];
   };
 
   const flushCode = () => {
@@ -136,6 +159,7 @@ export default function WikiMarkdown({ content }: Props) {
     if (trimmed.startsWith("```")) {
       flushParagraph();
       flushList();
+      flushBlockquote();
       if (inCode) {
         flushCode();
         inCode = false;
@@ -153,6 +177,7 @@ export default function WikiMarkdown({ content }: Props) {
     if (!trimmed) {
       flushParagraph();
       flushList();
+      flushBlockquote();
       continue;
     }
 
@@ -160,6 +185,7 @@ export default function WikiMarkdown({ content }: Props) {
     if (headingMatch) {
       flushParagraph();
       flushList();
+      flushBlockquote();
       const level = headingMatch[1].length;
       const text = headingMatch[2];
       if (level === 1) {
@@ -184,18 +210,45 @@ export default function WikiMarkdown({ content }: Props) {
       continue;
     }
 
-    const listMatch = /^[-*]\s+(.+)$/.exec(trimmed);
-    if (listMatch) {
+    const unorderedListMatch = /^[-*]\s+(.+)$/.exec(trimmed);
+    if (unorderedListMatch) {
       flushParagraph();
-      listItems.push(listMatch[1]);
+      flushBlockquote();
+      if (listType && listType !== "ul") {
+        flushList();
+      }
+      listType = "ul";
+      listItems.push(unorderedListMatch[1]);
       continue;
     }
 
+    const orderedListMatch = /^\d+\.\s+(.+)$/.exec(trimmed);
+    if (orderedListMatch) {
+      flushParagraph();
+      flushBlockquote();
+      if (listType && listType !== "ol") {
+        flushList();
+      }
+      listType = "ol";
+      listItems.push(orderedListMatch[1]);
+      continue;
+    }
+
+    const blockquoteMatch = /^>\s+(.+)$/.exec(trimmed);
+    if (blockquoteMatch) {
+      flushParagraph();
+      flushList();
+      blockquote.push(blockquoteMatch[1]);
+      continue;
+    }
+
+    flushBlockquote();
     paragraph.push(trimmed);
   }
 
   flushParagraph();
   flushList();
+  flushBlockquote();
   if (inCode) {
     flushCode();
   }
