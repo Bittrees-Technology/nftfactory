@@ -61,18 +61,9 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
 
   const [identityName, setIdentityName] = useState(initialLabel);
   const [profiles, setProfiles] = useState<ApiProfileRecord[]>([]);
-  const [selectedProfileSlug, setSelectedProfileSlug] = useState("");
   const [collections, setCollections] = useState<ApiOwnedCollections["collections"]>([]);
   const [verifiedCollections, setVerifiedCollections] = useState<ApiOwnedCollections["collections"]>([]);
   const [selectedCollection, setSelectedCollection] = useState("");
-  const [tagline, setTagline] = useState("");
-  const [displayName, setDisplayName] = useState("");
-  const [bio, setBio] = useState("");
-  const [bannerUrl, setBannerUrl] = useState("");
-  const [avatarUrl, setAvatarUrl] = useState("");
-  const [featuredUrl, setFeaturedUrl] = useState("");
-  const [accentColor, setAccentColor] = useState("#c53a1f");
-  const [linksText, setLinksText] = useState("");
   const [lookupNote, setLookupNote] = useState("");
   const [setupState, setSetupState] = useState<SetupState>({ status: "idle" });
 
@@ -98,10 +89,8 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
         if (profileResult.status === "fulfilled") {
           const nextProfiles = dedupeProfiles(profileResult.value.profiles || []);
           setProfiles(nextProfiles);
-          setSelectedProfileSlug((current) => current || nextProfiles[0]?.slug || "");
         } else {
           setProfiles([]);
-          setSelectedProfileSlug("");
         }
 
         const collectionResult = results[1];
@@ -187,27 +176,6 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
     };
   }, [slug]);
 
-  function openSelectedProfile(): void {
-    if (!selectedProfileSlug) return;
-    router.push(`/profile/${encodeURIComponent(selectedProfileSlug)}`);
-  }
-
-  useEffect(() => {
-    const selected = profiles.find((item) => item.slug === selectedProfileSlug);
-    if (!selected) return;
-    setTagline(selected.tagline || "");
-    setDisplayName(selected.displayName || "");
-    setBio(selected.bio || "");
-    setBannerUrl(selected.bannerUrl || "");
-    setAvatarUrl(selected.avatarUrl || "");
-    setFeaturedUrl(selected.featuredUrl || "");
-    setAccentColor(selected.accentColor || "#c53a1f");
-    setLinksText((selected.links || []).join("\n"));
-    if (!identityName) {
-      setIdentityName(selected.fullName);
-    }
-  }, [identityName, profiles, selectedProfileSlug]);
-
   async function linkIdentity(source: ApiProfileRecord["source"], options?: { launchMint?: boolean }): Promise<void> {
     if (!slug) {
       setSetupState({ status: "error", message: "Enter an ENS name, subdomain, or nftfactory label first." });
@@ -224,20 +192,11 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
         name: identityName,
         source,
         ownerAddress: address,
-        collectionAddress: selectedCollection || undefined,
-        tagline,
-        displayName,
-        bio,
-        bannerUrl,
-        avatarUrl,
-        featuredUrl,
-        accentColor,
-        links: linksText.split("\n").map((item) => item.trim()).filter(Boolean)
+        collectionAddress: selectedCollection || undefined
       });
 
       const nextProfiles = dedupeProfiles([...profiles, response.profile]);
       setProfiles(nextProfiles);
-      setSelectedProfileSlug(response.profile.slug);
       setSetupState({
         status: "success",
         message:
@@ -289,20 +248,11 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
         name: slug,
         source: "nftfactory-subname",
         ownerAddress: walletClient.account.address,
-        collectionAddress: selectedCollection || undefined,
-        tagline,
-        displayName,
-        bio,
-        bannerUrl,
-        avatarUrl,
-        featuredUrl,
-        accentColor,
-        links: linksText.split("\n").map((item) => item.trim()).filter(Boolean)
+        collectionAddress: selectedCollection || undefined
       });
 
       const nextProfiles = dedupeProfiles([...profiles, response.profile]);
       setProfiles(nextProfiles);
-      setSelectedProfileSlug(response.profile.slug);
       setSetupState({
         status: "success",
         hash: txHash,
@@ -317,44 +267,24 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
   return (
     <section className="wizard">
       <div className="card formCard">
-        <h3>Select Profile</h3>
-        {!isConnected ? (
-          <p className="hint">Connect a wallet from the header to load creator profiles linked under this address.</p>
-        ) : profiles.length > 0 ? (
-          <>
-            <label>
-              Profiles under this wallet
-              <select value={selectedProfileSlug} onChange={(e) => setSelectedProfileSlug(e.target.value)}>
-                {profiles.map((profile) => (
-                  <option key={`${profile.slug}-${profile.source}-${profile.collectionAddress || "none"}`} value={profile.slug}>
-                    {profile.fullName}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="row">
-              <button type="button" onClick={openSelectedProfile} disabled={!selectedProfileSlug}>Open Profile</button>
-            </div>
-          </>
-        ) : (
-          <p className="hint">No creator identities are linked to this wallet yet. Use the setup form below to create the first one.</p>
-        )}
-      </div>
-
-      <div className="card formCard">
-        <h3>Profile Setup</h3>
+        <h3>Creator Identity</h3>
         <p className="sectionLead">
           Enter the identity you want to use. Use a full ENS name like <span className="mono">artist.eth</span>,
           an external subdomain like <span className="mono">music.artist.eth</span>, or a plain label like{" "}
           <span className="mono">artist</span> for nftfactory.eth.
         </p>
+        {isConnected && profiles.length > 0 ? (
+          <p className="hint">
+            This wallet already has a linked profile. Identity actions here update the canonical name. Use{" "}
+            <Link href={`/profile/${encodeURIComponent(profiles[0].slug)}`}>the profile page</Link> to edit display details.
+          </p>
+        ) : null}
         <div className="gridMini">
           <label>
             Identity name
             <input
               value={identityName}
               onChange={(e) => setIdentityName(e.target.value)}
-              placeholder="artist.eth or artist"
             />
           </label>
           <label>
@@ -383,72 +313,6 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
               </p>
             ) : null}
           </div>
-        </div>
-        <div className="gridMini">
-          <label>
-            Tagline
-            <input
-              value={tagline}
-              onChange={(e) => setTagline(e.target.value)}
-              placeholder="Independent creator. Collector-friendly drops."
-            />
-          </label>
-          <label>
-            Display name
-            <input
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-              placeholder="Artist Name"
-            />
-          </label>
-          <label>
-            Accent color
-            <input
-              value={accentColor}
-              onChange={(e) => setAccentColor(e.target.value)}
-              placeholder="#c53a1f"
-            />
-          </label>
-          <label>
-            Avatar URL
-            <input
-              value={avatarUrl}
-              onChange={(e) => setAvatarUrl(e.target.value)}
-              placeholder="https://... or ipfs://..."
-            />
-          </label>
-          <label>
-            Banner URL
-            <input
-              value={bannerUrl}
-              onChange={(e) => setBannerUrl(e.target.value)}
-              placeholder="https://... or ipfs://..."
-            />
-          </label>
-          <label>
-            Featured media URL
-            <input
-              value={featuredUrl}
-              onChange={(e) => setFeaturedUrl(e.target.value)}
-              placeholder="https://... or ipfs://..."
-            />
-          </label>
-          <label>
-            Bio
-            <textarea
-              value={bio}
-              onChange={(e) => setBio(e.target.value)}
-              placeholder="Short creator bio"
-            />
-          </label>
-          <label>
-            Links (one per line)
-            <textarea
-              value={linksText}
-              onChange={(e) => setLinksText(e.target.value)}
-              placeholder={"https://example.com\nhttps://x.com/handle"}
-            />
-          </label>
         </div>
         <div className="row">
           <button type="button" onClick={() => void linkIdentity("ens", { launchMint: true })} disabled={!slug || !isConnected || setupState.status === "pending"}>

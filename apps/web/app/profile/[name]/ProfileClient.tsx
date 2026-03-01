@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { Address } from "viem";
+import { useAccount } from "wagmi";
 import { getContractsConfig } from "../../../lib/contracts";
 import {
   fetchActiveListingsBatch,
@@ -11,7 +12,7 @@ import {
   truncateAddress,
   type MarketplaceListing
 } from "../../../lib/marketplace";
-import { fetchHiddenListingIds, fetchProfileResolution, type ApiProfileResolution } from "../../../lib/indexerApi";
+import { fetchHiddenListingIds, fetchProfileResolution, linkProfileIdentity, type ApiProfileResolution } from "../../../lib/indexerApi";
 
 function isAddress(value: string): value is Address {
   return /^0x[a-fA-F0-9]{40}$/.test(value);
@@ -31,6 +32,7 @@ function getFeaturedMediaKind(url: string | null | undefined): "image" | "audio"
 
 export default function ProfileClient({ name }: { name: string }) {
   const config = useMemo(() => getContractsConfig(), []);
+  const { address: connectedAddress, isConnected } = useAccount();
 
   const [sellerAddress, setSellerAddress] = useState("");
   const [scanDepth, setScanDepth] = useState("250");
@@ -41,6 +43,17 @@ export default function ProfileClient({ name }: { name: string }) {
   const [resolutionNote, setResolutionNote] = useState("");
   const [indexerError, setIndexerError] = useState("");
   const [profileResolution, setProfileResolution] = useState<ApiProfileResolution | null>(null);
+  const [editTagline, setEditTagline] = useState("");
+  const [editDisplayName, setEditDisplayName] = useState("");
+  const [editBio, setEditBio] = useState("");
+  const [editBannerUrl, setEditBannerUrl] = useState("");
+  const [editAvatarUrl, setEditAvatarUrl] = useState("");
+  const [editFeaturedUrl, setEditFeaturedUrl] = useState("");
+  const [editAccentColor, setEditAccentColor] = useState("#c53a1f");
+  const [editLinksText, setEditLinksText] = useState("");
+  const [editState, setEditState] = useState<{ status: "idle" | "pending" | "success" | "error"; message?: string }>({
+    status: "idle"
+  });
 
   const loadListings = useCallback(async (): Promise<void> => {
     setIsLoading(true);
@@ -109,6 +122,10 @@ export default function ProfileClient({ name }: { name: string }) {
 
   const linkedProfiles = useMemo(() => profileResolution?.profiles || [], [profileResolution]);
   const primaryProfile = useMemo(() => linkedProfiles[0] || null, [linkedProfiles]);
+  const canEditProfile = useMemo(() => {
+    if (!isConnected || !connectedAddress || !primaryProfile) return false;
+    return connectedAddress.toLowerCase() === primaryProfile.ownerAddress.toLowerCase();
+  }, [connectedAddress, isConnected, primaryProfile]);
 
   const primaryProfileName = useMemo(() => {
     const linked = primaryProfile?.fullName?.trim();
@@ -218,6 +235,60 @@ export default function ProfileClient({ name }: { name: string }) {
   const hasManualWallet = Boolean(sellerAddress.trim());
   const hasProfileData = hasResolvedIdentity || hasManualWallet;
   const featuredMediaKind = useMemo(() => getFeaturedMediaKind(primaryProfile?.featuredUrl), [primaryProfile]);
+
+  useEffect(() => {
+    if (!primaryProfile) return;
+    setEditTagline(primaryProfile.tagline || "");
+    setEditDisplayName(primaryProfile.displayName || "");
+    setEditBio(primaryProfile.bio || "");
+    setEditBannerUrl(primaryProfile.bannerUrl || "");
+    setEditAvatarUrl(primaryProfile.avatarUrl || "");
+    setEditFeaturedUrl(primaryProfile.featuredUrl || "");
+    setEditAccentColor(primaryProfile.accentColor || "#c53a1f");
+    setEditLinksText((primaryProfile.links || []).join("\n"));
+    setEditState({ status: "idle" });
+  }, [primaryProfile]);
+
+  async function saveProfileDetails(): Promise<void> {
+    if (!primaryProfile) {
+      setEditState({ status: "error", message: "No linked profile is available to edit yet." });
+      return;
+    }
+    if (!canEditProfile) {
+      setEditState({ status: "error", message: "Connect the profile owner wallet to edit these details." });
+      return;
+    }
+
+    try {
+      setEditState({ status: "pending", message: "Saving profile details..." });
+      const response = await linkProfileIdentity({
+        name: primaryProfile.fullName,
+        source: primaryProfile.source,
+        ownerAddress: primaryProfile.ownerAddress,
+        collectionAddress: primaryProfile.collectionAddress || undefined,
+        tagline: editTagline,
+        displayName: editDisplayName,
+        bio: editBio,
+        bannerUrl: editBannerUrl,
+        avatarUrl: editAvatarUrl,
+        featuredUrl: editFeaturedUrl,
+        accentColor: editAccentColor,
+        links: editLinksText.split("\n").map((item) => item.trim()).filter(Boolean)
+      });
+
+      setProfileResolution((current) => {
+        if (!current) return current;
+        const nextProfiles = [response.profile, ...(current.profiles || []).filter((item) => item.slug !== response.profile.slug)];
+        return { ...current, profiles: nextProfiles };
+      });
+      setEditState({ status: "success", message: "Profile details saved." });
+    } catch (err) {
+      setEditState({
+        status: "error",
+        message: err instanceof Error ? err.message : "Failed to save profile details"
+      });
+    }
+  }
 
   return (
     <section className="wizard">
@@ -526,6 +597,66 @@ export default function ProfileClient({ name }: { name: string }) {
             <p className="detailValue">{collectionSummaries.length}</p>
           </div>
         </div>
+      </div>
+
+      <div className="card formCard">
+        <h3>Edit Profile</h3>
+        {primaryProfile ? (
+          <>
+            <p className="sectionLead">
+              Update the public-facing profile details for {primaryProfile.fullName}. Identity creation stays in setup; presentation details live here.
+            </p>
+            <div className="gridMini">
+              <label>
+                Display name
+                <input value={editDisplayName} onChange={(e) => setEditDisplayName(e.target.value)} />
+              </label>
+              <label>
+                Tagline
+                <input value={editTagline} onChange={(e) => setEditTagline(e.target.value)} />
+              </label>
+              <label>
+                Accent color
+                <input value={editAccentColor} onChange={(e) => setEditAccentColor(e.target.value)} />
+              </label>
+              <label>
+                Avatar URL
+                <input value={editAvatarUrl} onChange={(e) => setEditAvatarUrl(e.target.value)} />
+              </label>
+              <label>
+                Banner URL
+                <input value={editBannerUrl} onChange={(e) => setEditBannerUrl(e.target.value)} />
+              </label>
+              <label>
+                Featured media URL
+                <input value={editFeaturedUrl} onChange={(e) => setEditFeaturedUrl(e.target.value)} />
+              </label>
+              <label>
+                Bio
+                <textarea value={editBio} onChange={(e) => setEditBio(e.target.value)} />
+              </label>
+              <label>
+                Links (one per line)
+                <textarea value={editLinksText} onChange={(e) => setEditLinksText(e.target.value)} />
+              </label>
+            </div>
+            <div className="row">
+              <button type="button" onClick={() => void saveProfileDetails()} disabled={!canEditProfile || editState.status === "pending"}>
+                {editState.status === "pending" ? "Saving..." : "Save Profile"}
+              </button>
+              {!canEditProfile ? <span className="hint">Connect the profile owner wallet to edit.</span> : null}
+            </div>
+            {editState.status === "error" ? <p className="error">{editState.message}</p> : null}
+            {editState.status === "success" ? <p className="success">{editState.message}</p> : null}
+          </>
+        ) : (
+          <>
+            <p className="hint">No linked profile record is available to edit yet.</p>
+            <div className="row">
+              <Link href={`/profile/setup?label=${encodeURIComponent(name)}`} className="ctaLink secondaryLink">Open identity setup</Link>
+            </div>
+          </>
+        )}
       </div>
 
       <div className="card formCard">
