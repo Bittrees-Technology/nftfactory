@@ -12,73 +12,38 @@ The system is designed so that contracts remain the source of on-chain truth, wh
 
 ## Environment model
 
-### Local development
+| Environment | Purpose | Notes |
+|-------------|---------|-------|
+| **Local** | Rapid UI and flow iteration | Anvil for chain, degraded indexer mode acceptable, local caches OK |
+| **Sepolia** | End-to-end pre-mainnet validation | Real wallets, real confirmations, real explorer links |
+| **Mainnet** | Release target only | Only after Sepolia validation and Safe ownership transfer |
 
-Used for rapid iteration:
-
-- Anvil can be used as the local chain
-- the web app can run against local contract addresses
-- the indexer may run in a degraded mode if Prisma is unavailable
-- local browser caches are acceptable as a fallback for drafts and recent selections
-
-### Sepolia validation
-
-Used for realistic end-to-end testing:
-
-- wallet actions use real Sepolia transactions
-- explorer links and contract receipts matter
-- contract addresses should match the validated deployment set
-- profile, mint, listing, and moderation flows should be verified here before mainnet
-
-### Mainnet
-
-Mainnet is the release target, not the iteration target. The recommended path is:
-
-1. local UX iteration
-2. Sepolia functional validation
-3. Safe ownership transfer and final operational checks
-4. mainnet deployment
+The recommended path is: local iteration → Sepolia validation → Safe ownership transfer → mainnet deployment.
 
 ## Contract layer
 
 The current contract system is built around:
 
-- `NftFactoryRegistry`
-  - registry and policy state
-- `CreatorFactory`
-  - deploys creator-owned ERC-1967 proxy collections
-- `CreatorCollection721` / `CreatorCollection1155`
-  - creator-owned, upgradeable collection contracts
-- `SharedMint721` / `SharedMint1155`
-  - low-friction shared publish contracts
-- `Marketplace`
-  - fixed-price listing and settlement
-- `RoyaltySplitRegistry`
-  - royalty split metadata
-- `SubnameRegistrar`
-  - `nftfactory.eth` subname registration and shared-mint attribution
+- `NftFactoryRegistry` — registry and policy state
+- `CreatorFactory` — deploys creator-owned ERC-1967 proxy collections
+- `CreatorCollection721` / `CreatorCollection1155` — creator-owned, upgradeable collection contracts
+- `SharedMint721` / `SharedMint1155` — low-friction shared publish contracts
+- `Marketplace` — fixed-price listing and settlement
+- `RoyaltySplitRegistry` — royalty split metadata
+- `SubnameRegistrar` — `nftfactory.eth` subname registration and shared-mint attribution
 
 ## Web application layer
 
-The current product routes are:
-
-- `/`
-  - landing page and product entry
-- `/mint`
-  - unified mint and publish flow
-  - collection management flow
-- `/discover`
-  - browse listings and creator activity
-- `/list`
-  - seller-side listing operations
-- `/profile`
-  - profile selector and redirect surface
-- `/profile/setup`
-  - creator identity and public-profile setup
-- `/profile/[name]`
-  - public creator page
-- `/admin`
-  - moderation and operational tools
+| Route | Purpose |
+|-------|---------|
+| `/` | Landing page and product entry |
+| `/mint` | Unified mint, publish, and collection management flow |
+| `/discover` | Browse listings and creator activity |
+| `/list` | Seller-side listing operations |
+| `/profile` | Profile selector and redirect surface |
+| `/profile/setup` | Creator identity and public-profile setup |
+| `/profile/[name]` | Public creator page |
+| `/admin` | Moderation and operational tools |
 
 ## Indexer layer
 
@@ -94,34 +59,43 @@ The indexer is the primary application mirror of that on-chain state and is the 
 - listing and discovery APIs
 - operational overview counts for the current indexed dataset
 
-Current important routes include:
+The indexer runs on port `8791` in deployed environments (`INDEXER_HOST=127.0.0.1 INDEXER_PORT=8791`).
 
-- `GET /api/overview`
-- `GET /api/profile/:name`
-- `GET /api/profiles?owner=<address>`
-- `POST /api/profiles/link`
-- `GET /api/owners/:address/summary`
-- `GET /api/collections?owner=<address>`
-- `GET /api/collections/:address/tokens`
-- `GET /api/feed`
-- `GET /api/moderation/reports`
-- `POST /api/moderation/reports`
-- `GET /api/moderation/actions`
-- `GET /api/moderation/hidden-listings`
+### Active API routes
 
-The current build stores and serves these practical data points:
+| Method | Route | Purpose |
+|--------|-------|---------|
+| `GET` | `/health` | Service health check |
+| `GET` | `/api/feed` | Public mint feed with cursor pagination |
+| `GET` | `/api/overview` | Operational overview counts |
+| `GET` | `/api/collections` | Collections by owner address |
+| `GET` | `/api/collections/:address/tokens` | Token inventory for a collection |
+| `GET` | `/api/profiles` | Profiles for a connected owner |
+| `GET` | `/api/profile/:name` | Public profile resolution by slug or ENS name |
+| `POST` | `/api/profiles/link` | Create or update a linked profile record |
+| `GET` | `/api/owners/:address/summary` | Owner-level summary and recent mints |
+| `GET` | `/api/moderation/reports` | Moderation report queue |
+| `POST` | `/api/moderation/reports` | Submit a moderation report |
+| `POST` | `/api/moderation/reports/:id/resolve` | Resolve a moderation report |
+| `GET` | `/api/moderation/actions` | Moderation action history |
+| `GET` | `/api/moderation/hidden-listings` | Hidden listing state |
+| `POST` | `/api/moderation/listings/:id/visibility` | Update listing visibility (admin) |
+| `GET` | `/api/admin/moderators` | Moderator list |
+| `POST` | `/api/admin/moderators` | Add a moderator |
+| `GET` | `/api/admin/payment-tokens` | Custom payment token registry |
+| `POST` | `/api/admin/payment-tokens` | Register a custom payment token |
+| `POST` | `/api/admin/collections/backfill-subname` | Backfill subname attribution on a collection |
+| `POST` | `/api/payment-tokens/log` | Log a payment token used in a listing |
+
+### Indexed data
+
+The current build stores and serves:
 
 - collection ownership, standard, upgradeability, finality state, and timestamps
 - token ownership, creator, media/metadata CIDs, and mint time
 - active listing state, payment token, price, and listing timestamps
 - linked creator profile records, moderator records, and tracked custom payment tokens
 - factory-created collection inventories, including the NFTs minted by those contracts
-
-The intended shape is:
-
-- blockchain as the source of truth
-- Prisma as the durable indexed mirror for chain-shaped application data
-- JSON-backed local registries for lightweight operational overlays that do not yet need a full schema migration
 
 ### Fallback behavior
 
@@ -141,19 +115,7 @@ For most user-facing dropdowns and selectors, the intended precedence is:
 2. indexer-backed data as the application mirror of chain state
 3. local cached data as a convenience fallback
 
-The browser should not attempt to discover full creator state by scanning the chain directly.
-
-The intended model is:
-
-- use indexed and cached data to discover likely candidates quickly
-- use the chain to confirm the currently relevant collection, owner, or contract fact
-- treat Prisma and local cache as materialized views of blockchain state, not as stronger truth than the chain
-
-In practice, this means the UI should:
-
-- read summaries, feeds, and candidate lists from the indexer first
-- confirm ownership and contract state on-chain before allowing contract actions
-- never treat local cache as stronger or fresher than indexed or chain data
+The browser should not attempt to discover full creator state by scanning the chain directly. Use indexed and cached data to discover likely candidates quickly, then confirm ownership and contract state on-chain before allowing contract actions.
 
 ## Related pages
 

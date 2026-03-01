@@ -1,4 +1,4 @@
-# Deployment And Launch
+# Deployment and Launch
 
 ## Deployment posture
 
@@ -10,38 +10,15 @@ NFTFactory should be operated as:
 
 ## Current environment model
 
-The repo supports two practical operating environments today:
-
-- **Local development**
-  - Anvil for fast contract iteration
-  - local Next.js and indexer services
-  - local caches and fallback modes are acceptable
-- **Sepolia validation**
-  - canonical pre-mainnet proving ground
-  - real wallets, real confirmations, and explorer verification
-  - the place to validate end-to-end creator, listing, and moderation flows
-
-Mainnet should be treated as a release target only after the Sepolia validation path is stable.
+| Environment | Purpose | Notes |
+|-------------|---------|-------|
+| **Local** | UI and flow iteration, local-chain testing | Anvil, local caches and fallback modes acceptable |
+| **Sepolia** | Canonical pre-mainnet proving ground | Real wallets, real confirmations, explorer verification |
+| **Mainnet** | Release target | Only after Sepolia validation path is stable |
 
 ## Local development
 
-### Purpose
-
-Local development is for:
-
-- UI and flow iteration
-- local-chain testing with Anvil
-- indexer and admin workflow testing
-
-### Acceptable local compromises
-
-In local development, it is acceptable to use:
-
-- Anvil instead of Sepolia
-- local JSON-backed fallback state if Prisma is unavailable
-- local caches for drafts and recent selections
-
-These are development conveniences, not production guarantees.
+Local development is for UI and flow iteration, local-chain testing with Anvil, and indexer and admin workflow testing. It is acceptable to use local JSON-backed fallback state if Prisma is unavailable. These are development conveniences, not production guarantees.
 
 ## Sepolia validation
 
@@ -71,9 +48,7 @@ Use this order for the current contract suite:
 7. `CreatorFactory`
 8. `Marketplace`
 
-For verification and deployment scripts, the marketplace contract now resolves as:
-
-- `src/core/Marketplace.sol:Marketplace`
+For verification and deployment scripts, the marketplace contract resolves as `src/core/Marketplace.sol:Marketplace`.
 
 After deploying `ModeratorRegistry`:
 
@@ -81,39 +56,39 @@ After deploying `ModeratorRegistry`:
 - set `MODERATOR_REGISTRY_ADDRESS` in `services/indexer/.env`
 - restart the indexer before validating admin and moderation flows
 
-## Environment readiness
+The indexer must be started with `INDEXER_HOST=127.0.0.1 INDEXER_PORT=8791` in deployed environments.
 
-Before deployment or release validation, confirm:
+## Environment readiness checklist
 
-- deployer wallet is funded
-- Safe addresses are defined
-- RPC endpoints are valid
-- contract addresses are consistent across services
-- `MODERATOR_REGISTRY_ADDRESS` is configured when using the contract-backed moderator flow
-- IPFS upload credentials are configured
-- indexer and web env files match the intended chain
+Before deployment or release validation:
+
+- [ ] deployer wallet is funded
+- [ ] Safe addresses are defined
+- [ ] RPC endpoints are valid
+- [ ] contract addresses are consistent across services
+- [ ] `MODERATOR_REGISTRY_ADDRESS` is configured when using the contract-backed moderator flow
+- [ ] `INDEXER_PORT=8791` is set in the indexer environment
+- [ ] IPFS upload credentials are configured
+- [ ] indexer and web env files match the intended chain
 
 ## Operational launch gates
 
-Treat these as the real go/no-go checks:
-
-- contracts compile and tests pass
-- web typecheck and build pass
-- indexer typecheck passes
-- current Sepolia deployment addresses are validated
-- profile and ENS-linked flows resolve correctly
-- moderator and admin controls are usable
-- ownership/admin surfaces are transferred to Safe where required
+- [ ] contracts compile and tests pass
+- [ ] indexer unit tests pass (`npm run test:indexer`)
+- [ ] web typecheck and build pass
+- [ ] indexer typecheck passes
+- [ ] current Sepolia deployment addresses are validated
+- [ ] profile and ENS-linked flows resolve correctly
+- [ ] moderator and admin controls are usable
+- [ ] ownership/admin surfaces are transferred to Safe where required
 
 ## Mainnet go criteria
 
-Mainnet should wait until:
-
-- Sepolia flows are stable
-- the mint, list, discover, and profile pages are visually and behaviorally locked
-- ownership transfer is complete
-- deployment addresses are documented
-- release confidence is based on current code, not stale docs or stale branches
+- [ ] Sepolia flows are stable
+- [ ] mint, list, discover, and profile pages are visually and behaviorally locked
+- [ ] ownership transfer is complete
+- [ ] deployment addresses are documented
+- [ ] release confidence is based on current code, not stale docs or stale branches
 
 ## Related pages
 

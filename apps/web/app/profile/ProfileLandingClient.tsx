@@ -139,11 +139,10 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
     let cancelled = false;
     void verifyOwnedCollectionsOnChain(publicClient, address, collections).then((verified) => {
       if (cancelled) return;
-      const nextCollections = verified.map((item) => ({
-        ensSubname: item.ensSubname,
-        contractAddress: item.contractAddress,
-        ownerAddress: item.ownerAddress
-      }));
+      const verifiedAddresses = new Set(verified.map((item) => item.contractAddress.toLowerCase()));
+      const nextCollections = collections.filter((item) =>
+        verifiedAddresses.has(item.contractAddress.toLowerCase())
+      );
       setVerifiedCollections(nextCollections);
       setSelectedCollection((current) => {
         if (current && nextCollections.some((item) => item.contractAddress.toLowerCase() === current.toLowerCase())) {

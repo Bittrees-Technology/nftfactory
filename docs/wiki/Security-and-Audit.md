@@ -1,10 +1,10 @@
-# Security And Audit
+# Security and Audit
 
 ## Security focus
 
 The highest-value security work in NFTFactory is still in the smart contract layer.
 
-That said, the practical release posture now depends on three categories:
+The practical release posture depends on three categories:
 
 1. contract safety
 2. operational correctness
@@ -14,15 +14,8 @@ That said, the practical release posture now depends on three categories:
 
 ### Highest-risk contracts
 
-- `Marketplace`
-  - settlement logic
-  - payment routing
-  - approval assumptions
-  - stale listing behavior
-- `SubnameRegistrar`
-  - fee handling
-  - treasury forwarding
-  - subname registration rules
+- `Marketplace` — settlement logic, payment routing, approval assumptions, stale listing behavior
+- `SubnameRegistrar` — fee handling, treasury forwarding, subname registration rules
 
 ### Medium-risk contracts
 
@@ -37,6 +30,17 @@ That said, the practical release posture now depends on three categories:
 - `SharedMint721`
 - `SharedMint1155`
 - `Owned`
+
+## Resolved findings
+
+The following issues were identified and resolved during internal audit hardening (PR #9):
+
+| Finding | Contract | Resolution |
+|---------|----------|------------|
+| Duplicate creator registrations possible | `NftFactoryRegistry` / `CreatorFactory` | Added uniqueness enforcement |
+| Token minting lacked input validation | `CreatorCollection721/1155` | Tightened minting and subname validation |
+| Marketplace verification path incomplete | `Marketplace` | Clarified verification target |
+| Registry fees and subname renewals not hardened | `SubnameRegistrar` | Hardened fee and renewal logic |
 
 ## Current review themes
 
@@ -80,16 +84,6 @@ The current recommended posture is:
 - explicit Sepolia validation before mainnet
 - strict env review before deployment
 - conservative assumptions around external ENS claims
-
-## What is not implied
-
-The current build should not be documented as if it already provides:
-
-- arbitrary ENS-name minting
-- strong on-chain validation of external ENS ownership
-- production-grade chain indexing beyond the current indexer behavior
-
-Those may be future improvements, but they are not current guarantees.
 
 ## Related pages
 

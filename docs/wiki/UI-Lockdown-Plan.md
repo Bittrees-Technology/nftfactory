@@ -2,27 +2,18 @@
 
 ## Purpose
 
-This page is the active execution plan for locking the core product UI before mainnet.
-
-It is intentionally narrower than the roadmap:
-
-- the roadmap tracks overall direction and release gates
-- this page tracks the concrete page-level work that should be completed before mainnet deployment
+This page tracks page-level work that must be completed before mainnet. It is narrower than the roadmap: the roadmap covers overall direction, this page covers concrete lock criteria and completion status for each surface.
 
 ## Mainnet-critical pages
-
-The current release target is to lock down these four product surfaces:
 
 1. Mint
 2. List
 3. Discover
 4. Profile
 
-Each one should be treated as production-critical, not as an experimental flow.
-
 ## Lock criteria
 
-Before a page can be considered locked:
+A page is considered locked when:
 
 - the route purpose is obvious from first load
 - the primary action is clear and not duplicated
@@ -69,8 +60,6 @@ Before a page can be considered locked:
 - [ ] finalize profile setup ergonomics for multi-profile wallets
 
 ## Release sequence
-
-The expected order of completion is:
 
 1. finish route-level UI polish for Mint, List, Discover, and Profile
 2. run the full Sepolia validation pass

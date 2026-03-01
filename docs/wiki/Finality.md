@@ -6,6 +6,14 @@ NFTFactory creator collections expose explicit irreversible actions so collector
 
 These finality controls apply to creator-owned collections, not the shared mint contracts.
 
+## Collector trust summary
+
+| Path | Upgrade risk | Metadata mutability |
+|------|-------------|---------------------|
+| Shared mint | None — no proxy | Fixed at mint |
+| Creator collection (before finalization) | Owner can upgrade logic | Unlocked unless token is locked |
+| Creator collection (after `finalizeUpgrades()`) | Permanently removed | Locked tokens are immutable |
+
 ## `finalizeUpgrades()`
 
 ### Applies to
@@ -32,7 +40,7 @@ After finalization:
 
 This action belongs in the collection-management flow on `/mint` under the manage path.
 
-It should be treated as a deliberate, explicit “I am freezing upgrade authority” step.
+It should be treated as a deliberate, explicit "I am freezing upgrade authority" step.
 
 ## Metadata locking
 
@@ -52,30 +60,12 @@ For collectors, metadata locking is the stronger guarantee around content immuta
 
 ## Shared mint finality
 
-Shared mint contracts are already the “final by design” path:
+Shared mint contracts are already the "final by design" path:
 
 - no proxy upgrade path
 - no metadata setter path
 
-For that reason:
-
-- there is no `finalizeUpgrades()` equivalent
-- there is no separate metadata-lock flow
-
-The shared path is simpler, but less configurable.
-
-## Practical collector interpretation
-
-The current trust model is:
-
-- **shared mint**
-  - simpler
-  - lower configurability
-  - already effectively frozen
-- **creator collections**
-  - more control
-  - more flexibility
-  - stronger creator-side governance until the owner explicitly finalizes
+There is no `finalizeUpgrades()` equivalent and no separate metadata-lock flow. The shared path is simpler, but less configurable.
 
 ## Recommended creator guidance
 
