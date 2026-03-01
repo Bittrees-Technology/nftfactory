@@ -3,12 +3,14 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SRC_DIR="$ROOT_DIR/packages/contracts/src"
-OUT_FILE="$ROOT_DIR/docs/contracts-dependency-tree.md"
+OUT_FILE="$ROOT_DIR/docs/archive/generated/contracts-dependency-tree.md"
 
 if ! command -v rg >/dev/null 2>&1; then
   echo "error: rg is required to generate the dependency tree" >&2
   exit 1
 fi
+
+mkdir -p "$(dirname "$OUT_FILE")"
 
 declare -A edges=()
 declare -A local_nodes=()

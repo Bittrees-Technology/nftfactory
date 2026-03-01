@@ -21,14 +21,16 @@ Production-grade monorepo scaffold for `nftfactory.eth`.
 - `docs`: architecture, deployment, and ops docs
 
 ## Docs quicklinks
-- `docs/contracts-command-and-control-wiki.md`
-  - Command-and-control view of the protocol: authority matrix, privileged functions, governance posture, and operational playbooks for admin/factory/creator/marketplace control surfaces.
-- `docs/contracts-dependency-tree.md`
-  - Solidity import/dependency map (Mermaid + readable trees) to understand composition, trust boundaries, and upgradeable/proxy touchpoints.
-- `docs/audit-scope.md`
-  - Security review scope and priority areas for critical paths.
-- `docs/ensv2-forward-compatibility.md`
-  - ENSv2 readiness checks and commands (Sepolia/mainnet resolver + CCIP-read compatibility).
+- `docs/wiki/Home.md`
+  - Main documentation entry point and wiki index.
+- `docs/wiki/Operations-and-Governance.md`
+  - Ownership, privileged surfaces, governance posture, and operational control boundaries.
+- `docs/wiki/Contract-Dependencies.md`
+  - High-level Solidity dependency map and regeneration guidance.
+- `docs/wiki/Security-and-Audit.md`
+  - Security review scope and the highest-priority audit areas.
+- `docs/wiki/ENS-Integration.md`
+  - ENS-linked identity, subname behavior, and profile resolution guidance.
 
 ## Current status
 This repo includes build-ready scaffolding and first-pass contract/backend code. Dependency install and deployment credentials are intentionally not included.

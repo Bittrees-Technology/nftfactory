@@ -1,21 +1,45 @@
-# nftfactory — Developer Wiki
+# NFTFactory Wiki
 
-Welcome to the nftfactory developer reference. Use the pages below to understand how contracts, identity, and the marketplace fit together.
+This is the canonical documentation entry point for the project.
 
-## Pages
+The wiki is organized so that the active source of truth lives under `docs/wiki`, with historical and superseded material moved to `docs/archive`.
 
-| Page | What it covers |
-|------|---------------|
-| [Contracts](./Contracts.md) | SharedMint vs CreatorCollection, NftFactoryRegistry, deployment addresses |
-| [ENS Integration](./ENS-Integration.md) | How subnames work, SubnameRegistrar, attribution in shared and custom mints |
-| [Finality](./Finality.md) | `finalizeUpgrades`, `metadataLock`, when and who can call them |
+## Start here
 
-## Quick summary
+| Page | Purpose |
+|------|---------|
+| [Architecture](./Architecture.md) | System structure, product routes, and service boundaries |
+| [Contracts](./Contracts.md) | Contract roles, deployment addresses, and minting models |
+| [ENS Integration](./ENS-Integration.md) | ENS-linked identity, `nftfactory.eth` subnames, and profile resolution |
+| [Finality](./Finality.md) | Irreversible actions and collector-verifiable guarantees |
 
-nftfactory is a Ethereum-native creator toolkit built on three concepts:
+## Operations
 
-1. **Shared minting** — any wallet can publish an ERC-721 or ERC-1155 token into a common contract instantly, at zero deploy cost.
-2. **Creator collections** — deploy your own ERC-1967 proxied ERC-721 or ERC-1155 contract via the factory; only you can mint into it.
-3. **ENS identity** — register a subname under `nftfactory.eth` (e.g. `studio.nftfactory.eth`) to link your wallet to a human-readable creator profile that appears in search and discovery.
+| Page | Purpose |
+|------|---------|
+| [Operations and Governance](./Operations-and-Governance.md) | Ownership, admin boundaries, and production control model |
+| [Deployment and Launch](./Deployment-and-Launch.md) | Deployment flow, readiness checks, and launch gates |
+| [Upgrade Runbook](./Upgrade-Runbook.md) | Safe UUPS upgrade workflow for creator collections |
 
-All contracts are deployed on Ethereum Sepolia for testing. See [Contracts](./Contracts.md) for addresses.
+## Reference
+
+| Page | Purpose |
+|------|---------|
+| [Security and Audit](./Security-and-Audit.md) | Audit scope and key review areas |
+| [Contract Dependencies](./Contract-Dependencies.md) | High-level contract dependency map |
+| [Archive](./Archive.md) | Historical and superseded documentation |
+
+## Product summary
+
+NFTFactory is built around three core product paths:
+
+1. Shared minting
+2. Creator-owned collections
+3. ENS-linked creator identity
+
+The normal validation path is:
+
+1. iterate locally
+2. validate on Sepolia
+3. finalize operational controls
+4. proceed to mainnet only after launch gates pass
