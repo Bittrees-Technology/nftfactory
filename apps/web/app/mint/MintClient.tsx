@@ -116,6 +116,23 @@ type KnownCollection = {
   ownerAddress: string;
 };
 
+const namedContractAbi = [
+  {
+    type: "function",
+    name: "name",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "string" }]
+  },
+  {
+    type: "function",
+    name: "symbol",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "string" }]
+  }
+] as const;
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function MintClient({
@@ -143,6 +160,8 @@ export default function MintClient({
   const [knownCollections, setKnownCollections] = useState<KnownCollection[]>([]);
   // Whether to show the inline "deploy new collection" sub-form
   const [showDeployForm, setShowDeployForm] = useState(false);
+  const [selectedCollectionName, setSelectedCollectionName] = useState("");
+  const [selectedCollectionSymbol, setSelectedCollectionSymbol] = useState("");
 
   // Deploy-new-collection form fields
   const [deployName, setDeployName] = useState("");
@@ -398,6 +417,37 @@ export default function MintClient({
       setManageAddress(customCollectionAddress);
     }
   }, [customCollectionAddress, manageAddress]);
+
+  useEffect(() => {
+    if (mintMode !== "custom" || !isAddress(customCollectionAddress) || !publicClient) {
+      setSelectedCollectionName("");
+      setSelectedCollectionSymbol("");
+      return;
+    }
+
+    let cancelled = false;
+
+    void Promise.all([
+      publicClient.readContract({
+        address: customCollectionAddress as Address,
+        abi: namedContractAbi,
+        functionName: "name"
+      }).catch(() => ""),
+      publicClient.readContract({
+        address: customCollectionAddress as Address,
+        abi: namedContractAbi,
+        functionName: "symbol"
+      }).catch(() => "")
+    ]).then(([nextName, nextSymbol]) => {
+      if (cancelled) return;
+      setSelectedCollectionName(typeof nextName === "string" ? nextName : "");
+      setSelectedCollectionSymbol(typeof nextSymbol === "string" ? nextSymbol : "");
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [customCollectionAddress, mintMode, publicClient]);
 
   useEffect(() => {
     if (knownCollections.length === 0) {
@@ -864,6 +914,10 @@ export default function MintClient({
                   <strong>Your collection:</strong> a contract you exclusively own. Only you can
                   mint into it. Supports royalties, metadata locking, and upgrade finality.
                 </p>
+                <p className="hint">
+                  The collection chosen here controls the <strong>contract-level name and address</strong> that explorers
+                  show for the collection. The individual NFT title is set later in the asset and metadata step.
+                </p>
                 <div className="selectionCard">
                   <label>
                     Collection source
@@ -906,8 +960,15 @@ export default function MintClient({
                   ) : null}
                 </div>
                 {isAddress(customCollectionAddress) && (
-                  <p className="hint mono">
-                    Using {formatCollectionIdentity(selectedKnownCollection?.ensSubname ?? null) ? `${formatCollectionIdentity(selectedKnownCollection?.ensSubname ?? null)} ` : ""}
+                  <div className="hint">
+                    <p className="hint">
+                      Using collection contract:
+                      {" "}
+                      <strong>{selectedCollectionName || formatCollectionIdentity(selectedKnownCollection?.ensSubname ?? null) || "Selected collection"}</strong>
+                      {selectedCollectionSymbol ? ` (${selectedCollectionSymbol})` : ""}
+                    </p>
+                    <p className="hint mono">
+                      {formatCollectionIdentity(selectedKnownCollection?.ensSubname ?? null) ? `${formatCollectionIdentity(selectedKnownCollection?.ensSubname ?? null)} ` : ""}
                     {toExplorerAddress(config.chainId, customCollectionAddress) ? (
                       <a href={toExplorerAddress(config.chainId, customCollectionAddress)!} target="_blank" rel="noreferrer">
                         {customCollectionAddress.slice(0, 10)}…{customCollectionAddress.slice(-8)}
@@ -915,7 +976,8 @@ export default function MintClient({
                     ) : (
                       <span>{customCollectionAddress.slice(0, 10)}…{customCollectionAddress.slice(-8)}</span>
                     )}
-                  </p>
+                    </p>
+                  </div>
                 )}
 
                 {/* ERC-1155 custom: token ID */}
@@ -958,13 +1020,23 @@ export default function MintClient({
                       UUPS-upgradeable ERC-1967 proxy. You will be set as the owner. One transaction,
                       no extra cost beyond gas.
                     </p>
+                    <p className="hint">
+                      These fields set the <strong>collection contract identity</strong>. They do not set the title of the NFT
+                      you are about to mint. The NFT title and description are configured in step 3.
+                    </p>
                     <label>
-                      Collection name
-                      <input value={deployName} onChange={(e) => setDeployName(e.target.value)} placeholder="My Collection" />
+                      Collection name (contract)
+                      <input value={deployName} onChange={(e) => setDeployName(e.target.value)} placeholder="Grow Collection" />
+                      <span className="hint">
+                        This becomes the collection&apos;s on-chain <code>name()</code> value and is what explorers use as the collection label.
+                      </span>
                     </label>
                     <label>
-                      Symbol (short ticker)
-                      <input value={deploySymbol} onChange={(e) => setDeploySymbol(e.target.value)} placeholder="MYCOL" />
+                      Collection symbol (contract ticker)
+                      <input value={deploySymbol} onChange={(e) => setDeploySymbol(e.target.value)} placeholder="GROW" />
+                      <span className="hint">
+                        This becomes the collection&apos;s on-chain <code>symbol()</code> value.
+                      </span>
                     </label>
                     <label>
                       ENS subname (optional — e.g. <code>studio</code> → studio.nftfactory.eth)
@@ -1012,12 +1084,20 @@ export default function MintClient({
           {/* Step 3: Asset + metadata */}
           <div className="card formCard">
             <h3>3. Asset and Metadata</h3>
+            <p className="hint">
+              This step sets the <strong>individual NFT&apos;s metadata</strong>. These fields are uploaded to IPFS and used for the
+              token you are minting. They do not rename the collection contract.
+            </p>
             <label>
-              Name (required)
-              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Artwork title" />
+              NFT title (metadata name, required)
+              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Grow #2" />
+              <span className="hint">
+                This becomes the token-level metadata <code>name</code>. On explorers, it is typically shown like
+                <code>Collection Name #TokenId</code> alongside the token metadata title.
+              </span>
             </label>
             <label>
-              Description (optional)
+              NFT description (metadata, optional)
               <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Tell collectors about this work" />
             </label>
             <div className="selectionCard">
@@ -1119,7 +1199,19 @@ export default function MintClient({
                   {description && <p className="nftPreviewDesc">{description}</p>}
                   <div className="compactList">
                     <p className="hint"><strong>Collection:</strong> {mintMode === "shared" ? "Shared contract" : "Creator collection"}</p>
+                    {mintMode === "custom" ? (
+                      <p className="hint">
+                        <strong>Collection contract name:</strong>
+                        {" "}
+                        {selectedCollectionName || deployName.trim() || "Not yet resolved"}
+                        {selectedCollectionSymbol ? ` (${selectedCollectionSymbol})` : ""}
+                      </p>
+                    ) : null}
+                    {mintMode === "custom" && isAddress(customCollectionAddress) ? (
+                      <p className="hint mono"><strong>Collection contract:</strong> {customCollectionAddress}</p>
+                    ) : null}
                     <p className="hint"><strong>Token type:</strong> {standard === "ERC721" ? "ERC-721 unique mint" : `ERC-1155 with ${copies || "1"} edition${copies === "1" ? "" : "s"}`}</p>
+                    <p className="hint"><strong>NFT title:</strong> {name || "Untitled NFT"}</p>
                     <p className="hint"><strong>Metadata:</strong> {useCustomMetadataUri ? "Custom IPFS metadata" : "Generated from form inputs"}</p>
                     <p className="hint"><strong>Media:</strong> {imageFile ? "Image attached" : "No image"}{audioFile ? " + audio attached" : ""}</p>
                     {includeExternalUrl && externalUrl ? <p className="hint"><strong>External link:</strong> included</p> : null}
