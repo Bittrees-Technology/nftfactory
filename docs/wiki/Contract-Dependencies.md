@@ -56,28 +56,22 @@ This is a supporting registry and should still be treated as part of the protoco
 
 The upgradeable creator-collection path depends on OpenZeppelin upgradeable primitives:
 
-- `CreatorCollection721`
-  - `Initializable`
-  - `OwnableUpgradeable`
-  - `UUPSUpgradeable`
-  - `ERC721URIStorageUpgradeable`
-  - `ERC2981Upgradeable`
-- `CreatorCollection1155`
-  - `Initializable`
-  - `OwnableUpgradeable`
-  - `UUPSUpgradeable`
-  - `ERC1155Upgradeable`
-  - `ERC2981Upgradeable`
+| Contract | OpenZeppelin dependencies |
+|----------|--------------------------|
+| `CreatorCollection721` | `Initializable`, `OwnableUpgradeable`, `UUPSUpgradeable`, `ERC721URIStorageUpgradeable`, `ERC2981Upgradeable` |
+| `CreatorCollection1155` | `Initializable`, `OwnableUpgradeable`, `UUPSUpgradeable`, `ERC1155Upgradeable`, `ERC2981Upgradeable` |
 
 ## Proxy boundary
 
 `CreatorFactory` depends on `ERC1967Proxy` to instantiate creator-owned collections.
 
-That means the upgrade boundary in the creator-collection path is:
+The upgrade boundary in the creator-collection path is:
 
-- implementation contract
-- proxy state
-- owner-controlled UUPS authorization
+- **implementation contract** — where the logic lives
+- **proxy state** — where the data lives
+- **owner-controlled UUPS authorization** — who can trigger an upgrade
+
+Once `finalizeUpgrades()` is called, the upgrade boundary is permanently closed.
 
 ## Why this matters
 

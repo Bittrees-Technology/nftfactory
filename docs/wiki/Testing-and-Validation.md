@@ -1,18 +1,10 @@
-# Testing And Validation
+# Testing and Validation
 
 ## Purpose
 
 This page is the practical validation checklist for the current build.
 
-It is intended to align the docs with how NFTFactory should actually be verified today:
-
-- contracts
-- web app
-- indexer
-- chain wiring
-- Sepolia product flows
-
-## Contract validation
+## 1. Contract validation
 
 Run the core contract checks first:
 
@@ -24,7 +16,7 @@ forge test -q
 
 Use this before reasoning about deployment quality or frontend behavior.
 
-## Deployment validation
+## 2. Deployment validation
 
 For a deployed network, verify:
 
@@ -41,7 +33,17 @@ cast call <address> "owner()(address)" --rpc-url "$SEPOLIA_RPC_URL"
 
 For current validated Sepolia addresses, see [Contracts](./Contracts.md).
 
-## Web validation
+## 3. Indexer unit tests
+
+Run the indexer test suite (65 tests expected):
+
+```bash
+npm run test:indexer
+```
+
+This validates the request handler, routing, rate limiting, admin auth, and feed endpoint behavior. Tests run in CI on the `docs/wiki-review-and-polish` branch and on every pull from `origin/main` via the watchdog script.
+
+## 4. Web validation
 
 The current web release gates are:
 
@@ -59,7 +61,7 @@ Then verify the core product paths manually:
 - listing and discovery
 - admin and moderation
 
-## Indexer validation
+## 5. Indexer service validation
 
 Validate the indexer separately:
 
@@ -69,14 +71,14 @@ npm run typecheck:indexer
 
 Then confirm:
 
-- the service starts
-- `/health` responds
+- the service starts on port `8791`
+- `/health` responds with `{"ok":true}`
 - profile and collection lookup routes behave as expected
 - moderation endpoints behave as expected
 
 If Prisma is unavailable locally, confirm the degraded startup mode still supports the expected local testing path.
 
-## Environment validation
+## 6. Environment validation
 
 Before testing flows, confirm:
 
@@ -85,9 +87,9 @@ Before testing flows, confirm:
 - wallet and IPFS env vars are present
 - the configured chain matches what the UI expects
 
-Most “the app is broken” issues in the current build are environment mismatches, not logic defects.
+Most "the app is broken" issues in the current build are environment mismatches, not logic defects.
 
-## Manual Sepolia flow matrix
+## 7. Manual Sepolia flow matrix
 
 Use this as the current end-to-end acceptance path:
 
@@ -101,12 +103,12 @@ Use this as the current end-to-end acceptance path:
 8. verify discovery
 9. submit and review a moderation action
 
-## Current best practice
+## Validation rhythm
 
-The intended validation rhythm is:
+The intended order is:
 
 1. local iteration
-2. local checks
+2. local checks (contracts, indexer tests, typecheck, build)
 3. Sepolia smoke tests
 4. ownership and deployment verification
 5. only then consider mainnet

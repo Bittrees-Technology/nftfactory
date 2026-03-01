@@ -1,4 +1,4 @@
-# Operations And Governance
+# Operations and Governance
 
 ## Overview
 
@@ -38,7 +38,7 @@ Current creator controls include:
 
 ## Admin and moderation model
 
-The product’s moderation and admin behavior is primarily implemented in the indexer and admin UI.
+The product's moderation and admin behavior is primarily implemented in the indexer and admin UI.
 
 Current operational controls include:
 
@@ -50,16 +50,14 @@ Current operational controls include:
 
 ### Auth controls
 
-Admin mutation paths can be gated with:
+Admin mutation paths in the indexer can be gated with:
 
-- `INDEXER_ADMIN_TOKEN`
-- `INDEXER_ADMIN_ALLOWLIST`
+- `INDEXER_ADMIN_TOKEN` — bearer token checked on write endpoints
+- `INDEXER_ADMIN_ALLOWLIST` — IP-based allowlist for privileged operations
 
 ### Moderator model
 
-The current build supports a moderator list managed through the admin workflow. In local or degraded environments, that list can be persisted in JSON-backed storage.
-
-When `MODERATOR_REGISTRY_ADDRESS` is configured in the indexer, the contract-backed moderator list should be treated as canonical for reads and allowlist enforcement.
+The current build supports a moderator list managed through the admin workflow. When `MODERATOR_REGISTRY_ADDRESS` is configured, the contract-backed moderator list is treated as canonical for reads and allowlist enforcement. In local or degraded environments, the list can fall back to JSON-backed storage.
 
 ## Safe-based production posture
 
@@ -76,14 +74,6 @@ Operational guidance should assume:
 - moderation can hide content from discovery
 - on-chain ownership remains unchanged
 - the product should fail closed on privileged actions when auth is missing
-
-## Current build alignment
-
-The current build already assumes:
-
-- profile and moderation tooling are indexer-backed
-- protocol controls live outside the public creator flow
-- creator profile setup is separate from protocol admin controls
 
 ## Related pages
 

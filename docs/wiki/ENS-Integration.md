@@ -26,10 +26,8 @@ Example:
 
 The profile system can also link:
 
-- an external ENS name
-  - example: `artist.eth`
-- an external ENS subname
-  - example: `drops.artist.eth`
+- an external ENS name — example: `artist.eth`
+- an external ENS subname — example: `drops.artist.eth`
 
 These are valid product identities, but they are **not** minted or managed by NFTFactory contracts. They are linked through the profile registry and surfaced in the UI and indexer.
 
@@ -53,46 +51,23 @@ Current behavior:
 - the shared mint contract attempts to call `recordMint`
 - failures do not block the mint
 
-This means attribution is:
-
-- useful for discovery
-- optional
-- not currently a hard ownership gate for minting
+Attribution is useful for discovery and optional — it is not currently a hard ownership gate for minting.
 
 ## Creator collection identity
 
-Creator collections can carry ENS-related identity metadata in the product, but collection identity and full creator-profile presentation are currently driven by:
-
-- indexer-backed profile records
-- linked collection metadata
-- owner-based lookups
+Creator collections can carry ENS-related identity metadata in the product, but collection identity and full creator-profile presentation are currently driven by indexer-backed profile records, linked collection metadata, and owner-based lookups.
 
 The collection contract itself is not the canonical source for the full public profile.
 
 ## Current profile resolution model
 
-The current build resolves creators through the indexer using:
+The current build resolves creators through the indexer using linked ENS names, subnames, `nftfactory.eth` subnames, and creator profile slugs.
 
-- linked ENS names
-- linked ENS subnames
-- linked `nftfactory.eth` subnames
-- creator profile slugs
-
-That means:
-
-- `/profile`
-  - uses owner-based profile lookup
-- `/profile/setup`
-  - links or creates the creator identity
-- `/profile/[name]`
-  - resolves the public creator page
-
-## Marketplace and discovery
-
-ENS-linked identity is also used to make discovery more human-readable:
-
-- the profile APIs resolve creator identities to wallets
-- discovery and profile surfaces can display creator identity without requiring raw address input
+| Route | Role |
+|-------|------|
+| `/profile` | Owner-based profile lookup and redirect |
+| `/profile/setup` | Links or creates the creator identity |
+| `/profile/[name]` | Resolves and renders the public creator page |
 
 ## Current limits
 
@@ -103,15 +78,6 @@ The current build does **not**:
 - prove external ENS ownership on-chain inside NFTFactory contracts
 
 Those identity modes are currently product-level links, not protocol-owned ENS mutation paths.
-
-## Recommended future direction
-
-If NFTFactory later needs stronger external ENS verification, that should be added as:
-
-- explicit off-chain validation in the indexer or app
-- or new chain-specific integrations
-
-It should not be implied by the current contracts.
 
 ## Related pages
 
