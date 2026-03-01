@@ -12,14 +12,12 @@ These files capture older launch and deployment framing that has since been fold
 - [legacy-docs/mvp-launch-checklist.md](./legacy-docs/mvp-launch-checklist.md)
 - [legacy-docs/mvp-launch-status-2026-02-27.md](./legacy-docs/mvp-launch-status-2026-02-27.md)
 - [legacy-docs/sepolia-checklist.md](./legacy-docs/sepolia-checklist.md)
-- [legacy-docs/upgrade-runbook.md](./legacy-docs/upgrade-runbook.md)
 - [legacy-docs/ensv2-forward-compatibility.md](./legacy-docs/ensv2-forward-compatibility.md)
 
 ## Security and Design
 
 These files preserve older design, audit, and contract-structure references that were summarized into the active wiki:
 
-- [legacy-docs/architecture.md](./legacy-docs/architecture.md)
 - [legacy-docs/audit-scope.md](./legacy-docs/audit-scope.md)
 - [legacy-docs/contracts-command-and-control-wiki.md](./legacy-docs/contracts-command-and-control-wiki.md)
 - [legacy-docs/contracts-dependency-tree.md](./legacy-docs/contracts-dependency-tree.md)
@@ -37,6 +35,11 @@ The old `pr-description-zealous-mayer.md` file was removed because it duplicated
 
 - the Zealous Mayer release notes
 - the Claude Zealous-Mayer branch archive
+
+The old standalone `architecture.md` and `upgrade-runbook.md` files were also removed because their content is fully superseded by the active wiki pages:
+
+- `docs/wiki/Architecture.md`
+- `docs/wiki/Upgrade-Runbook.md`
 
 ## Generated Artifacts
 

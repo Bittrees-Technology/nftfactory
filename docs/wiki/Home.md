@@ -45,6 +45,7 @@ NFTFactory is currently built around four connected product flows:
 | [Deployment and Launch](./Deployment-and-Launch.md) | Local, Sepolia, and mainnet rollout guidance |
 | [Upgrade Runbook](./Upgrade-Runbook.md) | UUPS upgrade path for creator collections |
 | [Testing and Validation](./Testing-and-Validation.md) | Recommended verification flow for contracts, app wiring, and release readiness |
+| [Roadmap](./Roadmap.md) | Near-future build scope and intentionally deferred work |
 
 ## Reference
 
