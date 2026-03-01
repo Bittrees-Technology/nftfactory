@@ -468,64 +468,48 @@ export default function ListClient() {
         <p className="eyebrow">Seller Flow</p>
         <h1>List NFT</h1>
         <p className="heroText">
-          Seller route for fixed-price listings. This page is for assets you already hold: connect a wallet,
-          prepare a listing, then manage active inventory without leaving the same screen.
+          Fixed-price selling route for assets you already hold. Connect the seller wallet, create a listing,
+          then manage live inventory from the same page without jumping between routes.
         </p>
-        <div className="row">
-          <Link href="/discover" className="ctaLink secondaryLink">Read-only browsing</Link>
-          <Link href="/mint?view=mint&collection=shared" className="ctaLink secondaryLink">Mint before selling</Link>
-        </div>
         <div className="flowStrip">
           <div className="flowCell">
-            <span className="flowLabel">1. Connect</span>
-            <p className="hint">Use the shared header wallet control to pick the correct seller wallet.</p>
+            <span className="flowLabel">1. Connect seller</span>
+            <p className="hint">Use the shared header wallet control to choose the wallet that owns the NFT.</p>
           </div>
           <div className="flowCell">
-            <span className="flowLabel">2. List</span>
-            <p className="hint">Approve the marketplace, then create a sale for an NFT you already own.</p>
+            <span className="flowLabel">2. Create listing</span>
+            <p className="hint">Approve the marketplace, then publish a sale for the asset you already hold.</p>
           </div>
           <div className="flowCell">
-            <span className="flowLabel">3. Manage</span>
-            <p className="hint">Refresh, cancel, buy, or inspect active listings below.</p>
+            <span className="flowLabel">3. Manage inventory</span>
+            <p className="hint">Refresh, cancel, inspect, or buy live listings once they are active.</p>
           </div>
-        </div>
-      </div>
-
-      <div className="card formCard">
-        <h3>Current Route Scope</h3>
-        <p className="sectionLead">
-          `List` combines seller setup and live marketplace management. Use `Discover` if you want a cleaner
-          feed with no listing form, and use `Mint` if you need to create the NFT first.
-        </p>
-        <div className="gridMini">
-          <p className="hint"><strong>Create listing:</strong> use steps 1-4 to approve and submit a sale.</p>
-          <p className="hint"><strong>Manage listings:</strong> use the lower sections to cancel, buy, or filter active listings.</p>
         </div>
       </div>
 
       <form className="wizard" onSubmit={onSubmit}>
         <div className="card formCard">
           <h3>1. Wallet Status</h3>
-          <p className="hint">Use the header wallet button to connect, change accounts, or switch networks.</p>
+          <p className="hint">Use the header wallet button to connect, change accounts, or choose the correct network.</p>
           {!isConnected ? (
             <p className="hint">
-              Listing creation and cancel actions stay disabled until a wallet is connected.
+              Listing creation and cancel actions stay locked until a seller wallet is connected.
             </p>
           ) : null}
           {isConnected && wrongNetwork ? (
             <p className="hint">
-              Your wallet is connected to chain {chainId}. Use the header wallet button to select {appChain.name}. This
-              page stays disabled until the selected network matches the configured chain.
+              Your wallet is connected to chain {chainId}. Use the header wallet button to select {appChain.name}.
+              Selling actions stay disabled until the selected network matches the configured chain.
             </p>
           ) : null}
           <p className="mono">Account: {address || "Not connected"}</p>
-          <p className="mono">Network: {chainId ?? "Unknown"} (expected {appChain.name} / {config.chainId})</p>
+          <p className="mono">Target network: {appChain.name}</p>
           <button type="button" onClick={loadListings} disabled={wrongNetwork || listingsLoading}>
             {listingsLoading ? "Refreshing..." : "Refresh Listings"}
           </button>
           <p className="hint">
-            Refresh loads the latest visible marketplace state from the configured chain. Increase scan
-            depth if older listings are missing from the browse section below.
+            Refresh reloads the latest visible marketplace state from the configured chain. Increase scan
+            depth if older listings are missing from the marketplace section below.
           </p>
           <label>
             Scan depth
@@ -542,7 +526,7 @@ export default function ListClient() {
         <div className="card formCard">
           <h3>2. NFT Details</h3>
           <p className="hint">
-            This page is for assets you already hold. If you need to mint first, use the Mint route.
+            This route is for assets you already hold. If the NFT does not exist yet, use Mint first and then return here.
           </p>
           <label>
             Standard
@@ -580,6 +564,9 @@ export default function ListClient() {
 
         <div className="card formCard">
           <h3>3. Price</h3>
+          <p className="hint">
+            Choose the sale currency and set the fixed price buyers will see on the live marketplace.
+          </p>
           <label>
             Payment token
             <select value={paymentTokenType} onChange={(e) => setPaymentTokenType(e.target.value as "ETH" | "ERC20")}>
@@ -606,7 +593,7 @@ export default function ListClient() {
         <div className="card formCard">
           <h3>4. Submit</h3>
           <p className="hint">
-            This submits a live marketplace approval and listing transaction on {appChain.name}.
+            This submits the approval and listing transactions that make the NFT available for sale on {appChain.name}.
           </p>
           <button type="submit" disabled={!isConnected || wrongNetwork || state.status === "pending"}>
             {state.status === "pending" ? "Submitting..." : "Approve and Create Listing"}
@@ -616,12 +603,14 @@ export default function ListClient() {
 
         <div className="card formCard">
           <h3>My Active Listings</h3>
-          <p className="hint">These are listings where your connected wallet is the seller.</p>
+          <p className="hint">This is your live seller inventory for the connected wallet.</p>
           {!isConnected && <p className="hint">Connect wallet to view your listings.</p>}
-          {isConnected && myListings.length === 0 && !listingsLoading && <p className="hint">No active listings found.</p>}
+          {isConnected && myListings.length === 0 && !listingsLoading && (
+            <p className="hint">No active listings are live for this wallet yet.</p>
+          )}
           {isConnected && myListings.length === 0 && !listingsLoading ? (
             <div className="row">
-              <Link href="/mint?view=mint&collection=shared" className="ctaLink secondaryLink">Mint something first</Link>
+              <Link href="/mint?view=mint" className="ctaLink secondaryLink">Create and publish first</Link>
               <button type="button" onClick={loadListings} disabled={listingsLoading}>
                 Refresh Seller State
               </button>
@@ -650,10 +639,9 @@ export default function ListClient() {
         </div>
 
         <div className="card formCard">
-          <h3>Browse Active Marketplace Listings</h3>
+          <h3>Marketplace Feed</h3>
           <p className="hint">
-            This section is the live browse flow. Use filters to inspect listings before buying or
-            jump to Discover if you want a cleaner read-only browsing page.
+            This is the live sale feed. Use filters to inspect active listings, compare pricing, or jump into a purchase.
           </p>
           <ListingFilters
             filters={filters}
@@ -664,12 +652,12 @@ export default function ListClient() {
           />
           {filteredListings.length === 0 && !listingsLoading ? (
             <div>
-              <p className="hint">No active listings match filters.</p>
+              <p className="hint">No active listings are visible with the current filters.</p>
               <div className="row">
                 <button type="button" onClick={() => setFilters(DEFAULT_FILTERS)}>
-                  Reset Listing Filters
+                  Reset Filters
                 </button>
-                <Link href="/discover" className="ctaLink secondaryLink">Open read-only feed</Link>
+                <Link href="/discover" className="ctaLink secondaryLink">Open mint feed</Link>
               </div>
             </div>
           ) : null}
