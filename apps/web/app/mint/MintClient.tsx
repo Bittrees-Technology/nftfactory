@@ -818,21 +818,20 @@ export default function MintClient({
         <p className="eyebrow">Publishing Flow</p>
         <h1>Create and Publish</h1>
         <p className="heroText">
-          Use one route for the full publishing flow: pick shared mint or your own creator collection,
-          prepare metadata, then mint. Collection ownership and upgrade finality stay in the manage flow.
+          One route for the full publish flow: choose a collection, prepare the asset, then mint.
         </p>
         <div className="flowStrip">
           <div className="flowCell">
             <span className="flowLabel">Connect</span>
-            <p className="hint">The wallet button lives in the top-right of the header and controls connect, chain, and account state.</p>
+            <p className="hint">Use the header wallet button.</p>
           </div>
           <div className="flowCell">
             <span className="flowLabel">Prepare</span>
-            <p className="hint">Choose shared or creator collection, then provide metadata once.</p>
+            <p className="hint">Choose a collection and set the asset.</p>
           </div>
           <div className="flowCell">
             <span className="flowLabel">Publish</span>
-            <p className="hint">One final button uploads to IPFS if needed, then submits the mint transaction.</p>
+            <p className="hint">Upload to IPFS if needed, then mint.</p>
           </div>
         </div>
       </div>
@@ -846,8 +845,7 @@ export default function MintClient({
           </p>
         ) : (
           <p className="hint">
-            This is one unified publish flow. Choose the shared contract or one of your creator collections in step 2,
-            then complete the same metadata and mint sequence.
+            One publish flow for both shared and creator collections.
           </p>
         )}
         <div className="row">
@@ -871,7 +869,7 @@ export default function MintClient({
           {/* Step 1: Wallet */}
           <div className="card formCard">
             <h3>1. Wallet Status</h3>
-            <p className="hint">The header wallet button controls connect, account selection, and network selection.</p>
+            <p className="hint">Use the header wallet button to connect and choose the network.</p>
             {wrongNetwork ? (
               <p className="hint">
                 Use the header wallet button to select {appChain.name}. Minting stays blocked until the selected network
@@ -888,8 +886,7 @@ export default function MintClient({
           <div className="card formCard">
             <h3>2. Collection Target</h3>
             <p className="hint">
-              Use one publish form for both paths. Pick the shared contract for the fastest release, or pick one of your
-              creator collections when you want ownership, royalties, and upgrade controls.
+              Pick the shared contract for the fastest path, or use your own collection for more control.
             </p>
 
             <label>
@@ -925,15 +922,13 @@ export default function MintClient({
             {mintMode === "shared" && (
               <div>
                 <p className="hint">
-                  <strong>Shared collection:</strong> your token goes into a common contract
-                  anyone can mint into. Great for quick publishing.
+                  <strong>Shared collection:</strong> your token mints into the common NFTFactory contract.
                 </p>
                 <p className="mono">
                   {standard === "ERC721" ? config.shared721 : config.shared1155}
                 </p>
                 <p className="hint">
-                  Shared mint publishes immediately. If you want a named creator collection, switch the collection type above
-                  and choose one of your owned collections.
+                  Shared mint publishes immediately. Switch to your own collection if you want a dedicated contract.
                 </p>
               </div>
             )}
@@ -941,12 +936,10 @@ export default function MintClient({
             {mintMode === "custom" && (
               <>
                 <p className="hint">
-                  <strong>Your collection:</strong> a contract you exclusively own. Only you can
-                  mint into it. Supports royalties, metadata locking, and upgrade finality.
+                  <strong>Your collection:</strong> a contract you own and mint into directly.
                 </p>
                 <p className="hint">
-                  The collection chosen here controls the <strong>contract-level name and address</strong> that explorers
-                  show for the collection. The individual NFT title is set later in the asset and metadata step.
+                  This sets the collection contract. The NFT name is set in the next step.
                 </p>
                 <div className="selectionCard">
                   <label>
@@ -1115,21 +1108,22 @@ export default function MintClient({
           <div className="card formCard">
             <h3>3. Asset and Metadata</h3>
             <p className="hint">
-              This step sets the <strong>individual NFT&apos;s metadata</strong>. These fields are uploaded to IPFS and used for the
-              token you are minting. They do not rename the collection contract.
+              This step sets the NFT metadata that will be uploaded and minted.
             </p>
             <label>
-              NFT title (metadata name, required)
+              Name (required)
               <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Grow #2" />
-              <span className="hint">
-                This becomes the token-level metadata <code>name</code>. On explorers, it is typically shown like
-                <code>Collection Name #TokenId</code> alongside the token metadata title.
-              </span>
             </label>
             <label>
-              NFT description (metadata, optional)
+              Description (optional)
               <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Tell collectors about this work" />
             </label>
+            {standard === "ERC1155" && (
+              <label>
+                Number of copies
+                <input value={copies} onChange={(e) => setCopies(e.target.value)} inputMode="numeric" placeholder="10" />
+              </label>
+            )}
             <div className="selectionCard">
               <span className="flowLabel">Media Inputs</span>
               <label>
@@ -1159,9 +1153,6 @@ export default function MintClient({
                 <img src={previewUrl} alt={name || "NFT preview"} className="previewImage" />
               </div>
             )}
-            <p className="hint">
-              Choose an image to auto-upload to IPFS during publish, or add audio below so it is included in the metadata.
-            </p>
             <div className="selectionCard">
               <span className="flowLabel">Metadata Options</span>
               <label className="inlineCheck">
@@ -1207,17 +1198,9 @@ export default function MintClient({
           {/* Step 4: Mint settings */}
           <div className="card formCard">
             <h3>4. Mint Preview</h3>
-            {standard === "ERC1155" && (
-              <label>
-                Number of copies (editions)
-                <input value={copies} onChange={(e) => setCopies(e.target.value)} inputMode="numeric" placeholder="10" />
-              </label>
-            )}
-
             {mintMode === "custom" ? (
               <p className="hint">
-                Custom collections do not store per-mint ENS attribution. Their creator identity comes from the
-                collection contract and its registered ENS subname.
+                Custom collections use the collection identity you already set.
               </p>
             ) : null}
 
