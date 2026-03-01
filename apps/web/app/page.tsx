@@ -3,23 +3,14 @@ import Link from "next/link";
 export default function HomePage() {
   return (
     <section className="wizard">
-      <div className="heroCard">
-        <p className="eyebrow">nftfactory.eth</p>
-        <p className="heroText">
-          Mint instantly into shared contracts, deploy your own creator collection, list work for sale,
-          and browse the marketplace. Use the profile route for creator onboarding, ENS identity setup,
-          and storefront lookup.
-        </p>
-      </div>
-
       <div className="grid">
-        <Link href="/mint?view=mint&collection=shared" className="card actionCard">
-          <h3>Shared Mint</h3>
+        <Link href="/mint?view=mint" className="card actionCard">
+          <h3>Create and Publish</h3>
           <p>
-            Publish any token into a common shared contract — no setup, no deploy cost, instant.
-            Anyone can mint. Attribute tokens to your ENS subname for creator-profile discovery.
+            Start with one unified mint flow. Choose the shared contract for the fastest release, or
+            switch to one of your creator collections when you need ownership, royalties, and long-term control.
           </p>
-          <p className="actionHint">Opens Mint in shared mode.</p>
+          <p className="actionHint">Opens the unified mint and publish flow.</p>
         </Link>
 
         <Link href="/mint?view=mint&collection=custom" className="card actionCard">
@@ -68,6 +59,10 @@ export default function HomePage() {
           </p>
           <p className="actionHint">Opens the collection management flow directly.</p>
         </Link>
+      </div>
+
+      <div className="card formCard">
+        <Link href="/wiki" className="ctaLink secondaryLink">Open Wiki</Link>
       </div>
     </section>
   );
