@@ -1,7 +1,7 @@
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 
-const WIKI_DIR = path.join(process.cwd(), "data", "wiki");
+const WIKI_DIR = path.resolve(process.cwd(), "..", "..", "data", "wiki");
 
 export type WikiPage = {
   slug: string;
