@@ -5,26 +5,11 @@ export default function HomePage() {
     <section className="wizard">
       <div className="heroCard">
         <p className="eyebrow">nftfactory.eth</p>
-        <h1>Publish, List, and Discover</h1>
         <p className="heroText">
           Mint instantly into shared contracts, deploy your own creator collection, list work for sale,
           and browse the marketplace. Use the profile route for creator onboarding, ENS identity setup,
           and storefront lookup.
         </p>
-        <div className="row">
-          <Link href="/mint?view=mint&collection=shared" className="ctaLink">
-            Start with shared mint
-          </Link>
-          <Link href="/mint?view=mint&collection=custom" className="ctaLink secondaryLink">
-            Deploy a creator collection
-          </Link>
-          <Link href="/discover" className="ctaLink secondaryLink">
-            Browse marketplace
-          </Link>
-          <Link href="/profile/setup" className="ctaLink secondaryLink">
-            Creator setup
-          </Link>
-        </div>
       </div>
 
       <div className="grid">
@@ -83,14 +68,6 @@ export default function HomePage() {
           </p>
           <p className="actionHint">Opens the collection management flow directly.</p>
         </Link>
-      </div>
-
-      <div className="card formCard">
-        <h3>Operational Routes</h3>
-        <div className="row">
-          <Link href="/list" className="ctaLink secondaryLink">Create or manage listings</Link>
-          <Link href="/admin" className="ctaLink secondaryLink">Moderation admin</Link>
-        </div>
       </div>
     </section>
   );
