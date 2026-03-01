@@ -11,6 +11,7 @@ export type MarketplaceListing = {
   standard: string;
   paymentToken: Address;
   price: bigint;
+  expiresAt: bigint;
   active: boolean;
 };
 
@@ -38,6 +39,7 @@ export const marketplaceAbi = [
       { name: "standard", type: "string" },
       { name: "paymentToken", type: "address" },
       { name: "price", type: "uint256" },
+      { name: "expiresAt", type: "uint256" },
       { name: "active", type: "bool" }
     ]
   }
@@ -100,12 +102,15 @@ export async function fetchActiveListingsBatch(params: {
           args: [BigInt(id)]
         })
       )
-    )) as readonly (readonly [Address, Address, bigint, bigint, string, Address, bigint, boolean])[];
+    )) as readonly (readonly [Address, Address, bigint, bigint, string, Address, bigint, bigint, boolean])[];
 
     for (let i = 0; i < listings.length; i += 1) {
       const listing = listings[i];
       const id = batch[i];
-      if (!listing[7]) {
+      if (!listing[8]) {
+        continue;
+      }
+      if (listing[7] <= BigInt(Math.floor(Date.now() / 1000))) {
         continue;
       }
 
@@ -118,7 +123,8 @@ export async function fetchActiveListingsBatch(params: {
         standard: listing[4],
         paymentToken: listing[5],
         price: listing[6],
-        active: listing[7]
+        expiresAt: listing[7],
+        active: listing[8]
       });
     }
   }

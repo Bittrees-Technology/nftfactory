@@ -465,6 +465,23 @@ nav {
   background: #fff9f1;
 }
 
+.selectionButton {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid #e6d7c4;
+  border-radius: 12px;
+  background: #fff9f1;
+  color: #4b4138;
+  text-align: left;
+  cursor: pointer;
+}
+
+.selectionButtonActive {
+  border-color: #c87d4a;
+  background: #fff0dc;
+}
+
 .profileShell {
   display: grid;
   gap: 16px;

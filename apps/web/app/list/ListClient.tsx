@@ -5,20 +5,16 @@ import Link from "next/link";
 import { useAccount, useChainId, usePublicClient, useWalletClient } from "wagmi";
 import type { Address, Hex } from "viem";
 import {
-  encodeBuyListing,
   encodeCancelListing,
   encodeCreateListing,
-  encodeErc20Approve,
   encodeSetApprovalForAll,
   toWeiBigInt
 } from "../../lib/abi";
-import { buildBuyPlan } from "../../lib/marketplaceBuy";
 import { getContractsConfig } from "../../lib/contracts";
 import { fetchActiveListingsBatch } from "../../lib/marketplace";
-import { fetchProfileResolution } from "../../lib/indexerApi";
-import { getAppChain } from "../../lib/chains";
+import { fetchMintFeed, type ApiMintFeedItem } from "../../lib/indexerApi";
+import { getAppChain, getExplorerBaseUrl } from "../../lib/chains";
 import TxStatus, { type TxState } from "./TxStatus";
-import ListingFilters, { type FilterState, type Preset } from "./ListingFilters";
 import ListingCard, { type ListingRow } from "./ListingCard";
 
 type Standard = "ERC721" | "ERC1155";
@@ -26,34 +22,47 @@ type Standard = "ERC721" | "ERC1155";
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const DEFAULT_SCAN_LIMIT = 200;
 
-const erc20Abi = [
-  {
-    type: "function",
-    name: "allowance",
-    stateMutability: "view",
-    inputs: [
-      { name: "owner", type: "address" },
-      { name: "spender", type: "address" }
-    ],
-    outputs: [{ name: "", type: "uint256" }]
-  }
-] as const;
+type OwnedMintRow = {
+  key: string;
+  tokenId: string;
+  contractAddress: string;
+  standard: Standard;
+  source: "shared" | "custom";
+  metadataCid: string;
+  mediaCid: string | null;
+  mintedAt: string;
+  activeListingId: string | null;
+};
+
+type ContractOption = {
+  address: string;
+  label: string;
+};
 
 function isAddress(value: string): value is `0x${string}` {
   return /^0x[a-fA-F0-9]{40}$/.test(value);
 }
 
-const DEFAULT_FILTERS: FilterState = {
-  filterSource: "ALL",
-  filterStandard: "ALL",
-  filterContract: "",
-  filterSeller: "",
-  filterSubname: "",
-  filterMinPrice: "",
-  filterMaxPrice: "",
-  sortBy: "newest",
-  activePreset: "reset"
-};
+function truncateAddress(value: string): string {
+  return `${value.slice(0, 8)}…${value.slice(-6)}`;
+}
+
+function formatContractLabel(
+  address: string,
+  items: OwnedMintRow[],
+  config: ReturnType<typeof getContractsConfig>
+): string {
+  const sample = items.find((item) => item.contractAddress.toLowerCase() === address.toLowerCase());
+  if (!sample) return truncateAddress(address);
+  if (address.toLowerCase() === config.shared721.toLowerCase()) return "NFTFactory Shared ERC-721";
+  if (address.toLowerCase() === config.shared1155.toLowerCase()) return "NFTFactory Shared ERC-1155";
+  return `Creator Collection ${truncateAddress(address)}`;
+}
+
+function toGatewayUrl(cid: string | null | undefined, gateway: string): string | null {
+  if (!cid) return null;
+  return `${gateway}/${cid}`;
+}
 
 export default function ListClient() {
   const config = useMemo(() => getContractsConfig(), []);
@@ -65,166 +74,141 @@ export default function ListClient() {
 
   const [standard, setStandard] = useState<Standard>("ERC721");
   const [source, setSource] = useState<"shared" | "custom">("shared");
-  const [customNftAddress, setCustomNftAddress] = useState("");
-  const [tokenId, setTokenId] = useState("1");
-  const [amount, setAmount] = useState("1");
+  const [selectedContract, setSelectedContract] = useState("");
+  const [selectedTokenKeys, setSelectedTokenKeys] = useState<string[]>([]);
+  const [erc1155Amount, setErc1155Amount] = useState("1");
   const [paymentTokenType, setPaymentTokenType] = useState<"ETH" | "ERC20">("ETH");
   const [erc20TokenAddress, setErc20TokenAddress] = useState("");
   const [priceInput, setPriceInput] = useState("0.01");
+  const [listingDays, setListingDays] = useState("7");
   const [state, setState] = useState<TxState>({ status: "idle" });
-  const [allListings, setAllListings] = useState<ListingRow[]>([]);
   const [myListings, setMyListings] = useState<ListingRow[]>([]);
   const [listingsLoading, setListingsLoading] = useState(false);
   const [listingsError, setListingsError] = useState("");
   const [cancelingId, setCancelingId] = useState<number | null>(null);
-  const [buyingId, setBuyingId] = useState<number | null>(null);
   const [copiedKey, setCopiedKey] = useState("");
   const [scanDepth, setScanDepth] = useState("200");
-  const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS);
-
-  // ENS subname resolution state: resolved wallet addresses + display hint
-  const [ensSubnameAddresses, setEnsSubnameAddresses] = useState<string[]>([]);
-  const [ensSubnameHint, setEnsSubnameHint] = useState("");
+  const [ownedMints, setOwnedMints] = useState<OwnedMintRow[]>([]);
+  const [mintInventoryLoading, setMintInventoryLoading] = useState(false);
+  const [mintInventoryError, setMintInventoryError] = useState("");
 
   const wrongNetwork = isConnected && chainId !== config.chainId;
-  const nftAddress = source === "shared" ? (standard === "ERC721" ? config.shared721 : config.shared1155) : customNftAddress;
   const parsedScanDepth = Number.parseInt(scanDepth, 10);
+  const ipfsGateway = process.env.NEXT_PUBLIC_IPFS_GATEWAY || "https://gateway.pinata.cloud/ipfs";
 
-  // Load listings once on mount so the feed isn't empty by default.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { void loadListings(); }, []);
-
-  // Debounced ENS subname resolution: when the user types a subname label (e.g. "studio"),
-  // resolve it to one or more wallet addresses via the indexer profile API.
   useEffect(() => {
-    const label = filters.filterSubname.trim();
-    if (!label) {
-      setEnsSubnameAddresses([]);
-      setEnsSubnameHint("");
-      return;
-    }
-    setEnsSubnameHint("Resolving…");
-    const timer = setTimeout(() => {
-      fetchProfileResolution(label)
-        .then((result) => {
-          const addresses = result.sellers.map((a) => a.toLowerCase());
-          if (addresses.length > 0) {
-            setEnsSubnameAddresses(addresses);
-            setEnsSubnameHint(`→ ${addresses[0]}${addresses.length > 1 ? ` (+${addresses.length - 1} more)` : ""}`);
-          } else {
-            setEnsSubnameAddresses([]);
-            setEnsSubnameHint("subname not found");
-          }
-        })
-        .catch(() => {
-          setEnsSubnameAddresses([]);
-          setEnsSubnameHint("subname not found");
-        });
-    }, 400);
-    return () => clearTimeout(timer);
-  }, [filters.filterSubname]);
+    void loadListings();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const filteredListings = useMemo(() => {
-    let rows = allListings;
-    const shared721 = config.shared721.toLowerCase();
-    const shared1155 = config.shared1155.toLowerCase();
+  useEffect(() => {
+    let cancelled = false;
 
-    if (filters.filterSource !== "ALL") {
-      rows = rows.filter((row) => {
-        const isShared = row.nft.toLowerCase() === shared721 || row.nft.toLowerCase() === shared1155;
-        return filters.filterSource === "SHARED" ? isShared : !isShared;
-      });
-    }
+    async function loadOwnedMints(): Promise<void> {
+      if (!address) {
+        setOwnedMints([]);
+        setMintInventoryError("");
+        return;
+      }
 
-    if (filters.filterStandard !== "ALL") {
-      rows = rows.filter((row) => row.standard === filters.filterStandard);
-    }
-
-    const contractFilter = filters.filterContract.trim().toLowerCase();
-    if (contractFilter) {
-      rows = rows.filter((row) => row.nft.toLowerCase().includes(contractFilter));
-    }
-
-    const sellerFilter = filters.filterSeller.trim().toLowerCase();
-    if (sellerFilter) {
-      rows = rows.filter((row) => row.seller.toLowerCase().includes(sellerFilter));
-    }
-
-    // ENS subname filter: show only listings from the resolved wallet address(es).
-    // If a subname was typed but no address resolved yet, show nothing (empty while resolving).
-    if (filters.filterSubname.trim()) {
-      if (ensSubnameAddresses.length > 0) {
-        rows = rows.filter((row) => ensSubnameAddresses.includes(row.seller.toLowerCase()));
-      } else {
-        rows = [];
+      setMintInventoryLoading(true);
+      setMintInventoryError("");
+      try {
+        const response = await fetchMintFeed(0, 100);
+        if (cancelled) return;
+        const normalizedOwner = address.toLowerCase();
+        const next = response.items
+          .filter((item) => item.ownerAddress.toLowerCase() === normalizedOwner)
+          .map((item) => {
+            const contractAddress = item.collection.contractAddress;
+            const normalizedContract = contractAddress.toLowerCase();
+            const rowSource =
+              normalizedContract === config.shared721.toLowerCase() || normalizedContract === config.shared1155.toLowerCase()
+                ? "shared"
+                : "custom";
+            return {
+              key: `${contractAddress.toLowerCase()}:${item.tokenId}`,
+              tokenId: item.tokenId,
+              contractAddress,
+              standard: item.collection.standard === "ERC1155" ? "ERC1155" : "ERC721",
+              source: rowSource,
+              metadataCid: item.metadataCid,
+              mediaCid: item.mediaCid,
+              mintedAt: item.mintedAt,
+              activeListingId: item.activeListing?.listingId || null
+            } satisfies OwnedMintRow;
+          });
+        setOwnedMints(next);
+      } catch (err) {
+        if (!cancelled) {
+          setOwnedMints([]);
+          setMintInventoryError(err instanceof Error ? err.message : "Failed to load owned NFTs.");
+        }
+      } finally {
+        if (!cancelled) setMintInventoryLoading(false);
       }
     }
 
-    let minPrice: bigint | null = null;
-    let maxPrice: bigint | null = null;
-    try {
-      minPrice = filters.filterMinPrice.trim() ? toWeiBigInt(filters.filterMinPrice.trim()) : null;
-    } catch {
-      minPrice = null;
-    }
-    try {
-      maxPrice = filters.filterMaxPrice.trim() ? toWeiBigInt(filters.filterMaxPrice.trim()) : null;
-    } catch {
-      maxPrice = null;
-    }
+    void loadOwnedMints();
+    return () => {
+      cancelled = true;
+    };
+  }, [address, config.shared721, config.shared1155]);
 
-    if (minPrice !== null) {
-      rows = rows.filter((row) => row.paymentToken === ZERO_ADDRESS && row.price >= minPrice!);
+  const filteredOwnedMints = useMemo(
+    () => ownedMints.filter((item) => item.standard === standard && item.source === source),
+    [ownedMints, standard, source]
+  );
+
+  const contractOptions = useMemo<ContractOption[]>(() => {
+    const unique = new Map<string, OwnedMintRow[]>();
+    for (const item of filteredOwnedMints) {
+      const key = item.contractAddress.toLowerCase();
+      const existing = unique.get(key) || [];
+      existing.push(item);
+      unique.set(key, existing);
     }
-    if (maxPrice !== null) {
-      rows = rows.filter((row) => row.paymentToken === ZERO_ADDRESS && row.price <= maxPrice!);
-    }
+    return [...unique.entries()].map(([key, items]) => ({
+      address: items[0].contractAddress,
+      label: formatContractLabel(items[0].contractAddress, items, config)
+    }));
+  }, [config, filteredOwnedMints]);
 
-    const sorted = [...rows];
-    switch (filters.sortBy) {
-      case "oldest":
-        sorted.sort((a, b) => a.id - b.id);
-        break;
-      case "priceAsc":
-        sorted.sort((a, b) => (a.price === b.price ? 0 : a.price < b.price ? -1 : 1));
-        break;
-      case "priceDesc":
-        sorted.sort((a, b) => (a.price === b.price ? 0 : a.price > b.price ? -1 : 1));
-        break;
-      case "tokenIdAsc":
-        sorted.sort((a, b) => (a.tokenId === b.tokenId ? 0 : a.tokenId < b.tokenId ? -1 : 1));
-        break;
-      case "tokenIdDesc":
-        sorted.sort((a, b) => (a.tokenId === b.tokenId ? 0 : a.tokenId > b.tokenId ? -1 : 1));
-        break;
-      case "newest":
-      default:
-        sorted.sort((a, b) => b.id - a.id);
-        break;
-    }
-
-    return sorted;
-  }, [allListings, config.shared721, config.shared1155, filters, ensSubnameAddresses]);
-
-  function handleFilterChange(updates: Partial<FilterState>): void {
-    setFilters((prev) => ({ ...prev, ...updates }));
-  }
-
-  function applyPreset(preset: Preset): void {
-    if (preset === "cheap") {
-      setFilters({ ...DEFAULT_FILTERS, filterMaxPrice: "0.05", sortBy: "priceAsc", activePreset: "cheap" });
+  useEffect(() => {
+    if (contractOptions.length === 0) {
+      setSelectedContract("");
+      setSelectedTokenKeys([]);
       return;
     }
-    if (preset === "shared") {
-      setFilters({ ...DEFAULT_FILTERS, filterSource: "SHARED", activePreset: "shared" });
-      return;
+    if (!selectedContract || !contractOptions.some((item) => item.address.toLowerCase() === selectedContract.toLowerCase())) {
+      setSelectedContract(contractOptions[0].address);
     }
-    if (preset === "mine") {
-      setFilters({ ...DEFAULT_FILTERS, filterSeller: address ?? "", activePreset: "mine" });
-      return;
-    }
-    setFilters(DEFAULT_FILTERS);
-  }
+  }, [contractOptions, selectedContract]);
+
+  useEffect(() => {
+    setSelectedTokenKeys([]);
+  }, [selectedContract, source, standard]);
+
+  const availableTokens = useMemo(
+    () =>
+      filteredOwnedMints.filter(
+        (item) =>
+          item.contractAddress.toLowerCase() === selectedContract.toLowerCase()
+      ),
+    [filteredOwnedMints, selectedContract]
+  );
+
+  const selectedTokens = useMemo(
+    () => availableTokens.filter((item) => selectedTokenKeys.includes(item.key)),
+    [availableTokens, selectedTokenKeys]
+  );
+
+  const listingExpiryDate = useMemo(() => {
+    const parsedDays = Number.parseInt(listingDays, 10);
+    if (!Number.isInteger(parsedDays) || parsedDays <= 0) return null;
+    const expiresAt = Date.now() + parsedDays * 24 * 60 * 60 * 1000;
+    return new Date(expiresAt);
+  }, [listingDays]);
 
   async function loadListings(): Promise<void> {
     setListingsLoading(true);
@@ -238,10 +222,13 @@ export default function ListClient() {
         limit
       });
       const active = result.listings;
-      setAllListings(active);
       if (address) {
         const account = address.toLowerCase();
-        setMyListings(active.filter((row) => row.seller.toLowerCase() === account));
+        setMyListings(
+          active
+            .filter((row) => row.seller.toLowerCase() === account)
+            .map((row) => ({ ...row }))
+        );
       } else {
         setMyListings([]);
       }
@@ -270,6 +257,12 @@ export default function ListClient() {
     await publicClient.waitForTransactionReceipt({ hash: hash as Hex });
   }
 
+  function toggleSelectedToken(key: string): void {
+    setSelectedTokenKeys((prev) =>
+      prev.includes(key) ? prev.filter((item) => item !== key) : [...prev, key]
+    );
+  }
+
   async function onSubmit(e: React.FormEvent): Promise<void> {
     e.preventDefault();
     setState({ status: "idle" });
@@ -282,23 +275,24 @@ export default function ListClient() {
       setState({ status: "error", message: `Select ${appChain.name} in the wallet menu first.` });
       return;
     }
-    if (!isAddress(nftAddress)) {
-      setState({ status: "error", message: "Enter a valid NFT contract address." });
+    if (!isAddress(selectedContract)) {
+      setState({ status: "error", message: "Select a collection contract first." });
+      return;
+    }
+    if (selectedTokens.length === 0) {
+      setState({ status: "error", message: "Select at least one NFT to list." });
       return;
     }
 
-    const parsedTokenId = Number.parseInt(tokenId, 10);
-    const parsedAmount = Number.parseInt(amount, 10);
-    if (!Number.isInteger(parsedTokenId) || parsedTokenId < 0) {
-      setState({ status: "error", message: "Token ID must be a non-negative integer." });
-      return;
-    }
+    const parsedAmount = standard === "ERC721" ? 1 : Number.parseInt(erc1155Amount, 10);
     if (!Number.isInteger(parsedAmount) || parsedAmount <= 0) {
       setState({ status: "error", message: "Amount must be a positive integer." });
       return;
     }
-    if (standard === "ERC721" && parsedAmount !== 1) {
-      setState({ status: "error", message: "ERC721 listing amount must be 1." });
+
+    const parsedDays = Number.parseInt(listingDays, 10);
+    if (!Number.isInteger(parsedDays) || parsedDays <= 0) {
+      setState({ status: "error", message: "Listing length must be at least 1 day." });
       return;
     }
 
@@ -332,28 +326,46 @@ export default function ListClient() {
     }
 
     try {
-      setState({ status: "pending", message: "Approving marketplace..." });
+      setState({ status: "pending", message: "Approving marketplace for selected collection..." });
       const approvalTx = await sendTransaction(
-        nftAddress as `0x${string}`,
+        selectedContract as `0x${string}`,
         encodeSetApprovalForAll(config.marketplace as `0x${string}`, true) as `0x${string}`
       );
       await waitForReceipt(approvalTx);
 
-      setState({ status: "pending", hash: approvalTx, message: "Creating listing..." });
-      const listingTx = await sendTransaction(
-        config.marketplace as `0x${string}`,
-        encodeCreateListing(
-          nftAddress as `0x${string}`,
-          BigInt(parsedTokenId),
-          BigInt(parsedAmount),
-          standard,
-          paymentToken,
-          priceWei
-        ) as `0x${string}`
-      );
-      await waitForReceipt(listingTx);
+      let latestHash = approvalTx;
+      for (let index = 0; index < selectedTokens.length; index += 1) {
+        const token = selectedTokens[index];
+        setState({
+          status: "pending",
+          hash: latestHash,
+          message: `Creating listing ${index + 1} of ${selectedTokens.length}...`
+        });
+        const listingTx = await sendTransaction(
+          config.marketplace as `0x${string}`,
+          encodeCreateListing(
+            selectedContract as `0x${string}`,
+            BigInt(token.tokenId),
+            BigInt(parsedAmount),
+            standard,
+            paymentToken,
+            priceWei,
+            BigInt(parsedDays)
+          ) as `0x${string}`
+        );
+        latestHash = listingTx;
+        await waitForReceipt(listingTx);
+      }
 
-      setState({ status: "success", hash: listingTx, message: "Listing submitted successfully." });
+      setState({
+        status: "success",
+        hash: latestHash,
+        message:
+          selectedTokens.length === 1
+            ? "Listing submitted successfully."
+            : `${selectedTokens.length} listings submitted successfully.`
+      });
+      setSelectedTokenKeys([]);
       await loadListings();
     } catch (err) {
       setState({ status: "error", message: err instanceof Error ? err.message : "Listing failed" });
@@ -387,71 +399,6 @@ export default function ListClient() {
     }
   }
 
-  async function onBuyListing(row: ListingRow): Promise<void> {
-    if (!isConnected) {
-      setState({ status: "error", message: "Connect wallet first." });
-      return;
-    }
-    if (wrongNetwork) {
-      setState({ status: "error", message: `Select ${appChain.name} in the wallet menu first.` });
-      return;
-    }
-    try {
-      setBuyingId(row.id);
-      const needsErc20Path = row.paymentToken !== ZERO_ADDRESS;
-      if (needsErc20Path && (!publicClient || !address)) {
-        throw new Error("Public client unavailable. Reconnect wallet and try again.");
-      }
-      const buyerAddress = address as Address;
-      const reader = publicClient;
-
-      const allowance =
-        !needsErc20Path
-          ? null
-          : ((await reader!.readContract({
-              address: row.paymentToken,
-              abi: erc20Abi,
-              functionName: "allowance",
-              args: [buyerAddress, config.marketplace as Address]
-            })) as bigint);
-
-      const plan = buildBuyPlan({
-        paymentToken: row.paymentToken as `0x${string}`,
-        zeroAddress: ZERO_ADDRESS as `0x${string}`,
-        price: row.price,
-        allowance
-      });
-
-      for (const amount of plan.approvalAmounts) {
-        const approvalMessage =
-          amount === 0n
-            ? `Resetting ERC20 allowance for listing #${row.id}...`
-            : `Approving ERC20 for listing #${row.id}...`;
-        setState({ status: "pending", message: approvalMessage });
-        const approveTx = await sendTransaction(
-          row.paymentToken as `0x${string}`,
-          encodeErc20Approve(config.marketplace as `0x${string}`, amount) as `0x${string}`
-        );
-        await waitForReceipt(approveTx);
-        setState({ status: "pending", hash: approveTx, message: `Buying listing #${row.id}...` });
-      }
-
-      setState({ status: "pending", message: `Buying listing #${row.id}...` });
-      const txHash = await sendTransaction(
-        config.marketplace as `0x${string}`,
-        encodeBuyListing(BigInt(row.id)) as `0x${string}`,
-        plan.txValue
-      );
-      await waitForReceipt(txHash);
-      setState({ status: "success", hash: txHash, message: `Purchase submitted for listing #${row.id}.` });
-      await loadListings();
-    } catch (err) {
-      setState({ status: "error", message: err instanceof Error ? err.message : "Buy failed" });
-    } finally {
-      setBuyingId(null);
-    }
-  }
-
   async function copyText(key: string, value: string): Promise<void> {
     try {
       await navigator.clipboard.writeText(value);
@@ -462,88 +409,132 @@ export default function ListClient() {
     }
   }
 
+  const selectedContractLabel = selectedContract
+    ? formatContractLabel(selectedContract, availableTokens, config)
+    : "";
+
+  const explorerBase = getExplorerBaseUrl(config.chainId);
+
   return (
     <section className="wizard">
       <form className="wizard" onSubmit={onSubmit}>
         <div className="card formCard">
-          <h3>1. Wallet Status</h3>
-          <p className="hint">Use the header wallet button to connect, change accounts, or choose the correct network.</p>
-          {!isConnected ? (
-            <p className="hint">
-              Listing creation and cancel actions stay locked until a seller wallet is connected.
-            </p>
-          ) : null}
-          {isConnected && wrongNetwork ? (
-            <p className="hint">
-              Your wallet is connected to chain {chainId}. Use the header wallet button to select {appChain.name}.
-              Selling actions stay disabled until the selected network matches the configured chain.
-            </p>
-          ) : null}
-          <p className="mono">Account: {address || "Not connected"}</p>
-          <p className="mono">Target network: {appChain.name}</p>
-          <button type="button" onClick={loadListings} disabled={wrongNetwork || listingsLoading}>
-            {listingsLoading ? "Refreshing..." : "Refresh Listings"}
-          </button>
+          <h3>1. Select NFT</h3>
+          <p className="hint">Choose the collection, then select one or more NFTs you already own to list.</p>
+          <div className="gridMini">
+            <label>
+              Standard
+              <select value={standard} onChange={(e) => setStandard(e.target.value as Standard)}>
+                <option value="ERC721">ERC721</option>
+                <option value="ERC1155">ERC1155</option>
+              </select>
+            </label>
+            <label>
+              Source
+              <select value={source} onChange={(e) => setSource(e.target.value as "shared" | "custom")}>
+                <option value="shared">Shared contract</option>
+                <option value="custom">Custom collection</option>
+              </select>
+            </label>
+            <label>
+              Scan depth
+              <select value={scanDepth} onChange={(e) => setScanDepth(e.target.value)}>
+                <option value="100">Last 100</option>
+                <option value="200">Last 200</option>
+                <option value="500">Last 500</option>
+                <option value="1000">Last 1000</option>
+              </select>
+            </label>
+          </div>
           <p className="hint">
-            Refresh reloads the latest visible marketplace state from the configured chain. Increase scan
-            depth if older listings are missing from the marketplace section below.
+            {isConnected
+              ? `Connected wallet: ${address}`
+              : "Connect a wallet from the header to load owned NFTs that can be listed."}
           </p>
-          <label>
-            Scan depth
-            <select value={scanDepth} onChange={(e) => setScanDepth(e.target.value)}>
-              <option value="100">Last 100</option>
-              <option value="200">Last 200</option>
-              <option value="500">Last 500</option>
-              <option value="1000">Last 1000</option>
-            </select>
-          </label>
-          {listingsError && <p className="error">{listingsError}</p>}
+          {wrongNetwork ? <p className="hint">Use the header wallet button to select {appChain.name} before listing.</p> : null}
+          <div className="compactList">
+            {contractOptions.length > 0 ? (
+              contractOptions.map((option) => {
+                const isActive = option.address.toLowerCase() === selectedContract.toLowerCase();
+                return (
+                  <button
+                    key={option.address}
+                    type="button"
+                    className={`selectionButton${isActive ? " selectionButtonActive" : ""}`}
+                    onClick={() => setSelectedContract(option.address)}
+                  >
+                    <strong>{option.label}</strong>
+                    <span className="mono">{option.address}</span>
+                  </button>
+                );
+              })
+            ) : (
+              <p className="hint">
+                {mintInventoryLoading
+                  ? "Loading owned NFTs..."
+                  : "No indexed owned NFTs match this source and standard yet. Mint first, then return here to list."}
+              </p>
+            )}
+          </div>
+          {mintInventoryError ? <p className="error">{mintInventoryError}</p> : null}
+          {selectedContract ? (
+            <>
+              <p className="sectionLead">Selected collection: {selectedContractLabel}</p>
+              <div className="compactList">
+                {availableTokens.length > 0 ? (
+                  availableTokens.map((item) => {
+                    const selected = selectedTokenKeys.includes(item.key);
+                    const metadataUrl = toGatewayUrl(item.metadataCid, ipfsGateway);
+                    const mediaUrl = toGatewayUrl(item.mediaCid, ipfsGateway);
+                    return (
+                      <div
+                        key={item.key}
+                        role="button"
+                        tabIndex={0}
+                        className={`selectionButton${selected ? " selectionButtonActive" : ""}`}
+                        onClick={() => toggleSelectedToken(item.key)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            toggleSelectedToken(item.key);
+                          }
+                        }}
+                      >
+                        <strong>Token #{item.tokenId}</strong>
+                        <span>{new Date(item.mintedAt).toLocaleString()}</span>
+                        <span>{item.activeListingId ? `Already listed (#${item.activeListingId})` : "Ready to list"}</span>
+                        <span className="row">
+                          {metadataUrl ? (
+                            <a href={metadataUrl} target="_blank" rel="noreferrer" className="ctaLink secondaryLink" onClick={(e) => e.stopPropagation()}>
+                              Metadata
+                            </a>
+                          ) : null}
+                          {mediaUrl ? (
+                            <a href={mediaUrl} target="_blank" rel="noreferrer" className="ctaLink secondaryLink" onClick={(e) => e.stopPropagation()}>
+                              Media
+                            </a>
+                          ) : null}
+                        </span>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <p className="hint">No indexed NFTs were found for this collection yet.</p>
+                )}
+              </div>
+            </>
+          ) : null}
+          {standard === "ERC1155" ? (
+            <label>
+              Copies per listing
+              <input value={erc1155Amount} onChange={(e) => setErc1155Amount(e.target.value)} inputMode="numeric" placeholder="1" />
+            </label>
+          ) : null}
         </div>
 
         <div className="card formCard">
-          <h3>2. NFT Details</h3>
-          <p className="hint">
-            This route is for assets you already hold. If the NFT does not exist yet, use Mint first and then return here.
-          </p>
-          <label>
-            Standard
-            <select value={standard} onChange={(e) => setStandard(e.target.value as Standard)}>
-              <option value="ERC721">ERC721</option>
-              <option value="ERC1155">ERC1155</option>
-            </select>
-          </label>
-          <label>
-            Source
-            <select value={source} onChange={(e) => setSource(e.target.value as "shared" | "custom")}>
-              <option value="shared">Shared collection</option>
-              <option value="custom">Custom collection</option>
-            </select>
-          </label>
-          {source === "shared" ? (
-            <p className="mono">Contract: {nftAddress}</p>
-          ) : (
-            <label>
-              NFT contract address
-              <input value={customNftAddress} onChange={(e) => setCustomNftAddress(e.target.value)} placeholder="0x..." />
-            </label>
-          )}
-          <label>
-            Token ID
-            <input value={tokenId} onChange={(e) => setTokenId(e.target.value)} inputMode="numeric" placeholder="1" />
-          </label>
-          {standard === "ERC1155" && (
-            <label>
-              Amount
-              <input value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="numeric" placeholder="1" />
-            </label>
-          )}
-        </div>
-
-        <div className="card formCard">
-          <h3>3. Price</h3>
-          <p className="hint">
-            Choose the sale currency and set the fixed price buyers will see on the live marketplace.
-          </p>
+          <h3>2. Create Listing</h3>
+          <p className="hint">Set a fixed price, choose how long the listing should stay live, then publish one or more listings.</p>
           <label>
             Payment token
             <select value={paymentTokenType} onChange={(e) => setPaymentTokenType(e.target.value as "ETH" | "ERC20")}>
@@ -551,12 +542,12 @@ export default function ListClient() {
               <option value="ERC20">ERC20</option>
             </select>
           </label>
-          {paymentTokenType === "ERC20" && (
+          {paymentTokenType === "ERC20" ? (
             <label>
               ERC20 token address
               <input value={erc20TokenAddress} onChange={(e) => setErc20TokenAddress(e.target.value)} placeholder="0x..." />
             </label>
-          )}
+          ) : null}
           <label>
             {paymentTokenType === "ETH" ? "Price (ETH)" : "Price (raw ERC20 units)"}
             <input
@@ -565,35 +556,39 @@ export default function ListClient() {
               placeholder={paymentTokenType === "ETH" ? "0.01" : "1000000"}
             />
           </label>
-        </div>
-
-        <div className="card formCard">
-          <h3>4. Submit</h3>
+          <label>
+            Listing length (days)
+            <input value={listingDays} onChange={(e) => setListingDays(e.target.value)} inputMode="numeric" placeholder="7" />
+          </label>
           <p className="hint">
-            This submits the approval and listing transactions that make the NFT available for sale on {appChain.name}.
+            Expiration: {listingExpiryDate ? listingExpiryDate.toLocaleString() : "Enter a valid duration"}
           </p>
-          <button type="submit" disabled={!isConnected || wrongNetwork || state.status === "pending"}>
-            {state.status === "pending" ? "Submitting..." : "Approve and Create Listing"}
+          <button type="submit" disabled={!isConnected || wrongNetwork || state.status === "pending" || selectedTokens.length === 0}>
+            {state.status === "pending"
+              ? "Submitting..."
+              : selectedTokens.length > 1
+                ? `Create ${selectedTokens.length} Listings`
+                : "Create Listing"}
           </button>
           <TxStatus state={state} />
         </div>
 
         <div className="card formCard">
-          <h3>My Active Listings</h3>
-          <p className="hint">This is your live seller inventory for the connected wallet.</p>
-          {!isConnected && <p className="hint">Connect wallet to view your listings.</p>}
-          {isConnected && myListings.length === 0 && !listingsLoading && (
-            <p className="hint">No active listings are live for this wallet yet.</p>
-          )}
+          <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+            <h3>3. My Active Listings</h3>
+            <button type="button" onClick={loadListings} disabled={listingsLoading}>
+              {listingsLoading ? "Refreshing..." : "Refresh"}
+            </button>
+          </div>
+          {!isConnected ? <p className="hint">Connect a wallet to view and manage live listings for this address.</p> : null}
+          {listingsError ? <p className="error">{listingsError}</p> : null}
           {isConnected && myListings.length === 0 && !listingsLoading ? (
             <div className="row">
+              <p className="hint">No active listings are live for this wallet yet.</p>
               <Link href="/mint?view=mint" className="ctaLink secondaryLink">Create and publish first</Link>
-              <button type="button" onClick={loadListings} disabled={listingsLoading}>
-                Refresh Seller State
-              </button>
             </div>
           ) : null}
-          {myListings.length > 0 && (
+          {myListings.length > 0 ? (
             <div className="listTable">
               {myListings.map((item) => (
                 <ListingCard
@@ -605,59 +600,19 @@ export default function ListClient() {
                   isBuying={false}
                   isCanceling={cancelingId === item.id}
                   copiedKey={copiedKey}
-                  onBuy={onBuyListing}
+                  onBuy={(_item) => undefined}
                   onCancel={onCancelListing}
                   onCopy={copyText}
                   variant="mine"
                 />
               ))}
             </div>
-          )}
-        </div>
-
-        <div className="card formCard">
-          <h3>Marketplace Feed</h3>
-          <p className="hint">
-            This is the live sale feed. Use filters to inspect active listings, compare pricing, or jump into a purchase.
-          </p>
-          <ListingFilters
-            filters={filters}
-            address={address}
-            onFilterChange={handleFilterChange}
-            onPreset={applyPreset}
-            subnameHint={ensSubnameHint}
-          />
-          {filteredListings.length === 0 && !listingsLoading ? (
-            <div>
-              <p className="hint">No active listings are visible with the current filters.</p>
-              <div className="row">
-                <button type="button" onClick={() => setFilters(DEFAULT_FILTERS)}>
-                  Reset Filters
-                </button>
-                <Link href="/discover" className="ctaLink secondaryLink">Open mint feed</Link>
-              </div>
-            </div>
           ) : null}
-          {filteredListings.length > 0 && (
-            <div className="listTable">
-              {filteredListings.map((item) => (
-                <ListingCard
-                  key={`all-${item.id}`}
-                  item={item}
-                  currentAddress={address}
-                  wrongNetwork={wrongNetwork}
-                  isConnected={isConnected}
-                  isBuying={buyingId === item.id}
-                  isCanceling={false}
-                  copiedKey={copiedKey}
-                  onBuy={onBuyListing}
-                  onCancel={onCancelListing}
-                  onCopy={copyText}
-                  variant="marketplace"
-                />
-              ))}
-            </div>
-          )}
+          {myListings.length > 0 && explorerBase ? (
+            <p className="hint">
+              Each listing stays independent, so any single listing can be canceled by ID even if it was created in the same batch.
+            </p>
+          ) : null}
         </div>
       </form>
     </section>

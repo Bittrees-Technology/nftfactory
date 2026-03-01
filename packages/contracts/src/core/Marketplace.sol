@@ -16,6 +16,7 @@ contract Marketplace is Owned {
         string standard; // ERC721 | ERC1155
         address paymentToken; // address(0) = ETH
         uint256 price;
+        uint256 expiresAt;
         bool active;
     }
 
@@ -33,7 +34,8 @@ contract Marketplace is Owned {
         uint256 amount,
         string standard,
         address paymentToken,
-        uint256 price
+        uint256 price,
+        uint256 expiresAt
     );
     event Sale(uint256 indexed listingId, address indexed buyer, uint256 price, address paymentToken);
     event Cancelled(uint256 indexed listingId);
@@ -46,6 +48,8 @@ contract Marketplace is Owned {
     error UnsupportedStandard();
     error InvalidAmount();
     error InvalidPrice();
+    error InvalidDuration();
+    error Expired();
     error NotApproved();
     error Reentrancy();
 
@@ -73,10 +77,12 @@ contract Marketplace is Owned {
         uint256 amount,
         string calldata standard,
         address paymentToken,
-        uint256 price
+        uint256 price,
+        uint256 durationDays
     ) external {
         if (registry.blocked(msg.sender) || registry.blocked(nft) || blockedCollection[nft]) revert Sanctioned();
         if (price == 0) revert InvalidPrice();
+        if (durationDays == 0) revert InvalidDuration();
 
         bytes32 key = keccak256(bytes(standard));
         if (key == keccak256("ERC721")) {
@@ -91,6 +97,7 @@ contract Marketplace is Owned {
             revert UnsupportedStandard();
         }
 
+        uint256 expiresAt = block.timestamp + (durationDays * 1 days);
         listings[nextListingId] = Listing({
             seller: msg.sender,
             nft: nft,
@@ -99,10 +106,11 @@ contract Marketplace is Owned {
             standard: standard,
             paymentToken: paymentToken,
             price: price,
+            expiresAt: expiresAt,
             active: true
         });
 
-        emit Listed(nextListingId, msg.sender, nft, tokenId, amount, standard, paymentToken, price);
+        emit Listed(nextListingId, msg.sender, nft, tokenId, amount, standard, paymentToken, price, expiresAt);
         nextListingId++;
     }
 
@@ -117,6 +125,7 @@ contract Marketplace is Owned {
     function buy(uint256 listingId) external payable nonReentrant {
         Listing storage listing = listings[listingId];
         if (!listing.active) revert NotActive();
+        if (block.timestamp > listing.expiresAt) revert Expired();
         if (
             registry.blocked(msg.sender) || registry.blocked(listing.seller) || registry.blocked(listing.nft)
                 || blockedCollection[listing.nft]

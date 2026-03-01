@@ -102,7 +102,7 @@ contract MarketplaceTest is Test {
 
         vm.prank(seller);
         vm.expectRevert(Marketplace.NotApproved.selector);
-        marketplace.createListing(address(nft721), 1, 1, "ERC721", address(0), 0.1 ether);
+        marketplace.createListing(address(nft721), 1, 1, "ERC721", address(0), 0.1 ether, 7);
     }
 
     function testCreateListingRevertsWithoutApproval1155() external {
@@ -111,7 +111,7 @@ contract MarketplaceTest is Test {
 
         vm.prank(seller);
         vm.expectRevert(Marketplace.NotApproved.selector);
-        marketplace.createListing(address(nft1155), 7, 2, "ERC1155", address(0), 0.1 ether);
+        marketplace.createListing(address(nft1155), 7, 2, "ERC1155", address(0), 0.1 ether, 7);
     }
 
     function testCreateListingRevertsWithZeroPrice() external {
@@ -119,7 +119,16 @@ contract MarketplaceTest is Test {
         nft721.mint(seller, 1);
         nft721.setApprovalForAll(address(marketplace), true);
         vm.expectRevert(Marketplace.InvalidPrice.selector);
-        marketplace.createListing(address(nft721), 1, 1, "ERC721", address(0), 0);
+        marketplace.createListing(address(nft721), 1, 1, "ERC721", address(0), 0, 7);
+        vm.stopPrank();
+    }
+
+    function testCreateListingRevertsWithZeroDuration() external {
+        vm.startPrank(seller);
+        nft721.mint(seller, 1);
+        nft721.setApprovalForAll(address(marketplace), true);
+        vm.expectRevert(Marketplace.InvalidDuration.selector);
+        marketplace.createListing(address(nft721), 1, 1, "ERC721", address(0), 0.1 ether, 0);
         vm.stopPrank();
     }
 
@@ -127,7 +136,7 @@ contract MarketplaceTest is Test {
         vm.startPrank(seller);
         nft721.mint(seller, 1);
         nft721.setApprovalForAll(address(marketplace), true);
-        marketplace.createListing(address(nft721), 1, 1, "ERC721", address(0), 0.1 ether);
+        marketplace.createListing(address(nft721), 1, 1, "ERC721", address(0), 0.1 ether, 7);
         nft721.setApprovalForAll(address(marketplace), false);
         vm.stopPrank();
 
@@ -135,8 +144,22 @@ contract MarketplaceTest is Test {
         vm.expectRevert(Marketplace.NotApproved.selector);
         marketplace.buy{value: 0.1 ether}(0);
 
-        (,,,,,,, bool active) = marketplace.listings(0);
+        (,,,,,,,, bool active) = marketplace.listings(0);
         assertTrue(active);
+    }
+
+    function testBuyRevertsAfterListingExpiry() external {
+        vm.startPrank(seller);
+        nft721.mint(seller, 1);
+        nft721.setApprovalForAll(address(marketplace), true);
+        marketplace.createListing(address(nft721), 1, 1, "ERC721", address(0), 0.1 ether, 1);
+        vm.stopPrank();
+
+        vm.warp(block.timestamp + 1 days + 1);
+
+        vm.prank(buyer);
+        vm.expectRevert(Marketplace.Expired.selector);
+        marketplace.buy{value: 0.1 ether}(0);
     }
 
     function testNonReentrantBuyBlocksNestedBuy() external {
@@ -144,8 +167,8 @@ contract MarketplaceTest is Test {
         nft721.mint(seller, 1);
         nft721.mint(seller, 2);
         nft721.setApprovalForAll(address(marketplace), true);
-        marketplace.createListing(address(nft721), 1, 1, "ERC721", address(reentrantToken), 1);
-        marketplace.createListing(address(nft721), 2, 1, "ERC721", address(reentrantToken), 1);
+        marketplace.createListing(address(nft721), 1, 1, "ERC721", address(reentrantToken), 1, 7);
+        marketplace.createListing(address(nft721), 2, 1, "ERC721", address(reentrantToken), 1, 7);
         vm.stopPrank();
 
         reentrantToken.setReentry(1, true);
@@ -155,8 +178,8 @@ contract MarketplaceTest is Test {
 
         assertEq(nft721.ownerOf(1), buyer);
         assertEq(nft721.ownerOf(2), seller);
-        (,,,,,,, bool firstActive) = marketplace.listings(0);
-        (,,,,,,, bool secondActive) = marketplace.listings(1);
+        (,,,,,,,, bool firstActive) = marketplace.listings(0);
+        (,,,,,,,, bool secondActive) = marketplace.listings(1);
         assertFalse(firstActive);
         assertTrue(secondActive);
     }

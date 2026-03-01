@@ -116,17 +116,19 @@ export function encodeCreateListing(
   amount: bigint,
   standard: "ERC721" | "ERC1155",
   paymentToken: `0x${string}`,
-  priceWei: bigint
+  priceWei: bigint,
+  durationDays: bigint
 ): string {
-  const selector = "d6a2afae";
+  const selector = "875108cf";
   const standardBody = encodeStringData(standard);
   const head1 = encodeAddress(nft);
   const head2 = encodeUint256(tokenId);
   const head3 = encodeUint256(amount);
-  const head4 = wordFromBytes(192);
+  const head4 = wordFromBytes(224);
   const head5 = encodeAddress(paymentToken);
   const head6 = encodeUint256(priceWei);
-  return `0x${selector}${head1}${head2}${head3}${head4}${head5}${head6}${standardBody}`;
+  const head7 = encodeUint256(durationDays);
+  return `0x${selector}${head1}${head2}${head3}${head4}${head5}${head6}${head7}${standardBody}`;
 }
 
 export function encodeCancelListing(listingId: bigint): string {

@@ -15,6 +15,7 @@ export type ListingRow = {
   standard: string;
   paymentToken: Address;
   price: bigint;
+  expiresAt: bigint;
   active: boolean;
 };
 
@@ -62,6 +63,7 @@ export default function ListingCard({
       <p>Token {item.tokenId.toString()}</p>
       <p>Amt {item.amount.toString()}</p>
       <p>{formatListingPrice(item as MarketplaceListing)}</p>
+      <p>Ends {new Date(Number(item.expiresAt) * 1000).toLocaleDateString()}</p>
       {variant === "marketplace" && (
         <p className="mono">
           {truncateHash(item.seller)}{" "}
