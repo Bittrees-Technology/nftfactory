@@ -4,7 +4,48 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAccount } from "wagmi";
-import { fetchProfilesByOwner, type ApiProfileRecord } from "../../lib/indexerApi";
+import {
+  fetchCollectionsByOwner,
+  fetchProfilesByOwner,
+  type ApiOwnedCollections,
+  type ApiProfileRecord
+} from "../../lib/indexerApi";
+
+function normalizeDerivedProfile(collection: ApiOwnedCollections["collections"][number]): ApiProfileRecord | null {
+  const rawName = String(collection.ensSubname || "").trim().toLowerCase();
+  if (!rawName) return null;
+  const fullName = rawName.includes(".") ? rawName : `${rawName}.nftfactory.eth`;
+  const firstLabel = fullName.split(".")[0] || "";
+  const slug = firstLabel.trim().toLowerCase();
+  if (!slug) return null;
+
+  return {
+    slug,
+    fullName,
+    source: fullName.endsWith(".nftfactory.eth") ? "nftfactory-subname" : "external-subname",
+    ownerAddress: collection.ownerAddress.toLowerCase(),
+    collectionAddress: collection.contractAddress.toLowerCase(),
+    tagline: null,
+    displayName: null,
+    bio: null,
+    bannerUrl: null,
+    avatarUrl: null,
+    featuredUrl: null,
+    accentColor: null,
+    links: [],
+    createdAt: "",
+    updatedAt: ""
+  };
+}
+
+function dedupeProfiles(items: ApiProfileRecord[]): ApiProfileRecord[] {
+  const map = new Map<string, ApiProfileRecord>();
+  for (const item of items) {
+    const key = `${item.slug}:${item.ownerAddress}:${item.source}:${item.collectionAddress || ""}`;
+    if (!map.has(key)) map.set(key, item);
+  }
+  return [...map.values()].sort((a, b) => a.fullName.localeCompare(b.fullName));
+}
 
 export default function ProfileSelectorClient() {
   const router = useRouter();
@@ -25,25 +66,59 @@ export default function ProfileSelectorClient() {
     let cancelled = false;
     setIsLoading(true);
     setNote("");
-    void fetchProfilesByOwner(address)
-      .then((response) => {
+    void Promise.allSettled([fetchProfilesByOwner(address), fetchCollectionsByOwner(address)])
+      .then((results) => {
         if (cancelled) return;
-        const nextProfiles = response.profiles || [];
+
+        const profileResult = results[0];
+        const collectionResult = results[1];
+
+        const linkedProfiles =
+          profileResult.status === "fulfilled" ? profileResult.value.profiles || [] : [];
+        const derivedProfiles =
+          collectionResult.status === "fulfilled"
+            ? (collectionResult.value.collections || [])
+                .map(normalizeDerivedProfile)
+                .filter((item): item is ApiProfileRecord => !!item)
+            : [];
+
+        const nextProfiles = dedupeProfiles([...linkedProfiles, ...derivedProfiles]);
         setProfiles(nextProfiles);
+
         if (nextProfiles.length === 1) {
           router.replace(`/profile/${encodeURIComponent(nextProfiles[0].slug)}`);
           return;
         }
+
         setSelectedSlug(nextProfiles[0]?.slug || "");
+
         if (nextProfiles.length === 0) {
+          if (profileResult.status === "rejected" && collectionResult.status === "rejected") {
+            const reason =
+              profileResult.reason instanceof Error
+                ? profileResult.reason.message
+                : collectionResult.reason instanceof Error
+                  ? collectionResult.reason.message
+                  : "Indexer request failed";
+            setNote(`Profile lookup is unavailable right now (${reason}). Open setup to continue with manual creator onboarding.`);
+            return;
+          }
           setNote("No creator profile is linked to this wallet yet. Open setup to link an ENS identity or create an nftfactory.eth subname.");
+          return;
+        }
+
+        if (profileResult.status === "rejected" && collectionResult.status === "fulfilled") {
+          const reason =
+            profileResult.reason instanceof Error ? profileResult.reason.message : "Direct profile lookup failed";
+          setNote(`Loaded profile options from owned collections because direct profile lookup failed (${reason}).`);
         }
       })
-      .catch(() => {
+      .catch((err) => {
         if (!cancelled) {
           setProfiles([]);
           setSelectedSlug("");
-          setNote("Profile lookup is unavailable right now. Open setup to continue with manual creator onboarding.");
+          const reason = err instanceof Error ? err.message : "Indexer request failed";
+          setNote(`Profile lookup is unavailable right now (${reason}). Open setup to continue with manual creator onboarding.`);
         }
       })
       .finally(() => {
