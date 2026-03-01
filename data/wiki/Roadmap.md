@@ -18,7 +18,7 @@ The current build has already landed these major structural pieces:
 - [x] creator collection management flow
 - [x] ENS-linked creator profile setup and public profile routes
 - [x] public mint feed separated from moderation feed
-- [x] in-app wiki sourced from `data/wiki`
+- [x] 65-test indexer test suite covering feed, collections, moderation, and admin routes
 
 These are no longer the open structural questions. The remaining work is quality, consistency, and release readiness.
 
@@ -42,7 +42,7 @@ The active milestone is to lock down the user-facing experience of the core page
 
 ## Near-term product work
 
-### Creator profiles
+### Identity and ENS
 
 Expected next improvements:
 
@@ -54,7 +54,7 @@ These should be implemented carefully so the product does not imply capabilities
 
 ### Discovery and marketplace
 
-Expected follow-on work:
+Expected next improvements:
 
 - [ ] stronger discovery ranking and filters
 - [ ] richer creator-centric browsing
@@ -62,15 +62,13 @@ Expected follow-on work:
 
 ### Admin and moderation
 
-Expected follow-on work:
+Expected next improvements:
 
 - [ ] better moderator visibility and auditability
 - [ ] clearer operational status indicators
 - [ ] stronger admin workflow ergonomics
 
 ## Release gating
-
-The roadmap should not outrun the release process.
 
 Before expanding the product scope significantly, the current stack should be solid on:
 

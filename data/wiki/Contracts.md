@@ -36,25 +36,20 @@ NFTFactory currently has three contract families:
 
 ### Current behavior
 
-- immutable contract logic
-- no proxy upgrades
+- immutable contract logic (no proxy, no upgrades)
 - no royalty configuration
 - no post-mint metadata editing path
 - optional attribution using a subname label
 
 ### Best use
 
-Use shared mint when:
-
-- speed matters more than per-collection branding
-- the creator wants low friction
-- the drop is one-off or experimental
+Use shared mint when speed matters more than per-collection branding, or for one-off and experimental drops.
 
 ## Creator-owned collections
 
 ### Purpose
 
-`CreatorCollection721` and `CreatorCollection1155` are deployed through `CreatorFactory` as ERC-1967 proxies and are intended for creators who want a dedicated contract address.
+`CreatorCollection721` and `CreatorCollection1155` are deployed through `CreatorFactory` as **ERC-1967 proxies**. Each creator collection has its own contract address, with state living in the proxy and logic in the implementation contract.
 
 ### Current behavior
 
@@ -62,16 +57,11 @@ Use shared mint when:
 - royalties are configurable at deploy time
 - metadata can be locked per token
 - ownership can be transferred
-- upgrades are possible until `finalizeUpgrades()`
+- upgrades are possible until `finalizeUpgrades()` is called
 
 ### Best use
 
-Use a creator-owned collection when:
-
-- the creator wants a stable contract identity
-- royalties matter
-- the creator wants stronger collection-level control
-- the creator plans to manage ownership or finality explicitly
+Use a creator-owned collection when the creator wants a stable contract identity, configurable royalties, or plans to manage ownership or finality explicitly.
 
 ## CreatorFactory
 
@@ -134,16 +124,10 @@ The UI and tests currently treat marketplace settlement as a strict preflight + 
 
 `RoyaltySplitRegistry` is a supporting registry for royalty split metadata. It is not the primary user-facing contract, but it is part of the protocol-owned control surface and should be included in deployment and ownership-transfer checklists.
 
-## Current build assumptions
-
-- shared mint remains the fastest publishing path
-- creator collections remain the branded, managed path
-- profile identity is primarily product-level and indexer-backed
-- only `nftfactory.eth` subname creation is truly on-chain in the current identity model
-
 ## Related pages
 
 - [ENS Integration](./ENS-Integration.md)
 - [Finality](./Finality.md)
+- [Contract Dependencies](./Contract-Dependencies.md)
 - [Operations and Governance](./Operations-and-Governance.md)
 - [Testing and Validation](./Testing-and-Validation.md)

@@ -27,11 +27,7 @@ The creator-collection path is:
 CreatorFactory -> ERC1967Proxy -> CreatorCollection implementation
 ```
 
-This means:
-
-- state lives in the proxy
-- logic lives in the implementation
-- the collection owner controls upgrades until finalization
+State lives in the proxy. Logic lives in the implementation. The collection owner controls upgrades until finalization.
 
 ## When an upgrade is justified
 
@@ -45,13 +41,13 @@ Avoid upgrading for cosmetic or product-layer changes that can be handled in the
 
 ## Preconditions
 
-Before upgrading:
+Before upgrading, confirm:
 
-- test the new implementation thoroughly
-- confirm storage compatibility
-- deploy the new implementation
-- confirm the proxy has **not** been finalized
-- ensure the correct owner or Safe is the signer
+- [ ] new implementation is thoroughly tested
+- [ ] storage compatibility is verified
+- [ ] new implementation is deployed
+- [ ] proxy has **not** been finalized (`finalizeUpgrades()` not yet called)
+- [ ] correct owner or Safe is the signer
 
 ## Execution
 
