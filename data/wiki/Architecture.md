@@ -102,6 +102,7 @@ Current important routes include:
 - `POST /api/profiles/link`
 - `GET /api/owners/:address/summary`
 - `GET /api/collections?owner=<address>`
+- `GET /api/collections/:address/tokens`
 - `GET /api/feed`
 - `GET /api/moderation/reports`
 - `POST /api/moderation/reports`
@@ -114,6 +115,7 @@ The current build stores and serves these practical data points:
 - token ownership, creator, media/metadata CIDs, and mint time
 - active listing state, payment token, price, and listing timestamps
 - linked creator profile records, moderator records, and tracked custom payment tokens
+- factory-created collection inventories, including the NFTs minted by those contracts
 
 The intended shape is:
 

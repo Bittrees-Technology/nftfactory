@@ -416,6 +416,32 @@ function buildGatewayUrl(cidLike: string | null | undefined): string | null {
   return value;
 }
 
+function toTokenApiShape(item: any) {
+  return {
+    id: item.id,
+    tokenId: item.tokenId,
+    creatorAddress: item.creatorAddress,
+    ownerAddress: item.ownerAddress,
+    metadataCid: item.metadataCid,
+    metadataUrl: buildGatewayUrl(item.metadataCid),
+    mediaCid: item.mediaCid,
+    mediaUrl: buildGatewayUrl(item.mediaCid),
+    immutable: item.immutable,
+    mintedAt: item.mintedAt,
+    activeListing: item.listings?.[0]
+      ? {
+          listingId: item.listings[0].listingId,
+          sellerAddress: item.listings[0].sellerAddress,
+          paymentToken: item.listings[0].paymentToken,
+          priceRaw: item.listings[0].priceRaw,
+          active: item.listings[0].active,
+          createdAt: item.listings[0].createdAt,
+          updatedAt: item.listings[0].updatedAt
+        }
+      : null
+  };
+}
+
 async function readJsonBody<T>(req: IncomingMessage): Promise<T> {
   const chunks: Buffer[] = [];
   for await (const chunk of req) {
@@ -1071,6 +1097,49 @@ async function handleRequest(
       })
     ]);
 
+    const factoryCollectionIds = collections
+      .filter((item: any) => item.isFactoryCreated)
+      .map((item: any) => item.id);
+    const factoryCollectionTokens = factoryCollectionIds.length
+      ? await deps.prisma.token.findMany({
+          where: {
+            collectionId: { in: factoryCollectionIds }
+          },
+          orderBy: [{ mintedAt: "desc" }, { id: "desc" }],
+          select: {
+            id: true,
+            tokenId: true,
+            creatorAddress: true,
+            ownerAddress: true,
+            metadataCid: true,
+            mediaCid: true,
+            immutable: true,
+            mintedAt: true,
+            collectionId: true,
+            listings: {
+              where: { active: true },
+              orderBy: { createdAt: "desc" },
+              take: 1,
+              select: {
+                listingId: true,
+                sellerAddress: true,
+                paymentToken: true,
+                priceRaw: true,
+                active: true,
+                createdAt: true,
+                updatedAt: true
+              }
+            }
+          }
+        })
+      : [];
+    const tokensByCollectionId = new Map<string, any[]>();
+    for (const token of factoryCollectionTokens as Array<any>) {
+      const next = tokensByCollectionId.get(token.collectionId) || [];
+      next.push(token);
+      tokensByCollectionId.set(token.collectionId, next);
+    }
+
     sendJson(res, 200, {
       ownerAddress: owner,
       counts: {
@@ -1094,6 +1163,22 @@ async function handleRequest(
         updatedAt: item.updatedAt,
         tokenCount: item._count?.tokens || 0
       })),
+      factoryCollections: collections
+        .filter((item: any) => item.isFactoryCreated)
+        .map((item: any) => ({
+          chainId: item.chainId,
+          contractAddress: item.contractAddress,
+          ownerAddress: item.ownerAddress,
+          ensSubname: item.ensSubname,
+          standard: item.standard,
+          isFactoryCreated: item.isFactoryCreated,
+          isUpgradeable: item.isUpgradeable,
+          finalizedAt: item.finalizedAt,
+          createdAt: item.createdAt,
+          updatedAt: item.updatedAt,
+          tokenCount: item._count?.tokens || 0,
+          tokens: (tokensByCollectionId.get(item.id) || []).map(toTokenApiShape)
+        })),
       recentOwnedMints: recentOwnedTokens.map((item: any) => ({
         id: item.id,
         tokenId: item.tokenId,
@@ -1454,6 +1539,82 @@ async function handleRequest(
         updatedAt: item.updatedAt,
         tokenCount: item._count?.tokens || 0,
         activeListingCount: activeListingCounts.get(item.contractAddress.toLowerCase()) || 0
+      }))
+    });
+    return;
+  }
+
+  if (req.method === "GET" && /^\/api\/collections\/[^/]+\/tokens$/.test(path)) {
+    const contractAddress = String(decodeURIComponent(path.split("/")[3] || "")).trim().toLowerCase();
+    if (!contractAddress || !isAddress(contractAddress)) {
+      sendJson(res, 400, { error: "Valid contract address is required" });
+      return;
+    }
+
+    const tokens = await deps.prisma.token.findMany({
+      where: {
+        collection: {
+          contractAddress
+        }
+      },
+      orderBy: [{ mintedAt: "desc" }, { id: "desc" }],
+      select: {
+        id: true,
+        tokenId: true,
+        creatorAddress: true,
+        ownerAddress: true,
+        metadataCid: true,
+        mediaCid: true,
+        immutable: true,
+        mintedAt: true,
+        collection: {
+          select: {
+            chainId: true,
+            contractAddress: true,
+            ownerAddress: true,
+            ensSubname: true,
+            standard: true,
+            isFactoryCreated: true,
+            isUpgradeable: true,
+            finalizedAt: true,
+            createdAt: true,
+            updatedAt: true
+          }
+        },
+        listings: {
+          where: { active: true },
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          select: {
+            listingId: true,
+            sellerAddress: true,
+            paymentToken: true,
+            priceRaw: true,
+            active: true,
+            createdAt: true,
+            updatedAt: true
+          }
+        }
+      }
+    });
+
+    sendJson(res, 200, {
+      contractAddress,
+      count: tokens.length,
+      tokens: tokens.map((item: any) => ({
+        ...toTokenApiShape(item),
+        collection: {
+          chainId: item.collection.chainId,
+          contractAddress: item.collection.contractAddress,
+          ownerAddress: item.collection.ownerAddress,
+          ensSubname: item.collection.ensSubname,
+          standard: item.collection.standard,
+          isFactoryCreated: item.collection.isFactoryCreated,
+          isUpgradeable: item.collection.isUpgradeable,
+          finalizedAt: item.collection.finalizedAt,
+          createdAt: item.collection.createdAt,
+          updatedAt: item.collection.updatedAt
+        }
       }))
     });
     return;
