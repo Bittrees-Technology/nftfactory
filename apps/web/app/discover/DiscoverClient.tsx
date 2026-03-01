@@ -502,8 +502,6 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
               {isLoadingMore ? "Loading more..." : "Load More"}
             </button>
           ) : null}
-          {mode === "feed" ? <Link href="/list" className="ctaLink secondaryLink">Go to seller tools</Link> : null}
-          {mode === "feed" ? <Link href="/profile" className="ctaLink secondaryLink">Open creator profiles</Link> : null}
         </div>
 
         {showFilters ? (
@@ -576,22 +574,6 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
       {error ? <p className="error">{error}</p> : null}
       {indexerStatus ? <p className="hint">{indexerStatus}</p> : null}
 
-      {error ? (
-        <div className="card formCard">
-          <h3>Feed Unavailable</h3>
-          <p className="hint">
-            Listing data could not be loaded from the configured chain. Confirm the RPC endpoint and retry
-            refresh before assuming the marketplace is empty.
-          </p>
-          <div className="row">
-            <button type="button" onClick={() => void loadInitial(true)} disabled={isLoading}>
-              {isLoading ? "Retrying..." : "Retry Feed"}
-            </button>
-            <Link href="/list" className="ctaLink secondaryLink">Open seller tools</Link>
-          </div>
-        </div>
-      ) : null}
-
       <div className="card">
         <p className="hint">
           {mode === "feed"
@@ -607,29 +589,6 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
           </div>
         ) : null}
       </div>
-
-      {filtered.length === 0 && !isLoading ? (
-        <div className="card formCard">
-          <h3>{mode === "feed" ? "No Mints In View" : "No Listings In View"}</h3>
-          <p className="hint">
-            {mode === "feed"
-              ? hasActiveFilters
-                ? "Your current filters removed every visible mint. Clear filters or widen the page size to inspect more results."
-                : "No minted NFTs are visible right now. Try refreshing or increasing page size to inspect more recent mints."
-              : hasActiveFilters
-                ? "Your current filters removed every visible listing. Clear filters or widen the page size to inspect more results."
-                : "No listings are visible right now. Try refreshing, increasing page size, or switching to List if you expected to see your own inventory."}
-          </p>
-          <div className="row">
-            {hasActiveFilters ? (
-              <button type="button" onClick={resetFilters}>
-                Reset Filters
-              </button>
-            ) : null}
-            {mode === "feed" ? <Link href="/profile" className="ctaLink secondaryLink">Check creator profiles</Link> : null}
-          </div>
-        </div>
-      ) : null}
 
       <div className="listTable">
         {mode === "feed"
