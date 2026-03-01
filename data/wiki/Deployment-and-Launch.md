@@ -70,6 +70,10 @@ Use this order for the current contract suite:
 6. `CreatorFactory`
 7. `Marketplace`
 
+For verification and deployment scripts, the marketplace contract now resolves as:
+
+- `src/core/Marketplace.sol:Marketplace`
+
 ## Environment readiness
 
 Before deployment or release validation, confirm:
