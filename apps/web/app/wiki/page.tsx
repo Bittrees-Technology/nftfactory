@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getWikiPageBySlug, listWikiPages } from "../../lib/wiki";
+import WikiMarkdown from "./WikiMarkdown";
 
 export default async function WikiHomePage() {
   const [pages, home] = await Promise.all([listWikiPages(), getWikiPageBySlug("home")]);
@@ -28,7 +29,7 @@ export default async function WikiHomePage() {
       {home ? (
         <div className="card formCard">
           <h3>{home.title}</h3>
-          <pre className="codeBlock">{home.content}</pre>
+          <WikiMarkdown content={home.content} />
         </div>
       ) : null}
     </section>

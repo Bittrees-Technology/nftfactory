@@ -60,10 +60,6 @@ export default function HomePage() {
           <p className="actionHint">Opens the collection management flow directly.</p>
         </Link>
       </div>
-
-      <div className="card formCard">
-        <Link href="/wiki" className="ctaLink secondaryLink">Open Wiki</Link>
-      </div>
     </section>
   );
 }

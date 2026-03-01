@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getWikiPageBySlug, listWikiPages } from "../../../lib/wiki";
+import WikiMarkdown from "../WikiMarkdown";
 
 type Props = {
   params: Promise<{
@@ -35,7 +36,7 @@ export default async function WikiPage(props: Props) {
       </div>
 
       <div className="card formCard">
-        <pre className="codeBlock">{page.content}</pre>
+        <WikiMarkdown content={page.content} />
       </div>
     </section>
   );
