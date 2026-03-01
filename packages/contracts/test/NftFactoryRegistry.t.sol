@@ -11,6 +11,7 @@ contract NftFactoryRegistryTest is Test {
     address internal treasury = address(0xBEEF);
     address internal factory = address(0xFAc7);
     address internal creator = address(0xCAFE);
+    address internal otherCreator = address(0xCAFF);
 
     function setUp() external {
         vm.prank(admin);
@@ -72,5 +73,17 @@ contract NftFactoryRegistryTest is Test {
         vm.prank(factory);
         vm.expectRevert(NftFactoryRegistry.InvalidStandard.selector);
         registry.registerCreatorContract(creator, address(0x1111), "alice", "erc721", true);
+    }
+
+    function testRegisterCreatorContractRevertsForDifferentCreatorOnSameContract() external {
+        vm.prank(admin);
+        registry.setFactoryAuthorization(factory, true);
+
+        vm.prank(factory);
+        registry.registerCreatorContract(creator, address(0x1111), "alice", "ERC721", true);
+
+        vm.prank(factory);
+        vm.expectRevert(NftFactoryRegistry.CreatorContractAssignedToDifferentCreator.selector);
+        registry.registerCreatorContract(otherCreator, address(0x1111), "bob", "ERC721", true);
     }
 }
