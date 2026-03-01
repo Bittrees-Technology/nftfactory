@@ -141,9 +141,18 @@ export type ApiProfileRecord = {
 export type ApiOwnedCollections = {
   ownerAddress: string;
   collections: Array<{
+    chainId: number;
     ensSubname: string | null;
     contractAddress: string;
     ownerAddress: string;
+    standard: string;
+    isFactoryCreated: boolean;
+    isUpgradeable: boolean;
+    finalizedAt: string | null;
+    createdAt: string;
+    updatedAt: string;
+    tokenCount: number;
+    activeListingCount: number;
   }>;
 };
 
@@ -158,7 +167,9 @@ export type ApiMintFeedItem = {
   creatorAddress: string;
   ownerAddress: string;
   metadataCid: string;
+  metadataUrl?: string | null;
   mediaCid: string | null;
+  mediaUrl?: string | null;
   immutable: boolean;
   mintedAt: string;
   collection: {
@@ -168,12 +179,19 @@ export type ApiMintFeedItem = {
     ensSubname: string | null;
     standard: string;
     isFactoryCreated: boolean;
+    isUpgradeable?: boolean;
+    finalizedAt?: string | null;
+    createdAt?: string;
+    updatedAt?: string;
   };
   activeListing: {
     listingId: string;
     sellerAddress: string;
     paymentToken: string;
     priceRaw: string;
+    active?: boolean;
+    createdAt?: string;
+    updatedAt?: string;
   } | null;
 };
 
@@ -182,6 +200,49 @@ export type ApiMintFeedResponse = {
   nextCursor: number;
   canLoadMore: boolean;
   items: ApiMintFeedItem[];
+};
+
+export type ApiIndexerOverview = {
+  chainId: number;
+  counts: {
+    collections: number;
+    tokens: number;
+    activeListings: number;
+    openReports: number;
+    hiddenListings: number;
+    linkedProfiles: number;
+    trackedPaymentTokens: number;
+    moderators: number;
+  };
+  generatedAt: string;
+};
+
+export type ApiOwnerSummary = {
+  ownerAddress: string;
+  counts: {
+    linkedProfiles: number;
+    ownedCollections: number;
+    ownedTokens: number;
+    createdTokens: number;
+    activeListings: number;
+  };
+  profiles: ApiProfileRecord[];
+  collections: ApiOwnedCollections["collections"];
+  recentOwnedMints: Array<{
+    id: string;
+    tokenId: string;
+    metadataCid: string;
+    metadataUrl: string | null;
+    mediaCid: string | null;
+    mediaUrl: string | null;
+    mintedAt: string;
+    collection: {
+      contractAddress: string;
+      ensSubname: string | null;
+      standard: string;
+      isFactoryCreated: boolean;
+    };
+  }>;
 };
 
 export async function fetchHiddenListingIds(): Promise<number[]> {
@@ -327,6 +388,14 @@ export async function fetchMintFeed(cursor = 0, limit = 50): Promise<ApiMintFeed
   return fetchJson<ApiMintFeedResponse>(
     `/api/feed?cursor=${encodeURIComponent(String(cursor))}&limit=${encodeURIComponent(String(limit))}`
   );
+}
+
+export async function fetchIndexerOverview(): Promise<ApiIndexerOverview> {
+  return fetchJson<ApiIndexerOverview>("/api/overview");
+}
+
+export async function fetchOwnerSummary(ownerAddress: string): Promise<ApiOwnerSummary> {
+  return fetchJson<ApiOwnerSummary>(`/api/owners/${encodeURIComponent(ownerAddress)}/summary`);
 }
 
 export async function linkProfileIdentity(payload: {

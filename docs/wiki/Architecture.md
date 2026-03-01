@@ -88,20 +88,38 @@ The indexer is the primary application mirror of that on-chain state and is the 
 
 - creator profile resolution
 - owner-based collection lookup
+- owner-level summaries and recent mint snapshots
 - moderation queues and hidden state
 - action history
 - listing and discovery APIs
+- operational overview counts for the current indexed dataset
 
 Current important routes include:
 
+- `GET /api/overview`
 - `GET /api/profile/:name`
 - `GET /api/profiles?owner=<address>`
 - `POST /api/profiles/link`
+- `GET /api/owners/:address/summary`
 - `GET /api/collections?owner=<address>`
+- `GET /api/feed`
 - `GET /api/moderation/reports`
 - `POST /api/moderation/reports`
 - `GET /api/moderation/actions`
 - `GET /api/moderation/hidden-listings`
+
+The current build stores and serves these practical data points:
+
+- collection ownership, standard, upgradeability, finality state, and timestamps
+- token ownership, creator, media/metadata CIDs, and mint time
+- active listing state, payment token, price, and listing timestamps
+- linked creator profile records, moderator records, and tracked custom payment tokens
+
+The intended shape is:
+
+- blockchain as the source of truth
+- Prisma as the durable indexed mirror for chain-shaped application data
+- JSON-backed local registries for lightweight operational overlays that do not yet need a full schema migration
 
 ### Fallback behavior
 
@@ -128,6 +146,12 @@ The intended model is:
 - use indexed and cached data to discover likely candidates quickly
 - use the chain to confirm the currently relevant collection, owner, or contract fact
 - treat Prisma and local cache as materialized views of blockchain state, not as stronger truth than the chain
+
+In practice, this means the UI should:
+
+- read summaries, feeds, and candidate lists from the indexer first
+- confirm ownership and contract state on-chain before allowing contract actions
+- never treat local cache as stronger or fresher than indexed or chain data
 
 ## Related pages
 

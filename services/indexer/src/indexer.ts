@@ -132,7 +132,8 @@ function createFallbackPrisma(): PrismaClient {
       findMany: async () => [],
       create: async () => ({}),
       findUnique: async () => null,
-      update: async () => ({})
+      update: async () => ({}),
+      count: async () => 0
     },
     moderationAction: {
       findMany: async () => [],
@@ -141,7 +142,8 @@ function createFallbackPrisma(): PrismaClient {
     listing: {
       findMany: async () => [],
       findUnique: async () => null,
-      upsert: async () => ({})
+      upsert: async () => ({}),
+      count: async () => 0
     },
     collection: {
       findMany: async () => [],
@@ -151,7 +153,8 @@ function createFallbackPrisma(): PrismaClient {
     },
     token: {
       findMany: async () => [],
-      upsert: async () => ({})
+      upsert: async () => ({}),
+      count: async () => 0
     }
   } as unknown as PrismaClient;
 }
@@ -401,6 +404,16 @@ function parseListingId(value: string | undefined): number | null {
   const parsed = Number.parseInt(value, 10);
   if (!Number.isInteger(parsed) || parsed < 0) return null;
   return parsed;
+}
+
+function buildGatewayUrl(cidLike: string | null | undefined): string | null {
+  const value = String(cidLike || "").trim();
+  if (!value) return null;
+  if (value.startsWith("ipfs://")) {
+    return `https://gateway.pinata.cloud/ipfs/${value.replace(/^ipfs:\/\//, "")}`;
+  }
+  if (value.startsWith("pending://")) return null;
+  return value;
 }
 
 async function readJsonBody<T>(req: IncomingMessage): Promise<T> {
@@ -1003,6 +1016,103 @@ async function handleRequest(
     return;
   }
 
+  if (req.method === "GET" && /^\/api\/owners\/[^/]+\/summary$/.test(path)) {
+    const owner = String(decodeURIComponent(path.split("/")[3] || "")).trim().toLowerCase();
+    if (!owner || !isAddress(owner)) {
+      sendJson(res, 400, { error: "Valid owner address is required" });
+      return;
+    }
+
+    const [linkedProfiles, collections, ownedTokenCount, createdTokenCount, activeListings, recentOwnedTokens] = await Promise.all([
+      readProfileRecords().then((records) => records.filter((item) => item.ownerAddress === owner).map(toProfileResponse)),
+      deps.prisma.collection.findMany({
+        where: { ownerAddress: owner },
+        orderBy: { createdAt: "desc" },
+        select: {
+          chainId: true,
+          contractAddress: true,
+          ownerAddress: true,
+          ensSubname: true,
+          standard: true,
+          isFactoryCreated: true,
+          isUpgradeable: true,
+          finalizedAt: true,
+          createdAt: true,
+          updatedAt: true,
+          _count: {
+            select: {
+              tokens: true
+            }
+          }
+        }
+      }),
+      deps.prisma.token.count({ where: { ownerAddress: owner } }),
+      deps.prisma.token.count({ where: { creatorAddress: owner } }),
+      deps.prisma.listing.count({ where: { sellerAddress: owner, active: true } }),
+      deps.prisma.token.findMany({
+        where: { ownerAddress: owner },
+        take: 5,
+        orderBy: [{ mintedAt: "desc" }, { id: "desc" }],
+        select: {
+          id: true,
+          tokenId: true,
+          metadataCid: true,
+          mediaCid: true,
+          mintedAt: true,
+          collection: {
+            select: {
+              contractAddress: true,
+              ensSubname: true,
+              standard: true,
+              isFactoryCreated: true
+            }
+          }
+        }
+      })
+    ]);
+
+    sendJson(res, 200, {
+      ownerAddress: owner,
+      counts: {
+        linkedProfiles: linkedProfiles.length,
+        ownedCollections: collections.length,
+        ownedTokens: ownedTokenCount,
+        createdTokens: createdTokenCount,
+        activeListings
+      },
+      profiles: linkedProfiles,
+      collections: collections.map((item: any) => ({
+        chainId: item.chainId,
+        contractAddress: item.contractAddress,
+        ownerAddress: item.ownerAddress,
+        ensSubname: item.ensSubname,
+        standard: item.standard,
+        isFactoryCreated: item.isFactoryCreated,
+        isUpgradeable: item.isUpgradeable,
+        finalizedAt: item.finalizedAt,
+        createdAt: item.createdAt,
+        updatedAt: item.updatedAt,
+        tokenCount: item._count?.tokens || 0
+      })),
+      recentOwnedMints: recentOwnedTokens.map((item: any) => ({
+        id: item.id,
+        tokenId: item.tokenId,
+        metadataCid: item.metadataCid,
+        metadataUrl: buildGatewayUrl(item.metadataCid),
+        mediaCid: item.mediaCid,
+        mediaUrl: buildGatewayUrl(item.mediaCid),
+        mintedAt: item.mintedAt,
+        collection: {
+          contractAddress: item.collection.contractAddress,
+          ensSubname: item.collection.ensSubname,
+          standard: item.collection.standard,
+          isFactoryCreated: item.collection.isFactoryCreated
+        }
+      }))
+    });
+    return;
+  }
+
   if (req.method === "POST" && path === "/api/profiles/link") {
     if (deps.isRateLimitedImpl(deps.getClientIpImpl(req, config.trustProxy))) {
       sendJson(res, 429, { error: "Too many requests" });
@@ -1185,7 +1295,11 @@ async function handleRequest(
             ownerAddress: true,
             ensSubname: true,
             standard: true,
-            isFactoryCreated: true
+            isFactoryCreated: true,
+            isUpgradeable: true,
+            finalizedAt: true,
+            createdAt: true,
+            updatedAt: true
           }
         },
         listings: {
@@ -1196,7 +1310,10 @@ async function handleRequest(
             listingId: true,
             sellerAddress: true,
             paymentToken: true,
-            priceRaw: true
+            priceRaw: true,
+            active: true,
+            createdAt: true,
+            updatedAt: true
           }
         }
       }
@@ -1212,7 +1329,9 @@ async function handleRequest(
         creatorAddress: item.creatorAddress,
         ownerAddress: item.ownerAddress,
         metadataCid: item.metadataCid,
+        metadataUrl: buildGatewayUrl(item.metadataCid),
         mediaCid: item.mediaCid,
+        mediaUrl: buildGatewayUrl(item.mediaCid),
         immutable: item.immutable,
         mintedAt: item.mintedAt,
         collection: {
@@ -1221,17 +1340,54 @@ async function handleRequest(
           ownerAddress: item.collection.ownerAddress,
           ensSubname: item.collection.ensSubname,
           standard: item.collection.standard,
-          isFactoryCreated: item.collection.isFactoryCreated
+          isFactoryCreated: item.collection.isFactoryCreated,
+          isUpgradeable: item.collection.isUpgradeable,
+          finalizedAt: item.collection.finalizedAt,
+          createdAt: item.collection.createdAt,
+          updatedAt: item.collection.updatedAt
         },
         activeListing: item.listings?.[0]
           ? {
               listingId: item.listings[0].listingId,
               sellerAddress: item.listings[0].sellerAddress,
               paymentToken: item.listings[0].paymentToken,
-              priceRaw: item.listings[0].priceRaw
+              priceRaw: item.listings[0].priceRaw,
+              active: item.listings[0].active,
+              createdAt: item.listings[0].createdAt,
+              updatedAt: item.listings[0].updatedAt
             }
           : null
       }))
+    });
+    return;
+  }
+
+  if (req.method === "GET" && path === "/api/overview") {
+    const [collectionCount, tokenCount, activeListingCount, openReportCount, hiddenListingIds, profiles, paymentTokens, moderators] =
+      await Promise.all([
+        deps.prisma.collection.count(),
+        deps.prisma.token.count(),
+        deps.prisma.listing.count({ where: { active: true } }),
+        deps.prisma.report.count({ where: { status: "open" } }),
+        listHiddenListingIds(deps),
+        readProfileRecords(),
+        readPaymentTokenRecords(),
+        readModeratorRecords()
+      ]);
+
+    sendJson(res, 200, {
+      chainId: config.chainId,
+      counts: {
+        collections: collectionCount,
+        tokens: tokenCount,
+        activeListings: activeListingCount,
+        openReports: openReportCount,
+        hiddenListings: hiddenListingIds.length,
+        linkedProfiles: profiles.length,
+        trackedPaymentTokens: paymentTokens.length,
+        moderators: moderators.length
+      },
+      generatedAt: new Date().toISOString()
     });
     return;
   }
@@ -1247,16 +1403,57 @@ async function handleRequest(
       where: {
         ownerAddress: owner
       },
-      select: { ownerAddress: true, ensSubname: true, contractAddress: true },
+      select: {
+        chainId: true,
+        ownerAddress: true,
+        ensSubname: true,
+        contractAddress: true,
+        standard: true,
+        isFactoryCreated: true,
+        isUpgradeable: true,
+        finalizedAt: true,
+        createdAt: true,
+        updatedAt: true,
+        _count: {
+          select: {
+            tokens: true
+          }
+        }
+      },
       orderBy: { createdAt: "desc" }
     });
+
+    const contractAddresses = collections.map((item: any) => item.contractAddress.toLowerCase());
+    const activeListings = contractAddresses.length
+      ? await deps.prisma.listing.findMany({
+          where: {
+            active: true,
+            collectionAddress: { in: contractAddresses }
+          },
+          select: { collectionAddress: true }
+        })
+      : [];
+    const activeListingCounts = new Map<string, number>();
+    for (const item of activeListings as Array<{ collectionAddress: string }>) {
+      const key = item.collectionAddress.toLowerCase();
+      activeListingCounts.set(key, (activeListingCounts.get(key) || 0) + 1);
+    }
 
     sendJson(res, 200, {
       ownerAddress: owner,
       collections: collections.map((item: any) => ({
+        chainId: item.chainId,
         ensSubname: item.ensSubname,
         contractAddress: item.contractAddress,
-        ownerAddress: item.ownerAddress
+        ownerAddress: item.ownerAddress,
+        standard: item.standard,
+        isFactoryCreated: item.isFactoryCreated,
+        isUpgradeable: item.isUpgradeable,
+        finalizedAt: item.finalizedAt,
+        createdAt: item.createdAt,
+        updatedAt: item.updatedAt,
+        tokenCount: item._count?.tokens || 0,
+        activeListingCount: activeListingCounts.get(item.contractAddress.toLowerCase()) || 0
       }))
     });
     return;
