@@ -21,6 +21,9 @@ type Standard = "ERC721" | "ERC1155";
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const DEFAULT_SCAN_LIMIT = 200;
 const MAX_LISTING_DAYS = 365;
+const DEPLOYMENT_START_BLOCK_BY_CHAIN: Record<number, bigint> = {
+  11155111: 10_359_560n
+};
 
 const creatorRegisteredEvent = {
   type: "event",
@@ -249,12 +252,17 @@ export default function ListClient() {
 
         if (publicClient) {
           const blockTimes = new Map<string, string>();
-          const getLogsChunked = async (request: { address: Address; event: any }): Promise<any[]> => {
+          const getLogsChunked = async (request: {
+            address: Address;
+            event: any;
+            fromBlock?: bigint;
+          }): Promise<any[]> => {
             const latestBlock = await publicClient.getBlockNumber();
             const chunkSize = 900n;
             const logs: any[] = [];
+            const startBlock = request.fromBlock ?? 0n;
 
-            for (let fromBlock = 0n; fromBlock <= latestBlock; fromBlock += chunkSize) {
+            for (let fromBlock = startBlock; fromBlock <= latestBlock; fromBlock += chunkSize) {
               const toBlock = fromBlock + chunkSize - 1n > latestBlock ? latestBlock : fromBlock + chunkSize - 1n;
               const chunk = await publicClient.getLogs({
                 ...request,
@@ -278,12 +286,14 @@ export default function ListClient() {
 
           const hydrateErc721Contract = async (
             contractAddress: Address,
-            rowSource: "shared" | "custom"
+            rowSource: "shared" | "custom",
+            startBlock?: bigint
           ): Promise<void> => {
             try {
               const logs = await getLogsChunked({
                 address: contractAddress,
-                event: erc721TransferEvent
+                event: erc721TransferEvent,
+                fromBlock: startBlock
               });
               const mintedLogs = logs.filter((log) => log.args.from?.toLowerCase() === zeroAddress);
               for (const log of mintedLogs) {
@@ -332,16 +342,19 @@ export default function ListClient() {
 
           const hydrateErc1155Contract = async (
             contractAddress: Address,
-            rowSource: "shared" | "custom"
+            rowSource: "shared" | "custom",
+            startBlock?: bigint
           ): Promise<void> => {
             try {
               const singleLogs = await getLogsChunked({
                 address: contractAddress,
-                event: erc1155TransferSingleEvent
+                event: erc1155TransferSingleEvent,
+                fromBlock: startBlock
               });
               const batchLogs = await getLogsChunked({
                 address: contractAddress,
-                event: erc1155TransferBatchEvent
+                event: erc1155TransferBatchEvent,
+                fromBlock: startBlock
               });
 
               const tokenState = new Map<string, string>();
@@ -405,18 +418,21 @@ export default function ListClient() {
             }
           };
 
+          const deploymentStartBlock = DEPLOYMENT_START_BLOCK_BY_CHAIN[config.chainId] ?? 0n;
+
           if (isAddress(config.shared721)) {
-            await hydrateErc721Contract(config.shared721 as Address, "shared");
+            await hydrateErc721Contract(config.shared721 as Address, "shared", deploymentStartBlock);
           }
           if (isAddress(config.shared1155)) {
-            await hydrateErc1155Contract(config.shared1155 as Address, "shared");
+            await hydrateErc1155Contract(config.shared1155 as Address, "shared", deploymentStartBlock);
           }
 
           const registryLogs = await getLogsChunked({
             address: config.registry as Address,
-            event: creatorRegisteredEvent
+            event: creatorRegisteredEvent,
+            fromBlock: deploymentStartBlock
           });
-          const customCollections = new Map<string, Standard>();
+          const customCollections = new Map<string, { standard: Standard; startBlock: bigint }>();
 
           for (const log of registryLogs) {
             if (!log.args.isNftFactoryCreated) continue;
@@ -426,16 +442,19 @@ export default function ListClient() {
             if (customCollections.has(contractKey)) continue;
             customCollections.set(
               contractKey,
-              log.args.standard === "ERC1155" ? "ERC1155" : "ERC721"
+              {
+                standard: log.args.standard === "ERC1155" ? "ERC1155" : "ERC721",
+                startBlock: log.blockNumber
+              }
             );
           }
 
-          for (const [contractKey, collectionStandard] of [...customCollections.entries()].slice(0, 48)) {
+          for (const [contractKey, collectionDetails] of [...customCollections.entries()].slice(0, 48)) {
             const contractAddress = contractKey as Address;
-            if (collectionStandard === "ERC1155") {
-              await hydrateErc1155Contract(contractAddress, "custom");
+            if (collectionDetails.standard === "ERC1155") {
+              await hydrateErc1155Contract(contractAddress, "custom", collectionDetails.startBlock);
             } else {
-              await hydrateErc721Contract(contractAddress, "custom");
+              await hydrateErc721Contract(contractAddress, "custom", collectionDetails.startBlock);
             }
           }
         }
