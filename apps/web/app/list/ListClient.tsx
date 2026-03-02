@@ -173,7 +173,7 @@ export default function ListClient() {
   const publicClient = usePublicClient();
 
   const [standard, setStandard] = useState<Standard>("ERC721");
-  const [source, setSource] = useState<"shared" | "custom">("shared");
+  const [contractScope, setContractScope] = useState<"all" | "shared" | "custom">("all");
   const [selectedContract, setSelectedContract] = useState("");
   const [selectedTokenKeys, setSelectedTokenKeys] = useState<string[]>([]);
   const [erc1155Amount, setErc1155Amount] = useState("1");
@@ -435,8 +435,13 @@ export default function ListClient() {
   }, [address, config.registry, config.shared721, config.shared1155, publicClient]);
 
   const filteredOwnedMints = useMemo(
-    () => ownedMints.filter((item) => item.standard === standard && item.source === source),
-    [ownedMints, standard, source]
+    () =>
+      ownedMints.filter((item) => {
+        if (item.standard !== standard) return false;
+        if (contractScope === "all") return true;
+        return item.source === contractScope;
+      }),
+    [contractScope, ownedMints, standard]
   );
 
   const contractOptions = useMemo<ContractOption[]>(() => {
@@ -454,11 +459,6 @@ export default function ListClient() {
   }, [config, filteredOwnedMints]);
 
   useEffect(() => {
-    if (source === "shared") {
-      setSelectedContract(standard === "ERC721" ? config.shared721 : config.shared1155);
-      setSelectedTokenKeys([]);
-      return;
-    }
     if (contractOptions.length === 0) {
       setSelectedContract("");
       setSelectedTokenKeys([]);
@@ -467,11 +467,11 @@ export default function ListClient() {
     if (!selectedContract || !contractOptions.some((item) => item.address.toLowerCase() === selectedContract.toLowerCase())) {
       setSelectedContract(contractOptions[0].address);
     }
-  }, [config.shared1155, config.shared721, contractOptions, selectedContract, source, standard]);
+  }, [contractOptions, selectedContract]);
 
   useEffect(() => {
     setSelectedTokenKeys([]);
-  }, [selectedContract, source, standard]);
+  }, [selectedContract, contractScope, standard]);
 
   const availableTokens = useMemo(
     () =>
@@ -712,7 +712,7 @@ export default function ListClient() {
       <form className="wizard" onSubmit={onSubmit}>
         <div className="card formCard">
           <h3>1. Select NFT</h3>
-          <p className="hint">Choose the collection, then select one or more NFTs you already own to list.</p>
+          <p className="hint">Choose a standard, filter the contracts if needed, then select one or more NFTs already in this wallet.</p>
           <div className="gridMini">
             <label>
               Standard
@@ -722,8 +722,9 @@ export default function ListClient() {
               </select>
             </label>
             <label>
-              Source
-              <select value={source} onChange={(e) => setSource(e.target.value as "shared" | "custom")}>
+              Contracts
+              <select value={contractScope} onChange={(e) => setContractScope(e.target.value as "all" | "shared" | "custom")}>
+                <option value="all">All NFTFactory contracts</option>
                 <option value="shared">Shared contract</option>
                 <option value="custom">Custom collection</option>
               </select>
@@ -735,15 +736,9 @@ export default function ListClient() {
               : "Connect a wallet from the header to load owned NFTs that can be listed."}
           </p>
           {wrongNetwork ? <p className="hint">Use the header wallet button to select {appChain.name} before listing.</p> : null}
-          {source === "shared" ? (
-            <div className="selectionCard">
-              <span className="detailLabel">Collection Contract</span>
-              <p className="detailValue">{standard === "ERC721" ? "NFTFactory Shared ERC-721" : "NFTFactory Shared ERC-1155"}</p>
-              <p className="mono">{selectedContract || (standard === "ERC721" ? config.shared721 : config.shared1155)}</p>
-            </div>
-          ) : contractOptions.length > 0 ? (
+          {contractOptions.length > 1 ? (
             <label>
-              Creator collection
+              Collection contract
               <select value={selectedContract} onChange={(e) => setSelectedContract(e.target.value)}>
                 {contractOptions.map((option) => (
                   <option key={option.address} value={option.address}>
@@ -752,11 +747,17 @@ export default function ListClient() {
                 ))}
               </select>
             </label>
+          ) : contractOptions.length === 1 ? (
+            <div className="selectionCard">
+              <span className="detailLabel">Collection Contract</span>
+              <p className="detailValue">{contractOptions[0].label}</p>
+              <p className="mono">{contractOptions[0].address}</p>
+            </div>
           ) : (
             <p className="hint">
               {mintInventoryLoading
                 ? "Loading owned NFTs..."
-                : "No owned custom collections with indexed NFTs match this standard yet."}
+                : "No owned NFTs from the selected NFTFactory contracts match this standard yet."}
             </p>
           )}
           {mintInventoryError ? <p className="error">{mintInventoryError}</p> : null}
