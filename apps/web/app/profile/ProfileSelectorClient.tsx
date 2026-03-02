@@ -11,12 +11,25 @@ import {
   type ApiProfileRecord
 } from "../../lib/indexerApi";
 
+function deriveProfileRouteFromName(fullName: string): string {
+  const normalized = String(fullName || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\.+/g, ".")
+    .replace(/^\./, "")
+    .replace(/\.$/, "");
+  if (!normalized) return "";
+  if (normalized.endsWith(".nftfactory.eth")) {
+    return normalized.replace(/\.nftfactory\.eth$/, "");
+  }
+  return normalized.split(".").filter(Boolean).reverse().join(".");
+}
+
 function normalizeDerivedProfile(collection: ApiOwnedCollections["collections"][number]): ApiProfileRecord | null {
   const rawName = String(collection.ensSubname || "").trim().toLowerCase();
   if (!rawName) return null;
   const fullName = rawName.includes(".") ? rawName : `${rawName}.nftfactory.eth`;
-  const firstLabel = fullName.split(".")[0] || "";
-  const slug = firstLabel.trim().toLowerCase();
+  const slug = deriveProfileRouteFromName(fullName);
   if (!slug) return null;
 
   return {
@@ -169,8 +182,13 @@ export default function ProfileSelectorClient() {
           <div className="stack">
             <p className="hint">Linked profile</p>
             <strong>{primaryProfile.fullName}</strong>
+            <p className="hint">
+              Route: <span className="mono">/profile/{primaryProfile.slug}</span>
+            </p>
             <div className="row">
-              <button type="button" onClick={() => openProfile(primaryProfile.slug)}>Open Profile</button>
+              <button type="button" onClick={() => openProfile(primaryProfile.slug)}>
+                Open /profile/{primaryProfile.slug}
+              </button>
             </div>
           </div>
         ) : (
