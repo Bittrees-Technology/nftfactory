@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useAccount, useChainId, usePublicClient, useWalletClient } from "wagmi";
 import { encodeFunctionData, formatEther, keccak256, stringToBytes } from "viem";
 import type { Address, Hex } from "viem";
@@ -266,7 +265,6 @@ function createCommitmentSecret(): Hex {
 }
 
 export default function ProfileLandingClient({ initialLabel = "" }: { initialLabel?: string }) {
-  const router = useRouter();
   const config = useMemo(() => getContractsConfig(), []);
   const appChain = useMemo(() => getAppChain(config.chainId), [config.chainId]);
   const { address, isConnected } = useAccount();
@@ -759,6 +757,8 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
     }
 
     try {
+      setPostLinkProfile(null);
+      setPostLinkMintCta(false);
       const duration = BigInt(Number(registrationYears || "1") * 31536000);
       const minCommitmentAge = Number(
         await publicClient.readContract({
@@ -890,6 +890,8 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
 
       const nextProfiles = dedupeProfiles([...profiles, response.profile]);
       setProfiles(nextProfiles);
+      setPostLinkProfile(response.profile);
+      setPostLinkMintCta(true);
       setIdentityName(response.profile.fullName);
       setPendingEnsRegistration(null);
       if (address) {
@@ -900,7 +902,6 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
         hash: registerHash,
         message: `${response.profile.fullName} registered in ENS and linked.`
       });
-      router.push(`/mint?view=mint&collection=shared&profile=${encodeURIComponent(response.profile.fullName)}`);
     } catch (err) {
       setSetupState({
         status: "error",
@@ -974,12 +975,6 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
             ? `${response.profile.fullName} linked. Continue into shared mint to publish with this ENS identity.`
             : `${response.profile.fullName} linked to this creator profile.`
       });
-
-      if (options?.launchMint) {
-        return;
-      }
-
-      router.push(`/profile/${encodeURIComponent(response.profile.slug)}`);
     } catch (err) {
       setSetupState({ status: "error", message: err instanceof Error ? err.message : "Failed to save creator identity" });
     }
@@ -1006,6 +1001,8 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
     try {
       setSetupState({ status: "pending", message: `Creating ${slug}.nftfactory.eth...` });
       setCheckedIdentityReady(false);
+      setPostLinkProfile(null);
+      setPostLinkMintCta(false);
       const txHash = await walletClient.sendTransaction({
         account: walletClient.account,
         to: config.subnameRegistrar as Address,
@@ -1028,12 +1025,12 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
 
       const nextProfiles = dedupeProfiles([...profiles, response.profile]);
       setProfiles(nextProfiles);
+      setPostLinkProfile(response.profile);
       setSetupState({
         status: "success",
         hash: txHash,
         message: `${response.profile.fullName} created and linked.`
       });
-      router.push(`/profile/${encodeURIComponent(response.profile.slug)}`);
     } catch (err) {
       setSetupState({ status: "error", message: err instanceof Error ? err.message : "Failed to create nftfactory subname" });
     }
