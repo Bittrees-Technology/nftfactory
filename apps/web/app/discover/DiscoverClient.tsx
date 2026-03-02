@@ -200,6 +200,27 @@ const erc1155ReadAbi = [
   }
 ] as const;
 
+const registryReadAbi = [
+  {
+    type: "function",
+    name: "creatorContracts",
+    stateMutability: "view",
+    inputs: [{ name: "creator", type: "address" }],
+    outputs: [
+      {
+        type: "tuple[]",
+        components: [
+          { name: "owner", type: "address" },
+          { name: "contractAddress", type: "address" },
+          { name: "isNftFactoryCreated", type: "bool" },
+          { name: "ensSubname", type: "string" },
+          { name: "standard", type: "string" }
+        ]
+      }
+    ]
+  }
+] as const;
+
 function normalizeAddress(value: string): value is Address {
   return /^0x[a-fA-F0-9]{40}$/.test(value);
 }
@@ -538,22 +559,59 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
 
     let cancelled = false;
 
-    const indexedContracts = new Set(
-      [...feedItems, ...localFeedItems].map((item) => item.collection.contractAddress.toLowerCase())
-    );
-    const candidateCollections = readKnownCollections(address).filter(
-      (item) =>
-        item.ownerAddress.toLowerCase() === address.toLowerCase() &&
-        !indexedContracts.has(item.contractAddress.toLowerCase())
-    );
+    const loadHydratedItems = async (): Promise<void> => {
+      const indexedContracts = new Set(
+        [...feedItems, ...localFeedItems].map((item) => item.collection.contractAddress.toLowerCase())
+      );
 
-    if (candidateCollections.length === 0) {
-      setHydratedFeedItems([]);
-      return;
-    }
+      const localCandidates = readKnownCollections(address);
+      let registryCandidates: KnownCollection[] = [];
 
-    void Promise.all(
-      candidateCollections.slice(0, 4).map(async (collection) => {
+      try {
+        const records = (await publicClient.readContract({
+          address: config.registry,
+          abi: registryReadAbi,
+          functionName: "creatorContracts",
+          args: [address as Address]
+        })) as Array<{
+          owner: string;
+          contractAddress: string;
+          ensSubname: string;
+        }>;
+
+        registryCandidates = records.map((record) => ({
+          contractAddress: record.contractAddress.toLowerCase(),
+          ensSubname: record.ensSubname?.trim() || null,
+          ownerAddress: record.owner.toLowerCase()
+        }));
+      } catch {
+        registryCandidates = [];
+      }
+
+      const mergedCandidates = new Map<string, KnownCollection>();
+      for (const item of [...localCandidates, ...registryCandidates]) {
+        if (!isAddress(item.contractAddress) || !isAddress(item.ownerAddress)) continue;
+        if (item.ownerAddress.toLowerCase() !== address.toLowerCase()) continue;
+        const key = item.contractAddress.toLowerCase();
+        if (indexedContracts.has(key)) continue;
+        const existing = mergedCandidates.get(key);
+        mergedCandidates.set(key, {
+          contractAddress: item.contractAddress,
+          ensSubname: item.ensSubname || existing?.ensSubname || null,
+          ownerAddress: item.ownerAddress
+        });
+      }
+
+      const candidateCollections = [...mergedCandidates.values()];
+      if (candidateCollections.length === 0) {
+        if (!cancelled) {
+          setHydratedFeedItems([]);
+        }
+        return;
+      }
+
+      const groups = await Promise.all(
+        candidateCollections.slice(0, 6).map(async (collection) => {
         try {
           const blockTimes = new Map<string, string>();
           const getBlockTime = async (blockNumber: bigint): Promise<string> => {
@@ -733,17 +791,20 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
         } catch {
           return [];
         }
-      })
-    ).then((groups) => {
+        })
+      );
+
       if (!cancelled) {
         setHydratedFeedItems(groups.flat());
       }
-    });
+    };
+
+    void loadHydratedItems();
 
     return () => {
       cancelled = true;
     };
-  }, [address, config.chainId, feedItems, ipfsGateway, localFeedItems, mode, publicClient]);
+  }, [address, config.chainId, config.registry, feedItems, ipfsGateway, localFeedItems, mode, publicClient]);
 
   useEffect(() => {
     if (mode !== "feed") return;
