@@ -249,6 +249,24 @@ export default function ListClient() {
 
         if (publicClient) {
           const blockTimes = new Map<string, string>();
+          const getLogsChunked = async (request: { address: Address; event: any }): Promise<any[]> => {
+            const latestBlock = await publicClient.getBlockNumber();
+            const chunkSize = 8_000n;
+            const logs: any[] = [];
+
+            for (let fromBlock = 0n; fromBlock <= latestBlock; fromBlock += chunkSize) {
+              const toBlock = fromBlock + chunkSize - 1n > latestBlock ? latestBlock : fromBlock + chunkSize - 1n;
+              const chunk = await publicClient.getLogs({
+                ...request,
+                fromBlock,
+                toBlock
+              });
+              logs.push(...chunk);
+            }
+
+            return logs;
+          };
+
           const getBlockTime = async (blockNumber: bigint): Promise<string> => {
             const key = blockNumber.toString();
             if (!blockTimes.has(key)) {
@@ -263,11 +281,9 @@ export default function ListClient() {
             rowSource: "shared" | "custom"
           ): Promise<void> => {
             try {
-              const logs = await publicClient.getLogs({
+              const logs = await getLogsChunked({
                 address: contractAddress,
-                event: erc721TransferEvent,
-                fromBlock: 0n,
-                toBlock: "latest"
+                event: erc721TransferEvent
               });
               const mintedLogs = logs.filter((log) => log.args.from?.toLowerCase() === zeroAddress);
               for (const log of mintedLogs) {
@@ -319,17 +335,13 @@ export default function ListClient() {
             rowSource: "shared" | "custom"
           ): Promise<void> => {
             try {
-              const singleLogs = await publicClient.getLogs({
+              const singleLogs = await getLogsChunked({
                 address: contractAddress,
-                event: erc1155TransferSingleEvent,
-                fromBlock: 0n,
-                toBlock: "latest"
+                event: erc1155TransferSingleEvent
               });
-              const batchLogs = await publicClient.getLogs({
+              const batchLogs = await getLogsChunked({
                 address: contractAddress,
-                event: erc1155TransferBatchEvent,
-                fromBlock: 0n,
-                toBlock: "latest"
+                event: erc1155TransferBatchEvent
               });
 
               const tokenState = new Map<string, string>();
@@ -400,11 +412,9 @@ export default function ListClient() {
             await hydrateErc1155Contract(config.shared1155 as Address, "shared");
           }
 
-          const registryLogs = await publicClient.getLogs({
+          const registryLogs = await getLogsChunked({
             address: config.registry as Address,
-            event: creatorRegisteredEvent,
-            fromBlock: 0n,
-            toBlock: "latest"
+            event: creatorRegisteredEvent
           });
           const customCollections = new Map<string, Standard>();
 
