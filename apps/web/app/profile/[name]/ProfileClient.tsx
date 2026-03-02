@@ -33,6 +33,7 @@ function getFeaturedMediaKind(url: string | null | undefined): "image" | "audio"
 export default function ProfileClient({ name }: { name: string }) {
   const config = useMemo(() => getContractsConfig(), []);
   const { address: connectedAddress, isConnected } = useAccount();
+  const canonicalRoute = `/profile/${name}`;
 
   const [sellerAddress, setSellerAddress] = useState("");
   const [scanDepth, setScanDepth] = useState("250");
@@ -312,6 +313,9 @@ export default function ProfileClient({ name }: { name: string }) {
             <div className="profileIdentityMeta">
               <h3>{creatorDisplayName}</h3>
               <p className="hint">{primaryProfileName}</p>
+              <p className="hint">
+                Route: <span className="mono">{canonicalRoute}</span>
+              </p>
             </div>
           </div>
           <p className="sectionLead">
