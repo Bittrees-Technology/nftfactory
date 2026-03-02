@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAccount, useChainId, usePublicClient, useWalletClient } from "wagmi";
 import type { Address, Hex } from "viem";
+import { namehash } from "viem/ens";
 import { encodeRegisterSubname, toHexWei, truncateHash } from "../../lib/abi";
 import { getContractsConfig } from "../../lib/contracts";
 import { getAppChain, getExplorerBaseUrl } from "../../lib/chains";
@@ -19,6 +20,17 @@ import {
 import { verifyOwnedCollectionsOnChain } from "../../lib/onchainCollections";
 
 const SUBNAME_FEE_ETH = "0.001";
+const ENS_REGISTRY_ADDRESS = "0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e" as Address;
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+const ENS_REGISTRY_ABI = [
+  {
+    type: "function",
+    name: "owner",
+    stateMutability: "view",
+    inputs: [{ name: "node", type: "bytes32" }],
+    outputs: [{ name: "", type: "address" }]
+  }
+] as const;
 
 type SetupState = {
   status: "idle" | "pending" | "success" | "error";
@@ -160,40 +172,7 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
       return;
     }
     let cancelled = false;
-    void fetchProfileResolution(slug)
-      .then((resolution) => {
-        if (cancelled) return;
-
-        const exactProfileMatch = (resolution.profiles || []).some(
-          (profile) => profile.fullName.trim().toLowerCase() === normalizedFullName
-        );
-        const exactCollectionMatch = resolution.collections.some((collection) => {
-          const rawName = String(collection.ensSubname || "").trim().toLowerCase();
-          if (!rawName) return false;
-          const fullName = rawName.includes(".") ? rawName : `${rawName}.nftfactory.eth`;
-          return fullName === normalizedFullName;
-        });
-
-        if (exactProfileMatch || exactCollectionMatch) {
-          setLookupNote(`${normalizedFullName} is already linked in NFTFactory and is not available here.`);
-          return;
-        }
-
-        const walletCount = resolution.sellers.filter((item) => isAddress(item)).length;
-        if (walletCount > 0) {
-          setLookupNote(
-            `${normalizedFullName} is not linked directly, but /profile/${slug} already resolves to ${walletCount} wallet${walletCount === 1 ? "" : "s"}. Choose a different first label if you need a distinct profile.`
-          );
-          return;
-        }
-
-        setLookupNote(`${normalizedFullName} is currently available in NFTFactory.`);
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setLookupNote("Profile lookup is unavailable right now. You can still continue.");
-        }
-      });
+    void autoCheckIdentity(cancelled);
     return () => {
       cancelled = true;
     };
@@ -223,14 +202,38 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
     await createNftFactorySubname();
   }
 
-  async function checkIdentityAvailability(): Promise<void> {
-    if (!slug || !normalizedFullName) {
-      setLookupNote("Enter a name first.");
+  async function checkEnsRegistryIdentity(cancelled = false): Promise<void> {
+    if (!publicClient) {
+      if (!cancelled) setLookupNote("ENS registry lookup is unavailable right now.");
       return;
     }
 
     try {
+      const owner = await publicClient.readContract({
+        address: ENS_REGISTRY_ADDRESS,
+        abi: ENS_REGISTRY_ABI,
+        functionName: "owner",
+        args: [namehash(normalizedFullName)]
+      });
+      if (cancelled) return;
+
+      if (String(owner).toLowerCase() !== ZERO_ADDRESS.toLowerCase()) {
+        setLookupNote(`${normalizedFullName} exists in the ENS registry and can be linked here.`);
+        return;
+      }
+
+      setLookupNote(`${normalizedFullName} is not currently registered in the ENS registry. NFTFactory cannot mint it here.`);
+    } catch {
+      if (!cancelled) {
+        setLookupNote("ENS registry lookup is unavailable right now.");
+      }
+    }
+  }
+
+  async function checkNftFactoryIdentity(cancelled = false): Promise<void> {
+    try {
       const resolution = await fetchProfileResolution(slug);
+      if (cancelled) return;
 
       const requested = normalizedFullName;
       const exactProfileMatch = (resolution.profiles || []).some(
@@ -258,8 +261,26 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
 
       setLookupNote(`${requested} is currently available in NFTFactory.`);
     } catch {
-      setLookupNote("Profile lookup is unavailable right now. You can still continue.");
+      if (!cancelled) {
+        setLookupNote("Profile lookup is unavailable right now. You can still continue.");
+      }
     }
+  }
+
+  async function autoCheckIdentity(cancelled = false): Promise<void> {
+    if (identityMode === "nftfactory-subname") {
+      await checkNftFactoryIdentity(cancelled);
+      return;
+    }
+    await checkEnsRegistryIdentity(cancelled);
+  }
+
+  async function checkIdentityAvailability(): Promise<void> {
+    if (!slug || !normalizedFullName) {
+      setLookupNote("Enter a name first.");
+      return;
+    }
+    await autoCheckIdentity();
   }
 
   async function linkIdentity(source: ApiProfileRecord["source"], options?: { launchMint?: boolean }): Promise<void> {
