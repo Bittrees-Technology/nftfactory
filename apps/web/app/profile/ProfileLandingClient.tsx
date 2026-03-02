@@ -898,6 +898,12 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
     setLookupNote("");
   }
 
+  function resetRouteSlugToSuggested(): void {
+    setRouteSlugTouched(false);
+    setRouteSlug(slug);
+    setRouteNote("");
+  }
+
   return (
     <section className="wizard">
       <div className="card formCard">
@@ -1002,6 +1008,9 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
             <span className="detailLabel">Route check</span>
             <button type="button" onClick={() => void checkRouteAvailability()} disabled={!normalizedRouteSlug}>
               Check route
+            </button>
+            <button type="button" className="secondary" onClick={resetRouteSlugToSuggested} disabled={!slug}>
+              Use suggested
             </button>
           </div>
         </div>
