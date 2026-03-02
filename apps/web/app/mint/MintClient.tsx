@@ -117,6 +117,32 @@ type KnownCollection = {
   ownerAddress: string;
 };
 
+type LocalMintFeedItem = {
+  id: string;
+  tokenId: string;
+  creatorAddress: string;
+  ownerAddress: string;
+  metadataCid: string;
+  metadataUrl: string | null;
+  mediaCid: string | null;
+  mediaUrl: string | null;
+  immutable: boolean;
+  mintedAt: string;
+  collection: {
+    chainId: number;
+    contractAddress: string;
+    ownerAddress: string;
+    ensSubname: string | null;
+    standard: string;
+    isFactoryCreated: boolean;
+    isUpgradeable: boolean;
+    finalizedAt: string | null;
+    createdAt: string;
+    updatedAt: string;
+  };
+  activeListing: null;
+};
+
 const namedContractAbi = [
   {
     type: "function",
@@ -133,6 +159,68 @@ const namedContractAbi = [
     outputs: [{ name: "", type: "string" }]
   }
 ] as const;
+
+const LOCAL_MINT_FEED_LIMIT = 50;
+const ERC721_TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
+
+function localMintFeedKey(chainId: number): string {
+  return `nftfactory:local-mint-feed:v1:${chainId}`;
+}
+
+function toGatewayUrl(value: string | null | undefined, gateway: string): string | null {
+  if (!value) return null;
+  if (value.startsWith("ipfs://")) {
+    return `${gateway.replace(/\/$/, "")}/${value.replace("ipfs://", "")}`;
+  }
+  return value;
+}
+
+function readLocalMintFeed(chainId: number): LocalMintFeedItem[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(localMintFeedKey(chainId));
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as LocalMintFeedItem[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeLocalMintFeedItem(chainId: number, nextItem: LocalMintFeedItem): void {
+  if (typeof window === "undefined") return;
+  const current = readLocalMintFeed(chainId);
+  const merged = [nextItem, ...current.filter((item) => {
+    const sameContract = item.collection.contractAddress.toLowerCase() === nextItem.collection.contractAddress.toLowerCase();
+    const sameToken = item.tokenId === nextItem.tokenId;
+    return !(sameContract && sameToken);
+  })].slice(0, LOCAL_MINT_FEED_LIMIT);
+  window.localStorage.setItem(localMintFeedKey(chainId), JSON.stringify(merged));
+}
+
+function extractMintedTokenId(
+  receipt: { logs: Array<{ address: string; topics: readonly (string | undefined)[] }> },
+  contractAddress: string,
+  standard: Standard,
+  fallbackTokenId?: string
+): string {
+  if (standard === "ERC1155" && fallbackTokenId) return fallbackTokenId;
+  const normalizedContract = contractAddress.toLowerCase();
+  const match = receipt.logs.find(
+    (log) =>
+      log.address.toLowerCase() === normalizedContract &&
+      log.topics[0]?.toLowerCase() === ERC721_TRANSFER_TOPIC &&
+      log.topics[3]
+  );
+  if (match?.topics[3]) {
+    try {
+      return BigInt(match.topics[3]).toString();
+    } catch {
+      return fallbackTokenId || "0";
+    }
+  }
+  return fallbackTokenId || "0";
+}
 
 const interfaceProbeAbi = [
   {
@@ -837,7 +925,40 @@ export default function MintClient({
       }
 
       const txHash = await sendTransaction(targetNft, mintData);
-      await waitForReceipt(txHash);
+      const receipt = await waitForReceipt(txHash);
+      const fallbackTokenId =
+        standard === "ERC1155"
+          ? mintMode === "custom"
+            ? custom1155TokenId || "0"
+            : "0"
+          : undefined;
+      const mintedTokenId = extractMintedTokenId(receipt, targetNft, standard, fallbackTokenId);
+      const gateway = (process.env.NEXT_PUBLIC_IPFS_GATEWAY || "https://gateway.pinata.cloud/ipfs").replace(/\/$/, "");
+      writeLocalMintFeedItem(config.chainId, {
+        id: `local:${targetNft.toLowerCase()}:${mintedTokenId}:${Date.now()}`,
+        tokenId: mintedTokenId,
+        creatorAddress: account.toLowerCase(),
+        ownerAddress: account.toLowerCase(),
+        metadataCid: effectiveMetadataUri,
+        metadataUrl: toGatewayUrl(effectiveMetadataUri, gateway),
+        mediaCid: uploadReceipt.imageUri || uploadReceipt.audioUri || null,
+        mediaUrl: toGatewayUrl(uploadReceipt.imageUri || uploadReceipt.audioUri || null, gateway),
+        immutable: standard === "ERC721" ? mintMode === "shared" ? true : lockMetadata : lockMetadata,
+        mintedAt: new Date().toISOString(),
+        collection: {
+          chainId: config.chainId,
+          contractAddress: targetNft.toLowerCase(),
+          ownerAddress: account.toLowerCase(),
+          ensSubname: mintMode === "custom" ? selectedKnownCollection?.ensSubname ?? null : null,
+          standard,
+          isFactoryCreated: mintMode === "shared",
+          isUpgradeable: mintMode === "custom",
+          finalizedAt: null,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        },
+        activeListing: null
+      });
       setMintTx({ status: "success", hash: txHash, message: "Minted successfully." });
       clearMetadataDraft(account);
       resetMetadataInputs();

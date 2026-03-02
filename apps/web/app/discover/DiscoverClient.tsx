@@ -36,6 +36,10 @@ type MintFeedCache = {
   pageSize: number;
 };
 
+type LocalMintFeedCache = {
+  items: ApiMintFeedItem[];
+};
+
 const CACHE_TTL_MS = 60_000;
 const FEED_BATCH_SIZE = 50;
 
@@ -45,6 +49,10 @@ function cacheKey(marketplace: string): string {
 
 function mintFeedCacheKey(chainId: number): string {
   return `nftfactory:mint-feed-cache:v1:${chainId}`;
+}
+
+function localMintFeedKey(chainId: number): string {
+  return `nftfactory:local-mint-feed:v1:${chainId}`;
 }
 
 function readCache(marketplace: string): DiscoverCache | null {
@@ -83,6 +91,19 @@ function writeMintFeedCache(chainId: number, payload: Omit<MintFeedCache, "ts">)
   if (typeof window === "undefined") return;
   const cached: MintFeedCache = { ...payload, ts: Date.now() };
   window.sessionStorage.setItem(mintFeedCacheKey(chainId), JSON.stringify(cached));
+}
+
+function readLocalMintFeed(chainId: number): ApiMintFeedItem[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(localMintFeedKey(chainId));
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as LocalMintFeedCache | ApiMintFeedItem[];
+    if (Array.isArray(parsed)) return parsed;
+    return Array.isArray(parsed.items) ? parsed.items : [];
+  } catch {
+    return [];
+  }
 }
 
 function normalizeAddress(value: string): value is Address {
@@ -225,6 +246,7 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
 
   const [allListings, setAllListings] = useState<MarketplaceListing[]>([]);
   const [feedItems, setFeedItems] = useState<ApiMintFeedItem[]>([]);
+  const [localFeedItems, setLocalFeedItems] = useState<ApiMintFeedItem[]>([]);
   const [feedSearchIndex, setFeedSearchIndex] = useState<Record<string, string>>({});
   const [hiddenListingIds, setHiddenListingIds] = useState<number[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -394,6 +416,22 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
   }, [refreshHidden]);
 
   useEffect(() => {
+    if (mode !== "feed") return;
+
+    const syncLocalFeed = (): void => {
+      setLocalFeedItems(readLocalMintFeed(config.chainId));
+    };
+
+    syncLocalFeed();
+    window.addEventListener("storage", syncLocalFeed);
+    window.addEventListener("focus", syncLocalFeed);
+    return () => {
+      window.removeEventListener("storage", syncLocalFeed);
+      window.removeEventListener("focus", syncLocalFeed);
+    };
+  }, [config.chainId, mode]);
+
+  useEffect(() => {
     if (!reporter && address) {
       setReporter(address);
     }
@@ -419,9 +457,22 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
     return () => observer.disconnect();
   }, [canLoadMore, isLoading, isLoadingMore, loadMore, mode]);
 
+  const allFeedItems = useMemo(() => {
+    if (mode !== "feed") return feedItems;
+    const merged = [...localFeedItems, ...feedItems];
+    const deduped = new Map<string, ApiMintFeedItem>();
+    for (const item of merged) {
+      const key = `${item.collection.contractAddress.toLowerCase()}:${item.tokenId}`;
+      if (!deduped.has(key)) {
+        deduped.set(key, item);
+      }
+    }
+    return [...deduped.values()];
+  }, [feedItems, localFeedItems, mode]);
+
   useEffect(() => {
     if (mode !== "feed") return;
-    if (feedItems.length === 0) {
+    if (allFeedItems.length === 0) {
       setFeedSearchIndex({});
       return;
     }
@@ -430,7 +481,7 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
     const nextIndex: Record<string, string> = {};
 
     void Promise.all(
-      feedItems.map(async (item) => {
+      allFeedItems.map(async (item) => {
         const metadataLink = ipfsToGatewayUrl(item.metadataCid, ipfsGateway);
         if (!metadataLink) return;
         try {
@@ -458,14 +509,14 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
     return () => {
       cancelled = true;
     };
-  }, [feedItems, ipfsGateway, mode]);
+  }, [allFeedItems, ipfsGateway, mode]);
 
   const filtered = useMemo(() => {
     if (mode === "feed") {
       const normalizedSearchFilter = searchFilter.trim().toLowerCase();
       const normalizedSellerFilter = sellerFilter.trim().toLowerCase();
 
-      let rows = [...feedItems];
+      let rows = [...allFeedItems];
 
       if (sourceFilter !== "ALL") {
         rows = rows.filter((row) =>
@@ -605,7 +656,7 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
     sortBy,
     hiddenListingIds,
     mode,
-    feedItems,
+    allFeedItems,
     feedSearchIndex
   ]);
 
