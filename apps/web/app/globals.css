@@ -531,6 +531,61 @@ nav {
   background: #fff0dc;
 }
 
+.selectionPreviewCard {
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.selectionPreviewFrame,
+.selectionPreviewFallback {
+  min-height: 150px;
+  background: #f7efe3;
+  border-bottom: 1px solid #e6d7c4;
+}
+
+.selectionPreviewFrame {
+  display: grid;
+  place-items: center;
+}
+
+.selectionPreviewImage {
+  display: block;
+  width: 100%;
+  height: 150px;
+  object-fit: contain;
+  background: #f7efe3;
+}
+
+.selectionPreviewFallback {
+  display: grid;
+  gap: 4px;
+  place-items: center;
+  padding: 12px;
+  text-align: center;
+  color: #6b2d1c;
+}
+
+.selectionPreviewMeta {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px 12px;
+}
+
+.selectionPreviewSubline {
+  margin: 0;
+  color: #7f220f;
+  font-size: 0.8rem;
+}
+
+.selectionPreviewDetails {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.selectionPreviewMeta .detailItem {
+  padding: 8px 10px;
+}
+
 .profileShell {
   display: grid;
   gap: 16px;
@@ -706,6 +761,11 @@ nav {
 .compactList {
   display: grid;
   gap: 6px;
+}
+
+.compactSelectionGrid {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
 }
 
 .reportInline {

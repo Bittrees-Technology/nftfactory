@@ -125,6 +125,12 @@ type ContractOption = {
   label: string;
 };
 
+type TokenPreviewMeta = {
+  name: string | null;
+  description: string | null;
+  imageUrl: string | null;
+};
+
 function isAddress(value: string): value is `0x${string}` {
   return /^0x[a-fA-F0-9]{40}$/.test(value);
 }
@@ -148,6 +154,138 @@ function formatContractLabel(
 function toGatewayUrl(cid: string | null | undefined, gateway: string): string | null {
   if (!cid) return null;
   return `${gateway}/${cid}`;
+}
+
+function toDisplayAssetUrl(value: string | null | undefined, gateway: string): string | null {
+  if (!value) return null;
+  if (value.startsWith("ipfs://")) {
+    return `${gateway}/${value.replace(/^ipfs:\/\//, "")}`;
+  }
+  return value;
+}
+
+function InventoryTokenCard({
+  item,
+  ipfsGateway,
+  selected,
+  onSelect
+}: {
+  item: OwnedMintRow;
+  ipfsGateway: string;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  const metadataUrl = toGatewayUrl(item.metadataCid, ipfsGateway);
+  const mediaUrl = toGatewayUrl(item.mediaCid, ipfsGateway);
+  const [preview, setPreview] = useState<TokenPreviewMeta>({
+    name: null,
+    description: null,
+    imageUrl: mediaUrl
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadPreview(): Promise<void> {
+      if (!metadataUrl) {
+        setPreview({
+          name: null,
+          description: null,
+          imageUrl: mediaUrl
+        });
+        return;
+      }
+
+      try {
+        const response = await fetch(metadataUrl);
+        if (!response.ok) return;
+        const json = (await response.json()) as {
+          name?: string;
+          title?: string;
+          description?: string;
+          image?: string;
+          image_url?: string;
+          imageUrl?: string;
+        };
+        if (cancelled) return;
+        setPreview({
+          name: json.name || json.title || null,
+          description: json.description || null,
+          imageUrl:
+            mediaUrl ||
+            toDisplayAssetUrl(json.image || json.image_url || json.imageUrl || null, ipfsGateway)
+        });
+      } catch {
+        if (cancelled) return;
+        setPreview({
+          name: null,
+          description: null,
+          imageUrl: mediaUrl
+        });
+      }
+    }
+
+    void loadPreview();
+    return () => {
+      cancelled = true;
+    };
+  }, [ipfsGateway, mediaUrl, metadataUrl]);
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      className={`selectionButton selectionPreviewCard${selected ? " selectionButtonActive" : ""}`}
+      onClick={onSelect}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onSelect();
+        }
+      }}
+    >
+      {preview.imageUrl ? (
+        <div className="selectionPreviewFrame">
+          <img src={preview.imageUrl} alt={preview.name || `Token #${item.tokenId}`} className="selectionPreviewImage" loading="lazy" />
+        </div>
+      ) : (
+        <div className="selectionPreviewFallback">
+          <span className="detailLabel">NFT</span>
+          <strong>Token #{item.tokenId}</strong>
+        </div>
+      )}
+      <div className="selectionPreviewMeta">
+        <p className="nftPreviewName">{preview.name || `Token #${item.tokenId}`}</p>
+        <p className="selectionPreviewSubline">
+          {item.standard} · {item.source === "shared" ? "NFTFactory shared" : "Creator collection"}
+        </p>
+        <p className="nftPreviewDesc">{preview.description || "No description available yet."}</p>
+        <div className="detailGrid selectionPreviewDetails">
+          <div className="detailItem">
+            <span className="detailLabel">Token</span>
+            <p className="detailValue">#{item.tokenId}</p>
+          </div>
+          <div className="detailItem">
+            <span className="detailLabel">Status</span>
+            <p className="detailValue">{item.activeListingId ? `Listed #${item.activeListingId}` : "Ready to list"}</p>
+          </div>
+        </div>
+        <p className="selectionPreviewSubline">{new Date(item.mintedAt).toLocaleString()}</p>
+        <span className="row">
+          {metadataUrl ? (
+            <a href={metadataUrl} target="_blank" rel="noreferrer" className="ctaLink secondaryLink" onClick={(e) => e.stopPropagation()}>
+              Metadata
+            </a>
+          ) : null}
+          {mediaUrl ? (
+            <a href={mediaUrl} target="_blank" rel="noreferrer" className="ctaLink secondaryLink" onClick={(e) => e.stopPropagation()}>
+              Media
+            </a>
+          ) : null}
+        </span>
+      </div>
+    </div>
+  );
 }
 
 export default function ListClient() {
@@ -793,42 +931,18 @@ export default function ListClient() {
           {selectedContract ? (
             <>
               <p className="sectionLead">Selected collection: {selectedContractLabel}</p>
-              <div className="compactList">
+              <div className="compactList compactSelectionGrid">
                 {availableTokens.length > 0 ? (
                   availableTokens.map((item) => {
                     const selected = selectedTokenKeys.includes(item.key);
-                    const metadataUrl = toGatewayUrl(item.metadataCid, ipfsGateway);
-                    const mediaUrl = toGatewayUrl(item.mediaCid, ipfsGateway);
                     return (
-                      <div
+                      <InventoryTokenCard
                         key={item.key}
-                        role="button"
-                        tabIndex={0}
-                        className={`selectionButton${selected ? " selectionButtonActive" : ""}`}
-                        onClick={() => toggleSelectedToken(item.key)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            toggleSelectedToken(item.key);
-                          }
-                        }}
-                      >
-                        <strong>Token #{item.tokenId}</strong>
-                        <span>{new Date(item.mintedAt).toLocaleString()}</span>
-                        <span>{item.activeListingId ? `Already listed (#${item.activeListingId})` : "Ready to list"}</span>
-                        <span className="row">
-                          {metadataUrl ? (
-                            <a href={metadataUrl} target="_blank" rel="noreferrer" className="ctaLink secondaryLink" onClick={(e) => e.stopPropagation()}>
-                              Metadata
-                            </a>
-                          ) : null}
-                          {mediaUrl ? (
-                            <a href={mediaUrl} target="_blank" rel="noreferrer" className="ctaLink secondaryLink" onClick={(e) => e.stopPropagation()}>
-                              Media
-                            </a>
-                          ) : null}
-                        </span>
-                      </div>
+                        item={item}
+                        ipfsGateway={ipfsGateway}
+                        selected={selected}
+                        onSelect={() => toggleSelectedToken(item.key)}
+                      />
                     );
                   })
                 ) : (
