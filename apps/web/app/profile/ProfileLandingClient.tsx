@@ -272,6 +272,7 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
   const [pendingEnsRegistration, setPendingEnsRegistration] = useState<PendingEnsRegistration | null>(null);
   const [registrationCountdown, setRegistrationCountdown] = useState(0);
   const [lookupNote, setLookupNote] = useState("");
+  const [checkedIdentityReady, setCheckedIdentityReady] = useState(false);
   const [postLinkProfile, setPostLinkProfile] = useState<ApiProfileRecord | null>(null);
   const [postLinkMintCta, setPostLinkMintCta] = useState(false);
   const [setupState, setSetupState] = useState<SetupState>({ status: "idle" });
@@ -359,8 +360,10 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
   useEffect(() => {
     if (!slug || !normalizedFullName) {
       setLookupNote("");
+      setCheckedIdentityReady(false);
       return;
     }
+    setCheckedIdentityReady(false);
     let cancelled = false;
     void autoCheckIdentity(cancelled);
     return () => {
@@ -473,7 +476,10 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
 
   async function checkEnsRegistryIdentity(cancelled = false): Promise<void> {
     if (!publicClient) {
-      if (!cancelled) setLookupNote("ENS registry lookup is unavailable right now.");
+      if (!cancelled) {
+        setCheckedIdentityReady(false);
+        setLookupNote("ENS registry lookup is unavailable right now.");
+      }
       return;
     }
 
@@ -484,22 +490,26 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
       const ownerAddress = String(owner).toLowerCase();
       if (ownerAddress !== ZERO_ADDRESS.toLowerCase()) {
         if (address && ownerAddress === address.toLowerCase()) {
+          setCheckedIdentityReady(true);
           setLookupNote(
             `${normalizedFullName} exists in ENS and is owned by the connected wallet${wrapped ? " (via NameWrapper)" : ""}.`
           );
           return;
         }
+        setCheckedIdentityReady(false);
         setLookupNote(
           `${normalizedFullName} exists in ENS, but it is not owned by the connected wallet${wrapped ? " (via NameWrapper)" : ""}.`
         );
         return;
       }
 
+      setCheckedIdentityReady(false);
       setLookupNote(
         `${normalizedFullName} is not currently registered in the ENS registry. Use Register .eth for new .eth names, or create an nftfactory.eth subname here.`
       );
     } catch {
       if (!cancelled) {
+        setCheckedIdentityReady(false);
         setLookupNote("ENS registry lookup is unavailable right now.");
       }
     }
@@ -508,6 +518,7 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
   async function checkEthRegistrationAvailability(cancelled = false): Promise<void> {
     if (!publicClient || !ENS_ETH_REGISTRAR_CONTROLLER_ADDRESS) {
       if (!cancelled) {
+        setCheckedIdentityReady(false);
         setLookupNote("ENS .eth registration is not configured here yet.");
       }
       return;
@@ -516,6 +527,7 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
     const label = normalizeLabel(identityName.replace(/\.eth$/i, ""));
     if (!label || label.includes(".")) {
       if (!cancelled) {
+        setCheckedIdentityReady(false);
         setLookupNote("Enter a single .eth label like artist.eth.");
       }
       return;
@@ -531,6 +543,7 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
       });
       if (!available) {
         if (!cancelled) {
+          setCheckedIdentityReady(false);
           setLookupNote(`${label}.eth is already registered in ENS.`);
         }
         return;
@@ -543,13 +556,15 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
         args: [label, duration]
       });
       if (!cancelled) {
+        setCheckedIdentityReady(true);
         const total = BigInt(base) + BigInt(premium);
         setLookupNote(
-          `${label}.eth is available to register. Estimated ${registrationYears}-year cost: ${formatEther(total)} ETH.`
+          `${label}.eth is available to register. Estimated ${registrationYears}-year cost: ${formatEther(total)} ETH. ENS still requires commit, wait, then register.`
         );
       }
     } catch {
       if (!cancelled) {
+        setCheckedIdentityReady(false);
         setLookupNote("ENS controller lookup is unavailable right now.");
       }
     }
@@ -558,6 +573,7 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
   async function checkEthSubnameRegistrationAvailability(cancelled = false): Promise<void> {
     if (!publicClient) {
       if (!cancelled) {
+        setCheckedIdentityReady(false);
         setLookupNote("ENS registry lookup is unavailable right now.");
       }
       return;
@@ -567,6 +583,7 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
     const parts = fullName.split(".").filter(Boolean);
     if (parts.length < 3 || !fullName.endsWith(".eth")) {
       if (!cancelled) {
+        setCheckedIdentityReady(false);
         setLookupNote("Enter a full .eth subname like music.artist.eth.");
       }
       return;
@@ -576,6 +593,7 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
       const current = await resolveEnsEffectiveOwner(publicClient, fullName);
       if (cancelled) return;
       if (String(current.owner).toLowerCase() !== ZERO_ADDRESS.toLowerCase()) {
+        setCheckedIdentityReady(false);
         setLookupNote(`${fullName} is already registered in ENS. Use Link existing ENS subname instead.`);
         return;
       }
@@ -585,19 +603,23 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
       if (cancelled) return;
       const parentOwner = String(parent.owner).toLowerCase();
       if (parentOwner === ZERO_ADDRESS.toLowerCase()) {
+        setCheckedIdentityReady(false);
         setLookupNote(`${parentName} is not registered yet, so ${fullName} cannot be created under it.`);
         return;
       }
       if (!address || parentOwner !== address.toLowerCase()) {
+        setCheckedIdentityReady(false);
         setLookupNote(`${parentName} exists, but the connected wallet does not control that parent name.`);
         return;
       }
 
+      setCheckedIdentityReady(true);
       setLookupNote(
         `${fullName} can be created under ${parentName}, but external ENS subname creation is not fully wired here yet.`
       );
     } catch {
       if (!cancelled) {
+        setCheckedIdentityReady(false);
         setLookupNote("ENS registry lookup is unavailable right now.");
       }
     }
@@ -620,21 +642,25 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
       });
 
       if (exactProfileMatch || exactCollectionMatch) {
+        setCheckedIdentityReady(false);
         setLookupNote(`${requested} is already linked in NFTFactory and is not available here.`);
         return;
       }
 
       const walletCount = resolution.sellers.filter((item) => isAddress(item)).length;
       if (walletCount > 0) {
+        setCheckedIdentityReady(false);
         setLookupNote(
           `${requested} is not linked directly, but /profile/${slug} already resolves to ${walletCount} wallet${walletCount === 1 ? "" : "s"}. Choose a different label if you need a distinct profile.`
         );
         return;
       }
 
+      setCheckedIdentityReady(true);
       setLookupNote(`${requested} is currently available in NFTFactory.`);
     } catch {
       if (!cancelled) {
+        setCheckedIdentityReady(false);
         setLookupNote("Profile lookup is unavailable right now. You can still continue.");
       }
     }
@@ -825,6 +851,7 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
 
   async function checkIdentityAvailability(): Promise<void> {
     if (!slug || !normalizedFullName) {
+      setCheckedIdentityReady(false);
       setLookupNote("Enter a name first.");
       return;
     }
@@ -864,6 +891,7 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
 
     try {
       setSetupState({ status: "pending", message: "Saving creator identity..." });
+      setCheckedIdentityReady(false);
       setPostLinkProfile(null);
       setPostLinkMintCta(false);
       const response = await linkProfileIdentity({
@@ -917,6 +945,7 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
 
     try {
       setSetupState({ status: "pending", message: `Creating ${slug}.nftfactory.eth...` });
+      setCheckedIdentityReady(false);
       const txHash = await walletClient.sendTransaction({
         account: walletClient.account,
         to: config.subnameRegistrar as Address,
@@ -1019,12 +1048,32 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
           </label>
           <div className="profileIdentityControlRight">
             <span className="detailLabel">Name check</span>
-            <button type="button" onClick={() => void checkIdentityAvailability()} disabled={!slug || !normalizedFullName}>
-              {identityMode === "register-eth"
-                ? "Check availability"
-                : identityMode === "nftfactory-subname"
-                  ? "Check label"
-                  : "Check in ENS"}
+            <button
+              type="button"
+              onClick={() =>
+                void (
+                  checkedIdentityReady && identityMode !== "register-eth-subname"
+                    ? runIdentityAction()
+                    : checkIdentityAvailability()
+                )
+              }
+              disabled={!slug || !normalizedFullName}
+            >
+              {checkedIdentityReady
+                ? identityMode === "register-eth"
+                  ? "Start registration"
+                  : identityMode === "nftfactory-subname"
+                    ? "Create now"
+                    : identityMode === "register-eth-subname"
+                      ? "Check parent ownership"
+                      : "Link now"
+                : identityMode === "register-eth"
+                  ? "Check availability"
+                  : identityMode === "nftfactory-subname"
+                    ? "Check label"
+                    : identityMode === "register-eth-subname"
+                      ? "Check parent ownership"
+                      : "Check in ENS"}
             </button>
           </div>
         </div>
@@ -1062,40 +1111,24 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
           </label>
         </div>
         <p className="hint">{identityHint}</p>
-        <div className="row">
-          <button
-            type="button"
-            onClick={() => void runIdentityAction()}
-            disabled={
-              !slug ||
-              !isConnected ||
-              setupState.status === "pending" ||
-              (identityMode === "register-eth" && wrongNetwork) ||
-              (identityMode === "nftfactory-subname" && wrongNetwork)
-            }
-          >
-            {setupState.status === "pending"
-              ? "Working..."
-              : identityMode === "register-eth"
-                ? pendingEnsRegistration
-                  ? registrationCountdown > 0
-                    ? `Wait ${registrationCountdown}s`
-                    : "Send register"
-                  : "Send commit"
-                : identityMode === "register-eth-subname"
-                  ? "Check parent ownership"
-                : identityMode === "ens"
-                ? "Link existing ENS"
-                : identityMode === "external-subname"
-                  ? "Link existing ENS subname"
-                  : "Create nftfactory.eth subname"}
-          </button>
-          {identityMode === "register-eth" && pendingEnsRegistration ? (
+        {identityMode === "register-eth" && pendingEnsRegistration ? (
+          <div className="row">
+            <button
+              type="button"
+              onClick={() => void completeEthRegistration()}
+              disabled={!isConnected || setupState.status === "pending" || wrongNetwork || registrationCountdown > 0}
+            >
+              {setupState.status === "pending"
+                ? "Working..."
+                : registrationCountdown > 0
+                  ? `Wait ${registrationCountdown}s`
+                  : "Complete registration"}
+            </button>
             <button type="button" className="secondary" onClick={clearPendingEthRegistration}>
               Reset pending
             </button>
-          ) : null}
-        </div>
+          </div>
+        ) : null}
         <p className="hint">
           {derivedRouteSlug
             ? `Profile route: /profile/${derivedRouteSlug}`
