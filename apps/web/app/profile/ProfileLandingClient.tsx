@@ -22,12 +22,24 @@ import { verifyOwnedCollectionsOnChain } from "../../lib/onchainCollections";
 const SUBNAME_FEE_ETH = "0.001";
 const ENS_REGISTRY_ADDRESS = "0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e" as Address;
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+const ENS_NAME_WRAPPER_ADDRESS = /^0x[a-fA-F0-9]{40}$/.test(process.env.NEXT_PUBLIC_ENS_NAME_WRAPPER_ADDRESS || "")
+  ? (process.env.NEXT_PUBLIC_ENS_NAME_WRAPPER_ADDRESS as Address)
+  : null;
 const ENS_REGISTRY_ABI = [
   {
     type: "function",
     name: "owner",
     stateMutability: "view",
     inputs: [{ name: "node", type: "bytes32" }],
+    outputs: [{ name: "", type: "address" }]
+  }
+] as const;
+const ENS_NAME_WRAPPER_ABI = [
+  {
+    type: "function",
+    name: "ownerOf",
+    stateMutability: "view",
+    inputs: [{ name: "id", type: "uint256" }],
     outputs: [{ name: "", type: "address" }]
   }
 ] as const;
@@ -60,6 +72,39 @@ function sourceToIdentityMode(source: ApiProfileRecord["source"]): "ens" | "exte
   if (source === "ens") return "ens";
   if (source === "external-subname") return "external-subname";
   return "nftfactory-subname";
+}
+
+async function resolveEnsEffectiveOwner(
+  publicClient: NonNullable<ReturnType<typeof usePublicClient>>,
+  fullName: string
+): Promise<{ owner: string; wrapped: boolean }> {
+  const node = namehash(fullName);
+  const registryOwner = String(
+    await publicClient.readContract({
+      address: ENS_REGISTRY_ADDRESS,
+      abi: ENS_REGISTRY_ABI,
+      functionName: "owner",
+      args: [node]
+    })
+  ).toLowerCase();
+
+  if (registryOwner === ZERO_ADDRESS.toLowerCase()) {
+    return { owner: registryOwner, wrapped: false };
+  }
+
+  if (ENS_NAME_WRAPPER_ADDRESS && registryOwner === ENS_NAME_WRAPPER_ADDRESS.toLowerCase()) {
+    const wrappedOwner = String(
+      await publicClient.readContract({
+        address: ENS_NAME_WRAPPER_ADDRESS,
+        abi: ENS_NAME_WRAPPER_ABI,
+        functionName: "ownerOf",
+        args: [BigInt(node)]
+      })
+    ).toLowerCase();
+    return { owner: wrappedOwner, wrapped: true };
+  }
+
+  return { owner: registryOwner, wrapped: false };
 }
 
 function isAddress(value: string): value is `0x${string}` {
@@ -215,21 +260,20 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
     }
 
     try {
-      const owner = await publicClient.readContract({
-        address: ENS_REGISTRY_ADDRESS,
-        abi: ENS_REGISTRY_ABI,
-        functionName: "owner",
-        args: [namehash(normalizedFullName)]
-      });
+      const { owner, wrapped } = await resolveEnsEffectiveOwner(publicClient, normalizedFullName);
       if (cancelled) return;
 
       const ownerAddress = String(owner).toLowerCase();
       if (ownerAddress !== ZERO_ADDRESS.toLowerCase()) {
         if (address && ownerAddress === address.toLowerCase()) {
-          setLookupNote(`${normalizedFullName} exists in ENS and is owned by the connected wallet.`);
+          setLookupNote(
+            `${normalizedFullName} exists in ENS and is owned by the connected wallet${wrapped ? " (via NameWrapper)" : ""}.`
+          );
           return;
         }
-        setLookupNote(`${normalizedFullName} exists in ENS, but it is not owned by the connected wallet.`);
+        setLookupNote(
+          `${normalizedFullName} exists in ENS, but it is not owned by the connected wallet${wrapped ? " (via NameWrapper)" : ""}.`
+        );
         return;
       }
 
@@ -306,12 +350,10 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
 
     if (source !== "nftfactory-subname" && publicClient) {
       try {
-        const owner = await publicClient.readContract({
-          address: ENS_REGISTRY_ADDRESS,
-          abi: ENS_REGISTRY_ABI,
-          functionName: "owner",
-          args: [namehash(normalizeIdentityFullName(identityName, sourceToIdentityMode(source)))]
-        });
+        const { owner } = await resolveEnsEffectiveOwner(
+          publicClient,
+          normalizeIdentityFullName(identityName, sourceToIdentityMode(source))
+        );
         const ownerAddress = String(owner).toLowerCase();
         if (ownerAddress === ZERO_ADDRESS.toLowerCase()) {
           setSetupState({ status: "error", message: "This ENS name is not registered in the ENS registry." });
