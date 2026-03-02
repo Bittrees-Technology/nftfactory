@@ -170,6 +170,11 @@ export default function ProfileSelectorClient() {
 
   const primaryProfile = profiles[0] || null;
 
+  useEffect(() => {
+    if (!isConnected || isLoading || !primaryProfile?.slug) return;
+    router.replace(`/profile/${encodeURIComponent(primaryProfile.slug)}`);
+  }, [isConnected, isLoading, primaryProfile, router]);
+
   return (
     <section className="wizard">
       <div className="card formCard">
@@ -185,6 +190,7 @@ export default function ProfileSelectorClient() {
             <p className="hint">
               Route: <span className="mono">/profile/{primaryProfile.slug}</span>
             </p>
+            <p className="hint">Redirecting now...</p>
             <div className="row">
               <button type="button" onClick={() => openProfile(primaryProfile.slug)}>
                 Open /profile/{primaryProfile.slug}
