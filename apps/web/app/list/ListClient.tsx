@@ -22,26 +22,17 @@ const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const DEFAULT_SCAN_LIMIT = 200;
 const MAX_LISTING_DAYS = 365;
 
-const registryReadAbi = [
-  {
-    type: "function",
-    name: "creatorContracts",
-    stateMutability: "view",
-    inputs: [{ name: "creator", type: "address" }],
-    outputs: [
-      {
-        type: "tuple[]",
-        components: [
-          { name: "owner", type: "address" },
-          { name: "contractAddress", type: "address" },
-          { name: "isNftFactoryCreated", type: "bool" },
-          { name: "ensSubname", type: "string" },
-          { name: "standard", type: "string" }
-        ]
-      }
-    ]
-  }
-] as const;
+const creatorRegisteredEvent = {
+  type: "event",
+  name: "CreatorRegistered",
+  inputs: [
+    { indexed: true, name: "creator", type: "address" },
+    { indexed: true, name: "contractAddress", type: "address" },
+    { indexed: false, name: "ensSubname", type: "string" },
+    { indexed: false, name: "standard", type: "string" },
+    { indexed: false, name: "isNftFactoryCreated", type: "bool" }
+  ]
+} as const;
 
 const erc721TransferEvent = {
   type: "event",
@@ -129,14 +120,6 @@ type OwnedMintRow = {
 type ContractOption = {
   address: string;
   label: string;
-};
-
-type CreatorRecord = {
-  owner: string;
-  contractAddress: string;
-  isNftFactoryCreated: boolean;
-  ensSubname: string;
-  standard: string;
 };
 
 function isAddress(value: string): value is `0x${string}` {
@@ -417,21 +400,32 @@ export default function ListClient() {
             await hydrateErc1155Contract(config.shared1155 as Address, "shared");
           }
 
-          const chainRecords = (await publicClient.readContract({
+          const registryLogs = await publicClient.getLogs({
             address: config.registry as Address,
-            abi: registryReadAbi,
-            functionName: "creatorContracts",
-            args: [address as Address]
-          })) as CreatorRecord[];
+            event: creatorRegisteredEvent,
+            fromBlock: 0n,
+            toBlock: "latest"
+          });
+          const customCollections = new Map<string, Standard>();
 
-          for (const record of chainRecords.slice(0, 24)) {
-            if (!record.isNftFactoryCreated) continue;
-            const contractAddress = record.contractAddress;
-            if (!isAddress(contractAddress)) continue;
-            if (record.standard === "ERC1155") {
-              await hydrateErc1155Contract(contractAddress as Address, "custom");
+          for (const log of registryLogs) {
+            if (!log.args.isNftFactoryCreated) continue;
+            const contractAddress = log.args.contractAddress;
+            if (!contractAddress || !isAddress(contractAddress)) continue;
+            const contractKey = contractAddress.toLowerCase();
+            if (customCollections.has(contractKey)) continue;
+            customCollections.set(
+              contractKey,
+              log.args.standard === "ERC1155" ? "ERC1155" : "ERC721"
+            );
+          }
+
+          for (const [contractKey, collectionStandard] of [...customCollections.entries()].slice(0, 48)) {
+            const contractAddress = contractKey as Address;
+            if (collectionStandard === "ERC1155") {
+              await hydrateErc1155Contract(contractAddress, "custom");
             } else {
-              await hydrateErc721Contract(contractAddress as Address, "custom");
+              await hydrateErc721Contract(contractAddress, "custom");
             }
           }
         }
