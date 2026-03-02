@@ -156,6 +156,50 @@ const erc721ReadAbi = [
   }
 ] as const;
 
+const erc1155TransferSingleEvent = {
+  type: "event",
+  name: "TransferSingle",
+  inputs: [
+    { indexed: true, name: "operator", type: "address" },
+    { indexed: true, name: "from", type: "address" },
+    { indexed: true, name: "to", type: "address" },
+    { indexed: false, name: "id", type: "uint256" },
+    { indexed: false, name: "value", type: "uint256" }
+  ]
+} as const;
+
+const erc1155TransferBatchEvent = {
+  type: "event",
+  name: "TransferBatch",
+  inputs: [
+    { indexed: true, name: "operator", type: "address" },
+    { indexed: true, name: "from", type: "address" },
+    { indexed: true, name: "to", type: "address" },
+    { indexed: false, name: "ids", type: "uint256[]" },
+    { indexed: false, name: "values", type: "uint256[]" }
+  ]
+} as const;
+
+const erc1155ReadAbi = [
+  {
+    type: "function",
+    name: "balanceOf",
+    stateMutability: "view",
+    inputs: [
+      { name: "account", type: "address" },
+      { name: "id", type: "uint256" }
+    ],
+    outputs: [{ name: "", type: "uint256" }]
+  },
+  {
+    type: "function",
+    name: "uri",
+    stateMutability: "view",
+    inputs: [{ name: "id", type: "uint256" }],
+    outputs: [{ name: "", type: "string" }]
+  }
+] as const;
+
 function normalizeAddress(value: string): value is Address {
   return /^0x[a-fA-F0-9]{40}$/.test(value);
 }
@@ -511,81 +555,178 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
     void Promise.all(
       candidateCollections.slice(0, 4).map(async (collection) => {
         try {
-          const logs = await publicClient.getLogs({
+          const blockTimes = new Map<string, string>();
+          const getBlockTime = async (blockNumber: bigint): Promise<string> => {
+            const key = blockNumber.toString();
+            if (!blockTimes.has(key)) {
+              const block = await publicClient.getBlock({ blockNumber });
+              blockTimes.set(key, new Date(Number(block.timestamp) * 1000).toISOString());
+            }
+            return blockTimes.get(key) || new Date().toISOString();
+          };
+
+          try {
+            const logs = await publicClient.getLogs({
+              address: collection.contractAddress as Address,
+              event: erc721TransferEvent,
+              fromBlock: 0n,
+              toBlock: "latest"
+            });
+
+            const mintedLogs = logs.filter((log) => log.args.from?.toLowerCase() === zeroAddress);
+            const items = await Promise.all(
+              mintedLogs.map(async (log) => {
+                const tokenId = log.args.tokenId?.toString();
+                if (!tokenId) return null;
+
+                let ownerAddress = "";
+                let metadataCid = "";
+
+                try {
+                  ownerAddress = (await publicClient.readContract({
+                    address: collection.contractAddress as Address,
+                    abi: erc721ReadAbi,
+                    functionName: "ownerOf",
+                    args: [BigInt(tokenId)]
+                  })) as string;
+                } catch {
+                  return null;
+                }
+
+                if (ownerAddress.toLowerCase() !== address.toLowerCase()) return null;
+
+                try {
+                  metadataCid = (await publicClient.readContract({
+                    address: collection.contractAddress as Address,
+                    abi: erc721ReadAbi,
+                    functionName: "tokenURI",
+                    args: [BigInt(tokenId)]
+                  })) as string;
+                } catch {
+                  metadataCid = "";
+                }
+
+                const timestamp = await getBlockTime(log.blockNumber);
+                return {
+                  id: `hydrated:${collection.contractAddress.toLowerCase()}:${tokenId}`,
+                  tokenId,
+                  creatorAddress: address.toLowerCase(),
+                  ownerAddress: ownerAddress.toLowerCase(),
+                  metadataCid,
+                  metadataUrl: ipfsToGatewayUrl(metadataCid, ipfsGateway),
+                  mediaCid: null,
+                  mediaUrl: null,
+                  immutable: true,
+                  mintedAt: timestamp,
+                  collection: {
+                    chainId: config.chainId,
+                    contractAddress: collection.contractAddress.toLowerCase(),
+                    ownerAddress: address.toLowerCase(),
+                    ensSubname: collection.ensSubname,
+                    standard: "ERC721",
+                    isFactoryCreated: false,
+                    isUpgradeable: true,
+                    finalizedAt: null,
+                    createdAt: timestamp,
+                    updatedAt: timestamp
+                  },
+                  activeListing: null
+                } satisfies ApiMintFeedItem;
+              })
+            );
+
+            const filteredItems = items.filter(Boolean) as ApiMintFeedItem[];
+            if (filteredItems.length > 0) {
+              return filteredItems;
+            }
+          } catch {
+            // Fall through to ERC-1155 probing.
+          }
+
+          const singleLogs = await publicClient.getLogs({
             address: collection.contractAddress as Address,
-            event: erc721TransferEvent,
+            event: erc1155TransferSingleEvent,
+            fromBlock: 0n,
+            toBlock: "latest"
+          });
+          const batchLogs = await publicClient.getLogs({
+            address: collection.contractAddress as Address,
+            event: erc1155TransferBatchEvent,
             fromBlock: 0n,
             toBlock: "latest"
           });
 
-          const mintedLogs = logs.filter((log) => log.args.from?.toLowerCase() === zeroAddress);
-          const blockTimes = new Map<string, string>();
+          const mintedTokenIds = new Map<string, string>();
+          for (const log of singleLogs) {
+            if (log.args.from?.toLowerCase() === zeroAddress) {
+              mintedTokenIds.set(log.args.id?.toString() || "", await getBlockTime(log.blockNumber));
+            }
+          }
+          for (const log of batchLogs) {
+            if (log.args.from?.toLowerCase() === zeroAddress) {
+              for (const id of log.args.ids || []) {
+                mintedTokenIds.set(id.toString(), await getBlockTime(log.blockNumber));
+              }
+            }
+          }
 
           const items = await Promise.all(
-            mintedLogs.map(async (log) => {
-              const tokenId = log.args.tokenId?.toString();
-              if (!tokenId) return null;
+            [...mintedTokenIds.entries()]
+              .filter(([tokenId]) => Boolean(tokenId))
+              .map(async ([tokenId, mintedAt]) => {
+                let balance = 0n;
+                let metadataCid = "";
 
-              let ownerAddress = "";
-              let metadataCid = "";
+                try {
+                  balance = (await publicClient.readContract({
+                    address: collection.contractAddress as Address,
+                    abi: erc1155ReadAbi,
+                    functionName: "balanceOf",
+                    args: [address as Address, BigInt(tokenId)]
+                  })) as bigint;
+                } catch {
+                  return null;
+                }
 
-              try {
-                ownerAddress = (await publicClient.readContract({
-                  address: collection.contractAddress as Address,
-                  abi: erc721ReadAbi,
-                  functionName: "ownerOf",
-                  args: [BigInt(tokenId)]
-                })) as string;
-              } catch {
-                return null;
-              }
+                if (balance <= 0n) return null;
 
-              if (ownerAddress.toLowerCase() !== address.toLowerCase()) return null;
+                try {
+                  metadataCid = (await publicClient.readContract({
+                    address: collection.contractAddress as Address,
+                    abi: erc1155ReadAbi,
+                    functionName: "uri",
+                    args: [BigInt(tokenId)]
+                  })) as string;
+                } catch {
+                  metadataCid = "";
+                }
 
-              try {
-                metadataCid = (await publicClient.readContract({
-                  address: collection.contractAddress as Address,
-                  abi: erc721ReadAbi,
-                  functionName: "tokenURI",
-                  args: [BigInt(tokenId)]
-                })) as string;
-              } catch {
-                metadataCid = "";
-              }
-
-              const blockNumberKey = log.blockNumber.toString();
-              if (!blockTimes.has(blockNumberKey)) {
-                const block = await publicClient.getBlock({ blockNumber: log.blockNumber });
-                blockTimes.set(blockNumberKey, new Date(Number(block.timestamp) * 1000).toISOString());
-              }
-
-              const metadataUrl = ipfsToGatewayUrl(metadataCid, ipfsGateway);
-              return {
-                id: `hydrated:${collection.contractAddress.toLowerCase()}:${tokenId}`,
-                tokenId,
-                creatorAddress: address.toLowerCase(),
-                ownerAddress: ownerAddress.toLowerCase(),
-                metadataCid,
-                metadataUrl,
-                mediaCid: null,
-                mediaUrl: null,
-                immutable: true,
-                mintedAt: blockTimes.get(blockNumberKey) || new Date().toISOString(),
-                collection: {
-                  chainId: config.chainId,
-                  contractAddress: collection.contractAddress.toLowerCase(),
+                return {
+                  id: `hydrated:${collection.contractAddress.toLowerCase()}:${tokenId}`,
+                  tokenId,
+                  creatorAddress: address.toLowerCase(),
                   ownerAddress: address.toLowerCase(),
-                  ensSubname: collection.ensSubname,
-                  standard: "ERC721",
-                  isFactoryCreated: false,
-                  isUpgradeable: true,
-                  finalizedAt: null,
-                  createdAt: blockTimes.get(blockNumberKey) || new Date().toISOString(),
-                  updatedAt: blockTimes.get(blockNumberKey) || new Date().toISOString()
-                },
-                activeListing: null
-              } satisfies ApiMintFeedItem;
-            })
+                  metadataCid,
+                  metadataUrl: ipfsToGatewayUrl(metadataCid, ipfsGateway),
+                  mediaCid: null,
+                  mediaUrl: null,
+                  immutable: true,
+                  mintedAt,
+                  collection: {
+                    chainId: config.chainId,
+                    contractAddress: collection.contractAddress.toLowerCase(),
+                    ownerAddress: address.toLowerCase(),
+                    ensSubname: collection.ensSubname,
+                    standard: "ERC1155",
+                    isFactoryCreated: false,
+                    isUpgradeable: true,
+                    finalizedAt: null,
+                    createdAt: mintedAt,
+                    updatedAt: mintedAt
+                  },
+                  activeListing: null
+                } satisfies ApiMintFeedItem;
+              })
           );
 
           return items.filter(Boolean) as ApiMintFeedItem[];
