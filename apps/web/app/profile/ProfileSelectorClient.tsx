@@ -47,6 +47,10 @@ function dedupeProfiles(items: ApiProfileRecord[]): ApiProfileRecord[] {
   return [...map.values()].sort((a, b) => a.fullName.localeCompare(b.fullName));
 }
 
+function createPrimaryProfileKey(address: string): string {
+  return `nftfactory:primary-profile:${address.toLowerCase()}`;
+}
+
 export default function ProfileSelectorClient() {
   const router = useRouter();
   const { address, isConnected } = useAccount();
@@ -80,7 +84,20 @@ export default function ProfileSelectorClient() {
                 .filter((item): item is ApiProfileRecord => !!item)
             : [];
 
-        const nextProfiles = dedupeProfiles([...linkedProfiles, ...derivedProfiles]);
+        let cachedProfiles: ApiProfileRecord[] = [];
+        try {
+          const raw = globalThis.localStorage.getItem(createPrimaryProfileKey(address));
+          if (raw) {
+            const parsed = JSON.parse(raw) as ApiProfileRecord;
+            if (parsed?.slug && parsed?.fullName) {
+              cachedProfiles = [parsed];
+            }
+          }
+        } catch {
+          cachedProfiles = [];
+        }
+
+        const nextProfiles = dedupeProfiles([...linkedProfiles, ...derivedProfiles, ...cachedProfiles]);
         setProfiles(nextProfiles);
 
         if (nextProfiles.length === 0) {
@@ -102,6 +119,15 @@ export default function ProfileSelectorClient() {
           const reason =
             profileResult.reason instanceof Error ? profileResult.reason.message : "Direct profile lookup failed";
           setNote(`Loaded the profile from owned collection data because direct profile lookup failed (${reason}).`);
+          return;
+        }
+
+        if (
+          linkedProfiles.length === 0 &&
+          derivedProfiles.length === 0 &&
+          cachedProfiles.length > 0
+        ) {
+          setNote("Showing the most recently linked profile while the indexer catches up.");
           return;
         }
 

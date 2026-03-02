@@ -214,6 +214,10 @@ function createEnsPendingKey(address: string): string {
   return `nftfactory:ens-registration:${address.toLowerCase()}`;
 }
 
+function createPrimaryProfileKey(address: string): string {
+  return `nftfactory:primary-profile:${address.toLowerCase()}`;
+}
+
 function createCommitmentSecret(): Hex {
   const bytes = new Uint8Array(32);
   globalThis.crypto.getRandomValues(bytes);
@@ -599,6 +603,7 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
         functionName: "rentPrice",
         args: [label, duration]
       });
+      const total = BigInt(base) + BigInt(premium);
       const commitHash = await walletClient.sendTransaction({
         account: walletClient.account,
         to: ENS_ETH_REGISTRAR_CONTROLLER_ADDRESS,
@@ -626,7 +631,6 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
         globalThis.localStorage.setItem(createEnsPendingKey(address), JSON.stringify(nextPending));
       }
 
-      const total = BigInt(base) + BigInt(premium);
       setSetupState({
         status: "success",
         hash: commitHash,
@@ -690,6 +694,10 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
         ownerAddress: walletClient.account.address,
         collectionAddress: selectedCollection || undefined
       });
+      globalThis.localStorage.setItem(
+        createPrimaryProfileKey(walletClient.account.address),
+        JSON.stringify(response.profile)
+      );
 
       const nextProfiles = dedupeProfiles([...profiles, response.profile]);
       setProfiles(nextProfiles);
@@ -759,6 +767,7 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
         ownerAddress: address,
         collectionAddress: selectedCollection || undefined
       });
+      globalThis.localStorage.setItem(createPrimaryProfileKey(address), JSON.stringify(response.profile));
 
       const nextProfiles = dedupeProfiles([...profiles, response.profile]);
       setProfiles(nextProfiles);
@@ -815,6 +824,10 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
         ownerAddress: walletClient.account.address,
         collectionAddress: selectedCollection || undefined
       });
+      globalThis.localStorage.setItem(
+        createPrimaryProfileKey(walletClient.account.address),
+        JSON.stringify(response.profile)
+      );
 
       const nextProfiles = dedupeProfiles([...profiles, response.profile]);
       setProfiles(nextProfiles);
