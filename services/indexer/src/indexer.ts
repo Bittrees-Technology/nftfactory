@@ -59,6 +59,7 @@ type ProfileLinkPayload = {
   name: string;
   source: ProfileLinkSource;
   ownerAddress: string;
+  routeSlug?: string;
   collectionAddress?: string;
   tagline?: string;
   displayName?: string;
@@ -351,6 +352,17 @@ function normalizeProfileInput(name: string, source: ProfileLinkSource): { slug:
     slug,
     fullName
   };
+}
+
+function normalizeRouteSlug(value: string): string | null {
+  const raw = String(value || "").trim().toLowerCase();
+  if (!raw) return null;
+  const normalized = raw.replace(/\.+/g, ".").replace(/^\./, "").replace(/\.$/, "");
+  if (!normalized) return null;
+  const valid = normalized
+    .split(".")
+    .every((label) => Boolean(normalizeSubname(label)));
+  return valid ? normalized : null;
 }
 
 function toProfileResponse(record: ProfileRecord): ProfileRecord {
@@ -1315,6 +1327,12 @@ async function handleRequest(
       sendJson(res, 400, { error: "Invalid profile name" });
       return;
     }
+    const requestedRouteSlug = payload.routeSlug ? normalizeRouteSlug(payload.routeSlug) : null;
+    if (payload.routeSlug && !requestedRouteSlug) {
+      sendJson(res, 400, { error: "Invalid routeSlug" });
+      return;
+    }
+    const finalSlug = requestedRouteSlug || normalized.slug;
 
     const collectionAddress = String(payload.collectionAddress || "").trim().toLowerCase();
     if (collectionAddress && !isAddress(collectionAddress)) {
@@ -1324,17 +1342,31 @@ async function handleRequest(
 
     const now = new Date().toISOString();
     const current = await readProfileRecords();
-    const existing = current.find(
+    const existingIdentity = current.find(
       (item) =>
-        item.slug === normalized.slug &&
+        item.fullName === normalized.fullName &&
         item.ownerAddress === ownerAddress &&
         item.source === source &&
         item.collectionAddress === (collectionAddress || null)
     );
+    const conflicting = current.find(
+      (item) =>
+        item.slug === finalSlug &&
+        !(
+          item.fullName === normalized.fullName &&
+          item.ownerAddress === ownerAddress &&
+          item.source === source &&
+          item.collectionAddress === (collectionAddress || null)
+        )
+    );
+    if (conflicting) {
+      sendJson(res, 409, { error: `Route /profile/${finalSlug} is already in use` });
+      return;
+    }
     const next = current.filter(
       (item) =>
         !(
-          item.slug === normalized.slug &&
+          item.fullName === normalized.fullName &&
           item.ownerAddress === ownerAddress &&
           item.source === source &&
           item.collectionAddress === (collectionAddress || null)
@@ -1342,20 +1374,20 @@ async function handleRequest(
     );
 
     next.push({
-      slug: normalized.slug,
+      slug: finalSlug,
       fullName: normalized.fullName,
       source,
       ownerAddress,
       collectionAddress: collectionAddress || null,
-      tagline: sanitizeProfileText(payload.tagline, 120) || existing?.tagline || null,
-      displayName: sanitizeProfileText(payload.displayName, 80) || existing?.displayName || null,
-      bio: sanitizeProfileText(payload.bio, 1200) || existing?.bio || null,
-      bannerUrl: sanitizeProfileUrl(payload.bannerUrl) || existing?.bannerUrl || null,
-      avatarUrl: sanitizeProfileUrl(payload.avatarUrl) || existing?.avatarUrl || null,
-      featuredUrl: sanitizeProfileUrl(payload.featuredUrl) || existing?.featuredUrl || null,
-      accentColor: sanitizeAccentColor(payload.accentColor) || existing?.accentColor || null,
-      links: sanitizeProfileLinks(payload.links).length > 0 ? sanitizeProfileLinks(payload.links) : existing?.links || [],
-      createdAt: existing?.createdAt || now,
+      tagline: sanitizeProfileText(payload.tagline, 120) || existingIdentity?.tagline || null,
+      displayName: sanitizeProfileText(payload.displayName, 80) || existingIdentity?.displayName || null,
+      bio: sanitizeProfileText(payload.bio, 1200) || existingIdentity?.bio || null,
+      bannerUrl: sanitizeProfileUrl(payload.bannerUrl) || existingIdentity?.bannerUrl || null,
+      avatarUrl: sanitizeProfileUrl(payload.avatarUrl) || existingIdentity?.avatarUrl || null,
+      featuredUrl: sanitizeProfileUrl(payload.featuredUrl) || existingIdentity?.featuredUrl || null,
+      accentColor: sanitizeAccentColor(payload.accentColor) || existingIdentity?.accentColor || null,
+      links: sanitizeProfileLinks(payload.links).length > 0 ? sanitizeProfileLinks(payload.links) : existingIdentity?.links || [],
+      createdAt: existingIdentity?.createdAt || now,
       updatedAt: now
     });
     next.sort((a, b) => a.fullName.localeCompare(b.fullName));
@@ -1364,20 +1396,20 @@ async function handleRequest(
     sendJson(res, 200, {
       ok: true,
       profile: {
-        slug: normalized.slug,
+        slug: finalSlug,
         fullName: normalized.fullName,
         source,
         ownerAddress,
         collectionAddress: collectionAddress || null,
-        tagline: sanitizeProfileText(payload.tagline, 120) || existing?.tagline || null,
-        displayName: sanitizeProfileText(payload.displayName, 80) || existing?.displayName || null,
-        bio: sanitizeProfileText(payload.bio, 1200) || existing?.bio || null,
-        bannerUrl: sanitizeProfileUrl(payload.bannerUrl) || existing?.bannerUrl || null,
-        avatarUrl: sanitizeProfileUrl(payload.avatarUrl) || existing?.avatarUrl || null,
-        featuredUrl: sanitizeProfileUrl(payload.featuredUrl) || existing?.featuredUrl || null,
-        accentColor: sanitizeAccentColor(payload.accentColor) || existing?.accentColor || null,
-        links: sanitizeProfileLinks(payload.links).length > 0 ? sanitizeProfileLinks(payload.links) : existing?.links || [],
-        createdAt: existing?.createdAt || now,
+        tagline: sanitizeProfileText(payload.tagline, 120) || existingIdentity?.tagline || null,
+        displayName: sanitizeProfileText(payload.displayName, 80) || existingIdentity?.displayName || null,
+        bio: sanitizeProfileText(payload.bio, 1200) || existingIdentity?.bio || null,
+        bannerUrl: sanitizeProfileUrl(payload.bannerUrl) || existingIdentity?.bannerUrl || null,
+        avatarUrl: sanitizeProfileUrl(payload.avatarUrl) || existingIdentity?.avatarUrl || null,
+        featuredUrl: sanitizeProfileUrl(payload.featuredUrl) || existingIdentity?.featuredUrl || null,
+        accentColor: sanitizeAccentColor(payload.accentColor) || existingIdentity?.accentColor || null,
+        links: sanitizeProfileLinks(payload.links).length > 0 ? sanitizeProfileLinks(payload.links) : existingIdentity?.links || [],
+        createdAt: existingIdentity?.createdAt || now,
         updatedAt: now
       }
     });

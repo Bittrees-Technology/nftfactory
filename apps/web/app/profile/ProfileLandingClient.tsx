@@ -147,6 +147,18 @@ function normalizeSlug(value: string): string {
   return normalizeLabel(first);
 }
 
+function deriveProfileRoute(
+  value: string,
+  mode: "register-eth" | "ens" | "external-subname" | "nftfactory-subname"
+): string {
+  const fullName = normalizeIdentityFullName(value, mode);
+  if (!fullName) return "";
+  if (mode === "nftfactory-subname") {
+    return normalizeLabel(value);
+  }
+  return fullName;
+}
+
 function normalizeIdentityFullName(
   value: string,
   mode: "register-eth" | "ens" | "external-subname" | "nftfactory-subname"
@@ -241,26 +253,17 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
   const [identityMode, setIdentityMode] = useState<"register-eth" | "ens" | "external-subname" | "nftfactory-subname">(
     "ens"
   );
-  const [routeSlug, setRouteSlug] = useState(normalizeSlug(initialLabel));
-  const [routeSlugTouched, setRouteSlugTouched] = useState(Boolean(normalizeSlug(initialLabel)));
   const [registrationYears, setRegistrationYears] = useState("1");
   const [pendingEnsRegistration, setPendingEnsRegistration] = useState<PendingEnsRegistration | null>(null);
   const [registrationCountdown, setRegistrationCountdown] = useState(0);
   const [lookupNote, setLookupNote] = useState("");
-  const [routeNote, setRouteNote] = useState("");
   const [setupState, setSetupState] = useState<SetupState>({ status: "idle" });
 
   const explorerBase = getExplorerBaseUrl(config.chainId);
   const wrongNetwork = isConnected && chainId !== config.chainId;
   const slug = normalizeSlug(identityName);
-  const normalizedRouteSlug = normalizeSlug(routeSlug);
   const normalizedFullName = normalizeIdentityFullName(identityName, identityMode);
-
-  useEffect(() => {
-    if (!routeSlugTouched) {
-      setRouteSlug(slug);
-    }
-  }, [routeSlugTouched, slug]);
+  const derivedRouteSlug = deriveProfileRoute(identityName, identityMode);
 
   useEffect(() => {
     if (!address || !isConnected) {
@@ -365,8 +368,6 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
       setPendingEnsRegistration(parsed);
       setIdentityMode("register-eth");
       setIdentityName(parsed.fullName);
-      setRouteSlugTouched(false);
-      setRouteSlug(normalizeSlug(parsed.fullName));
       setRegistrationYears(String(parsed.durationYears));
     } catch {
       globalThis.localStorage.removeItem(createEnsPendingKey(address));
@@ -562,29 +563,6 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
     }
   }
 
-  async function checkRouteAvailability(): Promise<void> {
-    if (!normalizedRouteSlug) {
-      setRouteNote("Enter a route first.");
-      return;
-    }
-
-    try {
-      const resolution = await fetchProfileResolution(normalizedRouteSlug);
-      const inUse =
-        (resolution.profiles || []).length > 0 ||
-        (resolution.collections || []).length > 0 ||
-        (resolution.sellers || []).filter((item) => isAddress(item)).length > 0;
-
-      setRouteNote(
-        inUse
-          ? `/profile/${normalizedRouteSlug} is already in use.`
-          : `/profile/${normalizedRouteSlug} is available.`
-      );
-    } catch {
-      setRouteNote(`/profile/${normalizedRouteSlug} is available.`);
-    }
-  }
-
   async function autoCheckIdentity(cancelled = false): Promise<void> {
     if (identityMode === "register-eth") {
       await checkEthRegistrationAvailability(cancelled);
@@ -736,7 +714,7 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
         source: "ens",
         ownerAddress: walletClient.account.address,
         collectionAddress: selectedCollection || undefined,
-        routeSlug: normalizedRouteSlug || undefined
+        routeSlug: derivedRouteSlug || undefined
       });
       globalThis.localStorage.setItem(
         createPrimaryProfileKey(walletClient.account.address),
@@ -810,7 +788,7 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
         source,
         ownerAddress: address,
         collectionAddress: selectedCollection || undefined,
-        routeSlug: normalizedRouteSlug || undefined
+        routeSlug: derivedRouteSlug || undefined
       });
       globalThis.localStorage.setItem(createPrimaryProfileKey(address), JSON.stringify(response.profile));
 
@@ -868,7 +846,7 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
         source: "nftfactory-subname",
         ownerAddress: walletClient.account.address,
         collectionAddress: selectedCollection || undefined,
-        routeSlug: normalizedRouteSlug || undefined
+        routeSlug: derivedRouteSlug || undefined
       });
       globalThis.localStorage.setItem(
         createPrimaryProfileKey(walletClient.account.address),
@@ -896,12 +874,6 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
     setRegistrationCountdown(0);
     setSetupState({ status: "idle" });
     setLookupNote("");
-  }
-
-  function resetRouteSlugToSuggested(): void {
-    setRouteSlugTouched(false);
-    setRouteSlug(slug);
-    setRouteNote("");
   }
 
   return (
@@ -981,39 +953,6 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
             {registrationYears} year{registrationYears === "1" ? "" : "s"}.
           </p>
         ) : null}
-        <div className="profileIdentityControlRow">
-          <label className="profileIdentityControlLeft">
-            Profile route
-            <input
-              value={routeSlug}
-              onChange={(e) => {
-                setRouteSlugTouched(true);
-                setRouteSlug(e.target.value);
-              }}
-            />
-          </label>
-          <div className="profileIdentityControlCenter">
-            <span className="detailLabel">Route preview</span>
-            <p className="hint routePreview">
-              {normalizedRouteSlug ? (
-                <>
-                  /profile/<span className="mono">{normalizedRouteSlug}</span>
-                </>
-              ) : (
-                "Enter a route slug."
-              )}
-            </p>
-          </div>
-          <div className="profileIdentityControlRight">
-            <span className="detailLabel">Route check</span>
-            <button type="button" onClick={() => void checkRouteAvailability()} disabled={!normalizedRouteSlug}>
-              Check route
-            </button>
-            <button type="button" className="secondary" onClick={resetRouteSlugToSuggested} disabled={!slug}>
-              Use suggested
-            </button>
-          </div>
-        </div>
         <div className="gridMini">
           <label>
             Linked collection (optional)
@@ -1061,9 +1000,9 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
           ) : null}
         </div>
         <p className="hint">
-          {slug
-            ? `Profile route: /profile/${slug}`
-            : "The first label becomes the creator route slug. Example: artist.eth and music.artist.eth both route through /profile/artist."}
+          {derivedRouteSlug
+            ? `Profile route: /profile/${derivedRouteSlug}`
+            : "Profile routes use the full ENS name for ENS identities, and the chosen label for nftfactory subnames."}
         </p>
         {identityMode === "register-eth" && pendingEnsRegistration ? (
           <p className="hint">
@@ -1074,7 +1013,6 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
               : "You can now complete the register transaction."}
           </p>
         ) : null}
-        {routeNote ? <p className="hint">{routeNote}</p> : null}
         {lookupNote ? <p className="hint">{lookupNote}</p> : null}
         {setupState.status === "error" ? <p className="error">{setupState.message}</p> : null}
         {setupState.status === "pending" ? <p className="hint">{setupState.message}</p> : null}
