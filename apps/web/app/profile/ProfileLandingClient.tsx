@@ -1047,9 +1047,10 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
             <input value={identityName} onChange={(e) => setIdentityName(e.target.value)} />
           </label>
           <div className="profileIdentityControlRight">
-            <span className="detailLabel">Name check</span>
+            <span className="detailLabel">{checkedIdentityReady ? "Next action" : "Name check"}</span>
             <button
               type="button"
+              className={checkedIdentityReady && identityMode !== "register-eth-subname" ? "profileActionReady" : undefined}
               onClick={() =>
                 void (
                   checkedIdentityReady && identityMode !== "register-eth-subname"

@@ -946,6 +946,14 @@ button:disabled {
   gap: 8px;
 }
 
+.profileActionReady {
+  border-color: #8c2a14;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+  box-shadow: 0 8px 18px rgba(140, 42, 20, 0.16);
+}
+
 @media (max-width: 720px) {
   nav {
     align-items: flex-start;
