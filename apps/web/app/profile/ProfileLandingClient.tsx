@@ -932,10 +932,14 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
                 setIdentityMode(e.target.value as "register-eth" | "ens" | "external-subname" | "nftfactory-subname")
               }
             >
-              <option value="nftfactory-subname">Create nftfactory.eth subname</option>
-              <option value="register-eth">Register .eth</option>
-              <option value="ens">Link existing ENS</option>
-              <option value="external-subname">Link existing ENS subname</option>
+              <optgroup label="Create New">
+                <option value="nftfactory-subname">Create nftfactory.eth subname</option>
+                <option value="register-eth">Register .eth</option>
+              </optgroup>
+              <optgroup label="Link Existing">
+                <option value="ens">Link existing ENS</option>
+                <option value="external-subname">Link existing ENS subname</option>
+              </optgroup>
             </select>
           </label>
           <label className="profileIdentityControlCenter">
