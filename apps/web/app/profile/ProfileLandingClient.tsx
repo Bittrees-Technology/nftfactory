@@ -56,6 +56,12 @@ function normalizeIdentityFullName(value: string, mode: "ens" | "external-subnam
   return raw;
 }
 
+function sourceToIdentityMode(source: ApiProfileRecord["source"]): "ens" | "external-subname" | "nftfactory-subname" {
+  if (source === "ens") return "ens";
+  if (source === "external-subname") return "external-subname";
+  return "nftfactory-subname";
+}
+
 function isAddress(value: string): value is `0x${string}` {
   return /^0x[a-fA-F0-9]{40}$/.test(value);
 }
@@ -217,8 +223,13 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
       });
       if (cancelled) return;
 
-      if (String(owner).toLowerCase() !== ZERO_ADDRESS.toLowerCase()) {
-        setLookupNote(`${normalizedFullName} exists in the ENS registry and can be linked here.`);
+      const ownerAddress = String(owner).toLowerCase();
+      if (ownerAddress !== ZERO_ADDRESS.toLowerCase()) {
+        if (address && ownerAddress === address.toLowerCase()) {
+          setLookupNote(`${normalizedFullName} exists in ENS and is owned by the connected wallet.`);
+          return;
+        }
+        setLookupNote(`${normalizedFullName} exists in ENS, but it is not owned by the connected wallet.`);
         return;
       }
 
@@ -291,6 +302,29 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
     if (!address) {
       setSetupState({ status: "error", message: "Connect wallet first." });
       return;
+    }
+
+    if (source !== "nftfactory-subname" && publicClient) {
+      try {
+        const owner = await publicClient.readContract({
+          address: ENS_REGISTRY_ADDRESS,
+          abi: ENS_REGISTRY_ABI,
+          functionName: "owner",
+          args: [namehash(normalizeIdentityFullName(identityName, sourceToIdentityMode(source)))]
+        });
+        const ownerAddress = String(owner).toLowerCase();
+        if (ownerAddress === ZERO_ADDRESS.toLowerCase()) {
+          setSetupState({ status: "error", message: "This ENS name is not registered in the ENS registry." });
+          return;
+        }
+        if (ownerAddress !== address.toLowerCase()) {
+          setSetupState({ status: "error", message: "The connected wallet does not own this ENS name." });
+          return;
+        }
+      } catch {
+        setSetupState({ status: "error", message: "ENS registry lookup failed. Try again before linking this name." });
+        return;
+      }
     }
 
     try {
