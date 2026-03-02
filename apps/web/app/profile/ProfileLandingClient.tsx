@@ -262,7 +262,7 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
     return () => {
       cancelled = true;
     };
-  }, [identityMode, normalizedFullName, slug]);
+  }, [identityMode, normalizedFullName, registrationYears, slug]);
 
   const identityLabel = useMemo(() => {
     if (identityMode === "register-eth") return ".eth name";
@@ -319,7 +319,9 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
         return;
       }
 
-      setLookupNote(`${normalizedFullName} is not currently registered in the ENS registry. NFTFactory cannot mint it here.`);
+      setLookupNote(
+        `${normalizedFullName} is not currently registered in the ENS registry. Use Register .eth for new .eth names, or create an nftfactory.eth subname here.`
+      );
     } catch {
       if (!cancelled) {
         setLookupNote("ENS registry lookup is unavailable right now.");

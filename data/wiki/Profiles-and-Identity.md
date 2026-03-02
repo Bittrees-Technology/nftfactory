@@ -8,34 +8,33 @@ NFTFactory treats creator identity as a product-level layer built on top of on-c
 
 | Route | Role |
 |-------|------|
-| `/profile` | Detects profiles linked to the connected wallet; auto-redirects or shows a selector |
-| `/profile/setup` | Creator toolkit: link identity, set profile content, associate collections |
+| `/profile` | Resolves one primary profile for the connected wallet, or routes the user into setup |
+| `/profile/setup` | Identity setup: register `.eth`, link ENS, or create an `nftfactory.eth` subname |
 | `/profile/[name]` | Public creator page, resolved by slug or linked ENS name |
 
 ## Current identity modes
 
-The product currently supports three identity modes:
+The product currently supports four identity modes:
 
 | Mode | Example | Created by NFTFactory? |
 |------|---------|------------------------|
+| Fresh `.eth` registration | `artist.eth` | No — checked through the ENS controller; full commit/register flow is the next step |
 | External ENS name | `artist.eth` | No — linked in app only |
 | External ENS subname | `drops.artist.eth` | No — linked in app only |
 | `nftfactory.eth` subname | `studio.nftfactory.eth` | Yes — via `SubnameRegistrar` on-chain |
 
-Only the third mode is a native on-chain identity creation flow in the current build.
+Only the `nftfactory.eth` subname mode is a native NFTFactory on-chain identity creation flow in the current build. `.eth` registration is now checked against the ENS controller for availability and pricing, but the full commit/register write flow is still a follow-up integration.
 
 ## `/profile/setup` route
 
-This is the creator toolkit surface. It currently supports:
+This is the identity setup surface. It currently supports:
 
-- selecting an existing profile linked to the active wallet
+- checking `.eth` name availability and rent pricing through the ENS controller
 - linking an external ENS name or subname
 - creating a new `nftfactory.eth` subname
 - associating a creator collection
-- editing public-facing profile content:
-  - display name, tagline, bio
-  - avatar URL, banner URL, featured media URL
-  - accent color, external links
+
+Public-facing profile content is edited on the public profile page itself, not in setup.
 
 ## `/profile/[name]` route
 
