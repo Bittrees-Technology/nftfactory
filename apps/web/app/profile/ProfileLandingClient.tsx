@@ -492,7 +492,7 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
           <div className="profileIdentityControlRight">
             <span className="detailLabel">Name check</span>
             <button type="button" onClick={() => void checkIdentityAvailability()} disabled={!slug || !normalizedFullName}>
-              {identityMode === "nftfactory-subname" ? "Check label" : "Check in NFTFactory"}
+              {identityMode === "nftfactory-subname" ? "Check label" : "Check in ENS"}
             </button>
           </div>
         </div>
