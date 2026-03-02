@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAccount, useChainId, usePublicClient, useWalletClient } from "wagmi";
+import { formatEther } from "viem";
 import type { Address, Hex } from "viem";
 import { namehash } from "viem/ens";
 import { encodeRegisterSubname, toHexWei, truncateHash } from "../../lib/abi";
@@ -25,6 +26,11 @@ const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const ENS_NAME_WRAPPER_ADDRESS = /^0x[a-fA-F0-9]{40}$/.test(process.env.NEXT_PUBLIC_ENS_NAME_WRAPPER_ADDRESS || "")
   ? (process.env.NEXT_PUBLIC_ENS_NAME_WRAPPER_ADDRESS as Address)
   : null;
+const ENS_ETH_REGISTRAR_CONTROLLER_ADDRESS = /^0x[a-fA-F0-9]{40}$/.test(
+  process.env.NEXT_PUBLIC_ENS_ETH_REGISTRAR_CONTROLLER_ADDRESS || ""
+)
+  ? (process.env.NEXT_PUBLIC_ENS_ETH_REGISTRAR_CONTROLLER_ADDRESS as Address)
+  : null;
 const ENS_REGISTRY_ABI = [
   {
     type: "function",
@@ -41,6 +47,28 @@ const ENS_NAME_WRAPPER_ABI = [
     stateMutability: "view",
     inputs: [{ name: "id", type: "uint256" }],
     outputs: [{ name: "", type: "address" }]
+  }
+] as const;
+const ENS_ETH_REGISTRAR_CONTROLLER_ABI = [
+  {
+    type: "function",
+    name: "available",
+    stateMutability: "view",
+    inputs: [{ name: "name", type: "string" }],
+    outputs: [{ name: "", type: "bool" }]
+  },
+  {
+    type: "function",
+    name: "rentPrice",
+    stateMutability: "view",
+    inputs: [
+      { name: "name", type: "string" },
+      { name: "duration", type: "uint256" }
+    ],
+    outputs: [
+      { name: "base", type: "uint256" },
+      { name: "premium", type: "uint256" }
+    ]
   }
 ] as const;
 
@@ -61,9 +89,13 @@ function normalizeSlug(value: string): string {
   return normalizeLabel(first);
 }
 
-function normalizeIdentityFullName(value: string, mode: "ens" | "external-subname" | "nftfactory-subname"): string {
+function normalizeIdentityFullName(
+  value: string,
+  mode: "register-eth" | "ens" | "external-subname" | "nftfactory-subname"
+): string {
   const raw = String(value || "").trim().toLowerCase();
   if (!raw) return "";
+  if (mode === "register-eth") return raw.endsWith(".eth") ? raw : `${normalizeLabel(raw)}.eth`;
   if (mode === "nftfactory-subname") return `${normalizeLabel(raw)}.nftfactory.eth`;
   return raw;
 }
@@ -134,7 +166,10 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
   const [collections, setCollections] = useState<ApiOwnedCollections["collections"]>([]);
   const [verifiedCollections, setVerifiedCollections] = useState<ApiOwnedCollections["collections"]>([]);
   const [selectedCollection, setSelectedCollection] = useState("");
-  const [identityMode, setIdentityMode] = useState<"ens" | "external-subname" | "nftfactory-subname">("ens");
+  const [identityMode, setIdentityMode] = useState<"register-eth" | "ens" | "external-subname" | "nftfactory-subname">(
+    "ens"
+  );
+  const [registrationYears, setRegistrationYears] = useState("1");
   const [lookupNote, setLookupNote] = useState("");
   const [setupState, setSetupState] = useState<SetupState>({ status: "idle" });
 
@@ -230,18 +265,25 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
   }, [identityMode, normalizedFullName, slug]);
 
   const identityLabel = useMemo(() => {
+    if (identityMode === "register-eth") return ".eth name";
     if (identityMode === "ens") return "ENS name";
     if (identityMode === "external-subname") return "ENS subname";
     return "nftfactory label";
   }, [identityMode]);
 
   const identityHint = useMemo(() => {
+    if (identityMode === "register-eth")
+      return "Use a .eth name like artist.eth. NFTFactory checks ENS controller availability and price here before registration.";
     if (identityMode === "ens") return "Use a full ENS name like artist.eth. This links the name here, then routes into mint with that identity.";
     if (identityMode === "external-subname") return "Use a full subname like music.artist.eth to link an existing ENS subname.";
     return "Use a plain label like artist to create artist.nftfactory.eth on-chain.";
   }, [identityMode]);
 
   async function runIdentityAction(): Promise<void> {
+    if (identityMode === "register-eth") {
+      await prepareEthRegistration();
+      return;
+    }
     if (identityMode === "ens") {
       await linkIdentity("ens", { launchMint: true });
       return;
@@ -285,6 +327,56 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
     }
   }
 
+  async function checkEthRegistrationAvailability(cancelled = false): Promise<void> {
+    if (!publicClient || !ENS_ETH_REGISTRAR_CONTROLLER_ADDRESS) {
+      if (!cancelled) {
+        setLookupNote("ENS .eth registration is not configured here yet.");
+      }
+      return;
+    }
+
+    const label = normalizeLabel(identityName.replace(/\.eth$/i, ""));
+    if (!label || label.includes(".")) {
+      if (!cancelled) {
+        setLookupNote("Enter a single .eth label like artist.eth.");
+      }
+      return;
+    }
+
+    try {
+      const duration = BigInt(Number(registrationYears || "1") * 31536000);
+      const available = await publicClient.readContract({
+        address: ENS_ETH_REGISTRAR_CONTROLLER_ADDRESS,
+        abi: ENS_ETH_REGISTRAR_CONTROLLER_ABI,
+        functionName: "available",
+        args: [label]
+      });
+      if (!available) {
+        if (!cancelled) {
+          setLookupNote(`${label}.eth is already registered in ENS.`);
+        }
+        return;
+      }
+
+      const [base, premium] = await publicClient.readContract({
+        address: ENS_ETH_REGISTRAR_CONTROLLER_ADDRESS,
+        abi: ENS_ETH_REGISTRAR_CONTROLLER_ABI,
+        functionName: "rentPrice",
+        args: [label, duration]
+      });
+      if (!cancelled) {
+        const total = BigInt(base) + BigInt(premium);
+        setLookupNote(
+          `${label}.eth is available to register. Estimated ${registrationYears}-year cost: ${formatEther(total)} ETH.`
+        );
+      }
+    } catch {
+      if (!cancelled) {
+        setLookupNote("ENS controller lookup is unavailable right now.");
+      }
+    }
+  }
+
   async function checkNftFactoryIdentity(cancelled = false): Promise<void> {
     try {
       const resolution = await fetchProfileResolution(slug);
@@ -323,11 +415,61 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
   }
 
   async function autoCheckIdentity(cancelled = false): Promise<void> {
+    if (identityMode === "register-eth") {
+      await checkEthRegistrationAvailability(cancelled);
+      return;
+    }
     if (identityMode === "nftfactory-subname") {
       await checkNftFactoryIdentity(cancelled);
       return;
     }
     await checkEnsRegistryIdentity(cancelled);
+  }
+
+  async function prepareEthRegistration(): Promise<void> {
+    if (!publicClient || !ENS_ETH_REGISTRAR_CONTROLLER_ADDRESS) {
+      setSetupState({ status: "error", message: "ENS .eth registration is not configured here yet." });
+      return;
+    }
+
+    const label = normalizeLabel(identityName.replace(/\.eth$/i, ""));
+    if (!label || label.includes(".")) {
+      setSetupState({ status: "error", message: "Enter a single .eth label like artist.eth." });
+      return;
+    }
+
+    try {
+      const duration = BigInt(Number(registrationYears || "1") * 31536000);
+      const available = await publicClient.readContract({
+        address: ENS_ETH_REGISTRAR_CONTROLLER_ADDRESS,
+        abi: ENS_ETH_REGISTRAR_CONTROLLER_ABI,
+        functionName: "available",
+        args: [label]
+      });
+      if (!available) {
+        setSetupState({ status: "error", message: `${label}.eth is already registered in ENS.` });
+        return;
+      }
+
+      const [base, premium] = await publicClient.readContract({
+        address: ENS_ETH_REGISTRAR_CONTROLLER_ADDRESS,
+        abi: ENS_ETH_REGISTRAR_CONTROLLER_ABI,
+        functionName: "rentPrice",
+        args: [label, duration]
+      });
+      const total = BigInt(base) + BigInt(premium);
+      setSetupState({
+        status: "success",
+        message: `${label}.eth is available. Estimated ${registrationYears}-year registration cost: ${formatEther(
+          total
+        )} ETH. Full commit/register flow is the next ENS integration step.`
+      });
+    } catch (err) {
+      setSetupState({
+        status: "error",
+        message: err instanceof Error ? err.message : "ENS controller lookup failed"
+      });
+    }
   }
 
   async function checkIdentityAvailability(): Promise<void> {
@@ -477,9 +619,10 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
             <select
               value={identityMode}
               onChange={(e) =>
-                setIdentityMode(e.target.value as "ens" | "external-subname" | "nftfactory-subname")
+                setIdentityMode(e.target.value as "register-eth" | "ens" | "external-subname" | "nftfactory-subname")
               }
             >
+              <option value="register-eth">Register .eth</option>
               <option value="ens">Link ENS and continue</option>
               <option value="external-subname">Link ENS subname</option>
               <option value="nftfactory-subname">Create nftfactory subname</option>
@@ -492,10 +635,27 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
           <div className="profileIdentityControlRight">
             <span className="detailLabel">Name check</span>
             <button type="button" onClick={() => void checkIdentityAvailability()} disabled={!slug || !normalizedFullName}>
-              {identityMode === "nftfactory-subname" ? "Check label" : "Check in ENS"}
+              {identityMode === "register-eth"
+                ? "Check availability"
+                : identityMode === "nftfactory-subname"
+                  ? "Check label"
+                  : "Check in ENS"}
             </button>
           </div>
         </div>
+        {identityMode === "register-eth" ? (
+          <div className="gridMini">
+            <label>
+              Registration length
+              <select value={registrationYears} onChange={(e) => setRegistrationYears(e.target.value)}>
+                <option value="1">1 year</option>
+                <option value="2">2 years</option>
+                <option value="3">3 years</option>
+                <option value="5">5 years</option>
+              </select>
+            </label>
+          </div>
+        ) : null}
         <div className="gridMini">
           <label>
             Linked collection (optional)
@@ -523,7 +683,9 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
           >
             {setupState.status === "pending"
               ? "Working..."
-              : identityMode === "ens"
+              : identityMode === "register-eth"
+                ? "Prepare .eth registration"
+                : identityMode === "ens"
                 ? "Link ENS and continue"
                 : identityMode === "external-subname"
                   ? "Link ENS subname"
