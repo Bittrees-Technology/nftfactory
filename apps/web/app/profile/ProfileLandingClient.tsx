@@ -147,6 +147,21 @@ function normalizeSlug(value: string): string {
   return normalizeLabel(first);
 }
 
+function deriveEnsRouteFromName(fullName: string): string {
+  const normalized = String(fullName || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\.+/g, ".")
+    .replace(/^\./, "")
+    .replace(/\.$/, "");
+  if (!normalized) return "";
+  const parts = normalized.split(".").filter(Boolean);
+  if (parts.length === 0) return "";
+  const valid = parts.every((part) => Boolean(normalizeLabel(part)));
+  if (!valid) return "";
+  return parts.reverse().join(".");
+}
+
 function deriveProfileRoute(
   value: string,
   mode: "register-eth" | "ens" | "external-subname" | "nftfactory-subname"
@@ -156,7 +171,7 @@ function deriveProfileRoute(
   if (mode === "nftfactory-subname") {
     return normalizeLabel(value);
   }
-  return fullName;
+  return deriveEnsRouteFromName(fullName);
 }
 
 function normalizeIdentityFullName(
@@ -550,7 +565,7 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
       const walletCount = resolution.sellers.filter((item) => isAddress(item)).length;
       if (walletCount > 0) {
         setLookupNote(
-          `${requested} is not linked directly, but /profile/${slug} already resolves to ${walletCount} wallet${walletCount === 1 ? "" : "s"}. Choose a different first label if you need a distinct profile.`
+          `${requested} is not linked directly, but /profile/${slug} already resolves to ${walletCount} wallet${walletCount === 1 ? "" : "s"}. Choose a different label if you need a distinct profile.`
         );
         return;
       }
@@ -1002,7 +1017,7 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
         <p className="hint">
           {derivedRouteSlug
             ? `Profile route: /profile/${derivedRouteSlug}`
-            : "Profile routes use the full ENS name for ENS identities, and the chosen label for nftfactory subnames."}
+            : "Profile routes use reversed ENS labels like /profile/eth.artist, and plain labels for nftfactory subnames."}
         </p>
         {identityMode === "register-eth" && pendingEnsRegistration ? (
           <p className="hint">

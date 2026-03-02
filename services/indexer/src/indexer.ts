@@ -344,9 +344,10 @@ function normalizeProfileInput(name: string, source: ProfileLinkSource): { slug:
   }
 
   const fullName = raw.replace(/\.+/g, ".").replace(/^\./, "").replace(/\.$/, "");
-  const firstLabel = fullName.split(".")[0] || "";
-  const slug = normalizeSubname(firstLabel);
-  if (!fullName || !slug) return null;
+  const labels = fullName.split(".").filter(Boolean);
+  const valid = labels.length > 0 && labels.every((label) => Boolean(normalizeSubname(label)));
+  if (!fullName || !valid) return null;
+  const slug = labels.slice().reverse().join(".");
 
   return {
     slug,
