@@ -266,7 +266,7 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
   const [verifiedCollections, setVerifiedCollections] = useState<ApiOwnedCollections["collections"]>([]);
   const [selectedCollection, setSelectedCollection] = useState("");
   const [identityMode, setIdentityMode] = useState<"register-eth" | "ens" | "external-subname" | "nftfactory-subname">(
-    "ens"
+    "nftfactory-subname"
   );
   const [registrationYears, setRegistrationYears] = useState("1");
   const [pendingEnsRegistration, setPendingEnsRegistration] = useState<PendingEnsRegistration | null>(null);
@@ -411,17 +411,18 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
 
   const identityLabel = useMemo(() => {
     if (identityMode === "register-eth") return ".eth name";
-    if (identityMode === "ens") return "ENS name";
-    if (identityMode === "external-subname") return "ENS subname";
+    if (identityMode === "ens") return "Existing ENS name";
+    if (identityMode === "external-subname") return "Existing ENS subname";
     return "nftfactory label";
   }, [identityMode]);
 
   const identityHint = useMemo(() => {
     if (identityMode === "register-eth")
       return "Use a .eth name like artist.eth. NFTFactory checks ENS controller availability and price here before registration.";
-    if (identityMode === "ens") return "Use a full ENS name like artist.eth. This links the name here, then routes into mint with that identity.";
-    if (identityMode === "external-subname") return "Use a full subname like music.artist.eth to link an existing ENS subname.";
-    return "Use a plain label like artist to create artist.nftfactory.eth on-chain.";
+    if (identityMode === "ens") return "Use a full ENS name like artist.eth to link an existing ENS identity you already own.";
+    if (identityMode === "external-subname")
+      return "Use a full subname like music.artist.eth to link an existing ENS subname you already control.";
+    return "Use a plain label like artist to create artist.nftfactory.eth on-chain. This is the default identity path here.";
   }, [identityMode]);
 
   const ensRegistrationStep = useMemo(() => {
@@ -913,9 +914,8 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
       <div className="card formCard">
         <h3>Creator Identity</h3>
         <p className="sectionLead">
-          Enter the identity you want to use. Use a full ENS name like <span className="mono">artist.eth</span>,
-          an external subdomain like <span className="mono">music.artist.eth</span>, or a plain label like{" "}
-          <span className="mono">artist</span> for nftfactory.eth.
+          Choose how this creator identity should be created or linked. By default, NFTFactory creates a{" "}
+          <span className="mono">nftfactory.eth</span> subname unless you choose an ENS option instead.
         </p>
         {isConnected && profiles.length > 0 ? (
           <p className="hint">
@@ -932,10 +932,10 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
                 setIdentityMode(e.target.value as "register-eth" | "ens" | "external-subname" | "nftfactory-subname")
               }
             >
+              <option value="nftfactory-subname">Create nftfactory.eth subname</option>
               <option value="register-eth">Register .eth</option>
-              <option value="ens">Link ENS and continue</option>
-              <option value="external-subname">Link ENS subname</option>
-              <option value="nftfactory-subname">Create nftfactory subname</option>
+              <option value="ens">Link existing ENS</option>
+              <option value="external-subname">Link existing ENS subname</option>
             </select>
           </label>
           <label className="profileIdentityControlCenter">
@@ -1008,10 +1008,10 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
                     : "Send register"
                   : "Send commit"
                 : identityMode === "ens"
-                ? "Link ENS and continue"
+                ? "Link existing ENS"
                 : identityMode === "external-subname"
-                  ? "Link ENS subname"
-                  : "Create nftfactory subname"}
+                  ? "Link existing ENS subname"
+                  : "Create nftfactory.eth subname"}
           </button>
           {identityMode === "register-eth" && pendingEnsRegistration ? (
             <button type="button" className="secondary" onClick={clearPendingEthRegistration}>
