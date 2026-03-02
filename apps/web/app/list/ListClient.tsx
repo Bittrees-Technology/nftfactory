@@ -173,7 +173,6 @@ export default function ListClient() {
   const publicClient = usePublicClient();
 
   const [standard, setStandard] = useState<Standard>("ERC721");
-  const [contractScope, setContractScope] = useState<"all" | "shared" | "custom">("all");
   const [selectedContract, setSelectedContract] = useState("");
   const [selectedTokenKeys, setSelectedTokenKeys] = useState<string[]>([]);
   const [erc1155Amount, setErc1155Amount] = useState("1");
@@ -266,13 +265,6 @@ export default function ListClient() {
         }
 
         if (publicClient) {
-          const chainRecords = (await publicClient.readContract({
-            address: config.registry as Address,
-            abi: registryReadAbi,
-            functionName: "creatorContracts",
-            args: [address as Address]
-          })) as CreatorRecord[];
-
           const blockTimes = new Map<string, string>();
           const getBlockTime = async (blockNumber: bigint): Promise<string> => {
             const key = blockNumber.toString();
@@ -283,64 +275,66 @@ export default function ListClient() {
             return blockTimes.get(key) || new Date().toISOString();
           };
 
-          for (const record of chainRecords.slice(0, 12)) {
-            if (!record.isNftFactoryCreated) continue;
-            const contractAddress = record.contractAddress;
-            if (!isAddress(contractAddress)) continue;
-            const collectionStandard = record.standard === "ERC1155" ? "ERC1155" : "ERC721";
+          const hydrateErc721Contract = async (
+            contractAddress: Address,
+            rowSource: "shared" | "custom"
+          ): Promise<void> => {
+            try {
+              const logs = await publicClient.getLogs({
+                address: contractAddress,
+                event: erc721TransferEvent,
+                fromBlock: 0n,
+                toBlock: "latest"
+              });
+              const mintedLogs = logs.filter((log) => log.args.from?.toLowerCase() === zeroAddress);
+              for (const log of mintedLogs) {
+                const tokenId = log.args.tokenId?.toString();
+                if (!tokenId) continue;
+                try {
+                  const owner = (await publicClient.readContract({
+                    address: contractAddress,
+                    abi: erc721ReadAbi,
+                    functionName: "ownerOf",
+                    args: [BigInt(tokenId)]
+                  })) as string;
+                  if (owner.toLowerCase() !== normalizedOwner) continue;
 
-            if (collectionStandard === "ERC721") {
-              try {
-                const logs = await publicClient.getLogs({
-                  address: contractAddress,
-                  event: erc721TransferEvent,
-                  fromBlock: 0n,
-                  toBlock: "latest"
-                });
-                const mintedLogs = logs.filter((log) => log.args.from?.toLowerCase() === zeroAddress);
-                for (const log of mintedLogs) {
-                  const tokenId = log.args.tokenId?.toString();
-                  if (!tokenId) continue;
+                  let metadataCid = "";
                   try {
-                    const owner = (await publicClient.readContract({
+                    metadataCid = (await publicClient.readContract({
                       address: contractAddress,
                       abi: erc721ReadAbi,
-                      functionName: "ownerOf",
+                      functionName: "tokenURI",
                       args: [BigInt(tokenId)]
                     })) as string;
-                    if (owner.toLowerCase() !== normalizedOwner) continue;
-                    let metadataCid = "";
-                    try {
-                      metadataCid = (await publicClient.readContract({
-                        address: contractAddress,
-                        abi: erc721ReadAbi,
-                        functionName: "tokenURI",
-                        args: [BigInt(tokenId)]
-                      })) as string;
-                    } catch {
-                      metadataCid = "";
-                    }
-                    addRow({
-                      key: `${contractAddress.toLowerCase()}:${tokenId}`,
-                      tokenId,
-                      contractAddress,
-                      standard: "ERC721",
-                      source: "custom",
-                      metadataCid,
-                      mediaCid: null,
-                      mintedAt: await getBlockTime(log.blockNumber),
-                      activeListingId: null
-                    });
                   } catch {
-                    // Skip tokens that do not resolve cleanly.
+                    metadataCid = "";
                   }
-                }
-              } catch {
-                // Skip hydration errors for this collection.
-              }
-              continue;
-            }
 
+                  addRow({
+                    key: `${contractAddress.toLowerCase()}:${tokenId}`,
+                    tokenId,
+                    contractAddress,
+                    standard: "ERC721",
+                    source: rowSource,
+                    metadataCid,
+                    mediaCid: null,
+                    mintedAt: await getBlockTime(log.blockNumber),
+                    activeListingId: null
+                  });
+                } catch {
+                  // Skip tokens that do not resolve cleanly.
+                }
+              }
+            } catch {
+              // Skip hydration errors for this collection.
+            }
+          };
+
+          const hydrateErc1155Contract = async (
+            contractAddress: Address,
+            rowSource: "shared" | "custom"
+          ): Promise<void> => {
             try {
               const singleLogs = await publicClient.getLogs({
                 address: contractAddress,
@@ -401,7 +395,7 @@ export default function ListClient() {
                     tokenId,
                     contractAddress,
                     standard: "ERC1155",
-                    source: "custom",
+                    source: rowSource,
                     metadataCid,
                     mediaCid: null,
                     mintedAt,
@@ -413,6 +407,31 @@ export default function ListClient() {
               }
             } catch {
               // Skip hydration errors for this collection.
+            }
+          };
+
+          if (isAddress(config.shared721)) {
+            await hydrateErc721Contract(config.shared721 as Address, "shared");
+          }
+          if (isAddress(config.shared1155)) {
+            await hydrateErc1155Contract(config.shared1155 as Address, "shared");
+          }
+
+          const chainRecords = (await publicClient.readContract({
+            address: config.registry as Address,
+            abi: registryReadAbi,
+            functionName: "creatorContracts",
+            args: [address as Address]
+          })) as CreatorRecord[];
+
+          for (const record of chainRecords.slice(0, 24)) {
+            if (!record.isNftFactoryCreated) continue;
+            const contractAddress = record.contractAddress;
+            if (!isAddress(contractAddress)) continue;
+            if (record.standard === "ERC1155") {
+              await hydrateErc1155Contract(contractAddress as Address, "custom");
+            } else {
+              await hydrateErc721Contract(contractAddress as Address, "custom");
             }
           }
         }
@@ -435,13 +454,8 @@ export default function ListClient() {
   }, [address, config.registry, config.shared721, config.shared1155, publicClient]);
 
   const filteredOwnedMints = useMemo(
-    () =>
-      ownedMints.filter((item) => {
-        if (item.standard !== standard) return false;
-        if (contractScope === "all") return true;
-        return item.source === contractScope;
-      }),
-    [contractScope, ownedMints, standard]
+    () => ownedMints.filter((item) => item.standard === standard),
+    [ownedMints, standard]
   );
 
   const contractOptions = useMemo<ContractOption[]>(() => {
@@ -471,7 +485,7 @@ export default function ListClient() {
 
   useEffect(() => {
     setSelectedTokenKeys([]);
-  }, [selectedContract, contractScope, standard]);
+  }, [selectedContract, standard]);
 
   const availableTokens = useMemo(
     () =>
@@ -712,21 +726,13 @@ export default function ListClient() {
       <form className="wizard" onSubmit={onSubmit}>
         <div className="card formCard">
           <h3>1. Select NFT</h3>
-          <p className="hint">Choose a standard, filter the contracts if needed, then select one or more NFTs already in this wallet.</p>
+          <p className="hint">Choose a standard, then select one or more NFTs already in this wallet from NFTFactory shared or custom collections.</p>
           <div className="gridMini">
             <label>
               Standard
               <select value={standard} onChange={(e) => setStandard(e.target.value as Standard)}>
                 <option value="ERC721">ERC721</option>
                 <option value="ERC1155">ERC1155</option>
-              </select>
-            </label>
-            <label>
-              Contracts
-              <select value={contractScope} onChange={(e) => setContractScope(e.target.value as "all" | "shared" | "custom")}>
-                <option value="all">All NFTFactory contracts</option>
-                <option value="shared">Shared contract</option>
-                <option value="custom">Custom collection</option>
               </select>
             </label>
           </div>
