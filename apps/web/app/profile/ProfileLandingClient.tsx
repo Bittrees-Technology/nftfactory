@@ -272,6 +272,8 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
   const [pendingEnsRegistration, setPendingEnsRegistration] = useState<PendingEnsRegistration | null>(null);
   const [registrationCountdown, setRegistrationCountdown] = useState(0);
   const [lookupNote, setLookupNote] = useState("");
+  const [postLinkProfile, setPostLinkProfile] = useState<ApiProfileRecord | null>(null);
+  const [postLinkMintCta, setPostLinkMintCta] = useState(false);
   const [setupState, setSetupState] = useState<SetupState>({ status: "idle" });
 
   const explorerBase = getExplorerBaseUrl(config.chainId);
@@ -798,6 +800,8 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
 
     try {
       setSetupState({ status: "pending", message: "Saving creator identity..." });
+      setPostLinkProfile(null);
+      setPostLinkMintCta(false);
       const response = await linkProfileIdentity({
         name: identityName,
         source,
@@ -809,6 +813,8 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
 
       const nextProfiles = dedupeProfiles([...profiles, response.profile]);
       setProfiles(nextProfiles);
+      setPostLinkProfile(response.profile);
+      setPostLinkMintCta(Boolean(options?.launchMint));
       setSetupState({
         status: "success",
         message:
@@ -818,7 +824,6 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
       });
 
       if (options?.launchMint) {
-        router.push(`/mint?view=mint&collection=shared&profile=${encodeURIComponent(response.profile.fullName)}`);
         return;
       }
 
@@ -1032,18 +1037,35 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
         {setupState.status === "error" ? <p className="error">{setupState.message}</p> : null}
         {setupState.status === "pending" ? <p className="hint">{setupState.message}</p> : null}
         {setupState.status === "success" ? (
-          <p className="success">
-            {setupState.message}{" "}
-            {setupState.hash ? (
-              explorerBase ? (
-                <a href={`${explorerBase}/tx/${setupState.hash}`} target="_blank" rel="noreferrer">
-                  {truncateHash(setupState.hash)}
-                </a>
-              ) : (
-                <span className="mono">{truncateHash(setupState.hash)}</span>
-              )
+          <>
+            <p className="success">
+              {setupState.message}{" "}
+              {setupState.hash ? (
+                explorerBase ? (
+                  <a href={`${explorerBase}/tx/${setupState.hash}`} target="_blank" rel="noreferrer">
+                    {truncateHash(setupState.hash)}
+                  </a>
+                ) : (
+                  <span className="mono">{truncateHash(setupState.hash)}</span>
+                )
+              ) : null}
+            </p>
+            {postLinkProfile ? (
+              <div className="row">
+                <Link href={`/profile/${encodeURIComponent(postLinkProfile.slug)}`} className="ctaLink">
+                  Open profile
+                </Link>
+                {postLinkMintCta ? (
+                  <Link
+                    href={`/mint?view=mint&collection=shared&profile=${encodeURIComponent(postLinkProfile.fullName)}`}
+                    className="ctaLink"
+                  >
+                    Continue to mint
+                  </Link>
+                ) : null}
+              </div>
             ) : null}
-          </p>
+          </>
         ) : null}
       </div>
     </section>
