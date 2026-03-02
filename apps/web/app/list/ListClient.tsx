@@ -11,7 +11,7 @@ import {
 } from "../../lib/abi";
 import { getContractsConfig } from "../../lib/contracts";
 import { fetchActiveListingsBatch } from "../../lib/marketplace";
-import { fetchMintFeed, logPaymentTokenUsage } from "../../lib/indexerApi";
+import { fetchMintFeed, fetchOwnerSummary, logPaymentTokenUsage } from "../../lib/indexerApi";
 import { getAppChain } from "../../lib/chains";
 import TxStatus, { type TxState } from "./TxStatus";
 import ListingCard, { type ListingRow } from "./ListingCard";
@@ -112,19 +112,28 @@ export default function ListClient() {
       setMintInventoryLoading(true);
       setMintInventoryError("");
       try {
-        const response = await fetchMintFeed(0, 100);
+        const [response, ownerSummary] = await Promise.all([
+          fetchMintFeed(0, 100),
+          fetchOwnerSummary(address)
+        ]);
         if (cancelled) return;
         const normalizedOwner = address.toLowerCase();
-        const next = response.items
+        const byKey = new Map<string, OwnedMintRow>();
+
+        const addRow = (row: OwnedMintRow): void => {
+          byKey.set(row.key, row);
+        };
+
+        response.items
           .filter((item) => item.ownerAddress.toLowerCase() === normalizedOwner)
-          .map((item) => {
+          .forEach((item) => {
             const contractAddress = item.collection.contractAddress;
             const normalizedContract = contractAddress.toLowerCase();
             const rowSource =
               normalizedContract === config.shared721.toLowerCase() || normalizedContract === config.shared1155.toLowerCase()
                 ? "shared"
                 : "custom";
-            return {
+            addRow({
               key: `${contractAddress.toLowerCase()}:${item.tokenId}`,
               tokenId: item.tokenId,
               contractAddress,
@@ -134,9 +143,29 @@ export default function ListClient() {
               mediaCid: item.mediaCid,
               mintedAt: item.mintedAt,
               activeListingId: item.activeListing?.listingId || null
-            } satisfies OwnedMintRow;
+            });
           });
-        setOwnedMints(next);
+
+        for (const collection of ownerSummary.factoryCollections || []) {
+          const contractAddress = collection.contractAddress;
+          const collectionStandard = collection.standard === "ERC1155" ? "ERC1155" : "ERC721";
+          for (const token of collection.tokens || []) {
+            if (token.ownerAddress.toLowerCase() !== normalizedOwner) continue;
+            addRow({
+              key: `${contractAddress.toLowerCase()}:${token.tokenId}`,
+              tokenId: token.tokenId,
+              contractAddress,
+              standard: collectionStandard,
+              source: "custom",
+              metadataCid: token.metadataCid,
+              mediaCid: token.mediaCid,
+              mintedAt: token.mintedAt,
+              activeListingId: token.activeListing?.listingId || null
+            });
+          }
+        }
+
+        setOwnedMints([...byKey.values()]);
       } catch (err) {
         if (!cancelled) {
           setOwnedMints([]);
