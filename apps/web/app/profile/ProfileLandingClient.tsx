@@ -931,6 +931,12 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
           </div>
         ) : null}
         {identityMode === "register-eth" ? <p className="hint">Registration step: {ensRegistrationStep}</p> : null}
+        {identityMode === "register-eth" && slug ? (
+          <p className="hint">
+            Target: <span className="mono">{normalizeLabel(identityName.replace(/\.eth$/i, ""))}.eth</span> for{" "}
+            {registrationYears} year{registrationYears === "1" ? "" : "s"}.
+          </p>
+        ) : null}
         <div className="gridMini">
           <label>
             Linked collection (optional)
@@ -963,8 +969,8 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
                 ? pendingEnsRegistration
                   ? registrationCountdown > 0
                     ? `Wait ${registrationCountdown}s`
-                    : "Complete .eth registration"
-                  : "Begin .eth registration"
+                    : "Send register"
+                  : "Send commit"
                 : identityMode === "ens"
                 ? "Link ENS and continue"
                 : identityMode === "external-subname"
