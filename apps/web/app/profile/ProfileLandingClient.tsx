@@ -410,19 +410,19 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
   }, [pendingEnsRegistration]);
 
   const identityLabel = useMemo(() => {
-    if (identityMode === "register-eth") return ".eth name";
+    if (identityMode === "register-eth") return "New .eth label";
     if (identityMode === "ens") return "Existing ENS name";
     if (identityMode === "external-subname") return "Existing ENS subname";
-    return "nftfactory label";
+    return "New nftfactory label";
   }, [identityMode]);
 
   const identityHint = useMemo(() => {
     if (identityMode === "register-eth")
-      return "Use a .eth name like artist.eth. NFTFactory checks ENS controller availability and price here before registration.";
-    if (identityMode === "ens") return "Use a full ENS name like artist.eth to link an existing ENS identity you already own.";
+      return "Enter a fresh .eth label like artist. NFTFactory will check ENS availability, then run the commit/register flow.";
+    if (identityMode === "ens") return "Enter a full ENS name like artist.eth to link an existing ENS identity you already own.";
     if (identityMode === "external-subname")
-      return "Use a full subname like music.artist.eth to link an existing ENS subname you already control.";
-    return "Use a plain label like artist to create artist.nftfactory.eth on-chain. This is the default identity path here.";
+      return "Enter a full subname like music.artist.eth to link an existing ENS subname you already control.";
+    return "Enter a plain label like artist to create artist.nftfactory.eth on-chain. This is the default identity path here.";
   }, [identityMode]);
 
   const ensRegistrationStep = useMemo(() => {
