@@ -18,18 +18,19 @@ The product currently supports four identity modes:
 
 | Mode | Example | Created by NFTFactory? |
 |------|---------|------------------------|
-| Fresh `.eth` registration | `artist.eth` | No — checked through the ENS controller; full commit/register flow is the next step |
+| Fresh `.eth` registration | `artist.eth` | No — executed through the ENS controller, then linked into NFTFactory |
 | External ENS name | `artist.eth` | No — linked in app only |
 | External ENS subname | `drops.artist.eth` | No — linked in app only |
 | `nftfactory.eth` subname | `studio.nftfactory.eth` | Yes — via `SubnameRegistrar` on-chain |
 
-Only the `nftfactory.eth` subname mode is a native NFTFactory on-chain identity creation flow in the current build. `.eth` registration is now checked against the ENS controller for availability and pricing, but the full commit/register write flow is still a follow-up integration.
+Only the `nftfactory.eth` subname mode is a native NFTFactory-owned identity creation flow in the current build. Fresh `.eth` registration now uses the ENS controller commit/register flow directly when the controller address is configured, then links the resulting ENS name into NFTFactory after registration succeeds.
 
 ## `/profile/setup` route
 
 This is the identity setup surface. It currently supports:
 
 - checking `.eth` name availability and rent pricing through the ENS controller
+- running the ENS controller commit/register flow for fresh `.eth` names
 - linking an external ENS name or subname
 - creating a new `nftfactory.eth` subname
 - associating a creator collection

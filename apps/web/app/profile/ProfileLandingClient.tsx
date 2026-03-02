@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAccount, useChainId, usePublicClient, useWalletClient } from "wagmi";
-import { formatEther } from "viem";
+import { encodeFunctionData, formatEther } from "viem";
 import type { Address, Hex } from "viem";
 import { namehash } from "viem/ens";
 import { encodeRegisterSubname, toHexWei, truncateHash } from "../../lib/abi";
@@ -69,8 +69,65 @@ const ENS_ETH_REGISTRAR_CONTROLLER_ABI = [
       { name: "base", type: "uint256" },
       { name: "premium", type: "uint256" }
     ]
+  },
+  {
+    type: "function",
+    name: "minCommitmentAge",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }]
+  },
+  {
+    type: "function",
+    name: "makeCommitment",
+    stateMutability: "view",
+    inputs: [
+      { name: "name", type: "string" },
+      { name: "owner", type: "address" },
+      { name: "duration", type: "uint256" },
+      { name: "secret", type: "bytes32" },
+      { name: "resolver", type: "address" },
+      { name: "data", type: "bytes[]" },
+      { name: "reverseRecord", type: "bool" },
+      { name: "ownerControlledFuses", type: "uint16" }
+    ],
+    outputs: [{ name: "", type: "bytes32" }]
+  },
+  {
+    type: "function",
+    name: "commit",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "commitment", type: "bytes32" }],
+    outputs: []
+  },
+  {
+    type: "function",
+    name: "register",
+    stateMutability: "payable",
+    inputs: [
+      { name: "name", type: "string" },
+      { name: "owner", type: "address" },
+      { name: "duration", type: "uint256" },
+      { name: "secret", type: "bytes32" },
+      { name: "resolver", type: "address" },
+      { name: "data", type: "bytes[]" },
+      { name: "reverseRecord", type: "bool" },
+      { name: "ownerControlledFuses", type: "uint16" }
+    ],
+    outputs: []
   }
 ] as const;
+
+type PendingEnsRegistration = {
+  fullName: string;
+  label: string;
+  durationYears: number;
+  durationSeconds: string;
+  secret: Hex;
+  committedAt: number;
+  minCommitmentAge: number;
+  commitHash?: Hex;
+};
 
 type SetupState = {
   status: "idle" | "pending" | "success" | "error";
@@ -152,6 +209,16 @@ function dedupeProfiles(items: ApiProfileRecord[]): ApiProfileRecord[] {
   return Array.from(map.values()).sort((a, b) => a.fullName.localeCompare(b.fullName));
 }
 
+function createEnsPendingKey(address: string): string {
+  return `nftfactory:ens-registration:${address.toLowerCase()}`;
+}
+
+function createCommitmentSecret(): Hex {
+  const bytes = new Uint8Array(32);
+  globalThis.crypto.getRandomValues(bytes);
+  return `0x${Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("")}` as Hex;
+}
+
 export default function ProfileLandingClient({ initialLabel = "" }: { initialLabel?: string }) {
   const router = useRouter();
   const config = useMemo(() => getContractsConfig(), []);
@@ -170,6 +237,8 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
     "ens"
   );
   const [registrationYears, setRegistrationYears] = useState("1");
+  const [pendingEnsRegistration, setPendingEnsRegistration] = useState<PendingEnsRegistration | null>(null);
+  const [registrationCountdown, setRegistrationCountdown] = useState(0);
   const [lookupNote, setLookupNote] = useState("");
   const [setupState, setSetupState] = useState<SetupState>({ status: "idle" });
 
@@ -264,6 +333,47 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
     };
   }, [identityMode, normalizedFullName, registrationYears, slug]);
 
+  useEffect(() => {
+    if (!address) {
+      setPendingEnsRegistration(null);
+      return;
+    }
+
+    const raw = globalThis.localStorage.getItem(createEnsPendingKey(address));
+    if (!raw) {
+      setPendingEnsRegistration(null);
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(raw) as PendingEnsRegistration;
+      setPendingEnsRegistration(parsed);
+      setIdentityMode("register-eth");
+      setIdentityName(parsed.fullName);
+      setRegistrationYears(String(parsed.durationYears));
+    } catch {
+      globalThis.localStorage.removeItem(createEnsPendingKey(address));
+      setPendingEnsRegistration(null);
+    }
+  }, [address]);
+
+  useEffect(() => {
+    if (!pendingEnsRegistration) {
+      setRegistrationCountdown(0);
+      return;
+    }
+
+    const updateCountdown = () => {
+      const unlockAt = pendingEnsRegistration.committedAt + pendingEnsRegistration.minCommitmentAge * 1000;
+      const remaining = Math.max(0, Math.ceil((unlockAt - Date.now()) / 1000));
+      setRegistrationCountdown(remaining);
+    };
+
+    updateCountdown();
+    const timer = globalThis.setInterval(updateCountdown, 1000);
+    return () => globalThis.clearInterval(timer);
+  }, [pendingEnsRegistration]);
+
   const identityLabel = useMemo(() => {
     if (identityMode === "register-eth") return ".eth name";
     if (identityMode === "ens") return "ENS name";
@@ -281,7 +391,18 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
 
   async function runIdentityAction(): Promise<void> {
     if (identityMode === "register-eth") {
-      await prepareEthRegistration();
+      if (pendingEnsRegistration) {
+        if (registrationCountdown > 0) {
+          setSetupState({
+            status: "error",
+            message: `Wait ${registrationCountdown}s before completing ENS registration.`
+          });
+          return;
+        }
+        await completeEthRegistration();
+        return;
+      }
+      await beginEthRegistration();
       return;
     }
     if (identityMode === "ens") {
@@ -428,9 +549,13 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
     await checkEnsRegistryIdentity(cancelled);
   }
 
-  async function prepareEthRegistration(): Promise<void> {
-    if (!publicClient || !ENS_ETH_REGISTRAR_CONTROLLER_ADDRESS) {
+  async function beginEthRegistration(): Promise<void> {
+    if (!publicClient || !walletClient?.account || !ENS_ETH_REGISTRAR_CONTROLLER_ADDRESS) {
       setSetupState({ status: "error", message: "ENS .eth registration is not configured here yet." });
+      return;
+    }
+    if (wrongNetwork) {
+      setSetupState({ status: "error", message: `Select ${appChain.name} in the wallet menu first.` });
       return;
     }
 
@@ -442,6 +567,13 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
 
     try {
       const duration = BigInt(Number(registrationYears || "1") * 31536000);
+      const minCommitmentAge = Number(
+        await publicClient.readContract({
+          address: ENS_ETH_REGISTRAR_CONTROLLER_ADDRESS,
+          abi: ENS_ETH_REGISTRAR_CONTROLLER_ABI,
+          functionName: "minCommitmentAge"
+        })
+      );
       const available = await publicClient.readContract({
         address: ENS_ETH_REGISTRAR_CONTROLLER_ADDRESS,
         abi: ENS_ETH_REGISTRAR_CONTROLLER_ABI,
@@ -453,23 +585,127 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
         return;
       }
 
+      const secret = createCommitmentSecret();
+      const commitment = await publicClient.readContract({
+        address: ENS_ETH_REGISTRAR_CONTROLLER_ADDRESS,
+        abi: ENS_ETH_REGISTRAR_CONTROLLER_ABI,
+        functionName: "makeCommitment",
+        args: [label, walletClient.account.address, duration, secret, ZERO_ADDRESS as Address, [], false, 0]
+      });
       const [base, premium] = await publicClient.readContract({
         address: ENS_ETH_REGISTRAR_CONTROLLER_ADDRESS,
         abi: ENS_ETH_REGISTRAR_CONTROLLER_ABI,
         functionName: "rentPrice",
         args: [label, duration]
       });
+      const commitHash = await walletClient.sendTransaction({
+        account: walletClient.account,
+        to: ENS_ETH_REGISTRAR_CONTROLLER_ADDRESS,
+        data: encodeFunctionData({
+          abi: ENS_ETH_REGISTRAR_CONTROLLER_ABI,
+          functionName: "commit",
+          args: [commitment]
+        })
+      });
+      await publicClient.waitForTransactionReceipt({ hash: commitHash });
+
+      const nextPending: PendingEnsRegistration = {
+        fullName: `${label}.eth`,
+        label,
+        durationYears: Number(registrationYears || "1"),
+        durationSeconds: duration.toString(),
+        secret,
+        committedAt: Date.now(),
+        minCommitmentAge,
+        commitHash
+      };
+      setPendingEnsRegistration(nextPending);
+      if (address) {
+        globalThis.localStorage.setItem(createEnsPendingKey(address), JSON.stringify(nextPending));
+      }
+
       const total = BigInt(base) + BigInt(premium);
       setSetupState({
         status: "success",
-        message: `${label}.eth is available. Estimated ${registrationYears}-year registration cost: ${formatEther(
+        hash: commitHash,
+        message: `${label}.eth commit sent. Wait ${minCommitmentAge}s, then complete registration. Estimated ${registrationYears}-year cost: ${formatEther(
           total
-        )} ETH. Full commit/register flow is the next ENS integration step.`
+        )} ETH.`
       });
     } catch (err) {
       setSetupState({
         status: "error",
         message: err instanceof Error ? err.message : "ENS controller lookup failed"
+      });
+    }
+  }
+
+  async function completeEthRegistration(): Promise<void> {
+    if (!publicClient || !walletClient?.account || !ENS_ETH_REGISTRAR_CONTROLLER_ADDRESS || !pendingEnsRegistration) {
+      setSetupState({ status: "error", message: "ENS registration is not ready to complete." });
+      return;
+    }
+    if (wrongNetwork) {
+      setSetupState({ status: "error", message: `Select ${appChain.name} in the wallet menu first.` });
+      return;
+    }
+
+    try {
+      const duration = BigInt(pendingEnsRegistration.durationSeconds);
+      const [base, premium] = await publicClient.readContract({
+        address: ENS_ETH_REGISTRAR_CONTROLLER_ADDRESS,
+        abi: ENS_ETH_REGISTRAR_CONTROLLER_ABI,
+        functionName: "rentPrice",
+        args: [pendingEnsRegistration.label, duration]
+      });
+      const total = BigInt(base) + BigInt(premium);
+      const value = (total * 110n) / 100n;
+
+      const registerHash = await walletClient.sendTransaction({
+        account: walletClient.account,
+        to: ENS_ETH_REGISTRAR_CONTROLLER_ADDRESS,
+        data: encodeFunctionData({
+          abi: ENS_ETH_REGISTRAR_CONTROLLER_ABI,
+          functionName: "register",
+          args: [
+            pendingEnsRegistration.label,
+            walletClient.account.address,
+            duration,
+            pendingEnsRegistration.secret,
+            ZERO_ADDRESS as Address,
+            [],
+            false,
+            0
+          ]
+        }),
+        value
+      });
+      await publicClient.waitForTransactionReceipt({ hash: registerHash });
+
+      const response = await linkProfileIdentity({
+        name: pendingEnsRegistration.fullName,
+        source: "ens",
+        ownerAddress: walletClient.account.address,
+        collectionAddress: selectedCollection || undefined
+      });
+
+      const nextProfiles = dedupeProfiles([...profiles, response.profile]);
+      setProfiles(nextProfiles);
+      setIdentityName(response.profile.fullName);
+      setPendingEnsRegistration(null);
+      if (address) {
+        globalThis.localStorage.removeItem(createEnsPendingKey(address));
+      }
+      setSetupState({
+        status: "success",
+        hash: registerHash,
+        message: `${response.profile.fullName} registered in ENS and linked.`
+      });
+      router.push(`/mint?view=mint&collection=shared&profile=${encodeURIComponent(response.profile.fullName)}`);
+    } catch (err) {
+      setSetupState({
+        status: "error",
+        message: err instanceof Error ? err.message : "Failed to complete ENS registration"
       });
     }
   }
@@ -680,13 +916,18 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
               !slug ||
               !isConnected ||
               setupState.status === "pending" ||
+              (identityMode === "register-eth" && wrongNetwork) ||
               (identityMode === "nftfactory-subname" && wrongNetwork)
             }
           >
             {setupState.status === "pending"
               ? "Working..."
               : identityMode === "register-eth"
-                ? "Prepare .eth registration"
+                ? pendingEnsRegistration
+                  ? registrationCountdown > 0
+                    ? `Wait ${registrationCountdown}s`
+                    : "Complete .eth registration"
+                  : "Begin .eth registration"
                 : identityMode === "ens"
                 ? "Link ENS and continue"
                 : identityMode === "external-subname"
@@ -699,6 +940,14 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
             ? `Profile route: /profile/${slug}`
             : "The first label becomes the creator route slug. Example: artist.eth and music.artist.eth both route through /profile/artist."}
         </p>
+        {identityMode === "register-eth" && pendingEnsRegistration ? (
+          <p className="hint">
+            Pending registration: {pendingEnsRegistration.fullName}.{" "}
+            {registrationCountdown > 0
+              ? `You can complete registration in ${registrationCountdown}s.`
+              : "You can now complete the register transaction."}
+          </p>
+        ) : null}
         {lookupNote ? <p className="hint">{lookupNote}</p> : null}
         {setupState.status === "error" ? <p className="error">{setupState.message}</p> : null}
         {setupState.status === "pending" ? <p className="hint">{setupState.message}</p> : null}
