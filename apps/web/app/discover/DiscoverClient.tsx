@@ -92,6 +92,74 @@ type DiscoverClientProps = {
   mode?: "feed" | "mod";
 };
 
+function ipfsToGatewayUrl(value: string | null | undefined, gateway: string): string | null {
+  if (!value) return null;
+  if (value.startsWith("ipfs://")) {
+    return `${gateway}/${value.replace("ipfs://", "")}`;
+  }
+  return value;
+}
+
+function looksLikeImageUrl(value: string | null | undefined): boolean {
+  if (!value) return false;
+  return /\.(png|jpe?g|gif|webp|avif|svg)(\?.*)?$/i.test(value) || value.includes("/ipfs/");
+}
+
+function FeedCardMedia({
+  metadataLink,
+  mediaLink,
+  ipfsGateway,
+  title
+}: {
+  metadataLink: string | null;
+  mediaLink: string | null;
+  ipfsGateway: string;
+  title: string;
+}) {
+  const [resolvedImage, setResolvedImage] = useState<string | null>(looksLikeImageUrl(mediaLink) ? mediaLink : null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (looksLikeImageUrl(mediaLink)) {
+      setResolvedImage(mediaLink);
+      return;
+    }
+
+    if (!metadataLink) {
+      setResolvedImage(null);
+      return;
+    }
+
+    setResolvedImage(null);
+    void fetch(metadataLink)
+      .then(async (response) => {
+        if (!response.ok) throw new Error("metadata unavailable");
+        return response.json() as Promise<{ image?: string; image_url?: string }>;
+      })
+      .then((payload) => {
+        if (cancelled) return;
+        const next = ipfsToGatewayUrl(payload.image || payload.image_url || null, ipfsGateway);
+        setResolvedImage(looksLikeImageUrl(next) ? next : null);
+      })
+      .catch(() => {
+        if (!cancelled) setResolvedImage(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [ipfsGateway, mediaLink, metadataLink]);
+
+  if (!resolvedImage) return null;
+
+  return (
+    <div className="feedCardMedia">
+      <img src={resolvedImage} alt={title} className="feedCardImage" />
+    </div>
+  );
+}
+
 export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
   const config = useMemo(() => getContractsConfig(), []);
   const ipfsGateway = useMemo(
@@ -596,12 +664,8 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
               const mintedAtLabel = Number.isNaN(new Date(row.mintedAt).getTime())
                 ? row.mintedAt
                 : new Date(row.mintedAt).toLocaleString();
-              const metadataLink = row.metadataCid.startsWith("ipfs://")
-                ? `${ipfsGateway}/${row.metadataCid.replace("ipfs://", "")}`
-                : null;
-              const mediaLink = row.mediaCid?.startsWith("ipfs://")
-                ? `${ipfsGateway}/${row.mediaCid.replace("ipfs://", "")}`
-                : null;
+              const metadataLink = ipfsToGatewayUrl(row.metadataCid, ipfsGateway);
+              const mediaLink = ipfsToGatewayUrl(row.mediaCid, ipfsGateway);
               const ensLabel = row.collection.ensSubname?.trim()
                 ? row.collection.ensSubname.includes(".")
                   ? row.collection.ensSubname
@@ -626,6 +690,12 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
 
               return (
                 <article key={row.id} className="feedCard">
+                  <FeedCardMedia
+                    metadataLink={metadataLink}
+                    mediaLink={mediaLink}
+                    ipfsGateway={ipfsGateway}
+                    title={`${ensLabel || "NFTFactory mint"} #${row.tokenId}`}
+                  />
                   <div className="feedCardTop">
                     <p className="feedCardStamp">{mintedAtLabel}</p>
                     <span className="feedCardStatus">{priceLabel}</span>

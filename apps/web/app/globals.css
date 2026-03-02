@@ -336,6 +336,21 @@ nav {
   box-shadow: 0 10px 28px rgba(111, 63, 24, 0.06);
 }
 
+.feedCardMedia {
+  overflow: hidden;
+  border: 1px solid #e6d7c4;
+  border-radius: 14px;
+  background: #f7efe3;
+}
+
+.feedCardImage {
+  display: block;
+  width: 100%;
+  height: 240px;
+  object-fit: cover;
+  background: #f7efe3;
+}
+
 .feedCardTop {
   display: flex;
   justify-content: space-between;
