@@ -242,6 +242,7 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
     "ens"
   );
   const [routeSlug, setRouteSlug] = useState(normalizeSlug(initialLabel));
+  const [routeSlugTouched, setRouteSlugTouched] = useState(Boolean(normalizeSlug(initialLabel)));
   const [registrationYears, setRegistrationYears] = useState("1");
   const [pendingEnsRegistration, setPendingEnsRegistration] = useState<PendingEnsRegistration | null>(null);
   const [registrationCountdown, setRegistrationCountdown] = useState(0);
@@ -256,8 +257,10 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
   const normalizedFullName = normalizeIdentityFullName(identityName, identityMode);
 
   useEffect(() => {
-    setRouteSlug((current) => current || slug);
-  }, [slug]);
+    if (!routeSlugTouched) {
+      setRouteSlug(slug);
+    }
+  }, [routeSlugTouched, slug]);
 
   useEffect(() => {
     if (!address || !isConnected) {
@@ -362,6 +365,7 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
       setPendingEnsRegistration(parsed);
       setIdentityMode("register-eth");
       setIdentityName(parsed.fullName);
+      setRouteSlugTouched(false);
       setRouteSlug(normalizeSlug(parsed.fullName));
       setRegistrationYears(String(parsed.durationYears));
     } catch {
@@ -974,7 +978,13 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
         <div className="profileIdentityControlRow">
           <label className="profileIdentityControlLeft">
             Profile route
-            <input value={routeSlug} onChange={(e) => setRouteSlug(e.target.value)} />
+            <input
+              value={routeSlug}
+              onChange={(e) => {
+                setRouteSlugTouched(true);
+                setRouteSlug(e.target.value);
+              }}
+            />
           </label>
           <div className="profileIdentityControlCenter">
             <span className="detailLabel">Route preview</span>
