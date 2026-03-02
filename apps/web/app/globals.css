@@ -566,6 +566,16 @@ nav {
   color: #6b2d1c;
 }
 
+.selectionPreviewAudio {
+  padding: 12px;
+  align-content: center;
+}
+
+.selectionPreviewAudioPlayer {
+  width: 100%;
+  max-width: 220px;
+}
+
 .selectionPreviewMeta {
   display: grid;
   gap: 8px;

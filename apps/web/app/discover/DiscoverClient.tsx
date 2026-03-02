@@ -20,6 +20,7 @@ type SortBy = "newest" | "priceAsc" | "priceDesc";
 type SourceFilter = "ALL" | "SHARED" | "CUSTOM";
 type StandardFilter = "ALL" | "ERC721" | "ERC1155";
 type ListedFilter = "ALL" | "LISTED" | "UNLISTED";
+type MediaFilter = "ALL" | "IMAGE" | "AUDIO" | "METADATA";
 
 type DiscoverCache = {
   ts: number;
@@ -356,6 +357,7 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
   const [localFeedItems, setLocalFeedItems] = useState<ApiMintFeedItem[]>([]);
   const [hydratedFeedItems, setHydratedFeedItems] = useState<ApiMintFeedItem[]>([]);
   const [feedSearchIndex, setFeedSearchIndex] = useState<Record<string, string>>({});
+  const [feedMediaTypeIndex, setFeedMediaTypeIndex] = useState<Record<string, MediaFilter>>({});
   const [hiddenListingIds, setHiddenListingIds] = useState<number[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -368,6 +370,7 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>("ALL");
   const [standardFilter, setStandardFilter] = useState<StandardFilter>("ALL");
   const [listedFilter, setListedFilter] = useState<ListedFilter>("ALL");
+  const [mediaFilter, setMediaFilter] = useState<MediaFilter>("ALL");
   const [searchFilter, setSearchFilter] = useState("");
   const [sellerFilter, setSellerFilter] = useState("");
   const [sortBy, setSortBy] = useState<SortBy>("newest");
@@ -381,6 +384,7 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
     sourceFilter !== "ALL" ||
     standardFilter !== "ALL" ||
     listedFilter !== "ALL" ||
+    (mode === "feed" && mediaFilter !== "ALL") ||
     searchFilter.trim() ||
     sellerFilter.trim() ||
     sortBy !== "newest"
@@ -847,11 +851,13 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
     if (mode !== "feed") return;
     if (allFeedItems.length === 0) {
       setFeedSearchIndex({});
+      setFeedMediaTypeIndex({});
       return;
     }
 
     let cancelled = false;
     const nextIndex: Record<string, string> = {};
+    const nextMediaTypes: Record<string, MediaFilter> = {};
 
     void Promise.all(
       allFeedItems.map(async (item) => {
@@ -864,18 +870,41 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
             name?: string;
             title?: string;
             description?: string;
+            image?: string;
+            image_url?: string;
+            imageUrl?: string;
+            animation_url?: string;
+            animationUrl?: string;
           };
           nextIndex[item.id] = [payload.name, payload.title, payload.description]
             .filter(Boolean)
             .join(" ")
             .toLowerCase();
+          const directMediaLink = ipfsToGatewayUrl(item.mediaCid, ipfsGateway);
+          const imageUrl = ipfsToGatewayUrl(payload.image || payload.image_url || payload.imageUrl || null, ipfsGateway);
+          const audioUrl = ipfsToGatewayUrl(payload.animation_url || payload.animationUrl || null, ipfsGateway);
+          if (looksLikeImageUrl(directMediaLink) || looksLikeImageUrl(imageUrl)) {
+            nextMediaTypes[item.id] = "IMAGE";
+          } else if (looksLikeAudioUrl(directMediaLink) || looksLikeAudioUrl(audioUrl)) {
+            nextMediaTypes[item.id] = "AUDIO";
+          } else {
+            nextMediaTypes[item.id] = "METADATA";
+          }
         } catch {
-          // leave blank when metadata is unavailable
+          const directMediaLink = ipfsToGatewayUrl(item.mediaCid, ipfsGateway);
+          if (looksLikeImageUrl(directMediaLink)) {
+            nextMediaTypes[item.id] = "IMAGE";
+          } else if (looksLikeAudioUrl(directMediaLink)) {
+            nextMediaTypes[item.id] = "AUDIO";
+          } else {
+            nextMediaTypes[item.id] = "METADATA";
+          }
         }
       })
     ).then(() => {
       if (!cancelled) {
         setFeedSearchIndex(nextIndex);
+        setFeedMediaTypeIndex(nextMediaTypes);
       }
     });
 
@@ -903,6 +932,10 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
 
       if (listedFilter !== "ALL") {
         rows = rows.filter((row) => (listedFilter === "LISTED" ? Boolean(row.activeListing) : !row.activeListing));
+      }
+
+      if (mediaFilter !== "ALL") {
+        rows = rows.filter((row) => (feedMediaTypeIndex[row.id] || "METADATA") === mediaFilter);
       }
 
       if (normalizedSearchFilter) {
@@ -1024,12 +1057,14 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
     sourceFilter,
     standardFilter,
     listedFilter,
+    mediaFilter,
     searchFilter,
     sellerFilter,
     sortBy,
     hiddenListingIds,
     mode,
     allFeedItems,
+    feedMediaTypeIndex,
     feedSearchIndex
   ]);
 
@@ -1061,6 +1096,7 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
     setSourceFilter("ALL");
     setStandardFilter("ALL");
     setListedFilter("ALL");
+    setMediaFilter("ALL");
     setSearchFilter("");
     setSellerFilter("");
     setSortBy("newest");
@@ -1118,6 +1154,18 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
                   <option value="UNLISTED">Unlisted only</option>
                 </select>
               </label>
+
+              {mode === "feed" ? (
+                <label>
+                  Media
+                  <select value={mediaFilter} onChange={(e) => setMediaFilter(e.target.value as MediaFilter)}>
+                    <option value="ALL">All media</option>
+                    <option value="IMAGE">Image</option>
+                    <option value="AUDIO">Audio</option>
+                    <option value="METADATA">Metadata only</option>
+                  </select>
+                </label>
+              ) : null}
 
               <label>
                 Search

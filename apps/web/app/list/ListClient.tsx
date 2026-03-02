@@ -129,6 +129,7 @@ type TokenPreviewMeta = {
   name: string | null;
   description: string | null;
   imageUrl: string | null;
+  audioUrl: string | null;
 };
 
 function isAddress(value: string): value is `0x${string}` {
@@ -164,6 +165,16 @@ function toDisplayAssetUrl(value: string | null | undefined, gateway: string): s
   return value;
 }
 
+function looksLikeImageUrl(value: string | null | undefined): boolean {
+  if (!value) return false;
+  return /\.(png|jpe?g|gif|webp|avif|svg)(\?.*)?$/i.test(value) || value.includes("/ipfs/");
+}
+
+function looksLikeAudioUrl(value: string | null | undefined): boolean {
+  if (!value) return false;
+  return /\.(mp3|wav|ogg|m4a|aac|flac)(\?.*)?$/i.test(value);
+}
+
 function InventoryTokenCard({
   item,
   ipfsGateway,
@@ -180,7 +191,8 @@ function InventoryTokenCard({
   const [preview, setPreview] = useState<TokenPreviewMeta>({
     name: null,
     description: null,
-    imageUrl: mediaUrl
+    imageUrl: looksLikeImageUrl(mediaUrl) ? mediaUrl : null,
+    audioUrl: looksLikeAudioUrl(mediaUrl) ? mediaUrl : null
   });
 
   useEffect(() => {
@@ -191,7 +203,8 @@ function InventoryTokenCard({
         setPreview({
           name: null,
           description: null,
-          imageUrl: mediaUrl
+          imageUrl: looksLikeImageUrl(mediaUrl) ? mediaUrl : null,
+          audioUrl: looksLikeAudioUrl(mediaUrl) ? mediaUrl : null
         });
         return;
       }
@@ -212,15 +225,19 @@ function InventoryTokenCard({
           name: json.name || json.title || null,
           description: json.description || null,
           imageUrl:
-            mediaUrl ||
-            toDisplayAssetUrl(json.image || json.image_url || json.imageUrl || null, ipfsGateway)
+            (looksLikeImageUrl(mediaUrl) ? mediaUrl : null) ||
+            toDisplayAssetUrl(json.image || json.image_url || json.imageUrl || null, ipfsGateway),
+          audioUrl:
+            (looksLikeAudioUrl(mediaUrl) ? mediaUrl : null) ||
+            toDisplayAssetUrl((json as { animation_url?: string; animationUrl?: string }).animation_url || (json as { animation_url?: string; animationUrl?: string }).animationUrl || null, ipfsGateway)
         });
       } catch {
         if (cancelled) return;
         setPreview({
           name: null,
           description: null,
-          imageUrl: mediaUrl
+          imageUrl: looksLikeImageUrl(mediaUrl) ? mediaUrl : null,
+          audioUrl: looksLikeAudioUrl(mediaUrl) ? mediaUrl : null
         });
       }
     }
@@ -247,6 +264,14 @@ function InventoryTokenCard({
       {preview.imageUrl ? (
         <div className="selectionPreviewFrame">
           <img src={preview.imageUrl} alt={preview.name || `Token #${item.tokenId}`} className="selectionPreviewImage" loading="lazy" />
+        </div>
+      ) : preview.audioUrl ? (
+        <div className="selectionPreviewFallback selectionPreviewAudio">
+          <span className="detailLabel">Audio</span>
+          <strong>{preview.name || `Token #${item.tokenId}`}</strong>
+          <audio controls src={preview.audioUrl} className="selectionPreviewAudioPlayer" onClick={(e) => e.stopPropagation()}>
+            Your browser does not support audio playback.
+          </audio>
         </div>
       ) : (
         <div className="selectionPreviewFallback">
