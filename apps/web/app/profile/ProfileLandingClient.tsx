@@ -126,6 +126,7 @@ type PendingEnsRegistration = {
   secret: Hex;
   committedAt: number;
   minCommitmentAge: number;
+  estimatedCostWei: string;
   commitHash?: Hex;
 };
 
@@ -617,6 +618,7 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
         secret,
         committedAt: Date.now(),
         minCommitmentAge,
+        estimatedCostWei: total.toString(),
         commitHash
       };
       setPendingEnsRegistration(nextPending);
@@ -961,6 +963,7 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
         {identityMode === "register-eth" && pendingEnsRegistration ? (
           <p className="hint">
             Pending commit: {pendingEnsRegistration.fullName}.{" "}
+            Estimated register cost: {formatEther(BigInt(pendingEnsRegistration.estimatedCostWei))} ETH.{" "}
             {registrationCountdown > 0
               ? `You can complete registration in ${registrationCountdown}s.`
               : "You can now complete the register transaction."}
