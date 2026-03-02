@@ -62,6 +62,7 @@ For practical purposes, that means:
 |------|---------|
 | [Operations and Governance](./Operations-and-Governance.md) | Ownership boundaries, admin controls, moderator model, and production control surfaces |
 | [Deployment and Launch](./Deployment-and-Launch.md) | Local, Sepolia, and mainnet rollout guidance |
+| [Infrastructure and Operations](./Infrastructure-and-Operations.md) | Practical service layout, env wiring, process control, and troubleshooting |
 | [UI Lockdown Plan](./UI-Lockdown-Plan.md) | Page-by-page criteria for locking Mint, List, Discover, and Profile before mainnet |
 | [Upgrade Runbook](./Upgrade-Runbook.md) | UUPS upgrade path for creator collections |
 | [Testing and Validation](./Testing-and-Validation.md) | Recommended verification flow for contracts, app wiring, and release readiness |
