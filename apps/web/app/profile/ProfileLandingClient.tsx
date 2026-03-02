@@ -261,6 +261,7 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
   const { data: walletClient } = useWalletClient();
 
   const [identityName, setIdentityName] = useState(initialLabel);
+  const [subnameParent, setSubnameParent] = useState("");
   const [profiles, setProfiles] = useState<ApiProfileRecord[]>([]);
   const [collections, setCollections] = useState<ApiOwnedCollections["collections"]>([]);
   const [verifiedCollections, setVerifiedCollections] = useState<ApiOwnedCollections["collections"]>([]);
@@ -280,8 +281,12 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
   const explorerBase = getExplorerBaseUrl(config.chainId);
   const wrongNetwork = isConnected && chainId !== config.chainId;
   const slug = normalizeSlug(identityName);
-  const normalizedFullName = normalizeIdentityFullName(identityName, identityMode);
-  const derivedRouteSlug = deriveProfileRoute(identityName, identityMode);
+  const effectiveIdentityValue =
+    identityMode === "register-eth-subname"
+      ? [normalizeLabel(identityName), String(subnameParent || "").trim().toLowerCase()].filter(Boolean).join(".")
+      : identityName;
+  const normalizedFullName = normalizeIdentityFullName(effectiveIdentityValue, identityMode);
+  const derivedRouteSlug = deriveProfileRoute(effectiveIdentityValue, identityMode);
 
   useEffect(() => {
     if (!address || !isConnected) {
@@ -414,7 +419,7 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
 
   const identityLabel = useMemo(() => {
     if (identityMode === "register-eth") return "New .eth label";
-    if (identityMode === "register-eth-subname") return "New .eth subname";
+    if (identityMode === "register-eth-subname") return "New subname label";
     if (identityMode === "ens") return "Existing ENS name";
     if (identityMode === "external-subname") return "Existing ENS subname";
     return "New nftfactory label";
@@ -424,7 +429,7 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
     if (identityMode === "register-eth")
       return "Enter a fresh .eth label like artist. NFTFactory will check ENS availability, then run the commit/register flow.";
     if (identityMode === "register-eth-subname")
-      return "Enter a full subname like music.artist.eth. NFTFactory checks parent ownership here; external ENS subname creation is not fully wired yet.";
+      return "Enter a new subname label and the existing parent .eth name you already control. NFTFactory checks parent ownership here; external ENS subname creation is not fully wired yet.";
     if (identityMode === "ens") return "Enter a full ENS name like artist.eth to link an existing ENS identity you already own.";
     if (identityMode === "external-subname")
       return "Enter a full subname like music.artist.eth to link an existing ENS subname you already control.";
@@ -1044,7 +1049,20 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
           </label>
           <label className="profileIdentityControlCenter">
             {identityLabel}
-            <input value={identityName} onChange={(e) => setIdentityName(e.target.value)} />
+            {identityMode === "register-eth-subname" ? (
+              <div className="gridMini">
+                <label>
+                  New subname label
+                  <input value={identityName} onChange={(e) => setIdentityName(e.target.value)} />
+                </label>
+                <label>
+                  Parent .eth name
+                  <input value={subnameParent} onChange={(e) => setSubnameParent(e.target.value)} />
+                </label>
+              </div>
+            ) : (
+              <input value={identityName} onChange={(e) => setIdentityName(e.target.value)} />
+            )}
           </label>
           <div className="profileIdentityControlRight">
             <span className="detailLabel">{checkedIdentityReady ? "Next action" : "Name check"}</span>
