@@ -264,6 +264,32 @@ function createCommitmentSecret(): Hex {
   return `0x${Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("")}` as Hex;
 }
 
+function createLocalProfileRecord(args: {
+  fullName: string;
+  slug: string;
+  source: ApiProfileRecord["source"];
+  ownerAddress: string;
+  collectionAddress?: string;
+}): ApiProfileRecord {
+  return {
+    slug: args.slug,
+    fullName: args.fullName,
+    source: args.source,
+    ownerAddress: args.ownerAddress.toLowerCase(),
+    collectionAddress: args.collectionAddress?.toLowerCase() || null,
+    tagline: null,
+    displayName: null,
+    bio: null,
+    bannerUrl: null,
+    avatarUrl: null,
+    featuredUrl: null,
+    accentColor: null,
+    links: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+}
+
 export default function ProfileLandingClient({ initialLabel = "" }: { initialLabel?: string }) {
   const config = useMemo(() => getContractsConfig(), []);
   const appChain = useMemo(() => getAppChain(config.chainId), [config.chainId]);
@@ -1011,25 +1037,37 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
       });
       await publicClient.waitForTransactionReceipt({ hash: txHash as Hex });
 
-      const response = await linkProfileIdentity({
-        name: slug,
-        source: "nftfactory-subname",
-        ownerAddress: walletClient.account.address,
-        collectionAddress: selectedCollection || undefined,
-        routeSlug: derivedRouteSlug || undefined
-      });
+      let nextProfile: ApiProfileRecord;
+      try {
+        const response = await linkProfileIdentity({
+          name: slug,
+          source: "nftfactory-subname",
+          ownerAddress: walletClient.account.address,
+          collectionAddress: selectedCollection || undefined,
+          routeSlug: derivedRouteSlug || undefined
+        });
+        nextProfile = response.profile;
+      } catch {
+        nextProfile = createLocalProfileRecord({
+          fullName: `${slug}.nftfactory.eth`,
+          slug: derivedRouteSlug || slug,
+          source: "nftfactory-subname",
+          ownerAddress: walletClient.account.address,
+          collectionAddress: selectedCollection || undefined
+        });
+      }
       globalThis.localStorage.setItem(
         createPrimaryProfileKey(walletClient.account.address),
-        JSON.stringify(response.profile)
+        JSON.stringify(nextProfile)
       );
 
-      const nextProfiles = dedupeProfiles([...profiles, response.profile]);
+      const nextProfiles = dedupeProfiles([...profiles, nextProfile]);
       setProfiles(nextProfiles);
-      setPostLinkProfile(response.profile);
+      setPostLinkProfile(nextProfile);
       setSetupState({
         status: "success",
         hash: txHash,
-        message: `${response.profile.fullName} created and linked.`
+        message: `${nextProfile.fullName} created and linked.`
       });
     } catch (err) {
       setSetupState({ status: "error", message: err instanceof Error ? err.message : "Failed to create nftfactory subname" });
@@ -1242,7 +1280,7 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
             {postLinkProfile ? (
               <div className="row">
                 <Link href={`/profile/${encodeURIComponent(postLinkProfile.slug)}`} className="ctaLink">
-                  Open profile
+                  Open /profile/{postLinkProfile.slug}
                 </Link>
                 {postLinkMintCta ? (
                   <Link
