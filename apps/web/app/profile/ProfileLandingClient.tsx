@@ -827,6 +827,16 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
     }
   }
 
+  function clearPendingEthRegistration(): void {
+    if (address) {
+      globalThis.localStorage.removeItem(createEnsPendingKey(address));
+    }
+    setPendingEnsRegistration(null);
+    setRegistrationCountdown(0);
+    setSetupState({ status: "idle" });
+    setLookupNote("");
+  }
+
   return (
     <section className="wizard">
       <div className="card formCard">
@@ -834,7 +844,10 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
         <p className="hint">{address || "Connect a wallet from the header to link a creator profile."}</p>
         <p className="hint">Network: {appChain.name}</p>
         {wrongNetwork ? (
-          <p className="hint">Use the header wallet button to select {appChain.name} before creating an nftfactory subname.</p>
+          <p className="hint">
+            Use the header wallet button to select {appChain.name} before registering a .eth name or creating an
+            nftfactory subname.
+          </p>
         ) : null}
       </div>
 
@@ -934,6 +947,11 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
                   ? "Link ENS subname"
                   : "Create nftfactory subname"}
           </button>
+          {identityMode === "register-eth" && pendingEnsRegistration ? (
+            <button type="button" className="secondary" onClick={clearPendingEthRegistration}>
+              Reset pending
+            </button>
+          ) : null}
         </div>
         <p className="hint">
           {slug
@@ -942,7 +960,7 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
         </p>
         {identityMode === "register-eth" && pendingEnsRegistration ? (
           <p className="hint">
-            Pending registration: {pendingEnsRegistration.fullName}.{" "}
+            Pending commit: {pendingEnsRegistration.fullName}.{" "}
             {registrationCountdown > 0
               ? `You can complete registration in ${registrationCountdown}s.`
               : "You can now complete the register transaction."}
