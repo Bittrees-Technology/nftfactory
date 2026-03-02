@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAccount, useChainId, usePublicClient, useWalletClient } from "wagmi";
-import { encodeFunctionData, formatEther } from "viem";
+import { encodeFunctionData, formatEther, keccak256, stringToBytes } from "viem";
 import type { Address, Hex } from "viem";
 import { namehash } from "viem/ens";
 import { encodeRegisterSubname, toHexWei, truncateHash } from "../../lib/abi";
@@ -115,6 +115,20 @@ const ENS_ETH_REGISTRAR_CONTROLLER_ABI = [
       { name: "ownerControlledFuses", type: "uint16" }
     ],
     outputs: []
+  }
+] as const;
+const SUBNAME_REGISTRAR_ABI = [
+  {
+    type: "function",
+    name: "subnames",
+    stateMutability: "view",
+    inputs: [{ name: "", type: "bytes32" }],
+    outputs: [
+      { name: "owner", type: "address" },
+      { name: "expiresAt", type: "uint256" },
+      { name: "mintedCount", type: "uint256" },
+      { name: "exists", type: "bool" }
+    ]
   }
 ] as const;
 
@@ -631,6 +645,35 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
   }
 
   async function checkNftFactoryIdentity(cancelled = false): Promise<void> {
+    if (publicClient && config.subnameRegistrar) {
+      try {
+        const key = keccak256(stringToBytes(slug));
+        const [owner, expiresAt, , exists] = await publicClient.readContract({
+          address: config.subnameRegistrar as Address,
+          abi: SUBNAME_REGISTRAR_ABI,
+          functionName: "subnames",
+          args: [key]
+        });
+        if (cancelled) return;
+
+        const active =
+          Boolean(exists) &&
+          String(owner).toLowerCase() !== ZERO_ADDRESS.toLowerCase() &&
+          BigInt(expiresAt) > BigInt(Math.floor(Date.now() / 1000));
+        if (active) {
+          setCheckedIdentityReady(false);
+          setLookupNote(`${slug}.nftfactory.eth is already active on-chain. Choose a different label.`);
+          return;
+        }
+      } catch {
+        if (!cancelled) {
+          setCheckedIdentityReady(false);
+          setLookupNote("NFTFactory registrar lookup is unavailable right now.");
+        }
+        return;
+      }
+    }
+
     try {
       const resolution = await fetchProfileResolution(slug);
       if (cancelled) return;
@@ -662,13 +705,11 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
       }
 
       setCheckedIdentityReady(true);
-      setLookupNote(`${requested} is currently available in NFTFactory.`);
+      setLookupNote(`${requested} is available on-chain and is not currently linked in NFTFactory.`);
     } catch {
       if (!cancelled) {
-        setCheckedIdentityReady(false);
-        setLookupNote(
-          "NFTFactory availability could not be confirmed right now. You can still create the subname on-chain, but the label may already be linked in NFTFactory."
-        );
+        setCheckedIdentityReady(true);
+        setLookupNote(`${requested} is available on-chain. NFTFactory link status could not be confirmed right now.`);
       }
     }
   }
