@@ -1050,16 +1050,23 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
           <label className="profileIdentityControlCenter">
             {identityLabel}
             {identityMode === "register-eth-subname" ? (
-              <div className="gridMini">
-                <label>
-                  New subname label
-                  <input value={identityName} onChange={(e) => setIdentityName(e.target.value)} />
-                </label>
-                <label>
-                  Parent .eth name
-                  <input value={subnameParent} onChange={(e) => setSubnameParent(e.target.value)} />
-                </label>
-              </div>
+              <>
+                <div className="gridMini">
+                  <label>
+                    New subname label
+                    <input value={identityName} onChange={(e) => setIdentityName(e.target.value)} />
+                  </label>
+                  <label>
+                    Parent .eth name
+                    <input value={subnameParent} onChange={(e) => setSubnameParent(e.target.value)} />
+                  </label>
+                </div>
+                {normalizedFullName ? (
+                  <p className="hint">
+                    Full subname: <span className="mono">{normalizedFullName}</span>
+                  </p>
+                ) : null}
+              </>
             ) : (
               <input value={identityName} onChange={(e) => setIdentityName(e.target.value)} />
             )}
