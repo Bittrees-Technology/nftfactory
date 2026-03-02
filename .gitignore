@@ -29,3 +29,4 @@ packages/contracts/.env.example
 
 # Local ops files
 services/indexer/scripts/subname-map.json
+services/indexer/data/
