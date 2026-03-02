@@ -666,7 +666,9 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
     } catch {
       if (!cancelled) {
         setCheckedIdentityReady(false);
-        setLookupNote("Profile lookup is unavailable right now. You can still continue.");
+        setLookupNote(
+          "NFTFactory availability could not be confirmed right now. You can still create the subname on-chain, but the label may already be linked in NFTFactory."
+        );
       }
     }
   }
