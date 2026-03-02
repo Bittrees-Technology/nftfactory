@@ -582,10 +582,31 @@ nav {
   padding: 10px 12px 12px;
 }
 
+.selectionPreviewHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .selectionPreviewSubline {
   margin: 0;
   color: #7f220f;
   font-size: 0.8rem;
+}
+
+.selectionPreviewBadge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid #d5b38f;
+  background: #fff9f1;
+  color: #6b2d1c;
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .selectionPreviewDetails {

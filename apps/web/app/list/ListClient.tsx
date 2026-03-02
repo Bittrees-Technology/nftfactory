@@ -248,6 +248,8 @@ function InventoryTokenCard({
     };
   }, [ipfsGateway, mediaUrl, metadataUrl]);
 
+  const mediaTypeLabel = preview.imageUrl ? "Image" : preview.audioUrl ? "Audio" : "Metadata";
+
   return (
     <div
       role="button"
@@ -281,9 +283,12 @@ function InventoryTokenCard({
       )}
       <div className="selectionPreviewMeta">
         <p className="nftPreviewName">{preview.name || `Token #${item.tokenId}`}</p>
-        <p className="selectionPreviewSubline">
-          {item.standard} · {item.source === "shared" ? "NFTFactory shared" : "Creator collection"}
-        </p>
+        <div className="selectionPreviewHead">
+          <p className="selectionPreviewSubline">
+            {item.standard} · {item.source === "shared" ? "NFTFactory shared" : "Creator collection"}
+          </p>
+          <span className="selectionPreviewBadge">{mediaTypeLabel}</span>
+        </div>
         <p className="nftPreviewDesc">{preview.description || "No description available yet."}</p>
         <div className="detailGrid selectionPreviewDetails">
           <div className="detailItem">
