@@ -124,6 +124,7 @@ const HOST = process.env.INDEXER_HOST || "127.0.0.1";
 const ADMIN_TOKEN = process.env.INDEXER_ADMIN_TOKEN || "";
 const TRUST_PROXY = process.env.TRUST_PROXY === "true";
 const MODERATOR_REGISTRY_ADDRESS = process.env.MODERATOR_REGISTRY_ADDRESS || "";
+const REGISTRY_ADDRESS = process.env.REGISTRY_ADDRESS || process.env.NEXT_PUBLIC_REGISTRY_ADDRESS || "";
 const MODERATOR_FILE = process.env.INDEXER_MODERATOR_FILE || path.join(process.cwd(), "data", "moderators.json");
 const PROFILE_FILE = process.env.INDEXER_PROFILE_FILE || path.join(process.cwd(), "data", "profiles.json");
 const PAYMENT_TOKEN_FILE = process.env.INDEXER_PAYMENT_TOKEN_FILE || path.join(process.cwd(), "data", "payment-tokens.json");
@@ -189,6 +190,7 @@ type RequestHandlerConfig = {
   adminToken: string;
   adminAllowlist: Set<string>;
   trustProxy: boolean;
+  registryAddress: `0x${string}` | null;
   moderatorRegistryAddress: `0x${string}` | null;
 };
 type IndexerDeps = {
@@ -245,6 +247,98 @@ const moderatorRegistryAbi = [
         ]
       }
     ]
+  }
+] as const;
+
+const registryReadAbi = [
+  {
+    type: "function",
+    name: "creatorContracts",
+    stateMutability: "view",
+    inputs: [{ name: "creator", type: "address" }],
+    outputs: [
+      {
+        type: "tuple[]",
+        components: [
+          { name: "owner", type: "address" },
+          { name: "contractAddress", type: "address" },
+          { name: "isNftFactoryCreated", type: "bool" },
+          { name: "ensSubname", type: "string" },
+          { name: "standard", type: "string" }
+        ]
+      }
+    ]
+  }
+] as const;
+
+const erc721TransferEvent = {
+  type: "event",
+  name: "Transfer",
+  inputs: [
+    { indexed: true, name: "from", type: "address" },
+    { indexed: true, name: "to", type: "address" },
+    { indexed: true, name: "tokenId", type: "uint256" }
+  ]
+} as const;
+
+const erc721ReadAbi = [
+  {
+    type: "function",
+    name: "ownerOf",
+    stateMutability: "view",
+    inputs: [{ name: "tokenId", type: "uint256" }],
+    outputs: [{ name: "", type: "address" }]
+  },
+  {
+    type: "function",
+    name: "tokenURI",
+    stateMutability: "view",
+    inputs: [{ name: "tokenId", type: "uint256" }],
+    outputs: [{ name: "", type: "string" }]
+  }
+] as const;
+
+const erc1155TransferSingleEvent = {
+  type: "event",
+  name: "TransferSingle",
+  inputs: [
+    { indexed: true, name: "operator", type: "address" },
+    { indexed: true, name: "from", type: "address" },
+    { indexed: true, name: "to", type: "address" },
+    { indexed: false, name: "id", type: "uint256" },
+    { indexed: false, name: "value", type: "uint256" }
+  ]
+} as const;
+
+const erc1155TransferBatchEvent = {
+  type: "event",
+  name: "TransferBatch",
+  inputs: [
+    { indexed: true, name: "operator", type: "address" },
+    { indexed: true, name: "from", type: "address" },
+    { indexed: true, name: "to", type: "address" },
+    { indexed: false, name: "ids", type: "uint256[]" },
+    { indexed: false, name: "values", type: "uint256[]" }
+  ]
+} as const;
+
+const erc1155ReadAbi = [
+  {
+    type: "function",
+    name: "balanceOf",
+    stateMutability: "view",
+    inputs: [
+      { name: "account", type: "address" },
+      { name: "id", type: "uint256" }
+    ],
+    outputs: [{ name: "", type: "uint256" }]
+  },
+  {
+    type: "function",
+    name: "uri",
+    stateMutability: "view",
+    inputs: [{ name: "id", type: "uint256" }],
+    outputs: [{ name: "", type: "string" }]
   }
 ] as const;
 
@@ -1210,6 +1304,10 @@ async function handleRequest(
       })
     ]);
 
+    const onchainClient = createPublicClient({
+      transport: http(config.rpcUrl)
+    });
+
     const factoryCollectionIds = collections
       .filter((item: any) => item.isFactoryCreated)
       .map((item: any) => item.id);
@@ -1253,12 +1351,252 @@ async function handleRequest(
       tokensByCollectionId.set(token.collectionId, next);
     }
 
+    const dbFactoryByAddress = new Map<string, any>(
+      collections
+        .filter((item: any) => item.isFactoryCreated)
+        .map((item: any) => [String(item.contractAddress).toLowerCase(), item])
+    );
+
+    const hydratedFactoryCollections: Array<{
+      chainId: number;
+      contractAddress: string;
+      ownerAddress: string;
+      ensSubname: string | null;
+      standard: string;
+      isFactoryCreated: boolean;
+      isUpgradeable: boolean;
+      finalizedAt: string | null;
+      createdAt: string;
+      updatedAt: string;
+      tokenCount: number;
+      tokens: ReturnType<typeof toTokenApiShape>[];
+    }> = [];
+
+    try {
+      if (!config.registryAddress) {
+        throw new Error("Registry address not configured");
+      }
+      const chainRecords = (await onchainClient.readContract({
+        address: config.registryAddress,
+        abi: registryReadAbi,
+        functionName: "creatorContracts",
+        args: [owner as `0x${string}`]
+      })) as Array<{
+        owner: string;
+        contractAddress: string;
+        isNftFactoryCreated: boolean;
+        ensSubname: string;
+        standard: string;
+      }>;
+
+      for (const record of chainRecords) {
+        if (!record.isNftFactoryCreated) continue;
+        const contractAddress = String(record.contractAddress || "").toLowerCase();
+        if (!isAddress(contractAddress)) continue;
+
+        const existing = dbFactoryByAddress.get(contractAddress);
+        const existingTokens = existing ? (tokensByCollectionId.get(existing.id) || []).map(toTokenApiShape) : [];
+        if (existing && existingTokens.length > 0) {
+          hydratedFactoryCollections.push({
+            chainId: existing.chainId,
+            contractAddress: existing.contractAddress,
+            ownerAddress: existing.ownerAddress,
+            ensSubname: existing.ensSubname,
+            standard: existing.standard,
+            isFactoryCreated: existing.isFactoryCreated,
+            isUpgradeable: existing.isUpgradeable,
+            finalizedAt: existing.finalizedAt,
+            createdAt: existing.createdAt,
+            updatedAt: existing.updatedAt,
+            tokenCount: Math.max(existing._count?.tokens || 0, existingTokens.length),
+            tokens: existingTokens
+          });
+          continue;
+        }
+
+        const standard = record.standard === "ERC1155" ? "ERC1155" : "ERC721";
+        const createdAt = new Date().toISOString();
+        const tokens: ReturnType<typeof toTokenApiShape>[] = [];
+
+        if (standard === "ERC721") {
+          try {
+            const logs = await onchainClient.getLogs({
+              address: contractAddress as `0x${string}`,
+              event: erc721TransferEvent,
+              fromBlock: 0n,
+              toBlock: "latest"
+            });
+            const mintedLogs = logs.filter((log) => String(log.args.from || "").toLowerCase() === zeroAddress);
+            for (const log of mintedLogs) {
+              const tokenId = log.args.tokenId?.toString();
+              if (!tokenId) continue;
+              try {
+                const currentOwner = String(
+                  await onchainClient.readContract({
+                    address: contractAddress as `0x${string}`,
+                    abi: erc721ReadAbi,
+                    functionName: "ownerOf",
+                    args: [BigInt(tokenId)]
+                  })
+                ).toLowerCase();
+                if (currentOwner !== owner) continue;
+
+                let metadataCid = "";
+                try {
+                  metadataCid = String(
+                    await onchainClient.readContract({
+                      address: contractAddress as `0x${string}`,
+                      abi: erc721ReadAbi,
+                      functionName: "tokenURI",
+                      args: [BigInt(tokenId)]
+                    })
+                  );
+                } catch {
+                  metadataCid = "";
+                }
+
+                tokens.push({
+                  id: `chain:${contractAddress}:${tokenId}`,
+                  tokenId,
+                  creatorAddress: owner,
+                  ownerAddress: owner,
+                  metadataCid,
+                  metadataUrl: buildGatewayUrl(metadataCid),
+                  mediaCid: null,
+                  mediaUrl: null,
+                  immutable: true,
+                  mintedAt: createdAt,
+                  activeListing: null
+                });
+              } catch {
+                // ignore unreadable token
+              }
+            }
+          } catch {
+            // ignore chain hydration failure
+          }
+        } else {
+          try {
+            const singleLogs = await onchainClient.getLogs({
+              address: contractAddress as `0x${string}`,
+              event: erc1155TransferSingleEvent,
+              fromBlock: 0n,
+              toBlock: "latest"
+            });
+            const batchLogs = await onchainClient.getLogs({
+              address: contractAddress as `0x${string}`,
+              event: erc1155TransferBatchEvent,
+              fromBlock: 0n,
+              toBlock: "latest"
+            });
+
+            const tokenIds = new Set<string>();
+            for (const log of singleLogs) {
+              if (String(log.args.from || "").toLowerCase() !== zeroAddress) continue;
+              const tokenId = log.args.id?.toString();
+              if (tokenId) tokenIds.add(tokenId);
+            }
+            for (const log of batchLogs) {
+              if (String(log.args.from || "").toLowerCase() !== zeroAddress) continue;
+              for (const id of log.args.ids || []) tokenIds.add(id.toString());
+            }
+
+            for (const tokenId of tokenIds) {
+              try {
+                const balance = BigInt(
+                  await onchainClient.readContract({
+                    address: contractAddress as `0x${string}`,
+                    abi: erc1155ReadAbi,
+                    functionName: "balanceOf",
+                    args: [owner as `0x${string}`, BigInt(tokenId)]
+                  })
+                );
+                if (balance <= 0n) continue;
+
+                let metadataCid = "";
+                try {
+                  metadataCid = String(
+                    await onchainClient.readContract({
+                      address: contractAddress as `0x${string}`,
+                      abi: erc1155ReadAbi,
+                      functionName: "uri",
+                      args: [BigInt(tokenId)]
+                    })
+                  );
+                } catch {
+                  metadataCid = "";
+                }
+
+                tokens.push({
+                  id: `chain:${contractAddress}:${tokenId}`,
+                  tokenId,
+                  creatorAddress: owner,
+                  ownerAddress: owner,
+                  metadataCid,
+                  metadataUrl: buildGatewayUrl(metadataCid),
+                  mediaCid: null,
+                  mediaUrl: null,
+                  immutable: true,
+                  mintedAt: createdAt,
+                  activeListing: null
+                });
+              } catch {
+                // ignore unreadable token
+              }
+            }
+          } catch {
+            // ignore chain hydration failure
+          }
+        }
+
+        hydratedFactoryCollections.push({
+          chainId: existing?.chainId || config.chainId,
+          contractAddress,
+          ownerAddress: owner,
+          ensSubname: existing?.ensSubname || String(record.ensSubname || "").trim() || null,
+          standard,
+          isFactoryCreated: true,
+          isUpgradeable: existing?.isUpgradeable ?? true,
+          finalizedAt: existing?.finalizedAt || null,
+          createdAt: existing?.createdAt || createdAt,
+          updatedAt: existing?.updatedAt || createdAt,
+          tokenCount: Math.max(existing?._count?.tokens || 0, tokens.length),
+          tokens
+        });
+      }
+    } catch {
+      // keep DB-only response if chain hydration is unavailable
+    }
+
+    const mergedFactoryCollections =
+      hydratedFactoryCollections.length > 0
+        ? hydratedFactoryCollections
+        : collections
+            .filter((item: any) => item.isFactoryCreated)
+            .map((item: any) => ({
+              chainId: item.chainId,
+              contractAddress: item.contractAddress,
+              ownerAddress: item.ownerAddress,
+              ensSubname: item.ensSubname,
+              standard: item.standard,
+              isFactoryCreated: item.isFactoryCreated,
+              isUpgradeable: item.isUpgradeable,
+              finalizedAt: item.finalizedAt,
+              createdAt: item.createdAt,
+              updatedAt: item.updatedAt,
+              tokenCount: item._count?.tokens || 0,
+              tokens: (tokensByCollectionId.get(item.id) || []).map(toTokenApiShape)
+            }));
+
     sendJson(res, 200, {
       ownerAddress: owner,
       counts: {
         linkedProfiles: linkedProfiles.length,
-        ownedCollections: collections.length,
-        ownedTokens: ownedTokenCount,
+        ownedCollections: Math.max(collections.length, mergedFactoryCollections.length),
+        ownedTokens: Math.max(
+          ownedTokenCount,
+          mergedFactoryCollections.reduce((sum, item) => sum + item.tokens.length, 0)
+        ),
         createdTokens: createdTokenCount,
         activeListings
       },
@@ -1276,22 +1614,7 @@ async function handleRequest(
         updatedAt: item.updatedAt,
         tokenCount: item._count?.tokens || 0
       })),
-      factoryCollections: collections
-        .filter((item: any) => item.isFactoryCreated)
-        .map((item: any) => ({
-          chainId: item.chainId,
-          contractAddress: item.contractAddress,
-          ownerAddress: item.ownerAddress,
-          ensSubname: item.ensSubname,
-          standard: item.standard,
-          isFactoryCreated: item.isFactoryCreated,
-          isUpgradeable: item.isUpgradeable,
-          finalizedAt: item.finalizedAt,
-          createdAt: item.createdAt,
-          updatedAt: item.updatedAt,
-          tokenCount: item._count?.tokens || 0,
-          tokens: (tokensByCollectionId.get(item.id) || []).map(toTokenApiShape)
-        })),
+      factoryCollections: mergedFactoryCollections,
       recentOwnedMints: recentOwnedTokens.map((item: any) => ({
         id: item.id,
         tokenId: item.tokenId,
@@ -1901,6 +2224,10 @@ export async function main() {
       adminToken: ADMIN_TOKEN,
       adminAllowlist: ADMIN_ALLOWLIST,
       trustProxy: TRUST_PROXY,
+      registryAddress:
+        REGISTRY_ADDRESS && isAddress(REGISTRY_ADDRESS.toLowerCase())
+          ? (REGISTRY_ADDRESS.toLowerCase() as `0x${string}`)
+          : null,
       moderatorRegistryAddress:
         MODERATOR_REGISTRY_ADDRESS && isAddress(MODERATOR_REGISTRY_ADDRESS.toLowerCase())
           ? (MODERATOR_REGISTRY_ADDRESS.toLowerCase() as `0x${string}`)
