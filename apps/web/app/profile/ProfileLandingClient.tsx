@@ -458,6 +458,18 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
     return "Register";
   }, [identityMode, pendingEnsRegistration, registrationCountdown, setupState.status]);
 
+  const identityStatusText = useMemo(() => {
+    if (!slug || !normalizedFullName) return "";
+    if (checkedIdentityReady) {
+      if (identityMode === "register-eth") return "Status: available in ENS";
+      if (identityMode === "register-eth-subname") return "Status: parent ownership confirmed";
+      if (identityMode === "nftfactory-subname") return "Status: available on-chain";
+      return "Status: owned in ENS and ready to link";
+    }
+    if (lookupNote) return "Status: review the current check result";
+    return "";
+  }, [checkedIdentityReady, identityMode, lookupNote, normalizedFullName, slug]);
+
   async function runIdentityAction(): Promise<void> {
     if (identityMode === "register-eth") {
       if (pendingEnsRegistration) {
@@ -1212,6 +1224,7 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
               : "You can now complete the register transaction."}
           </p>
         ) : null}
+        {identityStatusText ? <p className={checkedIdentityReady ? "success" : "hint"}>{identityStatusText}</p> : null}
         {lookupNote ? <p className="hint">{lookupNote}</p> : null}
         {setupState.status === "error" ? <p className="error">{setupState.message}</p> : null}
         {setupState.status === "pending" ? <p className="hint">{setupState.message}</p> : null}
