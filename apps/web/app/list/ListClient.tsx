@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useAccount, useChainId, usePublicClient, useWalletClient } from "wagmi";
-import type { Address, Hex } from "viem";
+import { zeroAddress, type Address, type Hex } from "viem";
 import {
   encodeCancelListing,
   encodeCreateListing,
@@ -22,6 +22,98 @@ const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const DEFAULT_SCAN_LIMIT = 200;
 const MAX_LISTING_DAYS = 365;
 
+const registryReadAbi = [
+  {
+    type: "function",
+    name: "creatorContracts",
+    stateMutability: "view",
+    inputs: [{ name: "creator", type: "address" }],
+    outputs: [
+      {
+        type: "tuple[]",
+        components: [
+          { name: "owner", type: "address" },
+          { name: "contractAddress", type: "address" },
+          { name: "isNftFactoryCreated", type: "bool" },
+          { name: "ensSubname", type: "string" },
+          { name: "standard", type: "string" }
+        ]
+      }
+    ]
+  }
+] as const;
+
+const erc721TransferEvent = {
+  type: "event",
+  name: "Transfer",
+  inputs: [
+    { indexed: true, name: "from", type: "address" },
+    { indexed: true, name: "to", type: "address" },
+    { indexed: true, name: "tokenId", type: "uint256" }
+  ]
+} as const;
+
+const erc721ReadAbi = [
+  {
+    type: "function",
+    name: "ownerOf",
+    stateMutability: "view",
+    inputs: [{ name: "tokenId", type: "uint256" }],
+    outputs: [{ name: "", type: "address" }]
+  },
+  {
+    type: "function",
+    name: "tokenURI",
+    stateMutability: "view",
+    inputs: [{ name: "tokenId", type: "uint256" }],
+    outputs: [{ name: "", type: "string" }]
+  }
+] as const;
+
+const erc1155TransferSingleEvent = {
+  type: "event",
+  name: "TransferSingle",
+  inputs: [
+    { indexed: true, name: "operator", type: "address" },
+    { indexed: true, name: "from", type: "address" },
+    { indexed: true, name: "to", type: "address" },
+    { indexed: false, name: "id", type: "uint256" },
+    { indexed: false, name: "value", type: "uint256" }
+  ]
+} as const;
+
+const erc1155TransferBatchEvent = {
+  type: "event",
+  name: "TransferBatch",
+  inputs: [
+    { indexed: true, name: "operator", type: "address" },
+    { indexed: true, name: "from", type: "address" },
+    { indexed: true, name: "to", type: "address" },
+    { indexed: false, name: "ids", type: "uint256[]" },
+    { indexed: false, name: "values", type: "uint256[]" }
+  ]
+} as const;
+
+const erc1155ReadAbi = [
+  {
+    type: "function",
+    name: "balanceOf",
+    stateMutability: "view",
+    inputs: [
+      { name: "account", type: "address" },
+      { name: "id", type: "uint256" }
+    ],
+    outputs: [{ name: "", type: "uint256" }]
+  },
+  {
+    type: "function",
+    name: "uri",
+    stateMutability: "view",
+    inputs: [{ name: "id", type: "uint256" }],
+    outputs: [{ name: "", type: "string" }]
+  }
+] as const;
+
 type OwnedMintRow = {
   key: string;
   tokenId: string;
@@ -37,6 +129,14 @@ type OwnedMintRow = {
 type ContractOption = {
   address: string;
   label: string;
+};
+
+type CreatorRecord = {
+  owner: string;
+  contractAddress: string;
+  isNftFactoryCreated: boolean;
+  ensSubname: string;
+  standard: string;
 };
 
 function isAddress(value: string): value is `0x${string}` {
@@ -165,6 +265,158 @@ export default function ListClient() {
           }
         }
 
+        if (publicClient) {
+          const chainRecords = (await publicClient.readContract({
+            address: config.registry as Address,
+            abi: registryReadAbi,
+            functionName: "creatorContracts",
+            args: [address as Address]
+          })) as CreatorRecord[];
+
+          const blockTimes = new Map<string, string>();
+          const getBlockTime = async (blockNumber: bigint): Promise<string> => {
+            const key = blockNumber.toString();
+            if (!blockTimes.has(key)) {
+              const block = await publicClient.getBlock({ blockNumber });
+              blockTimes.set(key, new Date(Number(block.timestamp) * 1000).toISOString());
+            }
+            return blockTimes.get(key) || new Date().toISOString();
+          };
+
+          for (const record of chainRecords.slice(0, 12)) {
+            if (!record.isNftFactoryCreated) continue;
+            const contractAddress = record.contractAddress;
+            if (!isAddress(contractAddress)) continue;
+            const collectionStandard = record.standard === "ERC1155" ? "ERC1155" : "ERC721";
+
+            if (collectionStandard === "ERC721") {
+              try {
+                const logs = await publicClient.getLogs({
+                  address: contractAddress,
+                  event: erc721TransferEvent,
+                  fromBlock: 0n,
+                  toBlock: "latest"
+                });
+                const mintedLogs = logs.filter((log) => log.args.from?.toLowerCase() === zeroAddress);
+                for (const log of mintedLogs) {
+                  const tokenId = log.args.tokenId?.toString();
+                  if (!tokenId) continue;
+                  try {
+                    const owner = (await publicClient.readContract({
+                      address: contractAddress,
+                      abi: erc721ReadAbi,
+                      functionName: "ownerOf",
+                      args: [BigInt(tokenId)]
+                    })) as string;
+                    if (owner.toLowerCase() !== normalizedOwner) continue;
+                    let metadataCid = "";
+                    try {
+                      metadataCid = (await publicClient.readContract({
+                        address: contractAddress,
+                        abi: erc721ReadAbi,
+                        functionName: "tokenURI",
+                        args: [BigInt(tokenId)]
+                      })) as string;
+                    } catch {
+                      metadataCid = "";
+                    }
+                    addRow({
+                      key: `${contractAddress.toLowerCase()}:${tokenId}`,
+                      tokenId,
+                      contractAddress,
+                      standard: "ERC721",
+                      source: "custom",
+                      metadataCid,
+                      mediaCid: null,
+                      mintedAt: await getBlockTime(log.blockNumber),
+                      activeListingId: null
+                    });
+                  } catch {
+                    // Skip tokens that do not resolve cleanly.
+                  }
+                }
+              } catch {
+                // Skip hydration errors for this collection.
+              }
+              continue;
+            }
+
+            try {
+              const singleLogs = await publicClient.getLogs({
+                address: contractAddress,
+                event: erc1155TransferSingleEvent,
+                fromBlock: 0n,
+                toBlock: "latest"
+              });
+              const batchLogs = await publicClient.getLogs({
+                address: contractAddress,
+                event: erc1155TransferBatchEvent,
+                fromBlock: 0n,
+                toBlock: "latest"
+              });
+
+              const tokenState = new Map<string, string>();
+
+              for (const log of singleLogs) {
+                if (log.args.from?.toLowerCase() !== zeroAddress) continue;
+                const tokenId = log.args.id?.toString();
+                if (!tokenId) continue;
+                tokenState.set(tokenId, await getBlockTime(log.blockNumber));
+              }
+
+              for (const log of batchLogs) {
+                if (log.args.from?.toLowerCase() !== zeroAddress) continue;
+                for (const id of log.args.ids || []) {
+                  const tokenId = id.toString();
+                  if (!tokenState.has(tokenId)) {
+                    tokenState.set(tokenId, await getBlockTime(log.blockNumber));
+                  }
+                }
+              }
+
+              for (const [tokenId, mintedAt] of tokenState.entries()) {
+                try {
+                  const balance = (await publicClient.readContract({
+                    address: contractAddress,
+                    abi: erc1155ReadAbi,
+                    functionName: "balanceOf",
+                    args: [address as Address, BigInt(tokenId)]
+                  })) as bigint;
+                  if (balance <= 0n) continue;
+
+                  let metadataCid = "";
+                  try {
+                    metadataCid = (await publicClient.readContract({
+                      address: contractAddress,
+                      abi: erc1155ReadAbi,
+                      functionName: "uri",
+                      args: [BigInt(tokenId)]
+                    })) as string;
+                  } catch {
+                    metadataCid = "";
+                  }
+
+                  addRow({
+                    key: `${contractAddress.toLowerCase()}:${tokenId}`,
+                    tokenId,
+                    contractAddress,
+                    standard: "ERC1155",
+                    source: "custom",
+                    metadataCid,
+                    mediaCid: null,
+                    mintedAt,
+                    activeListingId: null
+                  });
+                } catch {
+                  // Skip tokens that do not resolve cleanly.
+                }
+              }
+            } catch {
+              // Skip hydration errors for this collection.
+            }
+          }
+        }
+
         setOwnedMints([...byKey.values()]);
       } catch (err) {
         if (!cancelled) {
@@ -180,7 +432,7 @@ export default function ListClient() {
     return () => {
       cancelled = true;
     };
-  }, [address, config.shared721, config.shared1155]);
+  }, [address, config.registry, config.shared721, config.shared1155, publicClient]);
 
   const filteredOwnedMints = useMemo(
     () => ownedMints.filter((item) => item.standard === standard && item.source === source),
