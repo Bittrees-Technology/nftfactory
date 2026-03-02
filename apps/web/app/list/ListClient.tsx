@@ -25,18 +25,6 @@ const DEPLOYMENT_START_BLOCK_BY_CHAIN: Record<number, bigint> = {
   11155111: 10_359_560n
 };
 
-const creatorRegisteredEvent = {
-  type: "event",
-  name: "CreatorRegistered",
-  inputs: [
-    { indexed: true, name: "creator", type: "address" },
-    { indexed: true, name: "contractAddress", type: "address" },
-    { indexed: false, name: "ensSubname", type: "string" },
-    { indexed: false, name: "standard", type: "string" },
-    { indexed: false, name: "isNftFactoryCreated", type: "bool" }
-  ]
-} as const;
-
 const erc721TransferEvent = {
   type: "event",
   name: "Transfer",
@@ -108,6 +96,27 @@ const erc1155ReadAbi = [
   }
 ] as const;
 
+const registryReadAbi = [
+  {
+    type: "function",
+    name: "creatorContracts",
+    stateMutability: "view",
+    inputs: [{ name: "creator", type: "address" }],
+    outputs: [
+      {
+        type: "tuple[]",
+        components: [
+          { name: "creator", type: "address" },
+          { name: "contractAddress", type: "address" },
+          { name: "isNftFactoryCreated", type: "bool" },
+          { name: "ensSubname", type: "string" },
+          { name: "standard", type: "string" }
+        ]
+      }
+    ]
+  }
+] as const;
+
 type OwnedMintRow = {
   key: string;
   tokenId: string;
@@ -125,6 +134,8 @@ type ContractOption = {
   label: string;
 };
 
+type InventorySort = "newest" | "oldest";
+
 type TokenPreviewMeta = {
   name: string | null;
   description: string | null;
@@ -132,8 +143,31 @@ type TokenPreviewMeta = {
   audioUrl: string | null;
 };
 
+type RegistryCreatorContract = {
+  creator: Address;
+  contractAddress: Address;
+  isNftFactoryCreated: boolean;
+  ensSubname: string;
+  standard: string;
+};
+
 function isAddress(value: string): value is `0x${string}` {
   return /^0x[a-fA-F0-9]{40}$/.test(value);
+}
+
+function getAlchemyNftApiUrl(owner: Address, contractAddresses: Address[]): string | null {
+  const rpcUrl = process.env.NEXT_PUBLIC_RPC_URL || "";
+  const match = rpcUrl.match(/^https:\/\/([a-z0-9-]+)\.g\.alchemy\.com\/v2\/([^/?#]+)$/i);
+  if (!match) return null;
+  const [, network, apiKey] = match;
+  const url = new URL(`https://${network}.g.alchemy.com/nft/v3/${apiKey}/getNFTsForOwner`);
+  url.searchParams.set("owner", owner);
+  url.searchParams.set("withMetadata", "true");
+  url.searchParams.set("pageSize", "100");
+  for (const contractAddress of contractAddresses) {
+    url.searchParams.append("contractAddresses[]", contractAddress);
+  }
+  return url.toString();
 }
 
 function truncateAddress(value: string): string {
@@ -328,6 +362,7 @@ export default function ListClient() {
 
   const [standard, setStandard] = useState<Standard>("ERC721");
   const [selectedContract, setSelectedContract] = useState("");
+  const [inventorySort, setInventorySort] = useState<InventorySort>("newest");
   const [selectedTokenKeys, setSelectedTokenKeys] = useState<string[]>([]);
   const [erc1155Amount, setErc1155Amount] = useState("1");
   const [paymentTokenType, setPaymentTokenType] = useState<"ETH" | "ERC20">("ETH");
@@ -587,6 +622,72 @@ export default function ListClient() {
           };
 
           const deploymentStartBlock = DEPLOYMENT_START_BLOCK_BY_CHAIN[config.chainId] ?? 0n;
+          const creatorContracts = isAddress(config.registry)
+            ? (((await publicClient.readContract({
+                address: config.registry as Address,
+                abi: registryReadAbi,
+                functionName: "creatorContracts",
+                args: [address as Address]
+              })) as RegistryCreatorContract[]) || [])
+            : [];
+          const customCollections = creatorContracts
+            .filter((record) => record.isNftFactoryCreated && isAddress(record.contractAddress))
+            .map((record) => ({
+              address: record.contractAddress,
+              standard: record.standard === "ERC1155" ? ("ERC1155" as const) : ("ERC721" as const)
+            }));
+
+          const alchemyContracts = [
+            ...(isAddress(config.shared721) ? [config.shared721 as Address] : []),
+            ...(isAddress(config.shared1155) ? [config.shared1155 as Address] : []),
+            ...customCollections.map((collection) => collection.address)
+          ];
+          const alchemyUrl =
+            alchemyContracts.length > 0 ? getAlchemyNftApiUrl(address as Address, alchemyContracts) : null;
+
+          if (alchemyUrl) {
+            try {
+              const response = await fetch(alchemyUrl);
+              if (response.ok) {
+                const payload = (await response.json()) as {
+                  ownedNfts?: Array<{
+                    contract?: { address?: string };
+                    tokenType?: string;
+                    tokenId?: string;
+                    tokenUri?: string;
+                    image?: { originalUrl?: string; cachedUrl?: string };
+                    timeLastUpdated?: string;
+                  }>;
+                };
+                for (const nft of payload.ownedNfts || []) {
+                  const contractAddress = nft.contract?.address;
+                  if (!contractAddress || !isAddress(contractAddress)) continue;
+                  const standardValue = nft.tokenType?.toUpperCase();
+                  const tokenId = nft.tokenId ? BigInt(nft.tokenId).toString() : "";
+                  if (!tokenId) continue;
+                  if (standardValue !== "ERC721" && standardValue !== "ERC1155") continue;
+                  const contractKey = contractAddress.toLowerCase();
+                  addRow({
+                    key: `${contractKey}:${tokenId}`,
+                    tokenId,
+                    contractAddress,
+                    standard: standardValue as Standard,
+                    source:
+                      contractKey === config.shared721.toLowerCase() ||
+                      contractKey === config.shared1155.toLowerCase()
+                        ? "shared"
+                        : "custom",
+                    metadataCid: nft.tokenUri || "",
+                    mediaCid: nft.image?.originalUrl || nft.image?.cachedUrl || null,
+                    mintedAt: nft.timeLastUpdated || new Date().toISOString(),
+                    activeListingId: null
+                  });
+                }
+              }
+            } catch {
+              // Fall through to direct chain reads.
+            }
+          }
 
           if (isAddress(config.shared721)) {
             await hydrateErc721Contract(config.shared721 as Address, "shared", deploymentStartBlock);
@@ -595,34 +696,11 @@ export default function ListClient() {
             await hydrateErc1155Contract(config.shared1155 as Address, "shared", deploymentStartBlock);
           }
 
-          const registryLogs = await getLogsChunked({
-            address: config.registry as Address,
-            event: creatorRegisteredEvent,
-            fromBlock: deploymentStartBlock
-          });
-          const customCollections = new Map<string, { standard: Standard; startBlock: bigint }>();
-
-          for (const log of registryLogs) {
-            if (!log.args.isNftFactoryCreated) continue;
-            const contractAddress = log.args.contractAddress;
-            if (!contractAddress || !isAddress(contractAddress)) continue;
-            const contractKey = contractAddress.toLowerCase();
-            if (customCollections.has(contractKey)) continue;
-            customCollections.set(
-              contractKey,
-              {
-                standard: log.args.standard === "ERC1155" ? "ERC1155" : "ERC721",
-                startBlock: log.blockNumber
-              }
-            );
-          }
-
-          for (const [contractKey, collectionDetails] of [...customCollections.entries()].slice(0, 48)) {
-            const contractAddress = contractKey as Address;
-            if (collectionDetails.standard === "ERC1155") {
-              await hydrateErc1155Contract(contractAddress, "custom", collectionDetails.startBlock);
+          for (const collection of customCollections.slice(0, 48)) {
+            if (collection.standard === "ERC1155") {
+              await hydrateErc1155Contract(collection.address, "custom", deploymentStartBlock);
             } else {
-              await hydrateErc721Contract(contractAddress, "custom", collectionDetails.startBlock);
+              await hydrateErc721Contract(collection.address, "custom", deploymentStartBlock);
             }
           }
         }
@@ -679,12 +757,20 @@ export default function ListClient() {
   }, [selectedContract, standard]);
 
   const availableTokens = useMemo(
-    () =>
-      filteredOwnedMints.filter(
+    () => {
+      const rows = filteredOwnedMints.filter(
         (item) =>
           item.contractAddress.toLowerCase() === selectedContract.toLowerCase()
-      ),
-    [filteredOwnedMints, selectedContract]
+      );
+      const sorted = [...rows];
+      sorted.sort((a, b) => {
+        const aTime = new Date(a.mintedAt).getTime();
+        const bTime = new Date(b.mintedAt).getTime();
+        return inventorySort === "newest" ? bTime - aTime : aTime - bTime;
+      });
+      return sorted;
+    },
+    [filteredOwnedMints, inventorySort, selectedContract]
   );
 
   const selectedTokens = useMemo(
@@ -934,16 +1020,25 @@ export default function ListClient() {
           </p>
           {wrongNetwork ? <p className="hint">Use the header wallet button to select {appChain.name} before listing.</p> : null}
           {contractOptions.length > 1 ? (
-            <label>
-              Collection contract
-              <select value={selectedContract} onChange={(e) => setSelectedContract(e.target.value)}>
-                {contractOptions.map((option) => (
-                  <option key={option.address} value={option.address}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <div className="gridMini">
+              <label>
+                Collection contract
+                <select value={selectedContract} onChange={(e) => setSelectedContract(e.target.value)}>
+                  {contractOptions.map((option) => (
+                    <option key={option.address} value={option.address}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Inventory sort
+                <select value={inventorySort} onChange={(e) => setInventorySort(e.target.value as InventorySort)}>
+                  <option value="newest">Newest first</option>
+                  <option value="oldest">Oldest first</option>
+                </select>
+              </label>
+            </div>
           ) : contractOptions.length === 1 ? (
             <div className="selectionCard">
               <span className="detailLabel">Collection Contract</span>
@@ -961,6 +1056,17 @@ export default function ListClient() {
           {selectedContract ? (
             <>
               <p className="sectionLead">Selected collection: {selectedContractLabel}</p>
+              {contractOptions.length <= 1 && availableTokens.length > 1 ? (
+                <div className="row">
+                  <label>
+                    Inventory sort
+                    <select value={inventorySort} onChange={(e) => setInventorySort(e.target.value as InventorySort)}>
+                      <option value="newest">Newest first</option>
+                      <option value="oldest">Oldest first</option>
+                    </select>
+                  </label>
+                </div>
+              ) : null}
               <div className="compactList compactSelectionGrid">
                 {availableTokens.length > 0 ? (
                   availableTokens.map((item) => {
