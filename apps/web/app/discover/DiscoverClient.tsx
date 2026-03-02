@@ -13,12 +13,12 @@ import {
   ZERO_ADDRESS,
   type MarketplaceListing
 } from "../../lib/marketplace";
-import { toWeiBigInt } from "../../lib/abi";
 import { createModerationReport, fetchHiddenListingIds, fetchMintFeed, type ApiMintFeedItem } from "../../lib/indexerApi";
 
 type SortBy = "newest" | "priceAsc" | "priceDesc";
 type SourceFilter = "ALL" | "SHARED" | "CUSTOM";
 type StandardFilter = "ALL" | "ERC721" | "ERC1155";
+type ListedFilter = "ALL" | "LISTED" | "UNLISTED";
 
 type DiscoverCache = {
   ts: number;
@@ -37,6 +37,7 @@ type MintFeedCache = {
 };
 
 const CACHE_TTL_MS = 60_000;
+const FEED_BATCH_SIZE = 50;
 
 function cacheKey(marketplace: string): string {
   return `nftfactory:discover-cache:v2:${marketplace.toLowerCase()}`;
@@ -224,20 +225,20 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
 
   const [allListings, setAllListings] = useState<MarketplaceListing[]>([]);
   const [feedItems, setFeedItems] = useState<ApiMintFeedItem[]>([]);
+  const [feedSearchIndex, setFeedSearchIndex] = useState<Record<string, string>>({});
   const [hiddenListingIds, setHiddenListingIds] = useState<number[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [error, setError] = useState("");
   const [indexerStatus, setIndexerStatus] = useState("");
 
-  const [pageSize, setPageSize] = useState("50");
   const [cursor, setCursor] = useState(0);
   const [canLoadMore, setCanLoadMore] = useState(false);
 
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>("ALL");
   const [standardFilter, setStandardFilter] = useState<StandardFilter>("ALL");
-  const [maxPriceEth, setMaxPriceEth] = useState("");
-  const [contractFilter, setContractFilter] = useState("");
+  const [listedFilter, setListedFilter] = useState<ListedFilter>("ALL");
+  const [searchFilter, setSearchFilter] = useState("");
   const [sellerFilter, setSellerFilter] = useState("");
   const [sortBy, setSortBy] = useState<SortBy>("newest");
 
@@ -249,8 +250,8 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
   const hasActiveFilters = Boolean(
     sourceFilter !== "ALL" ||
     standardFilter !== "ALL" ||
-    maxPriceEth.trim() ||
-    contractFilter.trim() ||
+    listedFilter !== "ALL" ||
+    searchFilter.trim() ||
     sellerFilter.trim() ||
     sortBy !== "newest"
   );
@@ -272,8 +273,7 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
       setError("");
 
       try {
-        const parsedPageSize = Number.parseInt(pageSize, 10);
-        const limit = Number.isInteger(parsedPageSize) && parsedPageSize > 0 ? parsedPageSize : 50;
+        const limit = FEED_BATCH_SIZE;
 
         if (mode === "feed") {
           if (!forceReload) {
@@ -333,7 +333,7 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
         setIsLoading(false);
       }
     },
-    [config.chainId, config.marketplace, config.rpcUrl, mode, pageSize]
+    [config.chainId, config.marketplace, config.rpcUrl, mode]
   );
 
   const loadMore = useCallback(async (): Promise<void> => {
@@ -341,8 +341,7 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
     setIsLoadingMore(true);
     setError("");
     try {
-      const parsedPageSize = Number.parseInt(pageSize, 10);
-      const limit = Number.isInteger(parsedPageSize) && parsedPageSize > 0 ? parsedPageSize : 50;
+      const limit = FEED_BATCH_SIZE;
 
       if (mode === "feed") {
         const result = await fetchMintFeed(cursor, limit);
@@ -384,7 +383,7 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
     } finally {
       setIsLoadingMore(false);
     }
-  }, [allListings, canLoadMore, config.chainId, config.marketplace, config.rpcUrl, cursor, feedItems, mode, pageSize]);
+  }, [allListings, canLoadMore, config.chainId, config.marketplace, config.rpcUrl, cursor, feedItems, mode]);
 
   useEffect(() => {
     void loadInitial(false);
@@ -420,16 +419,51 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
     return () => observer.disconnect();
   }, [canLoadMore, isLoading, isLoadingMore, loadMore, mode]);
 
+  useEffect(() => {
+    if (mode !== "feed") return;
+    if (feedItems.length === 0) {
+      setFeedSearchIndex({});
+      return;
+    }
+
+    let cancelled = false;
+    const nextIndex: Record<string, string> = {};
+
+    void Promise.all(
+      feedItems.map(async (item) => {
+        const metadataLink = ipfsToGatewayUrl(item.metadataCid, ipfsGateway);
+        if (!metadataLink) return;
+        try {
+          const response = await fetch(metadataLink);
+          if (!response.ok) return;
+          const payload = (await response.json()) as {
+            name?: string;
+            title?: string;
+            description?: string;
+          };
+          nextIndex[item.id] = [payload.name, payload.title, payload.description]
+            .filter(Boolean)
+            .join(" ")
+            .toLowerCase();
+        } catch {
+          // leave blank when metadata is unavailable
+        }
+      })
+    ).then(() => {
+      if (!cancelled) {
+        setFeedSearchIndex(nextIndex);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [feedItems, ipfsGateway, mode]);
+
   const filtered = useMemo(() => {
     if (mode === "feed") {
-      const normalizedContractFilter = contractFilter.trim().toLowerCase();
+      const normalizedSearchFilter = searchFilter.trim().toLowerCase();
       const normalizedSellerFilter = sellerFilter.trim().toLowerCase();
-      let maxPriceWei: bigint | null = null;
-      try {
-        maxPriceWei = maxPriceEth.trim() ? toWeiBigInt(maxPriceEth.trim()) : null;
-      } catch {
-        maxPriceWei = null;
-      }
 
       let rows = [...feedItems];
 
@@ -443,10 +477,31 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
         rows = rows.filter((row) => row.collection.standard.toUpperCase() === standardFilter);
       }
 
-      if (normalizedContractFilter) {
-        rows = rows.filter((row) =>
-          row.collection.contractAddress.toLowerCase().includes(normalizedContractFilter)
-        );
+      if (listedFilter !== "ALL") {
+        rows = rows.filter((row) => (listedFilter === "LISTED" ? Boolean(row.activeListing) : !row.activeListing));
+      }
+
+      if (normalizedSearchFilter) {
+        rows = rows.filter((row) => {
+          const collectionLabel = row.collection.ensSubname?.trim()
+            ? row.collection.ensSubname.includes(".")
+              ? row.collection.ensSubname
+              : `${row.collection.ensSubname}.nftfactory.eth`
+            : "";
+          const searchable = [
+            row.collection.contractAddress,
+            row.collection.standard,
+            row.collection.isFactoryCreated ? "shared" : "custom",
+            row.tokenId,
+            row.metadataCid,
+            row.mediaCid || "",
+            collectionLabel,
+            feedSearchIndex[row.id] || ""
+          ]
+            .join(" ")
+            .toLowerCase();
+          return searchable.includes(normalizedSearchFilter);
+        });
       }
 
       if (normalizeAddress(normalizedSellerFilter)) {
@@ -461,18 +516,6 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
             row.ownerAddress.toLowerCase().includes(normalizedSellerFilter) ||
             row.creatorAddress.toLowerCase().includes(normalizedSellerFilter)
         );
-      }
-
-      if (maxPriceWei !== null) {
-        rows = rows.filter((row) => {
-          if (!row.activeListing) return false;
-          if (row.activeListing.paymentToken !== ZERO_ADDRESS) return false;
-          try {
-            return BigInt(row.activeListing.priceRaw) <= maxPriceWei!;
-          } catch {
-            return false;
-          }
-        });
       }
 
       const sorted = [...rows];
@@ -508,14 +551,8 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
 
     const shared721 = config.shared721.toLowerCase();
     const shared1155 = config.shared1155.toLowerCase();
-    const normalizedContractFilter = contractFilter.trim().toLowerCase();
+    const normalizedSearchFilter = searchFilter.trim().toLowerCase();
     const normalizedSellerFilter = sellerFilter.trim().toLowerCase();
-    let maxPriceWei: bigint | null = null;
-    try {
-      maxPriceWei = maxPriceEth.trim() ? toWeiBigInt(maxPriceEth.trim()) : null;
-    } catch {
-      maxPriceWei = null;
-    }
     const hiddenSet = new Set(hiddenListingIds);
 
     let rows = allListings.filter((row) => !hiddenSet.has(row.id));
@@ -531,18 +568,20 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
       rows = rows.filter((row) => row.standard === standardFilter);
     }
 
-    if (normalizedContractFilter) {
-      rows = rows.filter((row) => row.nft.toLowerCase().includes(normalizedContractFilter));
+    if (listedFilter !== "ALL") {
+      rows = rows.filter((row) => (listedFilter === "LISTED" ? row.active : !row.active));
+    }
+
+    if (normalizedSearchFilter) {
+      rows = rows.filter((row) =>
+        [row.nft, row.standard, row.tokenId.toString(), row.seller].join(" ").toLowerCase().includes(normalizedSearchFilter)
+      );
     }
 
     if (normalizeAddress(normalizedSellerFilter)) {
       rows = rows.filter((row) => row.seller.toLowerCase() === normalizedSellerFilter);
     } else if (normalizedSellerFilter) {
       rows = rows.filter((row) => row.seller.toLowerCase().includes(normalizedSellerFilter));
-    }
-
-    if (maxPriceWei !== null) {
-      rows = rows.filter((row) => row.paymentToken === ZERO_ADDRESS && row.price <= maxPriceWei!);
     }
 
     const sorted = [...rows];
@@ -560,13 +599,14 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
     config.shared1155,
     sourceFilter,
     standardFilter,
-    contractFilter,
+    listedFilter,
+    searchFilter,
     sellerFilter,
-    maxPriceEth,
     sortBy,
     hiddenListingIds,
     mode,
-    feedItems
+    feedItems,
+    feedSearchIndex
   ]);
 
   async function submitReport(listing: MarketplaceListing): Promise<void> {
@@ -596,8 +636,8 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
   function resetFilters(): void {
     setSourceFilter("ALL");
     setStandardFilter("ALL");
-    setMaxPriceEth("");
-    setContractFilter("");
+    setListedFilter("ALL");
+    setSearchFilter("");
     setSellerFilter("");
     setSortBy("newest");
   }
@@ -647,18 +687,22 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
               </label>
 
               <label>
-                Max price (ETH only)
-                <input value={maxPriceEth} onChange={(e) => setMaxPriceEth(e.target.value)} placeholder="0.05" />
+                Listing
+                <select value={listedFilter} onChange={(e) => setListedFilter(e.target.value as ListedFilter)}>
+                  <option value="ALL">Listed and unlisted</option>
+                  <option value="LISTED">Listed only</option>
+                  <option value="UNLISTED">Unlisted only</option>
+                </select>
               </label>
 
               <label>
-                Collection contract
-                <input value={contractFilter} onChange={(e) => setContractFilter(e.target.value)} placeholder="0xabc..." />
+                Search
+                <input value={searchFilter} onChange={(e) => setSearchFilter(e.target.value)} />
               </label>
 
               <label>
                 Seller wallet
-                <input value={sellerFilter} onChange={(e) => setSellerFilter(e.target.value)} placeholder="0xseller..." />
+                <input value={sellerFilter} onChange={(e) => setSellerFilter(e.target.value)} />
               </label>
 
               <label>
@@ -670,10 +714,6 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
                 </select>
               </label>
 
-              <label>
-                Page size
-                <input value={pageSize} onChange={(e) => setPageSize(e.target.value)} inputMode="numeric" placeholder="50" />
-              </label>
             </div>
 
             {mode === "mod" ? (
@@ -681,7 +721,7 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
                 <div className="row">
                   <label>
                     Reporter address
-                    <input value={reporter} onChange={(e) => setReporter(e.target.value)} placeholder="0xreporter..." />
+                    <input value={reporter} onChange={(e) => setReporter(e.target.value)} />
                   </label>
                 </div>
                 {!reporter && !address ? <p className="hint">Connect wallet or enter reporter address manually.</p> : null}
