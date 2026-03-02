@@ -172,6 +172,7 @@ export type ApiMintFeedItem = {
   tokenId: string;
   creatorAddress: string;
   ownerAddress: string;
+  mintTxHash?: string | null;
   metadataCid: string;
   metadataUrl?: string | null;
   mediaCid: string | null;
@@ -208,6 +209,32 @@ export type ApiMintFeedResponse = {
   items: ApiMintFeedItem[];
 };
 
+export type ApiActiveListingItem = {
+  id: number;
+  listingId: string;
+  sellerAddress: string;
+  collectionAddress: string;
+  tokenId: string;
+  amountRaw: string;
+  standard: string;
+  paymentToken: string;
+  priceRaw: string;
+  expiresAtRaw: string;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+  token: (Omit<ApiMintFeedItem, "activeListing"> & {
+    collection: ApiMintFeedItem["collection"] | null;
+  }) | null;
+};
+
+export type ApiActiveListingsResponse = {
+  cursor: number;
+  nextCursor: number;
+  canLoadMore: boolean;
+  items: ApiActiveListingItem[];
+};
+
 export type ApiIndexerOverview = {
   chainId: number;
   counts: {
@@ -221,6 +248,20 @@ export type ApiIndexerOverview = {
     moderators: number;
   };
   generatedAt: string;
+};
+
+export type ApiIndexerHealth = {
+  ok: boolean;
+  service: string;
+  schema?: {
+    mintTxHashColumnAvailable?: boolean;
+  };
+  marketplace?: {
+    configured?: boolean;
+    syncInProgress?: boolean;
+    lastListingSyncAt?: string | null;
+    lastListingSyncCount?: number;
+  };
 };
 
 export type ApiOwnerSummary = {
@@ -436,8 +477,22 @@ export async function fetchMintFeed(cursor = 0, limit = 50): Promise<ApiMintFeed
   );
 }
 
+export async function fetchActiveListings(cursor = 0, limit = 50, seller?: string): Promise<ApiActiveListingsResponse> {
+  const params = new URLSearchParams();
+  params.set("cursor", String(cursor));
+  params.set("limit", String(limit));
+  if (seller) {
+    params.set("seller", seller);
+  }
+  return fetchJson<ApiActiveListingsResponse>(`/api/listings?${params.toString()}`);
+}
+
 export async function fetchIndexerOverview(): Promise<ApiIndexerOverview> {
   return fetchJson<ApiIndexerOverview>("/api/overview");
+}
+
+export async function fetchIndexerHealth(): Promise<ApiIndexerHealth> {
+  return fetchJson<ApiIndexerHealth>("/health");
 }
 
 export async function fetchOwnerSummary(ownerAddress: string): Promise<ApiOwnerSummary> {
@@ -494,5 +549,42 @@ export async function backfillCollectionSubname(payload: {
       ownerAddress: payload.ownerAddress,
       contractAddress: payload.contractAddress
     })
+  });
+}
+
+export async function backfillMintTxHashes(payload?: {
+  limit?: number;
+  auth?: AdminAuth;
+}): Promise<{ ok: boolean; scanned: number; resolved: number; unresolved: number; limit: number }> {
+  const params = new URLSearchParams();
+  if (payload?.limit && Number.isInteger(payload.limit) && payload.limit > 0) {
+    params.set("limit", String(payload.limit));
+  }
+  const query = params.toString();
+  return fetchJson<{ ok: boolean; scanned: number; resolved: number; unresolved: number; limit: number }>(
+    `/api/admin/tokens/backfill-mint-tx${query ? `?${query}` : ""}`,
+    {
+      method: "POST",
+      headers: adminHeaders(payload?.auth)
+    }
+  );
+}
+
+export async function syncMarketplaceListings(auth?: AdminAuth): Promise<{
+  ok: boolean;
+  configured: boolean;
+  syncInProgress: boolean;
+  lastListingSyncAt: string | null;
+  lastListingSyncCount: number;
+}> {
+  return fetchJson<{
+    ok: boolean;
+    configured: boolean;
+    syncInProgress: boolean;
+    lastListingSyncAt: string | null;
+    lastListingSyncCount: number;
+  }>("/api/admin/listings/sync", {
+    method: "POST",
+    headers: adminHeaders(auth)
   });
 }

@@ -28,6 +28,7 @@ model Token {
   tokenId            String
   creatorAddress     String
   ownerAddress       String
+  mintTxHash         String?
   metadataCid        String
   mediaCid           String?
   immutable          Boolean  @default(true)

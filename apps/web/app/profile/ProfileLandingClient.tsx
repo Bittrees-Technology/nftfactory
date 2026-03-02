@@ -710,11 +710,12 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
       }
     }
 
+    const requested = normalizedFullName;
+
     try {
       const resolution = await fetchProfileResolution(slug);
       if (cancelled) return;
 
-      const requested = normalizedFullName;
       const exactProfileMatch = (resolution.profiles || []).some(
         (profile) => profile.fullName.trim().toLowerCase() === requested
       );

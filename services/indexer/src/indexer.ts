@@ -125,6 +125,7 @@ const ADMIN_TOKEN = process.env.INDEXER_ADMIN_TOKEN || "";
 const TRUST_PROXY = process.env.TRUST_PROXY === "true";
 const MODERATOR_REGISTRY_ADDRESS = process.env.MODERATOR_REGISTRY_ADDRESS || "";
 const REGISTRY_ADDRESS = process.env.REGISTRY_ADDRESS || process.env.NEXT_PUBLIC_REGISTRY_ADDRESS || "";
+const MARKETPLACE_ADDRESS = process.env.MARKETPLACE_ADDRESS || process.env.NEXT_PUBLIC_MARKETPLACE_ADDRESS || "";
 const MODERATOR_FILE = process.env.INDEXER_MODERATOR_FILE || path.join(process.cwd(), "data", "moderators.json");
 const PROFILE_FILE = process.env.INDEXER_PROFILE_FILE || path.join(process.cwd(), "data", "profiles.json");
 const PAYMENT_TOKEN_FILE = process.env.INDEXER_PAYMENT_TOKEN_FILE || path.join(process.cwd(), "data", "payment-tokens.json");
@@ -182,6 +183,7 @@ function createPrismaClient(): PrismaClient {
 
 const prisma = createPrismaClient();
 const RESOLVE_ACTIONS = new Set(["hide", "restore", "dismiss"]);
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
 class BadRequestError extends Error {}
 type RequestHandlerConfig = {
@@ -190,6 +192,7 @@ type RequestHandlerConfig = {
   adminToken: string;
   adminAllowlist: Set<string>;
   trustProxy: boolean;
+  marketplaceAddress: `0x${string}` | null;
   registryAddress: `0x${string}` | null;
   moderatorRegistryAddress: `0x${string}` | null;
 };
@@ -341,6 +344,39 @@ const erc1155ReadAbi = [
     outputs: [{ name: "", type: "string" }]
   }
 ] as const;
+
+const marketplaceReadAbi = [
+  {
+    type: "function",
+    name: "nextListingId",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }]
+  },
+  {
+    type: "function",
+    name: "listings",
+    stateMutability: "view",
+    inputs: [{ name: "", type: "uint256" }],
+    outputs: [
+      { name: "seller", type: "address" },
+      { name: "nft", type: "address" },
+      { name: "tokenId", type: "uint256" },
+      { name: "amount", type: "uint256" },
+      { name: "standard", type: "string" },
+      { name: "paymentToken", type: "address" },
+      { name: "price", type: "uint256" },
+      { name: "expiresAt", type: "uint256" },
+      { name: "active", type: "bool" }
+    ]
+  }
+] as const;
+
+const LISTING_SYNC_BATCH_SIZE = 20;
+const LISTING_SYNC_TTL_MS = 30_000;
+let lastListingSyncAt = 0;
+let lastListingSyncCount = 0;
+let listingSyncPromise: Promise<void> | null = null;
 
 async function readOnchainModeratorRecords(config: RequestHandlerConfig): Promise<ModeratorRecord[]> {
   if (!config.moderatorRegistryAddress) return [];
@@ -618,6 +654,7 @@ function toTokenApiShape(item: any) {
     tokenId: item.tokenId,
     creatorAddress: item.creatorAddress,
     ownerAddress: item.ownerAddress,
+    mintTxHash: item.mintTxHash || null,
     metadataCid: item.metadataCid,
     metadataUrl: buildGatewayUrl(item.metadataCid),
     mediaCid: item.mediaCid,
@@ -636,6 +673,344 @@ function toTokenApiShape(item: any) {
         }
       : null
   };
+}
+
+function toListingApiShape(item: any) {
+  const token = item.token || null;
+  const collection = token?.collection || null;
+
+  return {
+    id: Number.parseInt(item.listingId, 10) || 0,
+    listingId: item.listingId,
+    sellerAddress: item.sellerAddress,
+    collectionAddress: item.collectionAddress,
+    tokenId: item.tokenId,
+    amountRaw: "1",
+    standard: collection?.standard || "UNKNOWN",
+    paymentToken: item.paymentToken,
+    priceRaw: item.priceRaw,
+    expiresAtRaw: "0",
+    active: item.active,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+    token: token
+      ? {
+          id: token.id,
+          creatorAddress: token.creatorAddress,
+          ownerAddress: token.ownerAddress,
+          mintTxHash: token.mintTxHash || null,
+          metadataCid: token.metadataCid,
+          metadataUrl: buildGatewayUrl(token.metadataCid),
+          mediaCid: token.mediaCid,
+          mediaUrl: buildGatewayUrl(token.mediaCid),
+          immutable: token.immutable,
+          mintedAt: token.mintedAt,
+          collection: collection
+            ? {
+                chainId: collection.chainId,
+                contractAddress: collection.contractAddress,
+                ownerAddress: collection.ownerAddress,
+                ensSubname: collection.ensSubname,
+                standard: collection.standard,
+                isFactoryCreated: collection.isFactoryCreated,
+                isUpgradeable: collection.isUpgradeable,
+                finalizedAt: collection.finalizedAt,
+                createdAt: collection.createdAt,
+                updatedAt: collection.updatedAt
+              }
+            : null
+        }
+      : null
+  };
+}
+
+let mintTxHashColumnAvailableCache: boolean | null = null;
+
+async function hasMintTxHashColumn(deps: IndexerDeps): Promise<boolean> {
+  if (mintTxHashColumnAvailableCache !== null) {
+    return mintTxHashColumnAvailableCache;
+  }
+
+  const prismaAny = deps.prisma as any;
+  if (typeof prismaAny.$queryRawUnsafe !== "function") {
+    mintTxHashColumnAvailableCache = false;
+    return false;
+  }
+
+  try {
+    const rows = (await prismaAny.$queryRawUnsafe(`
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'Token'
+        AND column_name = 'mintTxHash'
+      LIMIT 1
+    `)) as Array<unknown>;
+    mintTxHashColumnAvailableCache = rows.length > 0;
+    return mintTxHashColumnAvailableCache;
+  } catch {
+    mintTxHashColumnAvailableCache = false;
+    return false;
+  }
+}
+
+async function attachMintTxHashes(
+  items: Array<{
+    id?: string;
+    tokenId: string;
+    mintTxHash?: string | null;
+    collection?: { contractAddress: string; standard: string } | null;
+  }>,
+  config: RequestHandlerConfig,
+  deps?: IndexerDeps
+): Promise<void> {
+  const pending = items.filter(
+    (item) =>
+      !item.mintTxHash &&
+      item.collection &&
+      isAddress(String(item.collection.contractAddress || "").toLowerCase()) &&
+      item.tokenId
+  );
+  if (pending.length === 0) return;
+
+  const client = createPublicClient({
+    transport: http(config.rpcUrl)
+  });
+
+  const groups = new Map<string, typeof pending>();
+  for (const item of pending) {
+    const contractAddress = String(item.collection?.contractAddress || "").toLowerCase();
+    const standard = String(item.collection?.standard || "ERC721").toUpperCase();
+    const key = `${contractAddress}:${standard}`;
+    const next = groups.get(key) || [];
+    next.push(item);
+    groups.set(key, next);
+  }
+
+  await Promise.all(
+    [...groups.entries()].map(async ([key, group]) => {
+      const [contractAddress, standard] = key.split(":");
+      try {
+        if (standard === "ERC1155") {
+          const tokenTxs = new Map<string, string>();
+          const singleLogs = await client.getLogs({
+            address: contractAddress as `0x${string}`,
+            event: erc1155TransferSingleEvent,
+            fromBlock: 0n,
+            toBlock: "latest"
+          });
+          const batchLogs = await client.getLogs({
+            address: contractAddress as `0x${string}`,
+            event: erc1155TransferBatchEvent,
+            fromBlock: 0n,
+            toBlock: "latest"
+          });
+
+          for (const log of singleLogs) {
+            if (String(log.args.from || "").toLowerCase() !== ZERO_ADDRESS) continue;
+            const tokenId = log.args.id?.toString();
+            if (tokenId && !tokenTxs.has(tokenId)) {
+              tokenTxs.set(tokenId, log.transactionHash);
+            }
+          }
+
+          for (const log of batchLogs) {
+            if (String(log.args.from || "").toLowerCase() !== ZERO_ADDRESS) continue;
+            for (const id of log.args.ids || []) {
+              const tokenId = id.toString();
+              if (!tokenTxs.has(tokenId)) {
+                tokenTxs.set(tokenId, log.transactionHash);
+              }
+            }
+          }
+
+          for (const item of group) {
+            item.mintTxHash = tokenTxs.get(item.tokenId) || null;
+          }
+          if (deps) {
+            await Promise.all(
+              group
+                .filter((item) => item.id && item.mintTxHash)
+                .map((item) =>
+                  (deps.prisma.token as any).update({
+                    where: { id: item.id },
+                    data: { mintTxHash: item.mintTxHash }
+                  }).catch(() => null)
+                )
+            );
+          }
+          return;
+        }
+
+        const tokenTxs = new Map<string, string>();
+        const logs = await client.getLogs({
+          address: contractAddress as `0x${string}`,
+          event: erc721TransferEvent,
+          fromBlock: 0n,
+          toBlock: "latest"
+        });
+        for (const log of logs) {
+          if (String(log.args.from || "").toLowerCase() !== ZERO_ADDRESS) continue;
+          const tokenId = log.args.tokenId?.toString();
+          if (tokenId && !tokenTxs.has(tokenId)) {
+            tokenTxs.set(tokenId, log.transactionHash);
+          }
+        }
+        for (const item of group) {
+          item.mintTxHash = tokenTxs.get(item.tokenId) || null;
+        }
+        if (deps) {
+          await Promise.all(
+            group
+              .filter((item) => item.id && item.mintTxHash)
+              .map((item) =>
+                (deps.prisma.token as any).update({
+                  where: { id: item.id },
+                  data: { mintTxHash: item.mintTxHash }
+                }).catch(() => null)
+              )
+          );
+        }
+      } catch {
+        for (const item of group) {
+          item.mintTxHash = item.mintTxHash || null;
+        }
+      }
+    })
+  );
+}
+
+async function findTokenRefIdForListing(
+  collectionAddress: string,
+  tokenId: string,
+  deps: IndexerDeps
+): Promise<string | null> {
+  const token = await (deps.prisma.token as any).findFirst({
+    where: {
+      tokenId,
+      collection: {
+        contractAddress: collectionAddress
+      }
+    },
+    select: {
+      id: true
+    }
+  });
+  return token?.id || null;
+}
+
+async function syncMarketplaceListingsIfStale(
+  deps: IndexerDeps,
+  config: RequestHandlerConfig,
+  options?: { force?: boolean }
+): Promise<void> {
+  if (!config.marketplaceAddress) return;
+
+  const now = Date.now();
+  if (listingSyncPromise) {
+    await listingSyncPromise;
+    return;
+  }
+  if (!options?.force && now - lastListingSyncAt < LISTING_SYNC_TTL_MS) {
+    return;
+  }
+
+  listingSyncPromise = (async () => {
+    try {
+      const client = createPublicClient({
+        transport: http(config.rpcUrl)
+      });
+
+      const nextListingId = (await client.readContract({
+        address: config.marketplaceAddress as `0x${string}`,
+        abi: marketplaceReadAbi,
+        functionName: "nextListingId"
+      })) as bigint;
+
+      const activeListingIds = new Set<string>();
+      const currentUnix = BigInt(Math.floor(Date.now() / 1000));
+
+      for (let offset = 0; offset < Number(nextListingId); offset += LISTING_SYNC_BATCH_SIZE) {
+        const batchIds: number[] = [];
+        for (
+          let id = offset;
+          id < Math.min(Number(nextListingId), offset + LISTING_SYNC_BATCH_SIZE);
+          id += 1
+        ) {
+          batchIds.push(id);
+        }
+
+        const rows = (await Promise.all(
+          batchIds.map((id) =>
+            client.readContract({
+              address: config.marketplaceAddress as `0x${string}`,
+              abi: marketplaceReadAbi,
+              functionName: "listings",
+              args: [BigInt(id)]
+            })
+          )
+        )) as readonly (readonly [`0x${string}`, `0x${string}`, bigint, bigint, string, `0x${string}`, bigint, bigint, boolean])[];
+
+        await Promise.all(
+          rows.map(async (row, index) => {
+            const listingId = String(batchIds[index]);
+            const isActive = row[8] && row[7] > currentUnix;
+            if (!isActive) return;
+
+            activeListingIds.add(listingId);
+            const collectionAddress = row[1].toLowerCase();
+            const tokenId = row[2].toString();
+            const tokenRefId = await findTokenRefIdForListing(collectionAddress, tokenId, deps);
+
+            await deps.prisma.listing.upsert({
+              where: { listingId },
+              update: {
+                chainId: config.chainId,
+                collectionAddress,
+                tokenId,
+                sellerAddress: row[0].toLowerCase(),
+                paymentToken: row[5].toLowerCase(),
+                priceRaw: row[6].toString(),
+                active: true,
+                tokenRefId
+              },
+              create: {
+                listingId,
+                chainId: config.chainId,
+                collectionAddress,
+                tokenId,
+                sellerAddress: row[0].toLowerCase(),
+                paymentToken: row[5].toLowerCase(),
+                priceRaw: row[6].toString(),
+                active: true,
+                tokenRefId
+              }
+            });
+          })
+        );
+      }
+
+      await deps.prisma.listing.updateMany({
+        where: {
+          chainId: config.chainId,
+          active: true,
+          ...(activeListingIds.size > 0 ? { listingId: { notIn: Array.from(activeListingIds) } } : {})
+        },
+        data: {
+          active: false
+        }
+      });
+
+      lastListingSyncAt = Date.now();
+      lastListingSyncCount = activeListingIds.size;
+    } catch (err) {
+      log.warn({ err }, "marketplace_listing_sync_failed");
+    } finally {
+      listingSyncPromise = null;
+    }
+  })();
+
+  await listingSyncPromise;
 }
 
 async function readJsonBody<T>(req: IncomingMessage): Promise<T> {
@@ -785,7 +1160,20 @@ async function handleRequest(
   const path = url.pathname;
 
   if (req.method === "GET" && path === "/health") {
-    sendJson(res, 200, { ok: true, service: "indexer-api" });
+    const mintTxHashColumnAvailable = await hasMintTxHashColumn(deps);
+    sendJson(res, 200, {
+      ok: true,
+      service: "indexer-api",
+      schema: {
+        mintTxHashColumnAvailable
+      },
+      marketplace: {
+        configured: Boolean(config.marketplaceAddress),
+        syncInProgress: Boolean(listingSyncPromise),
+        lastListingSyncAt: lastListingSyncAt > 0 ? new Date(lastListingSyncAt).toISOString() : null,
+        lastListingSyncCount
+      }
+    });
     return;
   }
 
@@ -1190,6 +1578,68 @@ async function handleRequest(
     return;
   }
 
+  if (req.method === "POST" && path === "/api/admin/tokens/backfill-mint-tx") {
+    if (deps.isRateLimitedImpl(deps.getClientIpImpl(req, config.trustProxy))) {
+      sendJson(res, 429, { error: "Too many requests" });
+      return;
+    }
+    const auth = await assertAdminRequest(req, config, undefined, { includeDynamicModerators: false });
+    if (!auth.ok) {
+      sendJson(res, 401, { error: auth.error });
+      return;
+    }
+
+    const includeMintTxHash = await hasMintTxHashColumn(deps);
+    if (!includeMintTxHash) {
+      sendJson(res, 409, {
+        error: "mintTxHash column is not available yet",
+        schema: { mintTxHashColumnAvailable: false }
+      });
+      return;
+    }
+
+    const limitRaw = Number.parseInt(String(url.searchParams.get("limit") || "200"), 10);
+    const limit = Number.isInteger(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 500) : 200;
+    const candidates = await (deps.prisma.token as any).findMany({
+      where: {
+        mintTxHash: null
+      },
+      take: limit,
+      orderBy: [{ mintedAt: "desc" }, { id: "desc" }],
+      select: {
+        id: true,
+        tokenId: true,
+        collection: {
+          select: {
+            contractAddress: true,
+            standard: true
+          }
+        }
+      }
+    });
+
+    const rows = candidates.map((item: any) => ({
+      id: item.id,
+      tokenId: item.tokenId,
+      mintTxHash: null,
+      collection: {
+        contractAddress: item.collection.contractAddress,
+        standard: item.collection.standard
+      }
+    }));
+
+    await attachMintTxHashes(rows, config, deps);
+
+    sendJson(res, 200, {
+      ok: true,
+      scanned: candidates.length,
+      resolved: rows.filter((item: any) => Boolean(item.mintTxHash)).length,
+      unresolved: rows.filter((item: any) => !item.mintTxHash).length,
+      limit
+    });
+    return;
+  }
+
   if (req.method === "GET" && path === "/api/profiles") {
     const owner = String(url.searchParams.get("owner") || "").trim().toLowerCase();
     if (!owner || !isAddress(owner)) {
@@ -1249,12 +1699,40 @@ async function handleRequest(
     return;
   }
 
+  if (req.method === "POST" && path === "/api/admin/listings/sync") {
+    if (deps.isRateLimitedImpl(deps.getClientIpImpl(req, config.trustProxy))) {
+      sendJson(res, 429, { error: "Too many requests" });
+      return;
+    }
+    const auth = await assertAdminRequest(req, config, undefined, { includeDynamicModerators: false });
+    if (!auth.ok) {
+      sendJson(res, 401, { error: auth.error });
+      return;
+    }
+    if (!config.marketplaceAddress) {
+      sendJson(res, 409, { error: "Marketplace sync is not configured" });
+      return;
+    }
+
+    await syncMarketplaceListingsIfStale(deps, config, { force: true });
+    sendJson(res, 200, {
+      ok: true,
+      configured: true,
+      syncInProgress: Boolean(listingSyncPromise),
+      lastListingSyncAt: lastListingSyncAt > 0 ? new Date(lastListingSyncAt).toISOString() : null,
+      lastListingSyncCount
+    });
+    return;
+  }
+
   if (req.method === "GET" && /^\/api\/owners\/[^/]+\/summary$/.test(path)) {
     const owner = String(decodeURIComponent(path.split("/")[3] || "")).trim().toLowerCase();
     if (!owner || !isAddress(owner)) {
       sendJson(res, 400, { error: "Valid owner address is required" });
       return;
     }
+    await syncMarketplaceListingsIfStale(deps, config);
+    const includeMintTxHash = await hasMintTxHashColumn(deps);
 
     const [linkedProfiles, collections, ownedTokenCount, createdTokenCount, activeListings, recentOwnedTokens] = await Promise.all([
       readProfileRecords().then((records) => records.filter((item) => item.ownerAddress === owner).map(toProfileResponse)),
@@ -1282,13 +1760,14 @@ async function handleRequest(
       deps.prisma.token.count({ where: { ownerAddress: owner } }),
       deps.prisma.token.count({ where: { creatorAddress: owner } }),
       deps.prisma.listing.count({ where: { sellerAddress: owner, active: true } }),
-      deps.prisma.token.findMany({
+      (deps.prisma.token as any).findMany({
         where: { ownerAddress: owner },
         take: 5,
         orderBy: [{ mintedAt: "desc" }, { id: "desc" }],
         select: {
           id: true,
           tokenId: true,
+          ...(includeMintTxHash ? { mintTxHash: true } : {}),
           metadataCid: true,
           mediaCid: true,
           mintedAt: true,
@@ -1312,7 +1791,7 @@ async function handleRequest(
       .filter((item: any) => item.isFactoryCreated)
       .map((item: any) => item.id);
     const factoryCollectionTokens = factoryCollectionIds.length
-      ? await deps.prisma.token.findMany({
+      ? await (deps.prisma.token as any).findMany({
           where: {
             collectionId: { in: factoryCollectionIds }
           },
@@ -1322,6 +1801,7 @@ async function handleRequest(
             tokenId: true,
             creatorAddress: true,
             ownerAddress: true,
+            ...(includeMintTxHash ? { mintTxHash: true } : {}),
             metadataCid: true,
             mediaCid: true,
             immutable: true,
@@ -1426,7 +1906,7 @@ async function handleRequest(
               fromBlock: 0n,
               toBlock: "latest"
             });
-            const mintedLogs = logs.filter((log) => String(log.args.from || "").toLowerCase() === zeroAddress);
+            const mintedLogs = logs.filter((log) => String(log.args.from || "").toLowerCase() === ZERO_ADDRESS);
             for (const log of mintedLogs) {
               const tokenId = log.args.tokenId?.toString();
               if (!tokenId) continue;
@@ -1460,6 +1940,7 @@ async function handleRequest(
                   tokenId,
                   creatorAddress: owner,
                   ownerAddress: owner,
+                  mintTxHash: log.transactionHash,
                   metadataCid,
                   metadataUrl: buildGatewayUrl(metadataCid),
                   mediaCid: null,
@@ -1491,14 +1972,26 @@ async function handleRequest(
             });
 
             const tokenIds = new Set<string>();
+            const mintTxByTokenId = new Map<string, string>();
             for (const log of singleLogs) {
-              if (String(log.args.from || "").toLowerCase() !== zeroAddress) continue;
+              if (String(log.args.from || "").toLowerCase() !== ZERO_ADDRESS) continue;
               const tokenId = log.args.id?.toString();
-              if (tokenId) tokenIds.add(tokenId);
+              if (tokenId) {
+                tokenIds.add(tokenId);
+                if (!mintTxByTokenId.has(tokenId)) {
+                  mintTxByTokenId.set(tokenId, log.transactionHash);
+                }
+              }
             }
             for (const log of batchLogs) {
-              if (String(log.args.from || "").toLowerCase() !== zeroAddress) continue;
-              for (const id of log.args.ids || []) tokenIds.add(id.toString());
+              if (String(log.args.from || "").toLowerCase() !== ZERO_ADDRESS) continue;
+              for (const id of log.args.ids || []) {
+                const tokenId = id.toString();
+                tokenIds.add(tokenId);
+                if (!mintTxByTokenId.has(tokenId)) {
+                  mintTxByTokenId.set(tokenId, log.transactionHash);
+                }
+              }
             }
 
             for (const tokenId of tokenIds) {
@@ -1532,6 +2025,7 @@ async function handleRequest(
                   tokenId,
                   creatorAddress: owner,
                   ownerAddress: owner,
+                  mintTxHash: mintTxByTokenId.get(tokenId) || null,
                   metadataCid,
                   metadataUrl: buildGatewayUrl(metadataCid),
                   mediaCid: null,
@@ -1618,6 +2112,7 @@ async function handleRequest(
       recentOwnedMints: recentOwnedTokens.map((item: any) => ({
         id: item.id,
         tokenId: item.tokenId,
+        mintTxHash: includeMintTxHash ? item.mintTxHash || null : null,
         metadataCid: item.metadataCid,
         metadataUrl: buildGatewayUrl(item.metadataCid),
         mediaCid: item.mediaCid,
@@ -1915,13 +2410,84 @@ async function handleRequest(
     return;
   }
 
+  if (req.method === "GET" && path === "/api/listings") {
+    await syncMarketplaceListingsIfStale(deps, config);
+
+    const cursor = Math.max(0, Number.parseInt(String(url.searchParams.get("cursor") || "0"), 10) || 0);
+    const limit = Math.min(100, Math.max(1, Number.parseInt(String(url.searchParams.get("limit") || "50"), 10) || 50));
+    const seller = String(url.searchParams.get("seller") || "").trim().toLowerCase();
+    const includeMintTxHash = await hasMintTxHashColumn(deps);
+
+    const where: Record<string, unknown> = { active: true };
+    if (seller && isAddress(seller)) {
+      where.sellerAddress = seller;
+    }
+
+    const rows = await deps.prisma.listing.findMany({
+      where,
+      orderBy: [
+        { updatedAt: "desc" },
+        { createdAt: "desc" }
+      ],
+      skip: cursor,
+      take: limit,
+      select: {
+        listingId: true,
+        sellerAddress: true,
+        collectionAddress: true,
+        tokenId: true,
+        paymentToken: true,
+        priceRaw: true,
+        active: true,
+        createdAt: true,
+        updatedAt: true,
+        token: {
+          select: {
+            id: true,
+            creatorAddress: true,
+            ownerAddress: true,
+            metadataCid: true,
+            mediaCid: true,
+            immutable: true,
+            mintedAt: true,
+            ...(includeMintTxHash ? { mintTxHash: true } : {}),
+            collection: {
+              select: {
+                chainId: true,
+                contractAddress: true,
+                ownerAddress: true,
+                ensSubname: true,
+                standard: true,
+                isFactoryCreated: true,
+                isUpgradeable: true,
+                finalizedAt: true,
+                createdAt: true,
+                updatedAt: true
+              }
+            }
+          }
+        }
+      }
+    });
+
+    sendJson(res, 200, {
+      cursor,
+      nextCursor: cursor + rows.length,
+      canLoadMore: rows.length === limit,
+      items: rows.map((item: any) => toListingApiShape(item))
+    });
+    return;
+  }
+
   if (req.method === "GET" && path === "/api/feed") {
     const limitRaw = Number.parseInt(String(url.searchParams.get("limit") || "50"), 10);
     const cursorRaw = Number.parseInt(String(url.searchParams.get("cursor") || "0"), 10);
     const limit = Number.isInteger(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 100) : 50;
     const cursor = Number.isInteger(cursorRaw) && cursorRaw >= 0 ? cursorRaw : 0;
+    await syncMarketplaceListingsIfStale(deps, config);
+    const includeMintTxHash = await hasMintTxHashColumn(deps);
 
-    const items = await deps.prisma.token.findMany({
+    const items = await (deps.prisma.token as any).findMany({
       take: limit,
       skip: cursor,
       orderBy: [{ mintedAt: "desc" }, { id: "desc" }],
@@ -1930,6 +2496,7 @@ async function handleRequest(
         tokenId: true,
         creatorAddress: true,
         ownerAddress: true,
+        ...(includeMintTxHash ? { mintTxHash: true } : {}),
         metadataCid: true,
         mediaCid: true,
         immutable: true,
@@ -1965,50 +2532,56 @@ async function handleRequest(
       }
     });
 
+    const responseItems = items.map((item: any) => ({
+      id: item.id,
+      tokenId: item.tokenId,
+      creatorAddress: item.creatorAddress,
+      ownerAddress: item.ownerAddress,
+      mintTxHash: includeMintTxHash ? item.mintTxHash || null : null,
+      metadataCid: item.metadataCid,
+      metadataUrl: buildGatewayUrl(item.metadataCid),
+      mediaCid: item.mediaCid,
+      mediaUrl: buildGatewayUrl(item.mediaCid),
+      immutable: item.immutable,
+      mintedAt: item.mintedAt,
+      collection: {
+        chainId: item.collection.chainId,
+        contractAddress: item.collection.contractAddress,
+        ownerAddress: item.collection.ownerAddress,
+        ensSubname: item.collection.ensSubname,
+        standard: item.collection.standard,
+        isFactoryCreated: item.collection.isFactoryCreated,
+        isUpgradeable: item.collection.isUpgradeable,
+        finalizedAt: item.collection.finalizedAt,
+        createdAt: item.collection.createdAt,
+        updatedAt: item.collection.updatedAt
+      },
+      activeListing: item.listings?.[0]
+        ? {
+            listingId: item.listings[0].listingId,
+            sellerAddress: item.listings[0].sellerAddress,
+            paymentToken: item.listings[0].paymentToken,
+            priceRaw: item.listings[0].priceRaw,
+            active: item.listings[0].active,
+            createdAt: item.listings[0].createdAt,
+            updatedAt: item.listings[0].updatedAt
+          }
+        : null
+    }));
+
+    await attachMintTxHashes(responseItems, config, includeMintTxHash ? deps : undefined);
+
     sendJson(res, 200, {
       cursor,
       nextCursor: cursor + items.length,
       canLoadMore: items.length === limit,
-      items: items.map((item: any) => ({
-        id: item.id,
-        tokenId: item.tokenId,
-        creatorAddress: item.creatorAddress,
-        ownerAddress: item.ownerAddress,
-        metadataCid: item.metadataCid,
-        metadataUrl: buildGatewayUrl(item.metadataCid),
-        mediaCid: item.mediaCid,
-        mediaUrl: buildGatewayUrl(item.mediaCid),
-        immutable: item.immutable,
-        mintedAt: item.mintedAt,
-        collection: {
-          chainId: item.collection.chainId,
-          contractAddress: item.collection.contractAddress,
-          ownerAddress: item.collection.ownerAddress,
-          ensSubname: item.collection.ensSubname,
-          standard: item.collection.standard,
-          isFactoryCreated: item.collection.isFactoryCreated,
-          isUpgradeable: item.collection.isUpgradeable,
-          finalizedAt: item.collection.finalizedAt,
-          createdAt: item.collection.createdAt,
-          updatedAt: item.collection.updatedAt
-        },
-        activeListing: item.listings?.[0]
-          ? {
-              listingId: item.listings[0].listingId,
-              sellerAddress: item.listings[0].sellerAddress,
-              paymentToken: item.listings[0].paymentToken,
-              priceRaw: item.listings[0].priceRaw,
-              active: item.listings[0].active,
-              createdAt: item.listings[0].createdAt,
-              updatedAt: item.listings[0].updatedAt
-            }
-          : null
-      }))
+      items: responseItems
     });
     return;
   }
 
   if (req.method === "GET" && path === "/api/overview") {
+    await syncMarketplaceListingsIfStale(deps, config);
     const [collectionCount, tokenCount, activeListingCount, openReportCount, hiddenListingIds, profiles, paymentTokens, moderators] =
       await Promise.all([
         deps.prisma.collection.count(),
@@ -2111,8 +2684,9 @@ async function handleRequest(
       sendJson(res, 400, { error: "Valid contract address is required" });
       return;
     }
+    const includeMintTxHash = await hasMintTxHashColumn(deps);
 
-    const tokens = await deps.prisma.token.findMany({
+    const tokens = await (deps.prisma.token as any).findMany({
       where: {
         collection: {
           contractAddress
@@ -2124,6 +2698,7 @@ async function handleRequest(
         tokenId: true,
         creatorAddress: true,
         ownerAddress: true,
+        ...(includeMintTxHash ? { mintTxHash: true } : {}),
         metadataCid: true,
         mediaCid: true,
         immutable: true,
@@ -2224,6 +2799,10 @@ export async function main() {
       adminToken: ADMIN_TOKEN,
       adminAllowlist: ADMIN_ALLOWLIST,
       trustProxy: TRUST_PROXY,
+      marketplaceAddress:
+        MARKETPLACE_ADDRESS && isAddress(MARKETPLACE_ADDRESS.toLowerCase())
+          ? (MARKETPLACE_ADDRESS.toLowerCase() as `0x${string}`)
+          : null,
       registryAddress:
         REGISTRY_ADDRESS && isAddress(REGISTRY_ADDRESS.toLowerCase())
           ? (REGISTRY_ADDRESS.toLowerCase() as `0x${string}`)

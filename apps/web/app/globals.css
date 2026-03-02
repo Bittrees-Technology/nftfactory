@@ -12,6 +12,7 @@
 body {
   margin: 0;
   font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  line-height: 1.5;
   color: var(--ink);
   background:
     radial-gradient(circle at 0% 0%, #fbd4a4 0, transparent 38%),
@@ -326,6 +327,72 @@ nav {
   background: #fff9f1;
 }
 
+.listingPreviewRow {
+  grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
+  align-items: stretch;
+  gap: 14px;
+  padding: 14px;
+}
+
+.listingPreviewMedia {
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid #e6d7c4;
+  border-radius: 14px;
+  background: #f7efe3;
+  min-height: 200px;
+}
+
+.listingPreviewImage {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 360px;
+  object-fit: contain;
+  background: #f7efe3;
+}
+
+.listingPreviewFallback {
+  display: grid;
+  gap: 10px;
+  min-height: 180px;
+  place-items: center;
+  padding: 14px;
+  text-align: center;
+  color: #6b2d1c;
+}
+
+.listingPreviewContent {
+  display: grid;
+  gap: 12px;
+}
+
+.listingPreviewHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.listingPreviewTitle {
+  margin: 0;
+  font-size: 1.08rem;
+  line-height: 1.25;
+}
+
+.listingPreviewLinks {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.listingPreviewLinks p {
+  margin: 0;
+}
+
 .feedCard {
   display: grid;
   gap: 14px;
@@ -336,18 +403,34 @@ nav {
   box-shadow: 0 10px 28px rgba(111, 63, 24, 0.06);
 }
 
+.feedCardHero {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(280px, 0.95fr) minmax(0, 1.05fr);
+  align-items: start;
+}
+
+.feedCardContent {
+  display: grid;
+  gap: 14px;
+}
+
 .feedCardMedia {
+  display: grid;
+  place-items: center;
   overflow: hidden;
   border: 1px solid #e6d7c4;
   border-radius: 14px;
   background: #f7efe3;
+  min-height: 280px;
 }
 
 .feedCardImage {
   display: block;
   width: 100%;
-  height: 240px;
-  object-fit: cover;
+  height: auto;
+  max-height: 420px;
+  object-fit: contain;
   background: #f7efe3;
 }
 
@@ -387,7 +470,7 @@ nav {
 
 .feedCardTop {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 12px;
   align-items: center;
   flex-wrap: wrap;
@@ -415,7 +498,6 @@ nav {
 .feedCardBody {
   display: grid;
   gap: 14px;
-  grid-template-columns: minmax(220px, 1.2fr) minmax(240px, 1fr);
 }
 
 .feedCardMain {
@@ -829,6 +911,7 @@ input {
   border-radius: 10px;
   padding: 10px 12px;
   font: inherit;
+  line-height: 1.4;
   background: #fffcf7;
 }
 
@@ -837,6 +920,7 @@ select {
   border-radius: 10px;
   padding: 10px 12px;
   font: inherit;
+  line-height: 1.4;
   background: #fffcf7;
 }
 
@@ -845,6 +929,7 @@ textarea {
   border-radius: 10px;
   padding: 10px 12px;
   font: inherit;
+  line-height: 1.4;
   background: #fffcf7;
   min-height: 104px;
   resize: vertical;
@@ -856,6 +941,7 @@ button {
   background: var(--accent);
   color: #fff;
   font: inherit;
+  line-height: 1.4;
   font-weight: 600;
   padding: 10px 14px;
   cursor: pointer;
@@ -1116,7 +1202,11 @@ button:disabled {
     grid-template-columns: 1fr;
   }
 
-  .feedCardBody {
+  .listingPreviewRow {
+    grid-template-columns: 1fr;
+  }
+
+  .feedCardHero {
     grid-template-columns: 1fr;
   }
 

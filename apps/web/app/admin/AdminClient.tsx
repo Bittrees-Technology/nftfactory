@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
+  backfillMintTxHashes,
+  fetchIndexerHealth,
   fetchTrackedPaymentTokens,
   fetchHiddenListingIds,
   fetchModerators,
@@ -11,21 +13,69 @@ import {
   reviewTrackedPaymentToken,
   resolveModerationReport,
   setListingVisibility,
+  syncMarketplaceListings,
   updateModerator,
+  type ApiIndexerHealth,
   type ApiPaymentTokenRecord,
   type ApiModerator,
   type ApiModeratorsResponse,
   type ApiModerationAction,
   type ApiModerationReport
 } from "../../lib/indexerApi";
+import { useLogScanStatsSnapshot } from "../../lib/useLogScanStatsSnapshot";
+import LogScanDebugPanel from "../components/LogScanDebugPanel";
 
 type Decision = "hide" | "restore" | "dismiss";
+
+type MintBackfillRun = {
+  ranAt: string;
+  scanned: number;
+  resolved: number;
+  unresolved: number;
+  limit: number;
+};
+
+const MINT_BACKFILL_HISTORY_KEY = "nftfactory:admin:mint-tx-backfill-history:v1";
+const MAX_MINT_BACKFILL_HISTORY = 8;
 
 function formatIso(value: string | undefined): string {
   if (!value) return "-";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleString();
+}
+
+function readMintBackfillHistory(): MintBackfillRun[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(MINT_BACKFILL_HISTORY_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as MintBackfillRun[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeMintBackfillHistory(history: MintBackfillRun[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(
+      MINT_BACKFILL_HISTORY_KEY,
+      JSON.stringify(history.slice(0, MAX_MINT_BACKFILL_HISTORY))
+    );
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
+function clearMintBackfillHistory(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(MINT_BACKFILL_HISTORY_KEY);
+  } catch {
+    // Ignore storage failures.
+  }
 }
 
 export default function AdminClient() {
@@ -39,30 +89,47 @@ export default function AdminClient() {
   const [moderatorSource, setModeratorSource] = useState<ApiModeratorsResponse["source"]>("local");
   const [moderatorRegistryAddress, setModeratorRegistryAddress] = useState<string | null>(null);
   const [paymentTokens, setPaymentTokens] = useState<ApiPaymentTokenRecord[]>([]);
+  const [indexerHealth, setIndexerHealth] = useState<ApiIndexerHealth | null>(null);
+  const [mintBackfillHistory, setMintBackfillHistory] = useState<MintBackfillRun[]>([]);
   const [manualListingId, setManualListingId] = useState("");
   const [moderatorAddress, setModeratorAddress] = useState("");
   const [moderatorLabel, setModeratorLabel] = useState("");
   const [paymentTokenAddress, setPaymentTokenAddress] = useState("");
+  const [mintBackfillLimit, setMintBackfillLimit] = useState("200");
+  const [mintBackfillStatus, setMintBackfillStatus] = useState("");
   const [paymentTokenStatus, setPaymentTokenStatus] = useState<"pending" | "approved" | "flagged">("approved");
   const [paymentTokenNotes, setPaymentTokenNotes] = useState("");
+  const [marketplaceSyncStatus, setMarketplaceSyncStatus] = useState("");
   const [error, setError] = useState("");
   const [moderatorError, setModeratorError] = useState("");
   const [paymentTokenError, setPaymentTokenError] = useState("");
   const [pendingDecision, setPendingDecision] = useState<{ reportId: string; decision: Decision } | null>(null);
   const [notesDraft, setNotesDraft] = useState("");
+  const {
+    logScanStats,
+    logScanStatsUpdatedAt,
+    syncLogScanStats,
+    resetBrowserLogScanStats
+  } = useLogScanStatsSnapshot();
   const manualListingNumeric = Number.parseInt(manualListingId, 10);
   const canWrite = Boolean(adminToken || adminAddress);
   const canEditModerators = canWrite && moderatorSource !== "onchain+local";
   const hasManualListingId = Number.isInteger(manualListingNumeric) && manualListingNumeric >= 0;
+  const mintTxHashColumnAvailable = Boolean(indexerHealth?.schema?.mintTxHashColumnAvailable);
+  const marketplaceSyncConfigured = Boolean(indexerHealth?.marketplace?.configured);
+  const marketplaceSyncInProgress = Boolean(indexerHealth?.marketplace?.syncInProgress);
 
   async function refresh(): Promise<void> {
     try {
       setError("");
-      const [openReports, actionHistory, hidden] = await Promise.all([
+      syncLogScanStats();
+      const [health, openReports, actionHistory, hidden] = await Promise.all([
+        fetchIndexerHealth(),
         fetchModerationReports("open"),
         fetchModerationActions(),
         fetchHiddenListingIds()
       ]);
+      setIndexerHealth(health);
       setReports(openReports);
       setActions(actionHistory);
       setHiddenListings(hidden);
@@ -96,6 +163,7 @@ export default function AdminClient() {
         setPaymentTokenError("");
       }
     } catch (err) {
+      setIndexerHealth(null);
       setError(err instanceof Error ? err.message : "Failed to load moderation state.");
     }
   }
@@ -104,7 +172,12 @@ export default function AdminClient() {
     void refresh();
   }, []);
 
+  useEffect(() => {
+    setMintBackfillHistory(readMintBackfillHistory());
+  }, []);
+
   const openReports = useMemo(() => reports.filter((item) => item.status.toLowerCase() === "open"), [reports]);
+  const latestMintBackfill = mintBackfillHistory[0] || null;
 
   async function confirmDecision(): Promise<void> {
     if (!pendingDecision) return;
@@ -199,6 +272,60 @@ export default function AdminClient() {
     }
   }
 
+  async function runMintTxBackfill(): Promise<void> {
+    const parsedLimit = Number.parseInt(mintBackfillLimit, 10);
+    try {
+      setMintBackfillStatus("");
+      const result = await backfillMintTxHashes({
+        limit: Number.isInteger(parsedLimit) && parsedLimit > 0 ? parsedLimit : 200,
+        auth: {
+          adminToken,
+          adminAddress: adminAddress || actor
+        }
+      });
+      const nextRun: MintBackfillRun = {
+        ranAt: new Date().toISOString(),
+        scanned: result.scanned,
+        resolved: result.resolved,
+        unresolved: result.unresolved,
+        limit: result.limit
+      };
+      const nextHistory = [nextRun, ...mintBackfillHistory].slice(0, MAX_MINT_BACKFILL_HISTORY);
+      setMintBackfillHistory(nextHistory);
+      writeMintBackfillHistory(nextHistory);
+      setMintBackfillStatus(
+        `Backfill complete. Scanned ${result.scanned}, resolved ${result.resolved}, unresolved ${result.unresolved}.`
+      );
+      setIndexerHealth(await fetchIndexerHealth());
+    } catch (err) {
+      setMintBackfillStatus(err instanceof Error ? err.message : "Failed to backfill mint transaction hashes.");
+    }
+  }
+
+  async function runMarketplaceListingSync(): Promise<void> {
+    try {
+      setMarketplaceSyncStatus("");
+      const result = await syncMarketplaceListings({
+        adminToken,
+        adminAddress: adminAddress || actor
+      });
+      setMarketplaceSyncStatus(
+        result.lastListingSyncAt
+          ? `Marketplace listing sync completed at ${formatIso(result.lastListingSyncAt)} with ${result.lastListingSyncCount} active listing(s).`
+          : `Marketplace listing sync completed with ${result.lastListingSyncCount} active listing(s).`
+      );
+      setIndexerHealth(await fetchIndexerHealth());
+    } catch (err) {
+      setMarketplaceSyncStatus(err instanceof Error ? err.message : "Failed to sync marketplace listings.");
+    }
+  }
+
+  function resetMintTxBackfillHistory(): void {
+    clearMintBackfillHistory();
+    setMintBackfillHistory([]);
+    setMintBackfillStatus("");
+  }
+
   return (
     <section className="wizard">
       <div className="card formCard">
@@ -289,6 +416,48 @@ export default function AdminClient() {
           <h3>Tracked ERC20s</h3>
           <p>{paymentTokens.length}</p>
         </article>
+        <article className="card">
+          <h3>Mint Tx Schema</h3>
+          <p>{indexerHealth ? (mintTxHashColumnAvailable ? "Live" : "Pending") : "-"}</p>
+        </article>
+        <article className="card">
+          <h3>Marketplace Sync</h3>
+          <p>
+            {indexerHealth
+              ? (marketplaceSyncConfigured ? (marketplaceSyncInProgress ? "Running" : "Configured") : "Disabled")
+              : "-"}
+          </p>
+        </article>
+        <article className="card">
+          <h3>Listing Sync Time</h3>
+          <p>{indexerHealth?.marketplace?.lastListingSyncAt ? formatIso(indexerHealth.marketplace.lastListingSyncAt) : "-"}</p>
+        </article>
+        <article className="card">
+          <h3>Synced Listings</h3>
+          <p>{typeof indexerHealth?.marketplace?.lastListingSyncCount === "number" ? indexerHealth.marketplace.lastListingSyncCount : "-"}</p>
+        </article>
+      </div>
+
+      <div className="card formCard">
+        <h3>Marketplace Listing Sync</h3>
+        <p className="sectionLead">
+          Force a one-shot marketplace listing import into the indexer DB. This populates active listing rows for feed fallback and owner summaries.
+        </p>
+        <p className="hint">
+          Status: {indexerHealth ? (marketplaceSyncConfigured ? (marketplaceSyncInProgress ? "sync in progress" : "ready") : "marketplace address not configured") : "unknown"}
+        </p>
+        <div className="row">
+          <button type="button" onClick={() => void runMarketplaceListingSync()} disabled={!canWrite || !marketplaceSyncConfigured}>
+            Sync Marketplace Listings
+          </button>
+        </div>
+        {!canWrite ? <p className="hint">Enter admin credentials above to run a forced listing sync.</p> : null}
+        {canWrite && !marketplaceSyncConfigured ? (
+          <p className="hint">Set `MARKETPLACE_ADDRESS` (or `NEXT_PUBLIC_MARKETPLACE_ADDRESS`) in the indexer environment first.</p>
+        ) : null}
+        {marketplaceSyncStatus ? (
+          <p className={marketplaceSyncStatus.toLowerCase().includes("failed") ? "error" : "hint"}>{marketplaceSyncStatus}</p>
+        ) : null}
       </div>
 
       {!error && openReports.length === 0 && hiddenListings.length === 0 && actions.length === 0 ? (
@@ -300,6 +469,67 @@ export default function AdminClient() {
           </p>
         </div>
       ) : null}
+
+      <LogScanDebugPanel
+        stats={logScanStats}
+        updatedAt={logScanStatsUpdatedAt}
+        description="Browser-side RPC scan counters for discover and list page mint enrichment. These are local to this tab."
+        onReset={resetBrowserLogScanStats}
+        onRefresh={() => syncLogScanStats()}
+        title="Browser Log Scan"
+      />
+
+      <div className="card formCard">
+        <h3>Mint Tx Backfill</h3>
+        <p className="sectionLead">
+          Backfill missing mint transaction hashes for existing tokens after the `mintTxHash` column is available.
+        </p>
+        <p className="hint">
+          Schema status: {indexerHealth ? (mintTxHashColumnAvailable ? "column available" : "column not migrated yet") : "unknown"}
+        </p>
+        <div className="gridMini">
+          <label>
+            Backfill limit
+            <input value={mintBackfillLimit} onChange={(e) => setMintBackfillLimit(e.target.value)} placeholder="200" />
+          </label>
+        </div>
+        <div className="row">
+          <button type="button" onClick={() => void runMintTxBackfill()} disabled={!canWrite || !mintTxHashColumnAvailable}>
+            Backfill Mint Tx Hashes
+          </button>
+          <button type="button" onClick={resetMintTxBackfillHistory} disabled={mintBackfillHistory.length === 0}>
+            Clear History
+          </button>
+        </div>
+        {!canWrite ? <p className="hint">Enter admin credentials above to run the one-shot backfill.</p> : null}
+        {canWrite && !mintTxHashColumnAvailable ? (
+          <p className="hint">Run the Prisma migration first. The backfill endpoint stays disabled until the column exists.</p>
+        ) : null}
+        {mintBackfillStatus ? (
+          <p className={mintBackfillStatus.toLowerCase().includes("failed") ? "error" : "hint"}>{mintBackfillStatus}</p>
+        ) : null}
+        {latestMintBackfill ? (
+          <p className="hint">
+            Last run: {formatIso(latestMintBackfill.ranAt)}. Resolved {latestMintBackfill.resolved} of{" "}
+            {latestMintBackfill.scanned} scanned token(s).
+          </p>
+        ) : (
+          <p className="hint">No mint tx backfill runs recorded in this browser yet.</p>
+        )}
+        {mintBackfillHistory.length > 0 ? (
+          <div className="listTable">
+            {mintBackfillHistory.map((run) => (
+              <article key={`${run.ranAt}:${run.limit}`} className="listRow">
+                <span><strong>Ran</strong> {formatIso(run.ranAt)}</span>
+                <span><strong>Scanned</strong> {run.scanned}</span>
+                <span><strong>Resolved</strong> {run.resolved}</span>
+                <span><strong>Unresolved</strong> {run.unresolved}</span>
+                <span><strong>Limit</strong> {run.limit}</span>
+              </article>
+            ))}
+          </div>
+        ) : null}
+      </div>
 
       <div className="card formCard">
         <h3>Moderator List</h3>

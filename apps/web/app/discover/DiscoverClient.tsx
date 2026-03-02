@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Address } from "viem";
-import { zeroAddress } from "viem";
-import { useAccount, usePublicClient } from "wagmi";
+import { useAccount } from "wagmi";
+import { getAppChain, getExplorerBaseUrl } from "../../lib/chains";
 import { getContractsConfig } from "../../lib/contracts";
 import {
   fetchActiveListingsBatch,
@@ -14,7 +14,19 @@ import {
   ZERO_ADDRESS,
   type MarketplaceListing
 } from "../../lib/marketplace";
-import { createModerationReport, fetchHiddenListingIds, fetchMintFeed, type ApiMintFeedItem } from "../../lib/indexerApi";
+import {
+  createModerationReport,
+  fetchHiddenListingIds,
+  fetchMintFeed,
+  type ApiMintFeedItem
+} from "../../lib/indexerApi";
+import {
+  ipfsToGatewayUrl,
+  looksLikeAudioUrl,
+  looksLikeImageUrl,
+  resolveNftMetadataPreview,
+  type NftMetadataPreview
+} from "../../lib/nftMetadata";
 
 type SortBy = "newest" | "priceAsc" | "priceDesc";
 type SourceFilter = "ALL" | "SHARED" | "CUSTOM";
@@ -42,12 +54,6 @@ type LocalMintFeedCache = {
   items: ApiMintFeedItem[];
 };
 
-type KnownCollection = {
-  contractAddress: string;
-  ensSubname: string | null;
-  ownerAddress: string;
-};
-
 const CACHE_TTL_MS = 60_000;
 const FEED_BATCH_SIZE = 50;
 
@@ -61,10 +67,6 @@ function mintFeedCacheKey(chainId: number): string {
 
 function localMintFeedKey(chainId: number): string {
   return `nftfactory:local-mint-feed:v1:${chainId}`;
-}
-
-function knownCollectionsKey(ownerAddress: string): string {
-  return `nftfactory:known-collections:${ownerAddress.toLowerCase()}`;
 }
 
 function readCache(marketplace: string): DiscoverCache | null {
@@ -118,101 +120,6 @@ function readLocalMintFeed(chainId: number): ApiMintFeedItem[] {
   }
 }
 
-function readKnownCollections(ownerAddress: string): KnownCollection[] {
-  if (typeof window === "undefined" || !ownerAddress) return [];
-  try {
-    const raw = window.localStorage.getItem(knownCollectionsKey(ownerAddress));
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as KnownCollection[];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-const erc721TransferEvent = {
-  type: "event",
-  name: "Transfer",
-  inputs: [
-    { indexed: true, name: "from", type: "address" },
-    { indexed: true, name: "to", type: "address" },
-    { indexed: true, name: "tokenId", type: "uint256" }
-  ]
-} as const;
-
-const erc721ReadAbi = [
-  {
-    type: "function",
-    name: "ownerOf",
-    stateMutability: "view",
-    inputs: [{ name: "tokenId", type: "uint256" }],
-    outputs: [{ name: "", type: "address" }]
-  },
-  {
-    type: "function",
-    name: "tokenURI",
-    stateMutability: "view",
-    inputs: [{ name: "tokenId", type: "uint256" }],
-    outputs: [{ name: "", type: "string" }]
-  }
-] as const;
-
-const erc1155TransferSingleEvent = {
-  type: "event",
-  name: "TransferSingle",
-  inputs: [
-    { indexed: true, name: "operator", type: "address" },
-    { indexed: true, name: "from", type: "address" },
-    { indexed: true, name: "to", type: "address" },
-    { indexed: false, name: "id", type: "uint256" },
-    { indexed: false, name: "value", type: "uint256" }
-  ]
-} as const;
-
-const erc1155TransferBatchEvent = {
-  type: "event",
-  name: "TransferBatch",
-  inputs: [
-    { indexed: true, name: "operator", type: "address" },
-    { indexed: true, name: "from", type: "address" },
-    { indexed: true, name: "to", type: "address" },
-    { indexed: false, name: "ids", type: "uint256[]" },
-    { indexed: false, name: "values", type: "uint256[]" }
-  ]
-} as const;
-
-const erc1155ReadAbi = [
-  {
-    type: "function",
-    name: "balanceOf",
-    stateMutability: "view",
-    inputs: [
-      { name: "account", type: "address" },
-      { name: "id", type: "uint256" }
-    ],
-    outputs: [{ name: "", type: "uint256" }]
-  },
-  {
-    type: "function",
-    name: "uri",
-    stateMutability: "view",
-    inputs: [{ name: "id", type: "uint256" }],
-    outputs: [{ name: "", type: "string" }]
-  }
-] as const;
-
-const creatorRegisteredEvent = {
-  type: "event",
-  name: "CreatorRegistered",
-  inputs: [
-    { indexed: true, name: "creator", type: "address" },
-    { indexed: true, name: "contractAddress", type: "address" },
-    { indexed: false, name: "ensSubname", type: "string" },
-    { indexed: false, name: "standard", type: "string" },
-    { indexed: false, name: "isNftFactoryCreated", type: "bool" }
-  ]
-} as const;
-
 function normalizeAddress(value: string): value is Address {
   return /^0x[a-fA-F0-9]{40}$/.test(value);
 }
@@ -221,106 +128,33 @@ type DiscoverClientProps = {
   mode?: "feed" | "mod";
 };
 
-function ipfsToGatewayUrl(value: string | null | undefined, gateway: string): string | null {
-  if (!value) return null;
-  if (value.startsWith("ipfs://")) {
-    return `${gateway}/${value.replace("ipfs://", "")}`;
-  }
-  return value;
-}
-
-function looksLikeImageUrl(value: string | null | undefined): boolean {
-  if (!value) return false;
-  return /\.(png|jpe?g|gif|webp|avif|svg)(\?.*)?$/i.test(value) || value.includes("/ipfs/");
-}
-
-function looksLikeAudioUrl(value: string | null | undefined): boolean {
-  if (!value) return false;
-  return /\.(mp3|wav|ogg|m4a|aac|flac)(\?.*)?$/i.test(value);
-}
-
 function FeedCardMedia({
+  preview,
   metadataLink,
   mediaLink,
-  ipfsGateway,
   title
 }: {
+  preview: NftMetadataPreview | null;
   metadataLink: string | null;
   mediaLink: string | null;
-  ipfsGateway: string;
   title: string;
 }) {
-  const [resolvedImage, setResolvedImage] = useState<string | null>(looksLikeImageUrl(mediaLink) ? mediaLink : null);
-  const [resolvedAudio, setResolvedAudio] = useState<string | null>(looksLikeAudioUrl(mediaLink) ? mediaLink : null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    if (looksLikeImageUrl(mediaLink)) {
-      setResolvedImage(mediaLink);
-      setResolvedAudio(null);
-      return;
-    }
-
-    if (looksLikeAudioUrl(mediaLink)) {
-      setResolvedImage(null);
-      setResolvedAudio(mediaLink);
-      return;
-    }
-
-    if (!metadataLink) {
-      setResolvedImage(null);
-      setResolvedAudio(null);
-      return;
-    }
-
-    setResolvedImage(null);
-    setResolvedAudio(null);
-    void fetch(metadataLink)
-      .then(async (response) => {
-        if (!response.ok) throw new Error("metadata unavailable");
-        return response.json() as Promise<{
-          image?: string;
-          image_url?: string;
-          animation_url?: string;
-          animationUrl?: string;
-        }>;
-      })
-      .then((payload) => {
-        if (cancelled) return;
-        const next = ipfsToGatewayUrl(payload.image || payload.image_url || null, ipfsGateway);
-        const nextAudio = ipfsToGatewayUrl(payload.animation_url || payload.animationUrl || null, ipfsGateway);
-        setResolvedImage(looksLikeImageUrl(next) ? next : null);
-        setResolvedAudio(looksLikeAudioUrl(nextAudio) ? nextAudio : null);
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setResolvedImage(null);
-          setResolvedAudio(null);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [ipfsGateway, mediaLink, metadataLink]);
-
-  if (resolvedImage) {
+  if (preview?.imageUrl) {
     return (
       <div className="feedCardMedia">
-        <img src={resolvedImage} alt={title} className="feedCardImage" />
+        <img src={preview.imageUrl} alt={title} className="feedCardImage" loading="lazy" />
       </div>
     );
   }
 
-  if (resolvedAudio) {
+  if (preview?.audioUrl) {
     return (
       <div className="feedCardMedia feedCardMediaFallback">
         <div className="feedCardFallbackCopy">
           <span className="feedCardFallbackLabel">Audio drop</span>
           <strong>{title}</strong>
         </div>
-        <audio controls src={resolvedAudio} className="feedCardAudio">
+        <audio controls src={preview.audioUrl} className="feedCardAudio">
           Your browser does not support audio playback.
         </audio>
       </div>
@@ -342,20 +176,26 @@ function FeedCardMedia({
   return null;
 }
 
+function toExplorerTx(chainId: number, hash: string | null | undefined): string | null {
+  if (!hash) return null;
+  const baseUrl = getExplorerBaseUrl(chainId);
+  return baseUrl ? `${baseUrl}/tx/${hash}` : null;
+}
+
 export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
   const config = useMemo(() => getContractsConfig(), []);
+  const appChain = useMemo(() => getAppChain(config.chainId), [config.chainId]);
   const ipfsGateway = useMemo(
     () => (process.env.NEXT_PUBLIC_IPFS_GATEWAY || "https://gateway.pinata.cloud/ipfs").replace(/\/$/, ""),
     []
   );
   const { address } = useAccount();
-  const publicClient = usePublicClient();
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   const [allListings, setAllListings] = useState<MarketplaceListing[]>([]);
   const [feedItems, setFeedItems] = useState<ApiMintFeedItem[]>([]);
   const [localFeedItems, setLocalFeedItems] = useState<ApiMintFeedItem[]>([]);
-  const [hydratedFeedItems, setHydratedFeedItems] = useState<ApiMintFeedItem[]>([]);
+  const [feedPreviewIndex, setFeedPreviewIndex] = useState<Record<string, NftMetadataPreview>>({});
   const [feedSearchIndex, setFeedSearchIndex] = useState<Record<string, string>>({});
   const [feedMediaTypeIndex, setFeedMediaTypeIndex] = useState<Record<string, MediaFilter>>({});
   const [hiddenListingIds, setHiddenListingIds] = useState<number[]>([]);
@@ -550,271 +390,6 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
   }, [address, reporter]);
 
   useEffect(() => {
-    if (mode !== "feed" || !publicClient) return;
-
-    let cancelled = false;
-
-    const loadHydratedItems = async (): Promise<void> => {
-      const indexedContracts = new Set(
-        [...feedItems, ...localFeedItems].map((item) => item.collection.contractAddress.toLowerCase())
-      );
-
-      const localCandidates = address ? readKnownCollections(address) : [];
-      let registryCandidates: KnownCollection[] = [];
-
-      try {
-        const logs = await publicClient.getLogs({
-          address: config.registry,
-          event: creatorRegisteredEvent,
-          fromBlock: 0n,
-          toBlock: "latest"
-        });
-
-        const byContract = new Map<string, KnownCollection>();
-        for (const log of logs) {
-          const contractAddress = log.args.contractAddress?.toLowerCase();
-          const creator = log.args.creator?.toLowerCase();
-          if (!contractAddress || !creator) continue;
-          if (!normalizeAddress(contractAddress) || !normalizeAddress(creator)) continue;
-          if (!log.args.isNftFactoryCreated) continue;
-          byContract.set(contractAddress, {
-            contractAddress,
-            ensSubname: log.args.ensSubname?.trim() || null,
-            ownerAddress: creator
-          });
-        }
-        registryCandidates = [...byContract.values()];
-      } catch {
-        registryCandidates = [];
-      }
-
-      const mergedCandidates = new Map<string, KnownCollection>();
-      for (const item of [...localCandidates, ...registryCandidates]) {
-        if (!isAddress(item.contractAddress) || !isAddress(item.ownerAddress)) continue;
-        const key = item.contractAddress.toLowerCase();
-        if (indexedContracts.has(key)) continue;
-        const existing = mergedCandidates.get(key);
-        mergedCandidates.set(key, {
-          contractAddress: item.contractAddress,
-          ensSubname: item.ensSubname || existing?.ensSubname || null,
-          ownerAddress: item.ownerAddress
-        });
-      }
-
-      const candidateCollections = [...mergedCandidates.values()];
-      if (candidateCollections.length === 0) {
-        if (!cancelled) {
-          setHydratedFeedItems([]);
-        }
-        return;
-      }
-
-      const groups = await Promise.all(
-        candidateCollections.slice(0, 12).map(async (collection) => {
-        try {
-          const blockTimes = new Map<string, string>();
-          const getBlockTime = async (blockNumber: bigint): Promise<string> => {
-            const key = blockNumber.toString();
-            if (!blockTimes.has(key)) {
-              const block = await publicClient.getBlock({ blockNumber });
-              blockTimes.set(key, new Date(Number(block.timestamp) * 1000).toISOString());
-            }
-            return blockTimes.get(key) || new Date().toISOString();
-          };
-
-          try {
-            const logs = await publicClient.getLogs({
-              address: collection.contractAddress as Address,
-              event: erc721TransferEvent,
-              fromBlock: 0n,
-              toBlock: "latest"
-            });
-
-            const mintedLogs = logs.filter((log) => log.args.from?.toLowerCase() === zeroAddress);
-            const items = await Promise.all(
-              mintedLogs.map(async (log) => {
-                const tokenId = log.args.tokenId?.toString();
-                if (!tokenId) return null;
-
-                let ownerAddress = "";
-                let metadataCid = "";
-
-                try {
-                  ownerAddress = (await publicClient.readContract({
-                    address: collection.contractAddress as Address,
-                    abi: erc721ReadAbi,
-                    functionName: "ownerOf",
-                    args: [BigInt(tokenId)]
-                  })) as string;
-                } catch {
-                  return null;
-                }
-
-                try {
-                  metadataCid = (await publicClient.readContract({
-                    address: collection.contractAddress as Address,
-                    abi: erc721ReadAbi,
-                    functionName: "tokenURI",
-                    args: [BigInt(tokenId)]
-                  })) as string;
-                } catch {
-                  metadataCid = "";
-                }
-
-                const timestamp = await getBlockTime(log.blockNumber);
-                return {
-                  id: `hydrated:${collection.contractAddress.toLowerCase()}:${tokenId}`,
-                  tokenId,
-                  creatorAddress: collection.ownerAddress.toLowerCase(),
-                  ownerAddress: ownerAddress.toLowerCase(),
-                  metadataCid,
-                  metadataUrl: ipfsToGatewayUrl(metadataCid, ipfsGateway),
-                  mediaCid: null,
-                  mediaUrl: null,
-                  immutable: true,
-                  mintedAt: timestamp,
-                  collection: {
-                    chainId: config.chainId,
-                    contractAddress: collection.contractAddress.toLowerCase(),
-                    ownerAddress: collection.ownerAddress.toLowerCase(),
-                    ensSubname: collection.ensSubname,
-                    standard: "ERC721",
-                    isFactoryCreated: false,
-                    isUpgradeable: true,
-                    finalizedAt: null,
-                    createdAt: timestamp,
-                    updatedAt: timestamp
-                  },
-                  activeListing: null
-                } satisfies ApiMintFeedItem;
-              })
-            );
-
-            const filteredItems = items.filter(Boolean) as ApiMintFeedItem[];
-            if (filteredItems.length > 0) {
-              return filteredItems;
-            }
-          } catch {
-            // Fall through to ERC-1155 probing.
-          }
-
-          const singleLogs = await publicClient.getLogs({
-            address: collection.contractAddress as Address,
-            event: erc1155TransferSingleEvent,
-            fromBlock: 0n,
-            toBlock: "latest"
-          });
-          const batchLogs = await publicClient.getLogs({
-            address: collection.contractAddress as Address,
-            event: erc1155TransferBatchEvent,
-            fromBlock: 0n,
-            toBlock: "latest"
-          });
-
-          const tokenState = new Map<string, { mintedAt: string; ownerAddress: string }>();
-          for (const log of singleLogs) {
-            const tokenId = log.args.id?.toString() || "";
-            if (!tokenId) continue;
-            const timestamp = await getBlockTime(log.blockNumber);
-            const existing = tokenState.get(tokenId);
-            if (log.args.from?.toLowerCase() === zeroAddress) {
-              tokenState.set(tokenId, {
-                mintedAt: existing?.mintedAt || timestamp,
-                ownerAddress: (log.args.to || zeroAddress).toLowerCase()
-              });
-            } else if (existing) {
-              tokenState.set(tokenId, {
-                mintedAt: existing.mintedAt,
-                ownerAddress: (log.args.to || existing.ownerAddress || zeroAddress).toLowerCase()
-              });
-            }
-          }
-          for (const log of batchLogs) {
-            const timestamp = await getBlockTime(log.blockNumber);
-            for (const id of log.args.ids || []) {
-              const tokenId = id.toString();
-              const existing = tokenState.get(tokenId);
-              if (log.args.from?.toLowerCase() === zeroAddress) {
-                tokenState.set(tokenId, {
-                  mintedAt: existing?.mintedAt || timestamp,
-                  ownerAddress: (log.args.to || zeroAddress).toLowerCase()
-                });
-              } else if (existing) {
-                tokenState.set(tokenId, {
-                  mintedAt: existing.mintedAt,
-                  ownerAddress: (log.args.to || existing.ownerAddress || zeroAddress).toLowerCase()
-                });
-              }
-            }
-          }
-
-          const items = await Promise.all(
-            [...tokenState.entries()]
-              .filter(([tokenId, state]) => Boolean(tokenId) && Boolean(state.mintedAt))
-              .map(async ([tokenId, state]) => {
-                let metadataCid = "";
-
-                try {
-                  metadataCid = (await publicClient.readContract({
-                    address: collection.contractAddress as Address,
-                    abi: erc1155ReadAbi,
-                    functionName: "uri",
-                    args: [BigInt(tokenId)]
-                  })) as string;
-                } catch {
-                  metadataCid = "";
-                }
-
-                return {
-                  id: `hydrated:${collection.contractAddress.toLowerCase()}:${tokenId}`,
-                  tokenId,
-                  creatorAddress: collection.ownerAddress.toLowerCase(),
-                  ownerAddress: normalizeAddress(state.ownerAddress)
-                    ? state.ownerAddress.toLowerCase()
-                    : collection.ownerAddress.toLowerCase(),
-                  metadataCid,
-                  metadataUrl: ipfsToGatewayUrl(metadataCid, ipfsGateway),
-                  mediaCid: null,
-                  mediaUrl: null,
-                  immutable: true,
-                  mintedAt: state.mintedAt,
-                  collection: {
-                    chainId: config.chainId,
-                    contractAddress: collection.contractAddress.toLowerCase(),
-                    ownerAddress: collection.ownerAddress.toLowerCase(),
-                    ensSubname: collection.ensSubname,
-                    standard: "ERC1155",
-                    isFactoryCreated: false,
-                    isUpgradeable: true,
-                    finalizedAt: null,
-                    createdAt: state.mintedAt,
-                    updatedAt: state.mintedAt
-                  },
-                  activeListing: null
-                } satisfies ApiMintFeedItem;
-              })
-          );
-
-          return items.filter(Boolean) as ApiMintFeedItem[];
-        } catch {
-          return [];
-        }
-        })
-      );
-
-      if (!cancelled) {
-        setHydratedFeedItems(groups.flat());
-      }
-    };
-
-    void loadHydratedItems();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [address, config.chainId, config.registry, feedItems, ipfsGateway, localFeedItems, mode, publicClient]);
-
-  useEffect(() => {
     if (mode !== "feed") return;
     const node = sentinelRef.current;
     if (!node || !canLoadMore || isLoadingMore || isLoading) return;
@@ -836,7 +411,7 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
 
   const allFeedItems = useMemo(() => {
     if (mode !== "feed") return feedItems;
-    const merged = [...localFeedItems, ...hydratedFeedItems, ...feedItems];
+    const merged = [...localFeedItems, ...feedItems];
     const deduped = new Map<string, ApiMintFeedItem>();
     for (const item of merged) {
       const key = `${item.collection.contractAddress.toLowerCase()}:${item.tokenId}`;
@@ -845,64 +420,36 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
       }
     }
     return [...deduped.values()];
-  }, [feedItems, hydratedFeedItems, localFeedItems, mode]);
+  }, [feedItems, localFeedItems, mode]);
 
   useEffect(() => {
     if (mode !== "feed") return;
     if (allFeedItems.length === 0) {
+      setFeedPreviewIndex({});
       setFeedSearchIndex({});
       setFeedMediaTypeIndex({});
       return;
     }
 
     let cancelled = false;
+    const nextPreviews: Record<string, NftMetadataPreview> = {};
     const nextIndex: Record<string, string> = {};
     const nextMediaTypes: Record<string, MediaFilter> = {};
 
     void Promise.all(
       allFeedItems.map(async (item) => {
-        const metadataLink = ipfsToGatewayUrl(item.metadataCid, ipfsGateway);
-        if (!metadataLink) return;
-        try {
-          const response = await fetch(metadataLink);
-          if (!response.ok) return;
-          const payload = (await response.json()) as {
-            name?: string;
-            title?: string;
-            description?: string;
-            image?: string;
-            image_url?: string;
-            imageUrl?: string;
-            animation_url?: string;
-            animationUrl?: string;
-          };
-          nextIndex[item.id] = [payload.name, payload.title, payload.description]
-            .filter(Boolean)
-            .join(" ")
-            .toLowerCase();
-          const directMediaLink = ipfsToGatewayUrl(item.mediaCid, ipfsGateway);
-          const imageUrl = ipfsToGatewayUrl(payload.image || payload.image_url || payload.imageUrl || null, ipfsGateway);
-          const audioUrl = ipfsToGatewayUrl(payload.animation_url || payload.animationUrl || null, ipfsGateway);
-          if (looksLikeImageUrl(directMediaLink) || looksLikeImageUrl(imageUrl)) {
-            nextMediaTypes[item.id] = "IMAGE";
-          } else if (looksLikeAudioUrl(directMediaLink) || looksLikeAudioUrl(audioUrl)) {
-            nextMediaTypes[item.id] = "AUDIO";
-          } else {
-            nextMediaTypes[item.id] = "METADATA";
-          }
-        } catch {
-          const directMediaLink = ipfsToGatewayUrl(item.mediaCid, ipfsGateway);
-          if (looksLikeImageUrl(directMediaLink)) {
-            nextMediaTypes[item.id] = "IMAGE";
-          } else if (looksLikeAudioUrl(directMediaLink)) {
-            nextMediaTypes[item.id] = "AUDIO";
-          } else {
-            nextMediaTypes[item.id] = "METADATA";
-          }
-        }
+        const preview = await resolveNftMetadataPreview({
+          metadataUri: item.metadataCid,
+          mediaUri: item.mediaCid,
+          gateway: ipfsGateway
+        });
+        nextPreviews[item.id] = preview;
+        nextIndex[item.id] = [preview.name, preview.description].filter(Boolean).join(" ").toLowerCase();
+        nextMediaTypes[item.id] = preview.imageUrl ? "IMAGE" : preview.audioUrl ? "AUDIO" : "METADATA";
       })
     ).then(() => {
       if (!cancelled) {
+        setFeedPreviewIndex(nextPreviews);
         setFeedSearchIndex(nextIndex);
         setFeedMediaTypeIndex(nextMediaTypes);
       }
@@ -1252,65 +799,88 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
                     })}`
                   : "Listed (ERC20)"
                 : "Not listed";
+              const preview = feedPreviewIndex[row.id] || {
+                name: null,
+                description: null,
+                imageUrl: looksLikeImageUrl(mediaLink) ? mediaLink : null,
+                audioUrl: looksLikeAudioUrl(mediaLink) ? mediaLink : null
+              };
+              const displayTitle = preview?.name || `${ensLabel || "NFTFactory mint"} #${row.tokenId}`;
+              const txLink = toExplorerTx(config.chainId, row.mintTxHash);
 
               return (
                 <article key={row.id} className="feedCard">
-                  <FeedCardMedia
-                    metadataLink={metadataLink}
-                    mediaLink={mediaLink}
-                    ipfsGateway={ipfsGateway}
-                    title={`${ensLabel || "NFTFactory mint"} #${row.tokenId}`}
-                  />
-                  <div className="feedCardTop">
-                    <p className="feedCardStamp">{mintedAtLabel}</p>
-                    <span className="feedCardStatus">{priceLabel}</span>
-                  </div>
+                  <div className="feedCardHero">
+                    <FeedCardMedia
+                      preview={preview}
+                      metadataLink={metadataLink}
+                      mediaLink={mediaLink}
+                      title={displayTitle}
+                    />
 
-                  <div className="feedCardBody">
-                    <div className="feedCardMain">
-                      <p className="feedCardEyebrow">
-                        {row.collection.isFactoryCreated ? "NFTFactory shared mint" : "Creator collection mint"}
-                      </p>
-                      <h3 className="feedCardTitle">
-                        {ensLabel || "Untitled collection"} <span>#{row.tokenId}</span>
-                      </h3>
-                      <p className="feedCardMetaLine">
-                        {row.collection.standard} minted on chain {row.collection.chainId}
-                      </p>
-                    </div>
-
-                    <div className="feedCardFacts">
-                      <div className="feedFact">
-                        <span className="feedFactLabel">Contract</span>
-                        {contractExplorer ? (
-                          <a href={contractExplorer} target="_blank" rel="noreferrer" className="mono">
-                            {truncateAddress(row.collection.contractAddress)}
-                          </a>
-                        ) : (
-                          <span className="mono">{truncateAddress(row.collection.contractAddress)}</span>
-                        )}
+                    <div className="feedCardContent">
+                      <div className="feedCardTop">
+                        <span className="feedCardStatus">{priceLabel}</span>
                       </div>
 
-                      <div className="feedFact">
-                        <span className="feedFactLabel">Owner</span>
-                        {ownerExplorer ? (
-                          <a href={ownerExplorer} target="_blank" rel="noreferrer" className="mono">
-                            {truncateAddress(row.ownerAddress)}
-                          </a>
-                        ) : (
-                          <span className="mono">{truncateAddress(row.ownerAddress)}</span>
-                        )}
-                      </div>
+                      <div className="feedCardBody">
+                        <div className="feedCardMain">
+                          <p className="feedCardEyebrow">
+                            {row.collection.isFactoryCreated ? "NFTFactory shared mint" : "Creator collection mint"}
+                          </p>
+                          <h3 className="feedCardTitle">{displayTitle}</h3>
+                          <p className="feedCardMetaLine">
+                            {preview?.description?.trim() || `Collection ${ensLabel || "untitled"} · token #${row.tokenId}`}
+                          </p>
+                          <p className="feedCardMetaLine">
+                            Created{" "}
+                            {txLink ? (
+                              <a href={txLink} target="_blank" rel="noreferrer">
+                                {mintedAtLabel}
+                              </a>
+                            ) : (
+                              mintedAtLabel
+                            )}
+                          </p>
+                          <p className="feedCardMetaLine">
+                            Created on {appChain.name} (chain {row.collection.chainId})
+                          </p>
+                        </div>
 
-                      <div className="feedFact">
-                        <span className="feedFactLabel">Creator</span>
-                        {creatorExplorer ? (
-                          <a href={creatorExplorer} target="_blank" rel="noreferrer" className="mono">
-                            {truncateAddress(row.creatorAddress)}
-                          </a>
-                        ) : (
-                          <span className="mono">{truncateAddress(row.creatorAddress)}</span>
-                        )}
+                        <div className="feedCardFacts">
+                          <div className="feedFact">
+                            <span className="feedFactLabel">Contract</span>
+                            {contractExplorer ? (
+                              <a href={contractExplorer} target="_blank" rel="noreferrer" className="mono">
+                                {truncateAddress(row.collection.contractAddress)}
+                              </a>
+                            ) : (
+                              <span className="mono">{truncateAddress(row.collection.contractAddress)}</span>
+                            )}
+                          </div>
+
+                          <div className="feedFact">
+                            <span className="feedFactLabel">Owner</span>
+                            {ownerExplorer ? (
+                              <a href={ownerExplorer} target="_blank" rel="noreferrer" className="mono">
+                                {truncateAddress(row.ownerAddress)}
+                              </a>
+                            ) : (
+                              <span className="mono">{truncateAddress(row.ownerAddress)}</span>
+                            )}
+                          </div>
+
+                          <div className="feedFact">
+                            <span className="feedFactLabel">Creator</span>
+                            {creatorExplorer ? (
+                              <a href={creatorExplorer} target="_blank" rel="noreferrer" className="mono">
+                                {truncateAddress(row.creatorAddress)}
+                              </a>
+                            ) : (
+                              <span className="mono">{truncateAddress(row.creatorAddress)}</span>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>

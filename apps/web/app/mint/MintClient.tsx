@@ -122,6 +122,7 @@ type LocalMintFeedItem = {
   tokenId: string;
   creatorAddress: string;
   ownerAddress: string;
+  mintTxHash?: string | null;
   metadataCid: string;
   metadataUrl: string | null;
   mediaCid: string | null;
@@ -612,18 +613,19 @@ export default function MintClient({
       setManageImplementationAddress("");
       return;
     }
+    const client = publicClient;
 
     let cancelled = false;
 
     async function loadVerificationState(): Promise<void> {
       const [is721, is1155] = await Promise.all([
-        publicClient.readContract({
+        client.readContract({
           address: manageAddress as Address,
           abi: interfaceProbeAbi,
           functionName: "supportsInterface",
           args: ["0x80ac58cd"]
         }).catch(() => false),
-        publicClient.readContract({
+        client.readContract({
           address: manageAddress as Address,
           abi: interfaceProbeAbi,
           functionName: "supportsInterface",
@@ -641,7 +643,7 @@ export default function MintClient({
         return;
       }
 
-      const implementation = await publicClient.readContract({
+      const implementation = await client.readContract({
         address: config.factory,
         abi: factoryImplementationAbi,
         functionName: nextStandard === "ERC721" ? "implementation721" : "implementation1155"
@@ -939,6 +941,7 @@ export default function MintClient({
         tokenId: mintedTokenId,
         creatorAddress: account.toLowerCase(),
         ownerAddress: account.toLowerCase(),
+        mintTxHash: txHash,
         metadataCid: effectiveMetadataUri,
         metadataUrl: toGatewayUrl(effectiveMetadataUri, gateway),
         mediaCid: uploadReceipt.imageUri || uploadReceipt.audioUri || null,
