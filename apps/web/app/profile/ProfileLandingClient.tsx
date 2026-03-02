@@ -394,6 +394,14 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
     return "Use a plain label like artist to create artist.nftfactory.eth on-chain.";
   }, [identityMode]);
 
+  const ensRegistrationStep = useMemo(() => {
+    if (identityMode !== "register-eth") return "";
+    if (setupState.status === "pending") return "Commit";
+    if (!pendingEnsRegistration) return "Check";
+    if (registrationCountdown > 0) return "Wait";
+    return "Register";
+  }, [identityMode, pendingEnsRegistration, registrationCountdown, setupState.status]);
+
   async function runIdentityAction(): Promise<void> {
     if (identityMode === "register-eth") {
       if (pendingEnsRegistration) {
@@ -922,6 +930,7 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
             </label>
           </div>
         ) : null}
+        {identityMode === "register-eth" ? <p className="hint">Registration step: {ensRegistrationStep}</p> : null}
         <div className="gridMini">
           <label>
             Linked collection (optional)
