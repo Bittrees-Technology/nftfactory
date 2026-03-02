@@ -251,7 +251,7 @@ export default function ListClient() {
           const blockTimes = new Map<string, string>();
           const getLogsChunked = async (request: { address: Address; event: any }): Promise<any[]> => {
             const latestBlock = await publicClient.getBlockNumber();
-            const chunkSize = 8_000n;
+            const chunkSize = 900n;
             const logs: any[] = [];
 
             for (let fromBlock = 0n; fromBlock <= latestBlock; fromBlock += chunkSize) {
