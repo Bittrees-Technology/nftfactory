@@ -105,6 +105,11 @@ function looksLikeImageUrl(value: string | null | undefined): boolean {
   return /\.(png|jpe?g|gif|webp|avif|svg)(\?.*)?$/i.test(value) || value.includes("/ipfs/");
 }
 
+function looksLikeAudioUrl(value: string | null | undefined): boolean {
+  if (!value) return false;
+  return /\.(mp3|wav|ogg|m4a|aac|flac)(\?.*)?$/i.test(value);
+}
+
 function FeedCardMedia({
   metadataLink,
   mediaLink,
@@ -117,33 +122,53 @@ function FeedCardMedia({
   title: string;
 }) {
   const [resolvedImage, setResolvedImage] = useState<string | null>(looksLikeImageUrl(mediaLink) ? mediaLink : null);
+  const [resolvedAudio, setResolvedAudio] = useState<string | null>(looksLikeAudioUrl(mediaLink) ? mediaLink : null);
 
   useEffect(() => {
     let cancelled = false;
 
     if (looksLikeImageUrl(mediaLink)) {
       setResolvedImage(mediaLink);
+      setResolvedAudio(null);
+      return;
+    }
+
+    if (looksLikeAudioUrl(mediaLink)) {
+      setResolvedImage(null);
+      setResolvedAudio(mediaLink);
       return;
     }
 
     if (!metadataLink) {
       setResolvedImage(null);
+      setResolvedAudio(null);
       return;
     }
 
     setResolvedImage(null);
+    setResolvedAudio(null);
     void fetch(metadataLink)
       .then(async (response) => {
         if (!response.ok) throw new Error("metadata unavailable");
-        return response.json() as Promise<{ image?: string; image_url?: string }>;
+        return response.json() as Promise<{
+          image?: string;
+          image_url?: string;
+          animation_url?: string;
+          animationUrl?: string;
+        }>;
       })
       .then((payload) => {
         if (cancelled) return;
         const next = ipfsToGatewayUrl(payload.image || payload.image_url || null, ipfsGateway);
+        const nextAudio = ipfsToGatewayUrl(payload.animation_url || payload.animationUrl || null, ipfsGateway);
         setResolvedImage(looksLikeImageUrl(next) ? next : null);
+        setResolvedAudio(looksLikeAudioUrl(nextAudio) ? nextAudio : null);
       })
       .catch(() => {
-        if (!cancelled) setResolvedImage(null);
+        if (!cancelled) {
+          setResolvedImage(null);
+          setResolvedAudio(null);
+        }
       });
 
     return () => {
@@ -151,13 +176,41 @@ function FeedCardMedia({
     };
   }, [ipfsGateway, mediaLink, metadataLink]);
 
-  if (!resolvedImage) return null;
+  if (resolvedImage) {
+    return (
+      <div className="feedCardMedia">
+        <img src={resolvedImage} alt={title} className="feedCardImage" />
+      </div>
+    );
+  }
 
-  return (
-    <div className="feedCardMedia">
-      <img src={resolvedImage} alt={title} className="feedCardImage" />
-    </div>
-  );
+  if (resolvedAudio) {
+    return (
+      <div className="feedCardMedia feedCardMediaFallback">
+        <div className="feedCardFallbackCopy">
+          <span className="feedCardFallbackLabel">Audio drop</span>
+          <strong>{title}</strong>
+        </div>
+        <audio controls src={resolvedAudio} className="feedCardAudio">
+          Your browser does not support audio playback.
+        </audio>
+      </div>
+    );
+  }
+
+  if (metadataLink || mediaLink) {
+    return (
+      <div className="feedCardMedia feedCardMediaFallback">
+        <div className="feedCardFallbackCopy">
+          <span className="feedCardFallbackLabel">Media live</span>
+          <strong>{title}</strong>
+          <p>Metadata is available, but this mint does not expose a display image.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return null;
 }
 
 export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {

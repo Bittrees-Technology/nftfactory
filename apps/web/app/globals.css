@@ -351,6 +351,40 @@ nav {
   background: #f7efe3;
 }
 
+.feedCardMediaFallback {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  background: linear-gradient(135deg, #f7efe3, #fff7ec);
+}
+
+.feedCardFallbackCopy {
+  display: grid;
+  gap: 6px;
+}
+
+.feedCardFallbackCopy strong {
+  color: #4f2a18;
+}
+
+.feedCardFallbackCopy p {
+  margin: 0;
+  color: #725744;
+  font-size: 0.95rem;
+}
+
+.feedCardFallbackLabel {
+  color: #9b5c2e;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.feedCardAudio {
+  width: 100%;
+}
+
 .feedCardTop {
   display: flex;
   justify-content: space-between;
