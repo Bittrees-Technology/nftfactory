@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Address } from "viem";
-import { useAccount } from "wagmi";
+import { zeroAddress } from "viem";
+import { useAccount, usePublicClient } from "wagmi";
 import { getContractsConfig } from "../../lib/contracts";
 import {
   fetchActiveListingsBatch,
@@ -40,6 +41,12 @@ type LocalMintFeedCache = {
   items: ApiMintFeedItem[];
 };
 
+type KnownCollection = {
+  contractAddress: string;
+  ensSubname: string | null;
+  ownerAddress: string;
+};
+
 const CACHE_TTL_MS = 60_000;
 const FEED_BATCH_SIZE = 50;
 
@@ -53,6 +60,10 @@ function mintFeedCacheKey(chainId: number): string {
 
 function localMintFeedKey(chainId: number): string {
   return `nftfactory:local-mint-feed:v1:${chainId}`;
+}
+
+function knownCollectionsKey(ownerAddress: string): string {
+  return `nftfactory:known-collections:${ownerAddress.toLowerCase()}`;
 }
 
 function readCache(marketplace: string): DiscoverCache | null {
@@ -105,6 +116,45 @@ function readLocalMintFeed(chainId: number): ApiMintFeedItem[] {
     return [];
   }
 }
+
+function readKnownCollections(ownerAddress: string): KnownCollection[] {
+  if (typeof window === "undefined" || !ownerAddress) return [];
+  try {
+    const raw = window.localStorage.getItem(knownCollectionsKey(ownerAddress));
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as KnownCollection[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+const erc721TransferEvent = {
+  type: "event",
+  name: "Transfer",
+  inputs: [
+    { indexed: true, name: "from", type: "address" },
+    { indexed: true, name: "to", type: "address" },
+    { indexed: true, name: "tokenId", type: "uint256" }
+  ]
+} as const;
+
+const erc721ReadAbi = [
+  {
+    type: "function",
+    name: "ownerOf",
+    stateMutability: "view",
+    inputs: [{ name: "tokenId", type: "uint256" }],
+    outputs: [{ name: "", type: "address" }]
+  },
+  {
+    type: "function",
+    name: "tokenURI",
+    stateMutability: "view",
+    inputs: [{ name: "tokenId", type: "uint256" }],
+    outputs: [{ name: "", type: "string" }]
+  }
+] as const;
 
 function normalizeAddress(value: string): value is Address {
   return /^0x[a-fA-F0-9]{40}$/.test(value);
@@ -242,11 +292,13 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
     []
   );
   const { address } = useAccount();
+  const publicClient = usePublicClient();
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   const [allListings, setAllListings] = useState<MarketplaceListing[]>([]);
   const [feedItems, setFeedItems] = useState<ApiMintFeedItem[]>([]);
   const [localFeedItems, setLocalFeedItems] = useState<ApiMintFeedItem[]>([]);
+  const [hydratedFeedItems, setHydratedFeedItems] = useState<ApiMintFeedItem[]>([]);
   const [feedSearchIndex, setFeedSearchIndex] = useState<Record<string, string>>({});
   const [hiddenListingIds, setHiddenListingIds] = useState<number[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -438,6 +490,121 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
   }, [address, reporter]);
 
   useEffect(() => {
+    if (mode !== "feed" || !address || !publicClient) return;
+
+    let cancelled = false;
+
+    const indexedContracts = new Set(
+      [...feedItems, ...localFeedItems].map((item) => item.collection.contractAddress.toLowerCase())
+    );
+    const candidateCollections = readKnownCollections(address).filter(
+      (item) =>
+        item.ownerAddress.toLowerCase() === address.toLowerCase() &&
+        !indexedContracts.has(item.contractAddress.toLowerCase())
+    );
+
+    if (candidateCollections.length === 0) {
+      setHydratedFeedItems([]);
+      return;
+    }
+
+    void Promise.all(
+      candidateCollections.slice(0, 4).map(async (collection) => {
+        try {
+          const logs = await publicClient.getLogs({
+            address: collection.contractAddress as Address,
+            event: erc721TransferEvent,
+            fromBlock: 0n,
+            toBlock: "latest"
+          });
+
+          const mintedLogs = logs.filter((log) => log.args.from?.toLowerCase() === zeroAddress);
+          const blockTimes = new Map<string, string>();
+
+          const items = await Promise.all(
+            mintedLogs.map(async (log) => {
+              const tokenId = log.args.tokenId?.toString();
+              if (!tokenId) return null;
+
+              let ownerAddress = "";
+              let metadataCid = "";
+
+              try {
+                ownerAddress = (await publicClient.readContract({
+                  address: collection.contractAddress as Address,
+                  abi: erc721ReadAbi,
+                  functionName: "ownerOf",
+                  args: [BigInt(tokenId)]
+                })) as string;
+              } catch {
+                return null;
+              }
+
+              if (ownerAddress.toLowerCase() !== address.toLowerCase()) return null;
+
+              try {
+                metadataCid = (await publicClient.readContract({
+                  address: collection.contractAddress as Address,
+                  abi: erc721ReadAbi,
+                  functionName: "tokenURI",
+                  args: [BigInt(tokenId)]
+                })) as string;
+              } catch {
+                metadataCid = "";
+              }
+
+              const blockNumberKey = log.blockNumber.toString();
+              if (!blockTimes.has(blockNumberKey)) {
+                const block = await publicClient.getBlock({ blockNumber: log.blockNumber });
+                blockTimes.set(blockNumberKey, new Date(Number(block.timestamp) * 1000).toISOString());
+              }
+
+              const metadataUrl = ipfsToGatewayUrl(metadataCid, ipfsGateway);
+              return {
+                id: `hydrated:${collection.contractAddress.toLowerCase()}:${tokenId}`,
+                tokenId,
+                creatorAddress: address.toLowerCase(),
+                ownerAddress: ownerAddress.toLowerCase(),
+                metadataCid,
+                metadataUrl,
+                mediaCid: null,
+                mediaUrl: null,
+                immutable: true,
+                mintedAt: blockTimes.get(blockNumberKey) || new Date().toISOString(),
+                collection: {
+                  chainId: config.chainId,
+                  contractAddress: collection.contractAddress.toLowerCase(),
+                  ownerAddress: address.toLowerCase(),
+                  ensSubname: collection.ensSubname,
+                  standard: "ERC721",
+                  isFactoryCreated: false,
+                  isUpgradeable: true,
+                  finalizedAt: null,
+                  createdAt: blockTimes.get(blockNumberKey) || new Date().toISOString(),
+                  updatedAt: blockTimes.get(blockNumberKey) || new Date().toISOString()
+                },
+                activeListing: null
+              } satisfies ApiMintFeedItem;
+            })
+          );
+
+          return items.filter(Boolean) as ApiMintFeedItem[];
+        } catch {
+          return [];
+        }
+      })
+    ).then((groups) => {
+      if (!cancelled) {
+        setHydratedFeedItems(groups.flat());
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [address, config.chainId, feedItems, ipfsGateway, localFeedItems, mode, publicClient]);
+
+  useEffect(() => {
     if (mode !== "feed") return;
     const node = sentinelRef.current;
     if (!node || !canLoadMore || isLoadingMore || isLoading) return;
@@ -459,7 +626,7 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
 
   const allFeedItems = useMemo(() => {
     if (mode !== "feed") return feedItems;
-    const merged = [...localFeedItems, ...feedItems];
+    const merged = [...localFeedItems, ...hydratedFeedItems, ...feedItems];
     const deduped = new Map<string, ApiMintFeedItem>();
     for (const item of merged) {
       const key = `${item.collection.contractAddress.toLowerCase()}:${item.tokenId}`;
@@ -468,7 +635,7 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
       }
     }
     return [...deduped.values()];
-  }, [feedItems, localFeedItems, mode]);
+  }, [feedItems, hydratedFeedItems, localFeedItems, mode]);
 
   useEffect(() => {
     if (mode !== "feed") return;
