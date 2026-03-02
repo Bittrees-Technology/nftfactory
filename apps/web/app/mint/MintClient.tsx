@@ -1083,57 +1083,46 @@ export default function MintClient({
                 {/* Deploy new collection */}
                 <details open={showDeployForm} onToggle={(e) => setShowDeployForm((e.target as HTMLDetailsElement).open)}>
                   <summary style={{ cursor: "pointer", fontWeight: 600, marginTop: "0.5rem" }}>
-                    {customCollectionAddress ? "Deploy another collection" : "No collection yet? Deploy one now ▸"}
+                    {customCollectionAddress ? "Create another collection" : "Create collection"}
                   </summary>
                   <div className="formCard inset" style={{ marginTop: "0.75rem" }}>
                     <p className="hint">
-                      This calls <strong>CreatorFactory.deployCollection()</strong> which deploys a
-                      UUPS-upgradeable ERC-1967 proxy. You will be set as the owner. One transaction,
-                      no extra cost beyond gas.
-                    </p>
-                    <p className="hint">
-                      These fields set the <strong>collection contract identity</strong>. They do not set the title of the NFT
-                      you are about to mint. The NFT title and description are configured in step 3.
+                      Create a new creator collection, then mint into it in this same flow. This step sets the
+                      collection contract identity and ownership. NFT title and description are set in step 3.
                     </p>
                     <label>
-                      Collection name (contract)
+                      Collection name
                       <input value={deployName} onChange={(e) => setDeployName(e.target.value)} />
-                      <span className="hint">
-                        This becomes the collection&apos;s on-chain <code>name()</code> value and is what explorers use as the collection label.
-                      </span>
                     </label>
                     <label>
-                      Collection symbol (contract ticker)
+                      Collection symbol
                       <input value={deploySymbol} onChange={(e) => setDeploySymbol(e.target.value)} />
-                      <span className="hint">
-                        This becomes the collection&apos;s on-chain <code>symbol()</code> value.
-                      </span>
                     </label>
                     <label>
-                      ENS subname (optional — e.g. <code>studio</code> → studio.nftfactory.eth)
+                      Collection label (optional)
                       <input
                         value={deploySubname}
                         onChange={(e) => setDeploySubname(e.target.value)}
                       />
                       <span className="hint">
-                        Adds an identity label to the collection deployment. Collection registration and identity setup now live in the
-                        manage flow after deploy.
+                        Optional nftfactory label, for example <code>studio</code> becomes <code>studio.nftfactory.eth</code>.
                       </span>
                     </label>
                     <label>
-                      Royalty receiver address
+                      Royalty receiver
                       <input
                         value={deployRoyaltyReceiver}
                         onChange={(e) => setDeployRoyaltyReceiver(e.target.value)}
                       />
                     </label>
                     <label>
-                      Royalty % in basis points (500 = 5%)
+                      Royalty (basis points)
                       <input
                         value={deployRoyaltyBps}
                         onChange={(e) => setDeployRoyaltyBps(e.target.value)}
                         inputMode="numeric"
                       />
+                      <span className="hint">500 = 5%</span>
                     </label>
                     <button
                       type="button"
