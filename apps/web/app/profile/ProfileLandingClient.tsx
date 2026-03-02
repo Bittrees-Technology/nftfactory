@@ -164,7 +164,7 @@ function deriveEnsRouteFromName(fullName: string): string {
 
 function deriveProfileRoute(
   value: string,
-  mode: "register-eth" | "ens" | "external-subname" | "nftfactory-subname"
+  mode: "register-eth" | "register-eth-subname" | "ens" | "external-subname" | "nftfactory-subname"
 ): string {
   const fullName = normalizeIdentityFullName(value, mode);
   if (!fullName) return "";
@@ -176,7 +176,7 @@ function deriveProfileRoute(
 
 function normalizeIdentityFullName(
   value: string,
-  mode: "register-eth" | "ens" | "external-subname" | "nftfactory-subname"
+  mode: "register-eth" | "register-eth-subname" | "ens" | "external-subname" | "nftfactory-subname"
 ): string {
   const raw = String(value || "").trim().toLowerCase();
   if (!raw) return "";
@@ -265,9 +265,9 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
   const [collections, setCollections] = useState<ApiOwnedCollections["collections"]>([]);
   const [verifiedCollections, setVerifiedCollections] = useState<ApiOwnedCollections["collections"]>([]);
   const [selectedCollection, setSelectedCollection] = useState("");
-  const [identityMode, setIdentityMode] = useState<"register-eth" | "ens" | "external-subname" | "nftfactory-subname">(
-    "nftfactory-subname"
-  );
+  const [identityMode, setIdentityMode] = useState<
+    "register-eth" | "register-eth-subname" | "ens" | "external-subname" | "nftfactory-subname"
+  >("nftfactory-subname");
   const [registrationYears, setRegistrationYears] = useState("1");
   const [pendingEnsRegistration, setPendingEnsRegistration] = useState<PendingEnsRegistration | null>(null);
   const [registrationCountdown, setRegistrationCountdown] = useState(0);
@@ -411,6 +411,7 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
 
   const identityLabel = useMemo(() => {
     if (identityMode === "register-eth") return "New .eth label";
+    if (identityMode === "register-eth-subname") return "New .eth subname";
     if (identityMode === "ens") return "Existing ENS name";
     if (identityMode === "external-subname") return "Existing ENS subname";
     return "New nftfactory label";
@@ -419,6 +420,8 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
   const identityHint = useMemo(() => {
     if (identityMode === "register-eth")
       return "Enter a fresh .eth label like artist. NFTFactory will check ENS availability, then run the commit/register flow.";
+    if (identityMode === "register-eth-subname")
+      return "Enter a full subname like music.artist.eth. NFTFactory checks parent ownership here; external ENS subname creation is not fully wired yet.";
     if (identityMode === "ens") return "Enter a full ENS name like artist.eth to link an existing ENS identity you already own.";
     if (identityMode === "external-subname")
       return "Enter a full subname like music.artist.eth to link an existing ENS subname you already control.";
@@ -447,6 +450,14 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
         return;
       }
       await beginEthRegistration();
+      return;
+    }
+    if (identityMode === "register-eth-subname") {
+      setSetupState({
+        status: "error",
+        message:
+          "External ENS subname creation is not fully wired here yet. Use Link existing ENS subname, or create an nftfactory.eth subname."
+      });
       return;
     }
     if (identityMode === "ens") {
@@ -544,6 +555,54 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
     }
   }
 
+  async function checkEthSubnameRegistrationAvailability(cancelled = false): Promise<void> {
+    if (!publicClient) {
+      if (!cancelled) {
+        setLookupNote("ENS registry lookup is unavailable right now.");
+      }
+      return;
+    }
+
+    const fullName = normalizeIdentityFullName(identityName, "register-eth-subname");
+    const parts = fullName.split(".").filter(Boolean);
+    if (parts.length < 3 || !fullName.endsWith(".eth")) {
+      if (!cancelled) {
+        setLookupNote("Enter a full .eth subname like music.artist.eth.");
+      }
+      return;
+    }
+
+    try {
+      const current = await resolveEnsEffectiveOwner(publicClient, fullName);
+      if (cancelled) return;
+      if (String(current.owner).toLowerCase() !== ZERO_ADDRESS.toLowerCase()) {
+        setLookupNote(`${fullName} is already registered in ENS. Use Link existing ENS subname instead.`);
+        return;
+      }
+
+      const parentName = parts.slice(1).join(".");
+      const parent = await resolveEnsEffectiveOwner(publicClient, parentName);
+      if (cancelled) return;
+      const parentOwner = String(parent.owner).toLowerCase();
+      if (parentOwner === ZERO_ADDRESS.toLowerCase()) {
+        setLookupNote(`${parentName} is not registered yet, so ${fullName} cannot be created under it.`);
+        return;
+      }
+      if (!address || parentOwner !== address.toLowerCase()) {
+        setLookupNote(`${parentName} exists, but the connected wallet does not control that parent name.`);
+        return;
+      }
+
+      setLookupNote(
+        `${fullName} can be created under ${parentName}, but external ENS subname creation is not fully wired here yet.`
+      );
+    } catch {
+      if (!cancelled) {
+        setLookupNote("ENS registry lookup is unavailable right now.");
+      }
+    }
+  }
+
   async function checkNftFactoryIdentity(cancelled = false): Promise<void> {
     try {
       const resolution = await fetchProfileResolution(slug);
@@ -584,6 +643,10 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
   async function autoCheckIdentity(cancelled = false): Promise<void> {
     if (identityMode === "register-eth") {
       await checkEthRegistrationAvailability(cancelled);
+      return;
+    }
+    if (identityMode === "register-eth-subname") {
+      await checkEthSubnameRegistrationAvailability(cancelled);
       return;
     }
     if (identityMode === "nftfactory-subname") {
@@ -929,12 +992,20 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
             <select
               value={identityMode}
               onChange={(e) =>
-                setIdentityMode(e.target.value as "register-eth" | "ens" | "external-subname" | "nftfactory-subname")
+                setIdentityMode(
+                  e.target.value as
+                    | "register-eth"
+                    | "register-eth-subname"
+                    | "ens"
+                    | "external-subname"
+                    | "nftfactory-subname"
+                )
               }
             >
               <optgroup label="Create New">
                 <option value="nftfactory-subname">Create nftfactory.eth subname</option>
                 <option value="register-eth">Register .eth</option>
+                <option value="register-eth-subname">Register .eth subname</option>
               </optgroup>
               <optgroup label="Link Existing">
                 <option value="ens">Link existing ENS</option>
@@ -1011,6 +1082,8 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
                     ? `Wait ${registrationCountdown}s`
                     : "Send register"
                   : "Send commit"
+                : identityMode === "register-eth-subname"
+                  ? "Check parent ownership"
                 : identityMode === "ens"
                 ? "Link existing ENS"
                 : identityMode === "external-subname"
