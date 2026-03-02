@@ -200,26 +200,17 @@ const erc1155ReadAbi = [
   }
 ] as const;
 
-const registryReadAbi = [
-  {
-    type: "function",
-    name: "creatorContracts",
-    stateMutability: "view",
-    inputs: [{ name: "creator", type: "address" }],
-    outputs: [
-      {
-        type: "tuple[]",
-        components: [
-          { name: "owner", type: "address" },
-          { name: "contractAddress", type: "address" },
-          { name: "isNftFactoryCreated", type: "bool" },
-          { name: "ensSubname", type: "string" },
-          { name: "standard", type: "string" }
-        ]
-      }
-    ]
-  }
-] as const;
+const creatorRegisteredEvent = {
+  type: "event",
+  name: "CreatorRegistered",
+  inputs: [
+    { indexed: true, name: "creator", type: "address" },
+    { indexed: true, name: "contractAddress", type: "address" },
+    { indexed: false, name: "ensSubname", type: "string" },
+    { indexed: false, name: "standard", type: "string" },
+    { indexed: false, name: "isNftFactoryCreated", type: "bool" }
+  ]
+} as const;
 
 function normalizeAddress(value: string): value is Address {
   return /^0x[a-fA-F0-9]{40}$/.test(value);
@@ -555,7 +546,7 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
   }, [address, reporter]);
 
   useEffect(() => {
-    if (mode !== "feed" || !address || !publicClient) return;
+    if (mode !== "feed" || !publicClient) return;
 
     let cancelled = false;
 
@@ -564,26 +555,31 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
         [...feedItems, ...localFeedItems].map((item) => item.collection.contractAddress.toLowerCase())
       );
 
-      const localCandidates = readKnownCollections(address);
+      const localCandidates = address ? readKnownCollections(address) : [];
       let registryCandidates: KnownCollection[] = [];
 
       try {
-        const records = (await publicClient.readContract({
+        const logs = await publicClient.getLogs({
           address: config.registry,
-          abi: registryReadAbi,
-          functionName: "creatorContracts",
-          args: [address as Address]
-        })) as Array<{
-          owner: string;
-          contractAddress: string;
-          ensSubname: string;
-        }>;
+          event: creatorRegisteredEvent,
+          fromBlock: 0n,
+          toBlock: "latest"
+        });
 
-        registryCandidates = records.map((record) => ({
-          contractAddress: record.contractAddress.toLowerCase(),
-          ensSubname: record.ensSubname?.trim() || null,
-          ownerAddress: record.owner.toLowerCase()
-        }));
+        const byContract = new Map<string, KnownCollection>();
+        for (const log of logs) {
+          const contractAddress = log.args.contractAddress?.toLowerCase();
+          const creator = log.args.creator?.toLowerCase();
+          if (!contractAddress || !creator) continue;
+          if (!normalizeAddress(contractAddress) || !normalizeAddress(creator)) continue;
+          if (!log.args.isNftFactoryCreated) continue;
+          byContract.set(contractAddress, {
+            contractAddress,
+            ensSubname: log.args.ensSubname?.trim() || null,
+            ownerAddress: creator
+          });
+        }
+        registryCandidates = [...byContract.values()];
       } catch {
         registryCandidates = [];
       }
@@ -591,7 +587,6 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
       const mergedCandidates = new Map<string, KnownCollection>();
       for (const item of [...localCandidates, ...registryCandidates]) {
         if (!isAddress(item.contractAddress) || !isAddress(item.ownerAddress)) continue;
-        if (item.ownerAddress.toLowerCase() !== address.toLowerCase()) continue;
         const key = item.contractAddress.toLowerCase();
         if (indexedContracts.has(key)) continue;
         const existing = mergedCandidates.get(key);
@@ -611,7 +606,7 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
       }
 
       const groups = await Promise.all(
-        candidateCollections.slice(0, 6).map(async (collection) => {
+        candidateCollections.slice(0, 12).map(async (collection) => {
         try {
           const blockTimes = new Map<string, string>();
           const getBlockTime = async (blockNumber: bigint): Promise<string> => {
@@ -651,8 +646,6 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
                   return null;
                 }
 
-                if (ownerAddress.toLowerCase() !== address.toLowerCase()) return null;
-
                 try {
                   metadataCid = (await publicClient.readContract({
                     address: collection.contractAddress as Address,
@@ -668,7 +661,7 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
                 return {
                   id: `hydrated:${collection.contractAddress.toLowerCase()}:${tokenId}`,
                   tokenId,
-                  creatorAddress: address.toLowerCase(),
+                  creatorAddress: collection.ownerAddress.toLowerCase(),
                   ownerAddress: ownerAddress.toLowerCase(),
                   metadataCid,
                   metadataUrl: ipfsToGatewayUrl(metadataCid, ipfsGateway),
@@ -679,7 +672,7 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
                   collection: {
                     chainId: config.chainId,
                     contractAddress: collection.contractAddress.toLowerCase(),
-                    ownerAddress: address.toLowerCase(),
+                    ownerAddress: collection.ownerAddress.toLowerCase(),
                     ensSubname: collection.ensSubname,
                     standard: "ERC721",
                     isFactoryCreated: false,
@@ -714,39 +707,48 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
             toBlock: "latest"
           });
 
-          const mintedTokenIds = new Map<string, string>();
+          const tokenState = new Map<string, { mintedAt: string; ownerAddress: string }>();
           for (const log of singleLogs) {
+            const tokenId = log.args.id?.toString() || "";
+            if (!tokenId) continue;
+            const timestamp = await getBlockTime(log.blockNumber);
+            const existing = tokenState.get(tokenId);
             if (log.args.from?.toLowerCase() === zeroAddress) {
-              mintedTokenIds.set(log.args.id?.toString() || "", await getBlockTime(log.blockNumber));
+              tokenState.set(tokenId, {
+                mintedAt: existing?.mintedAt || timestamp,
+                ownerAddress: (log.args.to || zeroAddress).toLowerCase()
+              });
+            } else if (existing) {
+              tokenState.set(tokenId, {
+                mintedAt: existing.mintedAt,
+                ownerAddress: (log.args.to || existing.ownerAddress || zeroAddress).toLowerCase()
+              });
             }
           }
           for (const log of batchLogs) {
-            if (log.args.from?.toLowerCase() === zeroAddress) {
-              for (const id of log.args.ids || []) {
-                mintedTokenIds.set(id.toString(), await getBlockTime(log.blockNumber));
+            const timestamp = await getBlockTime(log.blockNumber);
+            for (const id of log.args.ids || []) {
+              const tokenId = id.toString();
+              const existing = tokenState.get(tokenId);
+              if (log.args.from?.toLowerCase() === zeroAddress) {
+                tokenState.set(tokenId, {
+                  mintedAt: existing?.mintedAt || timestamp,
+                  ownerAddress: (log.args.to || zeroAddress).toLowerCase()
+                });
+              } else if (existing) {
+                tokenState.set(tokenId, {
+                  mintedAt: existing.mintedAt,
+                  ownerAddress: (log.args.to || existing.ownerAddress || zeroAddress).toLowerCase()
+                });
               }
             }
           }
 
           const items = await Promise.all(
-            [...mintedTokenIds.entries()]
-              .filter(([tokenId]) => Boolean(tokenId))
-              .map(async ([tokenId, mintedAt]) => {
-                let balance = 0n;
+            [...tokenState.entries()]
+              .filter(([tokenId, state]) => Boolean(tokenId) && Boolean(state.mintedAt))
+              .map(async ([tokenId, state]) => {
                 let metadataCid = "";
-
-                try {
-                  balance = (await publicClient.readContract({
-                    address: collection.contractAddress as Address,
-                    abi: erc1155ReadAbi,
-                    functionName: "balanceOf",
-                    args: [address as Address, BigInt(tokenId)]
-                  })) as bigint;
-                } catch {
-                  return null;
-                }
-
-                if (balance <= 0n) return null;
 
                 try {
                   metadataCid = (await publicClient.readContract({
@@ -762,25 +764,27 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
                 return {
                   id: `hydrated:${collection.contractAddress.toLowerCase()}:${tokenId}`,
                   tokenId,
-                  creatorAddress: address.toLowerCase(),
-                  ownerAddress: address.toLowerCase(),
+                  creatorAddress: collection.ownerAddress.toLowerCase(),
+                  ownerAddress: normalizeAddress(state.ownerAddress)
+                    ? state.ownerAddress.toLowerCase()
+                    : collection.ownerAddress.toLowerCase(),
                   metadataCid,
                   metadataUrl: ipfsToGatewayUrl(metadataCid, ipfsGateway),
                   mediaCid: null,
                   mediaUrl: null,
                   immutable: true,
-                  mintedAt,
+                  mintedAt: state.mintedAt,
                   collection: {
                     chainId: config.chainId,
                     contractAddress: collection.contractAddress.toLowerCase(),
-                    ownerAddress: address.toLowerCase(),
+                    ownerAddress: collection.ownerAddress.toLowerCase(),
                     ensSubname: collection.ensSubname,
                     standard: "ERC1155",
                     isFactoryCreated: false,
                     isUpgradeable: true,
                     finalizedAt: null,
-                    createdAt: mintedAt,
-                    updatedAt: mintedAt
+                    createdAt: state.mintedAt,
+                    updatedAt: state.mintedAt
                   },
                   activeListing: null
                 } satisfies ApiMintFeedItem;
