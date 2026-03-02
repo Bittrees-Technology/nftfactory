@@ -452,6 +452,7 @@ export async function linkProfileIdentity(payload: {
   name: string;
   source: ApiProfileRecord["source"];
   ownerAddress: string;
+  routeSlug?: string;
   collectionAddress?: string;
   tagline?: string;
   displayName?: string;
@@ -463,6 +464,17 @@ export async function linkProfileIdentity(payload: {
   links?: string[];
 }): Promise<{ ok: boolean; profile: ApiProfileRecord }> {
   return fetchJson<{ ok: boolean; profile: ApiProfileRecord }>("/api/profiles/link", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function transferProfileOwnership(payload: {
+  slug: string;
+  currentOwnerAddress: string;
+  newOwnerAddress: string;
+}): Promise<{ ok: boolean; profile: ApiProfileRecord }> {
+  return fetchJson<{ ok: boolean; profile: ApiProfileRecord }>("/api/profiles/transfer", {
     method: "POST",
     body: JSON.stringify(payload)
   });

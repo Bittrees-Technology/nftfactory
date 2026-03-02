@@ -71,6 +71,12 @@ type ProfileLinkPayload = {
   links?: string[];
 };
 
+type ProfileTransferPayload = {
+  slug: string;
+  currentOwnerAddress: string;
+  newOwnerAddress: string;
+};
+
 type ProfileRecord = {
   slug: string;
   fullName: string;
@@ -1414,6 +1420,111 @@ async function handleRequest(
         updatedAt: now
       }
     });
+    return;
+  }
+
+  if (req.method === "POST" && path === "/api/profiles/transfer") {
+    if (deps.isRateLimitedImpl(deps.getClientIpImpl(req, config.trustProxy))) {
+      sendJson(res, 429, { error: "Too many requests" });
+      return;
+    }
+
+    const payload = await readJsonBody<ProfileTransferPayload>(req);
+    const slug = normalizeRouteSlug(payload.slug);
+    if (!slug) {
+      sendJson(res, 400, { error: "Invalid slug" });
+      return;
+    }
+
+    const currentOwnerAddress = String(payload.currentOwnerAddress || "").trim().toLowerCase();
+    if (!isAddress(currentOwnerAddress)) {
+      sendJson(res, 400, { error: "Invalid currentOwnerAddress" });
+      return;
+    }
+
+    const newOwnerAddress = String(payload.newOwnerAddress || "").trim().toLowerCase();
+    if (!isAddress(newOwnerAddress)) {
+      sendJson(res, 400, { error: "Invalid newOwnerAddress" });
+      return;
+    }
+
+    if (currentOwnerAddress === newOwnerAddress) {
+      sendJson(res, 400, { error: "New owner must be different" });
+      return;
+    }
+
+    const current = await readProfileRecords();
+    const target = current.find((item) => item.slug === slug && item.ownerAddress === currentOwnerAddress);
+    if (!target) {
+      sendJson(res, 404, { error: `Profile /profile/${slug} was not found for the current owner` });
+      return;
+    }
+
+    const duplicateForNewOwner = current.find(
+      (item) =>
+        item.slug === slug &&
+        item.ownerAddress === newOwnerAddress &&
+        item.fullName === target.fullName &&
+        item.source === target.source &&
+        item.collectionAddress === target.collectionAddress
+    );
+
+    const now = new Date().toISOString();
+    const next = current
+      .filter(
+        (item) =>
+          !(
+            item.slug === slug &&
+            item.ownerAddress === currentOwnerAddress &&
+            item.fullName === target.fullName &&
+            item.source === target.source &&
+            item.collectionAddress === target.collectionAddress
+          )
+      )
+      .map((item) => ({ ...item }));
+
+    const updatedRecord: ProfileRecord = duplicateForNewOwner
+      ? {
+          ...duplicateForNewOwner,
+          tagline: target.tagline,
+          displayName: target.displayName,
+          bio: target.bio,
+          bannerUrl: target.bannerUrl,
+          avatarUrl: target.avatarUrl,
+          featuredUrl: target.featuredUrl,
+          accentColor: target.accentColor,
+          links: target.links,
+          updatedAt: now
+        }
+      : {
+          ...target,
+          ownerAddress: newOwnerAddress,
+          updatedAt: now
+        };
+
+    if (!duplicateForNewOwner) {
+      next.push(updatedRecord);
+    } else {
+      const deduped = next.filter(
+        (item) =>
+          !(
+            item.slug === duplicateForNewOwner.slug &&
+            item.ownerAddress === duplicateForNewOwner.ownerAddress &&
+            item.fullName === duplicateForNewOwner.fullName &&
+            item.source === duplicateForNewOwner.source &&
+            item.collectionAddress === duplicateForNewOwner.collectionAddress
+          )
+      );
+      deduped.push(updatedRecord);
+      deduped.sort((a, b) => a.fullName.localeCompare(b.fullName));
+      await writeProfileRecords(deduped);
+      sendJson(res, 200, { ok: true, profile: toProfileResponse(updatedRecord) });
+      return;
+    }
+
+    next.sort((a, b) => a.fullName.localeCompare(b.fullName));
+    await writeProfileRecords(next);
+    sendJson(res, 200, { ok: true, profile: toProfileResponse(updatedRecord) });
     return;
   }
 

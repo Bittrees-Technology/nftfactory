@@ -12,7 +12,13 @@ import {
   truncateAddress,
   type MarketplaceListing
 } from "../../../lib/marketplace";
-import { fetchHiddenListingIds, fetchProfileResolution, linkProfileIdentity, type ApiProfileResolution } from "../../../lib/indexerApi";
+import {
+  fetchHiddenListingIds,
+  fetchProfileResolution,
+  linkProfileIdentity,
+  transferProfileOwnership,
+  type ApiProfileResolution
+} from "../../../lib/indexerApi";
 
 function isAddress(value: string): value is Address {
   return /^0x[a-fA-F0-9]{40}$/.test(value);
@@ -52,7 +58,11 @@ export default function ProfileClient({ name }: { name: string }) {
   const [editFeaturedUrl, setEditFeaturedUrl] = useState("");
   const [editAccentColor, setEditAccentColor] = useState("#c53a1f");
   const [editLinksText, setEditLinksText] = useState("");
+  const [transferAddress, setTransferAddress] = useState("");
   const [editState, setEditState] = useState<{ status: "idle" | "pending" | "success" | "error"; message?: string }>({
+    status: "idle"
+  });
+  const [transferState, setTransferState] = useState<{ status: "idle" | "pending" | "success" | "error"; message?: string }>({
     status: "idle"
   });
 
@@ -248,6 +258,8 @@ export default function ProfileClient({ name }: { name: string }) {
     setEditAccentColor(primaryProfile.accentColor || "#c53a1f");
     setEditLinksText((primaryProfile.links || []).join("\n"));
     setEditState({ status: "idle" });
+    setTransferAddress("");
+    setTransferState({ status: "idle" });
   }, [primaryProfile]);
 
   async function saveProfileDetails(): Promise<void> {
@@ -287,6 +299,50 @@ export default function ProfileClient({ name }: { name: string }) {
       setEditState({
         status: "error",
         message: err instanceof Error ? err.message : "Failed to save profile details"
+      });
+    }
+  }
+
+  async function submitProfileTransfer(): Promise<void> {
+    if (!primaryProfile) {
+      setTransferState({ status: "error", message: "No linked profile is available to transfer." });
+      return;
+    }
+    if (!canEditProfile) {
+      setTransferState({ status: "error", message: "Connect the current profile owner wallet to transfer it." });
+      return;
+    }
+    if (!isAddress(transferAddress.trim())) {
+      setTransferState({ status: "error", message: "Enter a valid destination wallet address." });
+      return;
+    }
+    if (transferAddress.trim().toLowerCase() === primaryProfile.ownerAddress.toLowerCase()) {
+      setTransferState({ status: "error", message: "Enter a different wallet to transfer this profile." });
+      return;
+    }
+
+    try {
+      setTransferState({ status: "pending", message: "Transferring profile ownership..." });
+      const response = await transferProfileOwnership({
+        slug: primaryProfile.slug,
+        currentOwnerAddress: primaryProfile.ownerAddress,
+        newOwnerAddress: transferAddress.trim()
+      });
+
+      setProfileResolution((current) => {
+        if (!current) return current;
+        const nextProfiles = [response.profile, ...(current.profiles || []).filter((item) => item.slug !== response.profile.slug)];
+        return { ...current, profiles: nextProfiles };
+      });
+      setTransferState({
+        status: "success",
+        message: `Profile ownership transferred to ${response.profile.ownerAddress}.`
+      });
+      setTransferAddress("");
+    } catch (err) {
+      setTransferState({
+        status: "error",
+        message: err instanceof Error ? err.message : "Failed to transfer profile ownership"
       });
     }
   }
@@ -660,6 +716,33 @@ export default function ProfileClient({ name }: { name: string }) {
               <Link href={`/profile/setup?label=${encodeURIComponent(name)}`} className="ctaLink secondaryLink">Open identity setup</Link>
             </div>
           </>
+        )}
+      </div>
+
+      <div className="card formCard">
+        <h3>Transfer Profile</h3>
+        {primaryProfile ? (
+          <>
+            <p className="sectionLead">
+              Move ownership of {primaryProfile.fullName} to another wallet while keeping the same public route and profile content.
+            </p>
+            <div className="gridMini">
+              <label>
+                New owner wallet
+                <input value={transferAddress} onChange={(e) => setTransferAddress(e.target.value)} />
+              </label>
+            </div>
+            <div className="row">
+              <button type="button" onClick={() => void submitProfileTransfer()} disabled={!canEditProfile || transferState.status === "pending"}>
+                {transferState.status === "pending" ? "Transferring..." : "Transfer Profile"}
+              </button>
+              {!canEditProfile ? <span className="hint">Connect the current profile owner wallet to transfer it.</span> : null}
+            </div>
+            {transferState.status === "error" ? <p className="error">{transferState.message}</p> : null}
+            {transferState.status === "success" ? <p className="success">{transferState.message}</p> : null}
+          </>
+        ) : (
+          <p className="hint">No linked profile record is available to transfer yet.</p>
         )}
       </div>
 
