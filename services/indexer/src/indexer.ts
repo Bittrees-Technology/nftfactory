@@ -118,6 +118,25 @@ type PaymentTokenReviewPayload = {
   notes?: string;
 };
 
+type SyncMintedTokenPayload = {
+  chainId?: number;
+  contractAddress: string;
+  collectionOwnerAddress?: string;
+  tokenId: string;
+  creatorAddress: string;
+  ownerAddress: string;
+  standard?: string;
+  isFactoryCreated?: boolean;
+  isUpgradeable?: boolean;
+  ensSubname?: string | null;
+  finalizedAt?: string | null;
+  mintTxHash?: string | null;
+  metadataCid: string;
+  mediaCid?: string | null;
+  immutable?: boolean;
+  mintedAt?: string;
+};
+
 const CHAIN_ID = Number.parseInt(process.env.CHAIN_ID || "11155111", 10);
 const PORT = Number.parseInt(process.env.INDEXER_PORT || "8787", 10);
 const HOST = process.env.INDEXER_HOST || "127.0.0.1";
@@ -1052,7 +1071,7 @@ async function ensureTokenForListing(
     }
   });
 
-  const token = await deps.prisma.token.upsert({
+  const token = await (deps.prisma.token as any).upsert({
     where: {
       collectionId_tokenId: {
         collectionId: collection.id,
@@ -1096,6 +1115,101 @@ async function ensureTokenForListing(
   });
 
   return { tokenRefId: token.id, listingRowId: listing.id };
+}
+
+async function upsertMintedToken(
+  payload: SyncMintedTokenPayload,
+  deps: IndexerDeps,
+  config: RequestHandlerConfig
+): Promise<any> {
+  const contractAddress = String(payload.contractAddress || "").trim().toLowerCase();
+  const collectionOwnerAddress = String(payload.collectionOwnerAddress || payload.ownerAddress || "").trim().toLowerCase();
+  const creatorAddress = String(payload.creatorAddress || "").trim().toLowerCase();
+  const ownerAddress = String(payload.ownerAddress || "").trim().toLowerCase();
+  const tokenId = String(payload.tokenId || "").trim();
+  const standard = String(payload.standard || "ERC721").trim().toUpperCase() === "ERC1155" ? "ERC1155" : "ERC721";
+  const metadataCid = String(payload.metadataCid || "").trim();
+  const mediaCid = payload.mediaCid?.trim() || null;
+  const ensSubname = payload.ensSubname?.trim() || null;
+  const mintTxHash = payload.mintTxHash?.trim() || null;
+  const mintedAt = payload.mintedAt?.trim() ? new Date(payload.mintedAt) : new Date();
+  const finalizedAt =
+    payload.finalizedAt && payload.finalizedAt.trim()
+      ? new Date(payload.finalizedAt)
+      : null;
+
+  if (
+    (typeof payload.chainId === "number" && payload.chainId !== config.chainId) ||
+    !isAddress(contractAddress) ||
+    !isAddress(collectionOwnerAddress) ||
+    !isAddress(creatorAddress) ||
+    !isAddress(ownerAddress) ||
+    !tokenId ||
+    !metadataCid
+  ) {
+    throw new BadRequestError("Invalid token sync payload");
+  }
+
+  const collection = await deps.prisma.collection.upsert({
+    where: { contractAddress },
+    update: {
+      ownerAddress: collectionOwnerAddress,
+      ensSubname: ensSubname || undefined,
+      standard,
+      isFactoryCreated: payload.isFactoryCreated === true,
+      isUpgradeable: payload.isUpgradeable !== false,
+      finalizedAt: finalizedAt || undefined
+    },
+    create: {
+      chainId: config.chainId,
+      contractAddress,
+      ownerAddress: collectionOwnerAddress,
+      ensSubname,
+      standard,
+      isFactoryCreated: payload.isFactoryCreated === true,
+      isUpgradeable: payload.isUpgradeable !== false,
+      finalizedAt
+    }
+  });
+
+  const token = await (deps.prisma.token as any).upsert({
+    where: {
+      collectionId_tokenId: {
+        collectionId: collection.id,
+        tokenId
+      }
+    },
+    update: {
+      creatorAddress,
+      ownerAddress,
+      mintTxHash,
+      metadataCid,
+      mediaCid,
+      immutable: payload.immutable !== false,
+      mintedAt
+    },
+    create: {
+      collectionId: collection.id,
+      tokenId,
+      creatorAddress,
+      ownerAddress,
+      mintTxHash,
+      metadataCid,
+      mediaCid,
+      immutable: payload.immutable !== false,
+      mintedAt
+    },
+    include: {
+      collection: true,
+      listings: {
+        where: { active: true },
+        orderBy: { createdAt: "desc" },
+        take: 1
+      }
+    }
+  });
+
+  return token;
 }
 
 async function listHiddenListingIds(deps: IndexerDeps): Promise<number[]> {
@@ -1246,6 +1360,21 @@ async function handleRequest(
       id: report.id,
       status: report.status,
       createdAt: report.createdAt.toISOString()
+    });
+    return;
+  }
+
+  if (req.method === "POST" && path === "/api/tokens/sync") {
+    if (deps.isRateLimitedImpl(deps.getClientIpImpl(req, config.trustProxy))) {
+      sendJson(res, 429, { error: "Too many requests" });
+      return;
+    }
+
+    const payload = await readJsonBody<SyncMintedTokenPayload>(req);
+    const token = await upsertMintedToken(payload, deps, config);
+    sendJson(res, 200, {
+      ok: true,
+      token: toTokenApiShape(token)
     });
     return;
   }

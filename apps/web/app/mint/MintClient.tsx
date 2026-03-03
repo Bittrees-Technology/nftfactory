@@ -22,7 +22,7 @@ import {
 } from "../../lib/creatorCollection";
 import { getContractsConfig } from "../../lib/contracts";
 import { getAppChain, getExplorerBaseUrl } from "../../lib/chains";
-import { fetchCollectionsByOwner, fetchProfileResolution } from "../../lib/indexerApi";
+import { fetchCollectionsByOwner, fetchProfileResolution, syncMintedToken } from "../../lib/indexerApi";
 import { verifyOwnedCollectionsOnChain } from "../../lib/onchainCollections";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -962,6 +962,28 @@ export default function MintClient({
         },
         activeListing: null
       });
+      try {
+        await syncMintedToken({
+          chainId: config.chainId,
+          contractAddress: targetNft.toLowerCase(),
+          collectionOwnerAddress: account.toLowerCase(),
+          tokenId: mintedTokenId,
+          creatorAddress: account.toLowerCase(),
+          ownerAddress: account.toLowerCase(),
+          standard,
+          isFactoryCreated: mintMode === "shared",
+          isUpgradeable: mintMode === "custom",
+          ensSubname: mintMode === "custom" ? selectedKnownCollection?.ensSubname ?? null : null,
+          finalizedAt: null,
+          mintTxHash: txHash,
+          metadataCid: effectiveMetadataUri,
+          mediaCid: uploadReceipt.imageUri || uploadReceipt.audioUri || null,
+          immutable: standard === "ERC721" ? (mintMode === "shared" ? true : lockMetadata) : lockMetadata,
+          mintedAt: new Date().toISOString()
+        });
+      } catch {
+        // Keep the mint flow successful even if indexer sync is temporarily unavailable.
+      }
       setMintTx({ status: "success", hash: txHash, message: "Minted successfully." });
       clearMetadataDraft(account);
       resetMetadataInputs();

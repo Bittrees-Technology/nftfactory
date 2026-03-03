@@ -503,6 +503,30 @@ export async function fetchCollectionTokens(contractAddress: string): Promise<Ap
   return fetchJson<ApiCollectionTokens>(`/api/collections/${encodeURIComponent(contractAddress)}/tokens`);
 }
 
+export async function syncMintedToken(payload: {
+  chainId: number;
+  contractAddress: string;
+  collectionOwnerAddress?: string;
+  tokenId: string;
+  creatorAddress: string;
+  ownerAddress: string;
+  standard: string;
+  isFactoryCreated: boolean;
+  isUpgradeable: boolean;
+  ensSubname?: string | null;
+  finalizedAt?: string | null;
+  mintTxHash?: string | null;
+  metadataCid: string;
+  mediaCid?: string | null;
+  immutable: boolean;
+  mintedAt?: string;
+}): Promise<{ ok: boolean; token: ApiMintFeedItem }> {
+  return fetchJson<{ ok: boolean; token: ApiMintFeedItem }>("/api/tokens/sync", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
 export async function linkProfileIdentity(payload: {
   name: string;
   source: ApiProfileRecord["source"];

@@ -10,7 +10,12 @@ import {
   toWeiBigInt
 } from "../../lib/abi";
 import { getContractsConfig } from "../../lib/contracts";
-import { fetchMintFeed, fetchOwnerSummary, logPaymentTokenUsage } from "../../lib/indexerApi";
+import {
+  fetchActiveListings,
+  fetchCollectionTokens,
+  fetchCollectionsByOwner,
+  logPaymentTokenUsage
+} from "../../lib/indexerApi";
 import { getAppChain } from "../../lib/chains";
 import { ipfsToGatewayUrl, useNftMetadataPreview } from "../../lib/nftMetadata";
 import TxStatus, { type TxState } from "./TxStatus";
@@ -210,82 +215,42 @@ export default function ListClient() {
       setMintInventoryLoading(true);
       setMintInventoryError("");
       try {
-        const ownerSummary = await fetchOwnerSummary(address);
-        if (cancelled) return;
         const normalizedOwner = address.toLowerCase();
+        const collections = await fetchCollectionsByOwner(address);
+        if (cancelled) return;
         const byKey = new Map<string, OwnedMintRow>();
 
         const addRow = (row: OwnedMintRow): void => {
           byKey.set(row.key, row);
         };
 
-        for (const recentMint of ownerSummary.recentOwnedMints || []) {
-          addRow({
-            key: `${recentMint.collection.contractAddress.toLowerCase()}:${recentMint.tokenId}`,
-            tokenId: recentMint.tokenId,
-            contractAddress: recentMint.collection.contractAddress,
-            standard: recentMint.collection.standard === "ERC1155" ? "ERC1155" : "ERC721",
-            source: recentMint.collection.isFactoryCreated ? "shared" : "custom",
-            metadataCid: recentMint.metadataCid,
-            mediaCid: recentMint.mediaCid,
-            mintedAt: recentMint.mintedAt,
-            activeListingId: null
-          });
-        }
+        const tokenResults = await Promise.allSettled(
+          (collections.collections || []).map((collection) => fetchCollectionTokens(collection.contractAddress))
+        );
+        if (cancelled) return;
 
-        for (const collection of ownerSummary.factoryCollections || []) {
-          const contractAddress = collection.contractAddress;
-          const collectionStandard = collection.standard === "ERC1155" ? "ERC1155" : "ERC721";
-          for (const token of collection.tokens || []) {
+        for (const result of tokenResults) {
+          if (result.status !== "fulfilled") continue;
+          for (const token of result.value.tokens || []) {
             if (token.ownerAddress.toLowerCase() !== normalizedOwner) continue;
-            addRow({
-              key: `${contractAddress.toLowerCase()}:${token.tokenId}`,
-              tokenId: token.tokenId,
-              contractAddress,
-              standard: collectionStandard,
-              source: "custom",
-              metadataCid: token.metadataCid,
-              mediaCid: token.mediaCid,
-              mintedAt: token.mintedAt,
-              activeListingId: token.activeListing?.listingId || null
-            });
-          }
-        }
-
-        let feedCursor = 0;
-        let feedPage = 0;
-        let feedCanLoadMore = true;
-        const indexedOwnedTokenCount = ownerSummary.counts.ownedTokens || 0;
-        while (feedCanLoadMore && feedPage < 6) {
-          if (indexedOwnedTokenCount > 0 && byKey.size >= indexedOwnedTokenCount) {
-            break;
-          }
-          const response = await fetchMintFeed(feedCursor, 100);
-          if (cancelled) return;
-          response.items
-            .filter((item) => item.ownerAddress.toLowerCase() === normalizedOwner)
-          .forEach((item) => {
-            const contractAddress = item.collection.contractAddress;
+            const contractAddress = token.collection.contractAddress;
             const normalizedContract = contractAddress.toLowerCase();
             const rowSource =
               normalizedContract === config.shared721.toLowerCase() || normalizedContract === config.shared1155.toLowerCase()
                 ? "shared"
                 : "custom";
             addRow({
-              key: `${contractAddress.toLowerCase()}:${item.tokenId}`,
-              tokenId: item.tokenId,
+              key: `${normalizedContract}:${token.tokenId}`,
+              tokenId: token.tokenId,
               contractAddress,
-              standard: item.collection.standard === "ERC1155" ? "ERC1155" : "ERC721",
+              standard: token.collection.standard === "ERC1155" ? "ERC1155" : "ERC721",
               source: rowSource,
-              metadataCid: item.metadataCid,
-              mediaCid: item.mediaCid,
-              mintedAt: item.mintedAt,
-              activeListingId: item.activeListing?.listingId || null
+              metadataCid: token.metadataCid,
+              mediaCid: token.mediaCid,
+              mintedAt: token.mintedAt,
+              activeListingId: token.activeListing?.listingId || null
             });
-          });
-          feedCanLoadMore = response.canLoadMore;
-          feedCursor = response.nextCursor;
-          feedPage += 1;
+          }
         }
 
         setOwnedMints([...byKey.values()]);
@@ -377,85 +342,44 @@ export default function ListClient() {
         return;
       }
 
-      const ownerSummary = await fetchOwnerSummary(address);
       const account = address.toLowerCase();
       const listingRows = new Map<number, ListingRow>();
 
-      for (const collection of ownerSummary.factoryCollections || []) {
-        for (const token of collection.tokens || []) {
-          if (!token.activeListing) continue;
-          if (token.activeListing.sellerAddress.toLowerCase() !== account) continue;
-
-          const listingId = Number.parseInt(token.activeListing.listingId, 10) || 0;
-          listingRows.set(listingId, {
-            id: listingId,
-            seller: token.activeListing.sellerAddress as Address,
-            nft: collection.contractAddress as Address,
-            tokenId: BigInt(token.tokenId),
-            amount: collection.standard === "ERC1155" ? 1n : 1n,
-            standard: collection.standard,
-            paymentToken: token.activeListing.paymentToken as Address,
-            price: BigInt(token.activeListing.priceRaw),
-            expiresAt: 0n,
-            active: token.activeListing.active !== false,
-            metadataCid: token.metadataCid,
-            mediaCid: token.mediaCid,
-            mintedAt: token.mintedAt,
-            mintTxHash: null
-          });
-        }
-      }
-
-      let feedCursor = 0;
-      let feedPage = 0;
-      let feedCanLoadMore = true;
-      const indexedListingCount = ownerSummary.counts.activeListings || 0;
-
-      if (indexedListingCount === 0) {
-        setMyListings([...listingRows.values()].sort((a, b) => b.id - a.id));
-        return;
-      }
-
-      while (
-        feedCanLoadMore &&
-        feedPage < 6 &&
-        (indexedListingCount === 0 || listingRows.size < indexedListingCount)
-      ) {
-        const response = await fetchMintFeed(feedCursor, 100);
+      let cursor = 0;
+      let page = 0;
+      let canLoadMore = true;
+      while (canLoadMore && page < 10) {
+        const response = await fetchActiveListings(cursor, 100, account);
         for (const item of response.items) {
-          if (!item.activeListing) continue;
-          if (item.activeListing.sellerAddress.toLowerCase() !== account) continue;
+          if (!item.token || !item.token.collection) continue;
 
-          const listingId = Number.parseInt(item.activeListing.listingId, 10) || 0;
+          const listingId = Number.parseInt(item.listingId, 10) || item.id || 0;
           if (listingRows.has(listingId)) continue;
 
           listingRows.set(listingId, {
             id: listingId,
-            seller: item.activeListing.sellerAddress as Address,
-            nft: item.collection.contractAddress as Address,
+            seller: item.sellerAddress as Address,
+            nft: item.collectionAddress as Address,
             tokenId: BigInt(item.tokenId),
-            amount: item.collection.standard === "ERC1155" ? 1n : 1n,
-            standard: item.collection.standard,
-            paymentToken: item.activeListing.paymentToken as Address,
-            price: BigInt(item.activeListing.priceRaw),
-            expiresAt: 0n,
-            active: item.activeListing.active !== false,
-            metadataCid: item.metadataCid,
-            mediaCid: item.mediaCid,
-            mintedAt: item.mintedAt,
-            mintTxHash: item.mintTxHash || null
+            amount: BigInt(item.amountRaw || "1"),
+            standard: item.standard,
+            paymentToken: item.paymentToken as Address,
+            price: BigInt(item.priceRaw),
+            expiresAt: BigInt(item.expiresAtRaw || "0"),
+            active: item.active !== false,
+            metadataCid: item.token.metadataCid,
+            mediaCid: item.token.mediaCid,
+            mintedAt: item.token.mintedAt,
+            mintTxHash: item.token.mintTxHash || null
           });
         }
 
-        feedCanLoadMore = response.canLoadMore;
-        feedCursor = response.nextCursor;
-        feedPage += 1;
+        canLoadMore = response.canLoadMore;
+        cursor = response.nextCursor;
+        page += 1;
       }
 
       const nextListings = [...listingRows.values()].sort((a, b) => b.id - a.id);
-      if (indexedListingCount > 0 && nextListings.length === 0) {
-        setListingsError("Indexer reports active listings, but the related token rows have not been hydrated yet.");
-      }
       setMyListings(nextListings);
     } catch (err) {
       setListingsError(err instanceof Error ? err.message : "Failed to load listings");
