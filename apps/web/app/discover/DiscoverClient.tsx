@@ -16,6 +16,8 @@ import {
 } from "../../lib/marketplace";
 import {
   createModerationReport,
+  fetchCollectionTokens,
+  fetchCollectionsByOwner,
   fetchHiddenListingIds,
   fetchMintFeed,
   type ApiMintFeedItem
@@ -195,6 +197,7 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
   const [allListings, setAllListings] = useState<MarketplaceListing[]>([]);
   const [feedItems, setFeedItems] = useState<ApiMintFeedItem[]>([]);
   const [localFeedItems, setLocalFeedItems] = useState<ApiMintFeedItem[]>([]);
+  const [supplementalFeedItems, setSupplementalFeedItems] = useState<ApiMintFeedItem[]>([]);
   const [feedPreviewIndex, setFeedPreviewIndex] = useState<Record<string, NftMetadataPreview>>({});
   const [feedSearchIndex, setFeedSearchIndex] = useState<Record<string, string>>({});
   const [feedMediaTypeIndex, setFeedMediaTypeIndex] = useState<Record<string, MediaFilter>>({});
@@ -384,6 +387,57 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
   }, [config.chainId, mode]);
 
   useEffect(() => {
+    if (mode !== "feed") return;
+    if (!address) {
+      setSupplementalFeedItems([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadSupplementalFeed(): Promise<void> {
+      try {
+        const collections = await fetchCollectionsByOwner(address);
+        if (cancelled) return;
+
+        const tokensByCollection = await Promise.all(
+          (collections.collections || []).map(async (collection) => {
+            try {
+              return await fetchCollectionTokens(collection.contractAddress);
+            } catch {
+              return null;
+            }
+          })
+        );
+        if (cancelled) return;
+
+        const ownedTokens = tokensByCollection
+          .flatMap((result) => result?.tokens || [])
+          .filter((item) => item.ownerAddress.toLowerCase() === address.toLowerCase());
+
+        const deduped = new Map<string, ApiMintFeedItem>();
+        for (const item of ownedTokens) {
+          const key = `${item.collection.contractAddress.toLowerCase()}:${item.tokenId}`;
+          if (!deduped.has(key)) {
+            deduped.set(key, item);
+          }
+        }
+
+        setSupplementalFeedItems([...deduped.values()]);
+      } catch {
+        if (!cancelled) {
+          setSupplementalFeedItems([]);
+        }
+      }
+    }
+
+    void loadSupplementalFeed();
+    return () => {
+      cancelled = true;
+    };
+  }, [address, mode]);
+
+  useEffect(() => {
     if (!reporter && address) {
       setReporter(address);
     }
@@ -411,7 +465,7 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
 
   const allFeedItems = useMemo(() => {
     if (mode !== "feed") return feedItems;
-    const merged = [...localFeedItems, ...feedItems];
+    const merged = [...localFeedItems, ...supplementalFeedItems, ...feedItems];
     const deduped = new Map<string, ApiMintFeedItem>();
     for (const item of merged) {
       const key = `${item.collection.contractAddress.toLowerCase()}:${item.tokenId}`;
@@ -420,7 +474,7 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
       }
     }
     return [...deduped.values()];
-  }, [feedItems, localFeedItems, mode]);
+  }, [feedItems, localFeedItems, mode, supplementalFeedItems]);
 
   useEffect(() => {
     if (mode !== "feed") return;

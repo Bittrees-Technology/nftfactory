@@ -1740,6 +1740,7 @@ async function handleRequest(
         where: { ownerAddress: owner },
         orderBy: { createdAt: "desc" },
         select: {
+          id: true,
           chainId: true,
           contractAddress: true,
           ownerAddress: true,
