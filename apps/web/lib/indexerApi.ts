@@ -576,6 +576,32 @@ export async function backfillCollectionSubname(payload: {
   });
 }
 
+export async function backfillCollectionTokens(payload: {
+  contractAddress: string;
+  ownerAddress?: string;
+  standard?: "ERC721" | "ERC1155";
+  ensSubname?: string | null;
+  isFactoryCreated?: boolean;
+  isUpgradeable?: boolean;
+  auth?: AdminAuth;
+}): Promise<{ ok: boolean; scanned: number; upserted: number; standard: string; ownerAddress: string | null }> {
+  return fetchJson<{ ok: boolean; scanned: number; upserted: number; standard: string; ownerAddress: string | null }>(
+    "/api/admin/collections/backfill-tokens",
+    {
+      method: "POST",
+      headers: adminHeaders(payload.auth),
+      body: JSON.stringify({
+        contractAddress: payload.contractAddress,
+        ownerAddress: payload.ownerAddress,
+        standard: payload.standard,
+        ensSubname: payload.ensSubname,
+        isFactoryCreated: payload.isFactoryCreated,
+        isUpgradeable: payload.isUpgradeable
+      })
+    }
+  );
+}
+
 export async function backfillMintTxHashes(payload?: {
   limit?: number;
   auth?: AdminAuth;

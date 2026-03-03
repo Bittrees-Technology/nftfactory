@@ -40,6 +40,15 @@ type BackfillSubnamePayload = {
   contractAddress?: string;
 };
 
+type BackfillCollectionTokensPayload = {
+  contractAddress: string;
+  ownerAddress?: string;
+  standard?: string;
+  ensSubname?: string | null;
+  isFactoryCreated?: boolean;
+  isUpgradeable?: boolean;
+};
+
 type ModeratorPayload = {
   address: string;
   label?: string;
@@ -361,6 +370,26 @@ const erc1155ReadAbi = [
     stateMutability: "view",
     inputs: [{ name: "id", type: "uint256" }],
     outputs: [{ name: "", type: "string" }]
+  }
+] as const;
+
+const erc165ReadAbi = [
+  {
+    type: "function",
+    name: "supportsInterface",
+    stateMutability: "view",
+    inputs: [{ name: "interfaceId", type: "bytes4" }],
+    outputs: [{ name: "", type: "bool" }]
+  }
+] as const;
+
+const ownableReadAbi = [
+  {
+    type: "function",
+    name: "owner",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }]
   }
 ] as const;
 
@@ -1212,6 +1241,255 @@ async function upsertMintedToken(
   return token;
 }
 
+async function backfillCollectionTokens(
+  payload: BackfillCollectionTokensPayload,
+  deps: IndexerDeps,
+  config: RequestHandlerConfig
+): Promise<{ scanned: number; upserted: number; standard: string; ownerAddress: string | null }> {
+  const contractAddress = String(payload.contractAddress || "").trim().toLowerCase();
+  const requestedOwner = payload.ownerAddress?.trim().toLowerCase() || null;
+  if (!isAddress(contractAddress)) {
+    throw new BadRequestError("Invalid contractAddress");
+  }
+  if (requestedOwner && !isAddress(requestedOwner)) {
+    throw new BadRequestError("Invalid ownerAddress");
+  }
+
+  const existingCollection = await deps.prisma.collection.findUnique({
+    where: { contractAddress },
+    select: {
+      ownerAddress: true,
+      ensSubname: true,
+      standard: true,
+      isFactoryCreated: true,
+      isUpgradeable: true,
+      finalizedAt: true
+    }
+  });
+
+  const client = createPublicClient({
+    transport: http(config.rpcUrl)
+  });
+
+  let chainOwnerAddress: string | null = null;
+  try {
+    const owner = await client.readContract({
+      address: contractAddress as `0x${string}`,
+      abi: ownableReadAbi,
+      functionName: "owner"
+    });
+    const normalized = String(owner || "").toLowerCase();
+    if (isAddress(normalized)) {
+      chainOwnerAddress = normalized;
+    }
+  } catch {
+    chainOwnerAddress = null;
+  }
+
+  let standard = String(payload.standard || existingCollection?.standard || "").trim().toUpperCase();
+  if (standard !== "ERC721" && standard !== "ERC1155") {
+    try {
+      const [is721, is1155] = await Promise.all([
+        client.readContract({
+          address: contractAddress as `0x${string}`,
+          abi: erc165ReadAbi,
+          functionName: "supportsInterface",
+          args: ["0x80ac58cd"]
+        }).catch(() => false),
+        client.readContract({
+          address: contractAddress as `0x${string}`,
+          abi: erc165ReadAbi,
+          functionName: "supportsInterface",
+          args: ["0xd9b67a26"]
+        }).catch(() => false)
+      ]);
+      standard = is721 ? "ERC721" : is1155 ? "ERC1155" : "";
+    } catch {
+      standard = "";
+    }
+  }
+  if (standard !== "ERC721" && standard !== "ERC1155") {
+    throw new BadRequestError("Could not determine collection standard");
+  }
+
+  const effectiveOwnerAddress = requestedOwner || chainOwnerAddress || existingCollection?.ownerAddress || null;
+  let scanned = 0;
+  let upserted = 0;
+
+  if (standard === "ERC721") {
+    const logs = await client.getLogs({
+      address: contractAddress as `0x${string}`,
+      event: erc721TransferEvent,
+      fromBlock: 0n,
+      toBlock: "latest"
+    });
+    const mintedLogs = logs.filter((log) => String(log.args.from || "").toLowerCase() === ZERO_ADDRESS);
+    scanned = mintedLogs.length;
+
+    for (const log of mintedLogs) {
+      const tokenId = log.args.tokenId?.toString();
+      if (!tokenId) continue;
+
+      let currentOwner = effectiveOwnerAddress;
+      try {
+        const owner = await client.readContract({
+          address: contractAddress as `0x${string}`,
+          abi: erc721ReadAbi,
+          functionName: "ownerOf",
+          args: [BigInt(tokenId)]
+        });
+        const normalized = String(owner || "").toLowerCase();
+        currentOwner = isAddress(normalized) ? normalized : currentOwner;
+      } catch {
+        currentOwner = currentOwner || null;
+      }
+      if (!currentOwner) continue;
+      if (requestedOwner && currentOwner !== requestedOwner) continue;
+
+      let metadataCid = "";
+      try {
+        metadataCid = String(
+          await client.readContract({
+            address: contractAddress as `0x${string}`,
+            abi: erc721ReadAbi,
+            functionName: "tokenURI",
+            args: [BigInt(tokenId)]
+          })
+        );
+      } catch {
+        metadataCid = "";
+      }
+      if (!metadataCid) continue;
+
+      await upsertMintedToken(
+        {
+          chainId: config.chainId,
+          contractAddress,
+          collectionOwnerAddress: chainOwnerAddress || currentOwner,
+          tokenId,
+          creatorAddress: chainOwnerAddress || currentOwner,
+          ownerAddress: currentOwner,
+          standard,
+          isFactoryCreated: payload.isFactoryCreated ?? existingCollection?.isFactoryCreated ?? false,
+          isUpgradeable: payload.isUpgradeable ?? existingCollection?.isUpgradeable ?? true,
+          ensSubname: payload.ensSubname ?? existingCollection?.ensSubname ?? null,
+          finalizedAt: existingCollection?.finalizedAt?.toISOString() || null,
+          mintTxHash: log.transactionHash,
+          metadataCid,
+          mediaCid: null,
+          immutable: existingCollection?.isUpgradeable === false ? true : true
+        },
+        deps,
+        config
+      );
+      upserted += 1;
+    }
+  } else {
+    const targetOwner = effectiveOwnerAddress;
+    if (!targetOwner) {
+      throw new BadRequestError("ownerAddress is required to backfill ERC1155 collections");
+    }
+
+    const singleLogs = await client.getLogs({
+      address: contractAddress as `0x${string}`,
+      event: erc1155TransferSingleEvent,
+      fromBlock: 0n,
+      toBlock: "latest"
+    });
+    const batchLogs = await client.getLogs({
+      address: contractAddress as `0x${string}`,
+      event: erc1155TransferBatchEvent,
+      fromBlock: 0n,
+      toBlock: "latest"
+    });
+
+    const tokenIds = new Set<string>();
+    const mintTxByTokenId = new Map<string, string>();
+    for (const log of singleLogs) {
+      if (String(log.args.from || "").toLowerCase() !== ZERO_ADDRESS) continue;
+      const tokenId = log.args.id?.toString();
+      if (!tokenId) continue;
+      tokenIds.add(tokenId);
+      if (!mintTxByTokenId.has(tokenId)) {
+        mintTxByTokenId.set(tokenId, log.transactionHash);
+      }
+    }
+    for (const log of batchLogs) {
+      if (String(log.args.from || "").toLowerCase() !== ZERO_ADDRESS) continue;
+      for (const id of log.args.ids || []) {
+        const tokenId = id.toString();
+        tokenIds.add(tokenId);
+        if (!mintTxByTokenId.has(tokenId)) {
+          mintTxByTokenId.set(tokenId, log.transactionHash);
+        }
+      }
+    }
+
+    scanned = tokenIds.size;
+    for (const tokenId of tokenIds) {
+      let balance = 0n;
+      try {
+        balance = BigInt(
+          await client.readContract({
+            address: contractAddress as `0x${string}`,
+            abi: erc1155ReadAbi,
+            functionName: "balanceOf",
+            args: [targetOwner as `0x${string}`, BigInt(tokenId)]
+          })
+        );
+      } catch {
+        balance = 0n;
+      }
+      if (balance <= 0n) continue;
+
+      let metadataCid = "";
+      try {
+        metadataCid = String(
+          await client.readContract({
+            address: contractAddress as `0x${string}`,
+            abi: erc1155ReadAbi,
+            functionName: "uri",
+            args: [BigInt(tokenId)]
+          })
+        );
+      } catch {
+        metadataCid = "";
+      }
+      if (!metadataCid) continue;
+
+      await upsertMintedToken(
+        {
+          chainId: config.chainId,
+          contractAddress,
+          collectionOwnerAddress: chainOwnerAddress || targetOwner,
+          tokenId,
+          creatorAddress: chainOwnerAddress || targetOwner,
+          ownerAddress: targetOwner,
+          standard,
+          isFactoryCreated: payload.isFactoryCreated ?? existingCollection?.isFactoryCreated ?? false,
+          isUpgradeable: payload.isUpgradeable ?? existingCollection?.isUpgradeable ?? true,
+          ensSubname: payload.ensSubname ?? existingCollection?.ensSubname ?? null,
+          finalizedAt: existingCollection?.finalizedAt?.toISOString() || null,
+          mintTxHash: mintTxByTokenId.get(tokenId) || null,
+          metadataCid,
+          mediaCid: null,
+          immutable: true
+        },
+        deps,
+        config
+      );
+      upserted += 1;
+    }
+  }
+
+  return {
+    scanned,
+    upserted,
+    standard,
+    ownerAddress: effectiveOwnerAddress
+  };
+}
+
 async function listHiddenListingIds(deps: IndexerDeps): Promise<number[]> {
   const actions = await deps.prisma.moderationAction.findMany({
     orderBy: { createdAt: "desc" },
@@ -1703,6 +1981,26 @@ async function handleRequest(
       ok: true,
       updatedCount: result.count,
       subname
+    });
+    return;
+  }
+
+  if (req.method === "POST" && path === "/api/admin/collections/backfill-tokens") {
+    if (deps.isRateLimitedImpl(deps.getClientIpImpl(req, config.trustProxy))) {
+      sendJson(res, 429, { error: "Too many requests" });
+      return;
+    }
+    const auth = await assertAdminRequest(req, config);
+    if (!auth.ok) {
+      sendJson(res, 401, { error: auth.error });
+      return;
+    }
+
+    const payload = await readJsonBody<BackfillCollectionTokensPayload>(req);
+    const result = await backfillCollectionTokens(payload, deps, config);
+    sendJson(res, 200, {
+      ok: true,
+      ...result
     });
     return;
   }
