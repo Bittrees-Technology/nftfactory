@@ -1,9 +1,8 @@
 # Archive
 
-The active documentation surface now has two mirrored trees:
+The active documentation surface is `docs/wiki`.
 
-- `docs/wiki` for maintainers
-- `data/wiki` for the in-app rendered wiki
+The in-app `/wiki` route reads from the same files directly.
 
 Everything under `docs/archive` should be treated as historical reference, not the current source of truth.
 
@@ -38,4 +37,4 @@ Start with:
 
 - [docs/archive/README.md](../archive/README.md)
 
-Do not use archive pages as the primary source for current behavior. The current source of truth is the active wiki content in `docs/wiki` and its mirrored `data/wiki` copy.
+Do not use archive pages as the primary source for current behavior. The current source of truth is the active wiki content in `docs/wiki`.

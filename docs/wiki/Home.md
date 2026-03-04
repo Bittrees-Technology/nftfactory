@@ -2,12 +2,7 @@
 
 This wiki is the active documentation surface for the current NFTFactory build.
 
-Two copies of the content exist in this repo:
-
-- `docs/wiki` is the source-of-truth documentation tree for maintainers.
-- `data/wiki` is the copy rendered by the web app at `/wiki`.
-
-They should stay in sync.
+The maintainer docs and the in-app `/wiki` route now both read directly from `docs/wiki`.
 
 ## Current build scope
 

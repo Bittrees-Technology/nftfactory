@@ -1,7 +1,7 @@
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 
-const WIKI_DIR = path.resolve(process.cwd(), "..", "..", "data", "wiki");
+const WIKI_DIR = path.resolve(process.cwd(), "..", "..", "docs", "wiki");
 const WIKI_PAGE_ORDER = [
   { filename: "Home.md", section: "Start Here" },
   { filename: "Architecture.md", section: "Start Here" },

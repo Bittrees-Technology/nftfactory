@@ -19,7 +19,6 @@ function resolveWikiHref(href: string): { href: string; external: boolean } {
   const normalized = trimmed
     .replace(/^\.?\//, "")
     .replace(/^docs\/wiki\//i, "")
-    .replace(/^data\/wiki\//i, "")
     .replace(/\.md$/i, "");
 
   if (!normalized) {
