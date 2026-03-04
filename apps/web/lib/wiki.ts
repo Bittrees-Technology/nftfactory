@@ -2,11 +2,40 @@ import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 
 const WIKI_DIR = path.resolve(process.cwd(), "..", "..", "data", "wiki");
+const WIKI_PAGE_ORDER = [
+  { filename: "Home.md", section: "Start Here" },
+  { filename: "Architecture.md", section: "Start Here" },
+  { filename: "Contracts.md", section: "Start Here" },
+  { filename: "Profiles-and-Identity.md", section: "Start Here" },
+  { filename: "ENS-Integration.md", section: "Start Here" },
+  { filename: "Finality.md", section: "Start Here" },
+  { filename: "Operations-and-Governance.md", section: "Operations" },
+  { filename: "Deployment-and-Launch.md", section: "Operations" },
+  { filename: "Infrastructure-and-Operations.md", section: "Operations" },
+  { filename: "UI-Lockdown-Plan.md", section: "Operations" },
+  { filename: "Upgrade-Runbook.md", section: "Operations" },
+  { filename: "Testing-and-Validation.md", section: "Operations" },
+  { filename: "Security-and-Audit.md", section: "Reference" },
+  { filename: "Contract-Dependencies.md", section: "Reference" },
+  { filename: "Roadmap.md", section: "Reference" },
+  { filename: "Archive.md", section: "Reference" }
+] as const;
+type WikiPageConfig = (typeof WIKI_PAGE_ORDER)[number];
+
+function pageOrderIndex(filename: string): number {
+  const index = WIKI_PAGE_ORDER.findIndex((page) => page.filename === filename);
+  return index === -1 ? Number.MAX_SAFE_INTEGER : index;
+}
+
+function pageSection(filename: string): string {
+  return WIKI_PAGE_ORDER.find((page) => page.filename === filename)?.section || "Reference";
+}
 
 export type WikiPage = {
   slug: string;
   title: string;
   filename: string;
+  section: string;
 };
 
 export type WikiHeading = {
@@ -53,17 +82,16 @@ export async function listWikiPages(): Promise<WikiPage[]> {
   const files = await readdir(WIKI_DIR);
   return files
     .filter((file) => file.toLowerCase().endsWith(".md"))
-    .filter((file) => file !== "Archive.md")
-    .filter((file) => file !== "Roadmap.md")
     .sort((a, b) => {
-      if (a === "Home.md") return -1;
-      if (b === "Home.md") return 1;
+      const orderDiff = pageOrderIndex(a) - pageOrderIndex(b);
+      if (orderDiff !== 0) return orderDiff;
       return a.localeCompare(b);
     })
     .map((filename) => ({
       slug: toSlug(filename),
       title: toTitle(filename),
-      filename
+      filename,
+      section: pageSection(filename)
     }));
 }
 

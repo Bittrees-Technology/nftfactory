@@ -392,12 +392,13 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
       setSupplementalFeedItems([]);
       return;
     }
+    const connectedAddress = address;
 
     let cancelled = false;
 
     async function loadSupplementalFeed(): Promise<void> {
       try {
-        const collections = await fetchCollectionsByOwner(address);
+        const collections = await fetchCollectionsByOwner(connectedAddress);
         if (cancelled) return;
 
         const tokensByCollection = await Promise.all(
@@ -413,7 +414,7 @@ export default function DiscoverClient({ mode = "feed" }: DiscoverClientProps) {
 
         const ownedTokens = tokensByCollection
           .flatMap((result) => result?.tokens || [])
-          .filter((item) => item.ownerAddress.toLowerCase() === address.toLowerCase());
+          .filter((item) => item.ownerAddress.toLowerCase() === connectedAddress.toLowerCase());
 
         const deduped = new Map<string, ApiMintFeedItem>();
         for (const item of ownedTokens) {

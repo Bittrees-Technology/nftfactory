@@ -17,7 +17,7 @@ export default async function WikiHomePage() {
               <p className="eyebrow">Knowledge Base</p>
               <h1>{home.title}</h1>
               <p className="wikiPageLead">
-                Product, architecture, operations, and launch guidance sourced from the in-repo wiki files under <code>data/wiki</code>.
+                Product, architecture, operations, and launch guidance mirrored from the maintainer wiki in <code>docs/wiki</code> and rendered from the in-app copy under <code>data/wiki</code>.
               </p>
             </div>
             {headings.length > 0 ? (
