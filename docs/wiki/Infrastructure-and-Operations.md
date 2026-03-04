@@ -1,16 +1,8 @@
 # Infrastructure and Operations
 
-This page captures the practical local and hosted operating model for NFTFactory.
+This page is the practical operating model for the current NFTFactory build.
 
-It is the live infrastructure reference for the current build, including:
-
-- monorepo layout
-- local service boundaries
-- process management
-- environment configuration
-- manual startup and troubleshooting
-
-This page should stay aligned with the active build, not historical one-off machine state.
+It describes the real local service layout, the env keys the code actually reads, and the current process model.
 
 ## Monorepo layout
 
@@ -21,9 +13,9 @@ nftfactory/
 ├── packages/
 │   └── contracts/           Foundry contracts, scripts, tests
 ├── services/
-│   └── indexer/             Node API + Prisma
+│   └── indexer/             Node HTTP API + Prisma
 ├── docs/
-│   └── wiki/                Source docs
+│   └── wiki/                Maintainer docs
 ├── data/
 │   └── wiki/                In-app wiki source
 ├── scripts/                 Project helpers
@@ -32,30 +24,32 @@ nftfactory/
 
 ## Service model
 
-The current active operating model is:
+The current operating model is:
 
 - **Web app**
   - Next.js 15
-  - normally served on port `3000`
+  - usually runs on port `3000`
 - **Indexer**
   - Node HTTP API
-  - normally served on port `8791`
+  - code default: `127.0.0.1:8787`
+  - current local env in this repo: port `8791`
 - **Database**
   - PostgreSQL
-  - normally served on port `5432`
+  - local env points to `localhost:5432`
 - **Chain**
-  - primary proving environment is **Ethereum Sepolia** (`11155111`)
-  - local Anvil remains optional for isolated local contract testing
+  - primary proving chain is Ethereum Sepolia (`11155111`)
 
 ## Active app surfaces
 
-The infrastructure supports these user-facing flows:
+The current user-facing routes are:
 
+- `/`
 - `/mint`
 - `/list`
 - `/discover`
 - `/profile`
 - `/profile/setup`
+- `/profile/[name]`
 - `/mod`
 - `/admin`
 - `/wiki`
@@ -70,22 +64,18 @@ Run these from the project root:
 | `npm run dev:web` | Start the web app |
 | `npm run dev:indexer` | Start the indexer |
 | `npm run typecheck:web` | Typecheck the web app |
-| `npm run typecheck:indexer` | Typecheck the indexer |
+| `npm run build:web` | Build the web app |
 | `npm run test:web` | Run web tests |
+| `npm run typecheck:indexer` | Typecheck the indexer |
 | `npm run test:indexer` | Run indexer tests |
-
-For contracts:
-
-| Command | Purpose |
-|------|---------|
-| `forge build` | Compile contracts |
-| `forge test -q` | Run contract tests |
+| `npm run test:contracts` | Run contract tests |
+| `npm run docs:contracts-deps` | Regenerate archived contract dependency output |
 
 ## Environment configuration
 
 ### Web app
 
-The web app expects `apps/web/.env.local` to provide:
+The web app currently reads these keys:
 
 - `NEXT_PUBLIC_CHAIN_ID`
 - `NEXT_PUBLIC_RPC_URL`
@@ -98,13 +88,15 @@ The web app expects `apps/web/.env.local` to provide:
 - `NEXT_PUBLIC_INDEXER_API_URL`
 - `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID`
 - `NEXT_PUBLIC_IPFS_GATEWAY`
-- `NEXT_PUBLIC_ENS_NAME_WRAPPER_ADDRESS` (optional but recommended for wrapped ENS support)
-- `NEXT_PUBLIC_ENS_ETH_REGISTRAR_CONTROLLER_ADDRESS` (required for real `.eth` registration flow)
-- `PINATA_JWT` (server-side web API route usage)
+- `NEXT_PUBLIC_ENS_NAME_WRAPPER_ADDRESS` (optional)
+- `NEXT_PUBLIC_ENS_ETH_REGISTRAR_CONTROLLER_ADDRESS` (needed for the real `.eth` registration flow)
+- `PINATA_JWT` (server-side web API usage)
+
+Note: `apps/web/.env.example` is not a complete list of every variable the current app can use.
 
 ### Indexer
 
-The indexer expects `services/indexer/.env` to provide:
+The indexer currently reads these keys:
 
 - `DATABASE_URL`
 - `RPC_URL`
@@ -113,29 +105,16 @@ The indexer expects `services/indexer/.env` to provide:
 - `INDEXER_PORT`
 - `INDEXER_ADMIN_TOKEN`
 - `INDEXER_ADMIN_ALLOWLIST`
-- `MODERATOR_REGISTRY_ADDRESS` (when using contract-backed moderator reads)
+- `TRUST_PROXY`
+- `REGISTRY_ADDRESS`
+- `MARKETPLACE_ADDRESS`
+- `MODERATOR_REGISTRY_ADDRESS`
 
-## Process management
-
-The supported process models are:
-
-1. Manual terminals
-2. `pm2` for persistent local sessions
-
-When using `pm2`, the important commands are:
-
-```bash
-pm2 list
-pm2 logs nftfactory-web
-pm2 logs nftfactory-indexer
-pm2 restart nftfactory-web
-pm2 restart nftfactory-indexer
-pm2 save
-```
+Note: `services/indexer/.env.example` is also a minimal example, not a full mirror of the current local env.
 
 ## Manual startup
 
-Use this sequence for local Sepolia-connected operation:
+Use this sequence for local Sepolia-connected work:
 
 ```bash
 cd /home/robert/nftfactory
@@ -156,27 +135,42 @@ cd /home/robert/nftfactory
 npm --workspace apps/web run dev -- --hostname 0.0.0.0 --port 3000
 ```
 
-Then open:
+The current local `.env.local` in this repo uses a LAN URL for `NEXT_PUBLIC_INDEXER_API_URL`.
 
-- `http://127.0.0.1:3000` locally
-- `http://192.168.1.115:3000` on the LAN (when the machine IP matches that address)
+Use your machine's actual reachable host and port there. Do not copy another machine's private LAN IP literally.
+
+## Process management
+
+The practical process models are:
+
+1. manual terminals
+2. `pm2` for persistent local sessions
+
+Useful `pm2` commands:
+
+```bash
+pm2 list
+pm2 logs nftfactory-web
+pm2 logs nftfactory-indexer
+pm2 restart nftfactory-web
+pm2 restart nftfactory-indexer
+pm2 save
+```
 
 ## Data flow
 
-The intended infrastructure data precedence is:
+The intended precedence is:
 
-1. **Blockchain**
-   - source of truth for ownership, mints, and contract state
-2. **Indexer + Prisma**
-   - primary application mirror of chain state
-3. **Local browser cache**
-   - short-lived UX fallback for immediate continuity
+1. blockchain for authoritative ownership and contract state
+2. indexer for normal product reads
+3. local browser cache as a short-lived UX fallback
 
-This means:
+Recent admin tooling reinforces this model:
 
-- contract actions should trust chain state
-- normal discovery and app flows should prefer indexed data
-- the UI can use targeted chain reads and local cache when the indexer is lagging
+- single-token sync
+- listing sync
+- collection token backfill
+- full registry-driven collection backfill
 
 ## Troubleshooting
 
@@ -185,9 +179,10 @@ This means:
 Most often this means:
 
 - `NEXT_PUBLIC_INDEXER_API_URL` points to a host the browser cannot reach
-- the indexer is only bound to `127.0.0.1` while the browser is calling a LAN IP
+- the indexer is still bound to `127.0.0.1`
+- the web app and indexer are not on the same port/host assumptions
 
-The fix is usually:
+Typical fix:
 
 ```bash
 cd /home/robert/nftfactory/services/indexer
@@ -195,27 +190,18 @@ fuser -k 8791/tcp
 INDEXER_HOST=0.0.0.0 INDEXER_PORT=8791 npm run dev
 ```
 
-### Web app not visible on the network
-
-Make sure Next is started with:
-
-```bash
-npm --workspace apps/web run dev -- --hostname 0.0.0.0 --port 3000
-```
-
 ### Discover feed missing a fresh mint
 
-The current system now has three visibility paths:
-
-1. indexed feed data
-2. local immediate post-mint cache
-3. bounded direct-chain hydration for NFTFactory collections
-
-If a mint still does not appear, verify:
+Check:
 
 - the mint transaction succeeded on-chain
-- the collection was created through NFTFactory and therefore registered
-- the web app was restarted after recent feed changes if needed
+- the token was synced into the indexer
+- the collection is registered if you expect registry-driven discovery
+- the relevant admin backfill/sync endpoint has been run if the index is behind
+
+### Long-running admin jobs fail from the browser
+
+The current build has explicit long-running backfill routes. If HTTP is still unreliable for a large recovery job, use the standalone indexer script path from `services/indexer/scripts` instead of keeping the browser request open.
 
 ## Related docs
 

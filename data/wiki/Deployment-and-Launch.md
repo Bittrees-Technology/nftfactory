@@ -2,42 +2,47 @@
 
 ## Deployment posture
 
-NFTFactory should be operated as:
+The current posture is still:
 
 1. local iteration first
 2. Sepolia validation second
-3. mainnet only after operational and product checks pass
+3. mainnet only after the exact wired build is stable
+
+Do not treat mainnet as a place to discover missing env wiring or stale addresses.
 
 ## Current environment model
 
 | Environment | Purpose | Notes |
 |-------------|---------|-------|
-| **Local** | UI and flow iteration, local-chain testing | Anvil, local caches and fallback modes acceptable |
-| **Sepolia** | Canonical pre-mainnet proving ground | Real wallets, real confirmations, explorer verification |
-| **Mainnet** | Release target | Only after Sepolia validation path is stable |
+| **Local** | UI iteration, local service validation, and admin recovery testing | degraded indexer mode is acceptable here |
+| **Sepolia** | Canonical proving ground | current configured chain id is `11155111` |
+| **Mainnet** | Release target | only after stable Sepolia flows and ownership transfer |
 
 ## Local development
 
-Local development is for UI and flow iteration, local-chain testing with Anvil, and indexer and admin workflow testing. It is acceptable to use local JSON-backed fallback state if Prisma is unavailable. These are development conveniences, not production guarantees.
+Local work should validate:
+
+- web routing and wallet flow
+- indexer API behavior
+- admin actions, including recovery and backfill endpoints
+- contract interactions against Sepolia or Anvil as appropriate
 
 ## Sepolia validation
 
-Sepolia is the canonical proving ground for current builds.
+Before calling a release candidate stable, validate on Sepolia:
 
-Before considering a release ready, validate on Sepolia:
-
-- wallet connectivity
-- IPFS upload flow
+- wallet connection
 - shared mint publish
 - creator collection deploy and mint
 - collection management actions
-- profile setup and resolution
-- listing and buy paths
+- profile setup and public profile resolution
+- listing create/cancel/buy paths
 - moderation report and visibility flows
+- indexer-backed discovery and collection lookup
 
 ## Contract deployment order
 
-Use this order for the current contract suite:
+Use this order for the current suite:
 
 1. `NftFactoryRegistry`
 2. `RoyaltySplitRegistry`
@@ -48,47 +53,64 @@ Use this order for the current contract suite:
 7. `CreatorFactory`
 8. `Marketplace`
 
-For verification and deployment scripts, the marketplace contract resolves as `src/core/Marketplace.sol:Marketplace`.
+After deployment:
 
-After deploying `ModeratorRegistry`:
+- authorize `CreatorFactory` in `NftFactoryRegistry`
+- authorize shared mint contracts in `SubnameRegistrar` if they should record attribution
+- seed the moderator set in `ModeratorRegistry` if using the on-chain moderator path
+- update web and indexer env files to the exact deployed addresses
 
-- seed the initial moderator set on-chain
-- set `MODERATOR_REGISTRY_ADDRESS` in `services/indexer/.env`
-- restart the indexer before validating admin and moderation flows
+## Current service wiring
 
-The indexer must be started with `INDEXER_HOST=127.0.0.1 INDEXER_PORT=8791` in deployed environments.
+The current build assumes:
+
+- web points to Sepolia via `NEXT_PUBLIC_RPC_URL`
+- the indexer points to the same chain via `RPC_URL`
+- the indexer knows the registry and marketplace addresses through its own env, not only the web env
+- the web uses `NEXT_PUBLIC_INDEXER_API_URL` to reach the indexer
+
+Code defaults:
+
+- indexer host default: `127.0.0.1`
+- indexer port default: `8787`
+
+Current local env snapshot in this repo:
+
+- indexer port override: `8791`
 
 ## Environment readiness checklist
 
 Before deployment or release validation:
 
-- [ ] deployer wallet is funded
-- [ ] Safe addresses are defined
+- [ ] deployer or Safe is funded
 - [ ] RPC endpoints are valid
-- [ ] contract addresses are consistent across services
-- [ ] `MODERATOR_REGISTRY_ADDRESS` is configured when using the contract-backed moderator flow
-- [ ] `INDEXER_PORT=8791` is set in the indexer environment
+- [ ] web and indexer point to the same chain
+- [ ] `NEXT_PUBLIC_*` contract addresses match the intended deployment
+- [ ] `REGISTRY_ADDRESS` and `MARKETPLACE_ADDRESS` are set in the indexer env
+- [ ] `MODERATOR_REGISTRY_ADDRESS` is set if using on-chain moderator reads
+- [ ] `NEXT_PUBLIC_INDEXER_API_URL` points to a reachable host
 - [ ] IPFS upload credentials are configured
-- [ ] indexer and web env files match the intended chain
 
 ## Operational launch gates
 
-- [ ] contracts compile and tests pass
-- [ ] indexer unit tests pass (`npm run test:indexer`)
-- [ ] web typecheck and build pass
-- [ ] indexer typecheck passes
-- [ ] current Sepolia deployment addresses are validated
-- [ ] profile and ENS-linked flows resolve correctly
-- [ ] moderator and admin controls are usable
-- [ ] ownership/admin surfaces are transferred to Safe where required
+- [ ] `npm run typecheck:web` passes
+- [ ] `npm run build:web` passes
+- [ ] `npm run typecheck:indexer` passes
+- [ ] `npm run test:indexer` passes
+- [ ] `npm run test:web` passes
+- [ ] `npm run test:contracts` passes
+- [ ] current env addresses are verified against the deployed contracts
+- [ ] admin backfill and listing-sync tools behave as expected
+- [ ] profile, discover, and moderation routes are stable
+- [ ] protocol ownership is transferred where required
 
 ## Mainnet go criteria
 
-- [ ] Sepolia flows are stable
-- [ ] mint, list, discover, and profile pages are visually and behaviorally locked
-- [ ] ownership transfer is complete
-- [ ] deployment addresses are documented
-- [ ] release confidence is based on current code, not stale docs or stale branches
+- [ ] Sepolia flows are stable with the exact wired env
+- [ ] Mint, List, Discover, and Profile are behaviorally locked
+- [ ] no critical indexer recovery path is still manual-only or undocumented
+- [ ] ownership/admin posture is deliberate and documented
+- [ ] the wiki matches the real build, not historical assumptions
 
 ## Related pages
 

@@ -2,7 +2,9 @@
 
 ## Purpose
 
-This page tracks page-level work that must be completed before mainnet. It is narrower than the roadmap: the roadmap covers overall direction, this page covers concrete lock criteria and completion status for each surface.
+This page tracks the page-level work that still matters before mainnet.
+
+It is narrower than the roadmap. The roadmap covers overall direction; this page tracks the lock criteria for the live user-facing routes.
 
 ## Mainnet-critical pages
 
@@ -15,57 +17,52 @@ This page tracks page-level work that must be completed before mainnet. It is na
 
 A page is considered locked when:
 
-- the route purpose is obvious from first load
-- the primary action is clear and not duplicated
-- copy matches the actual contract and backend behavior
-- empty states are informative
-- loading states are predictable
+- the route purpose is obvious on first load
+- the primary action is clear
+- copy matches actual contract and backend behavior
+- loading and empty states are intentional
 - failure states are actionable
 - the page behaves coherently on mobile and desktop
-- the page degrades cleanly when the indexer or wallet is unavailable
+- the page degrades clearly when wallet, indexer, or RPC conditions are poor
 
 ## Mint
 
-- [x] unified mint and publish flow
-- [x] shared and creator collection mint paths inside one route
-- [x] clearer separation between collection contract data and NFT metadata
-- [x] upload, metadata, and receipts treated as one publish sequence
-- [ ] tighten remaining copy and spacing so the route reads as one polished sequence
-- [ ] finish final empty, loading, and retry behavior for slow Sepolia confirmations
+- [x] unified publish flow
+- [x] shared and creator-owned paths live in one route
+- [x] collection management actions are present
+- [ ] remove remaining copy that still reads like tooling instead of product
+- [ ] make slow Sepolia confirmations feel predictable
 
 ## List
 
-- [x] seller and marketplace actions split more clearly than the original mixed flow
-- [x] wrong-network messaging aligned to the configured chain
-- [x] clearer empty states when listings are absent
-- [ ] tighten the seller action hierarchy so create, refresh, and manage feel less tool-like
-- [ ] make the page read more like one guided selling workflow and less like stacked controls
+- [x] seller and marketplace actions are separated
+- [x] wrong-network handling is explicit
+- [ ] make create, refresh, and manage actions feel like one workflow
+- [ ] reduce operational-looking clutter
 
 ## Discover
 
-- [x] public mint feed split from moderation tooling
-- [x] newest-first continuous feed model
-- [x] feed-card presentation instead of utility rows
-- [ ] improve visual rhythm so the feed feels more editorial and less operational
-- [ ] make backend-unavailable vs no-indexed-mints states more explicit to users
-- [ ] refine filters so they feel more intentional and less configuration-heavy
+- [x] public feed is separate from moderation
+- [x] indexed feed is the primary path
+- [ ] make backend-unavailable vs empty-index states clearer
+- [ ] improve filter and sorting ergonomics
+- [ ] keep the feed visually intentional instead of purely utilitarian
 
 ## Profile
 
-- [x] setup route separated from the public profile route
-- [x] ENS-linked identity model documented in the product
-- [x] public creator page supports richer presentation fields
-- [ ] continue tightening the public profile layout into a more intentional creator homepage
-- [ ] reduce remaining diagnostic language on public-facing profile sections
-- [ ] finalize profile setup ergonomics for multi-profile wallets
+- [x] setup route is separate from the public profile route
+- [x] ENS-linked identity modes are exposed
+- [x] public creator pages support richer presentation fields
+- [ ] keep public pages feeling polished rather than diagnostic
+- [ ] improve multi-profile wallet ergonomics
 
 ## Release sequence
 
-1. finish route-level UI polish for Mint, List, Discover, and Profile
+1. finish route-level UI polish
 2. run the full Sepolia validation pass
-3. confirm Safe ownership and operational controls
-4. freeze the release candidate
-5. deploy to mainnet
+3. confirm admin recovery paths
+4. confirm Safe ownership and operational controls
+5. freeze the release candidate
 
 ## Related pages
 

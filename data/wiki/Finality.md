@@ -2,78 +2,73 @@
 
 ## Overview
 
-NFTFactory creator collections expose explicit irreversible actions so collectors can verify what has been frozen and what has not.
+NFTFactory creator-owned collections expose explicit irreversible actions so collectors can verify what has been frozen and what has not.
 
-These finality controls apply to creator-owned collections, not the shared mint contracts.
+These controls apply to:
+
+- `CreatorCollection721`
+- `CreatorCollection1155`
+
+They do not apply to the shared mint contracts.
 
 ## Collector trust summary
 
 | Path | Upgrade risk | Metadata mutability |
 |------|-------------|---------------------|
-| Shared mint | None — no proxy | Fixed at mint |
-| Creator collection (before finalization) | Owner can upgrade logic | Unlocked unless token is locked |
-| Creator collection (after `finalizeUpgrades()`) | Permanently removed | Locked tokens are immutable |
+| Shared mint | None, no proxy path | Fixed at mint |
+| Creator collection before finalization | Owner can still upgrade logic | Mutable unless metadata is locked |
+| Creator collection after `finalizeUpgrades()` | Upgrade path permanently closed | Locked tokens remain immutable |
 
 ## `finalizeUpgrades()`
-
-### Applies to
-
-- `CreatorCollection721`
-- `CreatorCollection1155`
 
 ### Effect
 
 - permanently disables future UUPS upgrades
-- freezes the collection logic at the current implementation
+- leaves the current implementation in place
 - cannot be undone
 
-### Why it matters
+Before finalization, the collection owner can still change logic through the proxy upgrade path.
 
-Before finalization, a collection owner can change collection logic through the proxy upgrade path.
+After finalization, that specific upgrade trust assumption is removed.
 
-After finalization:
+### Product meaning
 
-- that upgrade trust assumption is removed
-- collectors can verify that no further implementation changes are possible
+This is the explicit "freeze upgrade authority" action in the creator-collection management flow.
 
-### How it is used in the product
-
-This action belongs in the collection-management flow on `/mint` under the manage path.
-
-It should be treated as a deliberate, explicit "I am freezing upgrade authority" step.
+It should be treated as a deliberate ownership-level decision, not a casual toggle.
 
 ## Metadata locking
 
-### Applies to
-
-- creator-owned collections only
-
 ### Effect
 
-- prevents later token-URI mutation for the affected token
-- can be set at mint time
-- should be treated as irreversible once enabled
+- applies per token
+- prevents later URI changes once a token is locked
+- can be set at publish time or later
+- is effectively irreversible once the token is locked
+
+The contracts allow `setMetadataLock(tokenId, bool)` only until the token is locked. Once a token is locked, later attempts to change that lock state or update the URI revert.
 
 ### Why it matters
 
-For collectors, metadata locking is the stronger guarantee around content immutability. Even if collection ownership remains transferable, a locked token should keep the same metadata URI.
+For collectors, metadata locking is the stronger content-immutability guarantee. A collection can still remain transferable in ownership, but a locked token should keep the same metadata URI.
 
 ## Shared mint finality
 
-Shared mint contracts are already the "final by design" path:
+Shared mint contracts are the "final by design" path:
 
 - no proxy upgrade path
-- no metadata setter path
+- no post-mint metadata update path
 
-There is no `finalizeUpgrades()` equivalent and no separate metadata-lock flow. The shared path is simpler, but less configurable.
+There is no `finalizeUpgrades()` equivalent because the shared path has no upgrade boundary to close.
 
 ## Recommended creator guidance
 
 Creators should:
 
-1. finish any needed upgrades first
-2. transfer ownership if a Safe or DAO should hold final control
-3. call `finalizeUpgrades()` only when the collection logic is truly ready to freeze
+1. finish any required upgrades first
+2. confirm token metadata policy
+3. transfer ownership to a Safe or other long-term owner if needed
+4. call `finalizeUpgrades()` only when the collection logic is truly ready to freeze
 
 ## Related pages
 

@@ -2,76 +2,85 @@
 
 ## Overview
 
-NFTFactory treats creator identity as a product-level layer built on top of on-chain wallets, creator collections, and ENS-linked names.
+NFTFactory treats creator identity as a product layer built on top of wallets, creator collections, and ENS-linked names.
+
+The important current distinction is:
+
+- some identities are created on-chain by NFTFactory
+- others are linked in the app and indexed as metadata
 
 ## Routes
 
 | Route | Role |
 |-------|------|
-| `/profile` | Resolves one primary profile for the connected wallet, or routes the user into setup |
-| `/profile/setup` | Identity setup: register `.eth`, link ENS, or create an `nftfactory.eth` subname |
-| `/profile/[name]` | Public creator page, resolved by slug or linked ENS name |
+| `/profile` | Resolves a primary profile for the connected wallet or routes into setup |
+| `/profile/setup` | Register `.eth`, link existing ENS, or create `nftfactory.eth` identity |
+| `/profile/[name]` | Public creator page resolved by slug or linked identity |
 
 ## Current identity modes
 
-The product currently supports four identity modes:
+The current build supports these identity modes:
 
 | Mode | Example | Created by NFTFactory? |
 |------|---------|------------------------|
-| Fresh `.eth` registration | `artist.eth` | No — executed through the ENS controller, then linked into NFTFactory |
-| External ENS name | `artist.eth` | No — linked in app only |
-| External ENS subname | `drops.artist.eth` | No — linked in app only |
-| `nftfactory.eth` subname | `studio.nftfactory.eth` | Yes — via `SubnameRegistrar` on-chain |
+| Fresh `.eth` registration | `artist.eth` | No. The app drives the ENS controller flow, then links the result |
+| Existing ENS name | `artist.eth` | No. Linked in app only |
+| Existing ENS subname | `drops.artist.eth` | No. Linked in app only |
+| `nftfactory.eth` subname | `studio.nftfactory.eth` | Yes. Created on-chain via `SubnameRegistrar` |
 
-Only the `nftfactory.eth` subname mode is a native NFTFactory-owned identity creation flow in the current build. Fresh `.eth` registration now uses the ENS controller commit/register flow directly when the controller address is configured, then links the resulting ENS name into NFTFactory after registration succeeds.
+Only the `nftfactory.eth` subname mode is a native NFTFactory contract-owned identity creation path.
 
-## `/profile/setup` route
+## `/profile/setup`
 
-This is the identity setup surface. It currently supports:
+This route currently supports:
 
-- checking `.eth` name availability and rent pricing through the ENS controller
-- running the ENS controller commit/register flow for fresh `.eth` names
-- linking an external ENS name or subname
+- checking `.eth` availability and estimated pricing through the ENS controller
+- running the `.eth` commit/register flow when the controller env is configured
+- linking an existing ENS name
+- linking an existing ENS subname
 - creating a new `nftfactory.eth` subname
-- associating a creator collection
+- associating a collection with the profile
 
-Public-facing profile content is edited on the public profile page itself, not in setup.
+It does not currently create external ENS subnames on-chain.
 
-## `/profile/[name]` route
+## `/profile/[name]`
 
-This is the public creator page. It currently renders:
+The public creator page currently renders:
 
-- resolved identity and display name
+- resolved identity
+- display name
 - avatar and banner
 - tagline and bio
-- linked wallets
+- links
 - featured media
-- pinned collection
-- collection wall
-- storefront feed
+- a pinned collection when available
+- a creator collection wall
+- a storefront feed based on indexed data
 
 ## Data sources
 
 Profile data should currently be sourced in this order:
 
-1. **Indexer-backed profile registry**
-2. **Indexer-backed owner collection lookup**
-3. **Local cached state as fallback**
+1. indexer-backed profile registry
+2. indexer-backed owner collection lookup
+3. local cache only as a fallback
 
-The browser should not scan the chain to discover profile state.
+The browser should not chain-scan to discover profile state.
 
 ## Backend routes
 
-- `GET /api/profiles?owner=<address>` — profile list for the connected owner
-- `POST /api/profiles/link` — creates or updates a linked profile record
-- `GET /api/profile/:name` — resolves the public profile by slug or linked name
+- `GET /api/profiles?owner=<address>`
+- `POST /api/profiles/link`
+- `POST /api/profiles/transfer`
+- `GET /api/profile/:name`
 
-## Near-future scope
+## Near-term reality
 
-- stronger creator-page presentation
-- more embedded media options
-- richer social and link sections
-- better canonical profile selection when a wallet owns multiple profiles
+The profile system is functional, but it is still being hardened around:
+
+- better canonical-profile selection for wallets with multiple identities
+- clearer ownership validation for linked identities
+- cleaner public presentation with less diagnostic copy
 
 ## Related pages
 

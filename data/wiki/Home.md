@@ -1,76 +1,70 @@
 # NFTFactory Wiki
 
-This wiki is the active documentation surface for NFTFactory.
+This wiki is the active documentation surface for the current NFTFactory build.
 
-Use this as the canonical entry point for the current product, release posture, and operational model. Older point-in-time notes and superseded standalone documents live under `docs/archive`.
+Two copies of the content exist in this repo:
+
+- `docs/wiki` is the source-of-truth documentation tree for maintainers.
+- `data/wiki` is the copy rendered by the web app at `/wiki`.
+
+They should stay in sync.
 
 ## Current build scope
 
-NFTFactory is currently organized around four connected product flows that are intended to reach mainnet in a stable, production-ready state:
+The current product is a Sepolia-first creator flow with these live surfaces:
 
 1. **Mint and publish**
-   - one unified publish flow
-   - choose the shared contracts or a creator-owned collection inside the same sequence
-   - upload media and metadata to IPFS from the web app
-2. **Manage creator collections**
-   - choose a known collection
-   - set creator identity metadata
-   - transfer ownership
-   - finalize upgrades
-3. **Creator profiles**
-   - link an external ENS name
-   - link an external ENS subname
-   - create an on-chain `nftfactory.eth` subname
-   - publish a richer public creator page
-4. **Discovery and moderation**
-   - browse the public mint feed
-   - review the moderation feed separately
-   - resolve creators by ENS-linked identity
-   - report and hide content through the moderation flow
+   - publish through shared mint contracts or a creator-owned collection from `/mint`
+   - upload media and metadata from the web app
+   - optionally register or attach `nftfactory.eth` attribution during the flow
+2. **List and discover**
+   - create and manage listings from `/list`
+   - browse indexed mints and listings from `/discover`
+   - use `/mod` for moderation review and `/admin` for admin tooling
+3. **Profiles and identity**
+   - resolve a connected wallet at `/profile`
+   - create or link identity at `/profile/setup`
+   - render the public creator page at `/profile/[name]`
+4. **Operations**
+   - the indexer mirrors chain state, serves read APIs, and exposes admin backfill/sync tools
+   - the in-app wiki is exposed at `/wiki`
 
 ## Current release focus
 
-The current release objective is not broad feature expansion.
+The release focus is hardening the current build, not broad feature expansion.
 
-The immediate goal is to lock down the user-facing quality, consistency, and reliability of these pages before mainnet:
+The main work still in flight is:
 
-- Mint
-- List
-- Discover
-- Profile
+- tightening Mint, List, Discover, and Profile UX before mainnet
+- keeping indexer-backed discovery and profile routes reliable on Sepolia
+- improving admin recovery paths, especially collection/token backfills and listing sync
+- validating the exact env wiring and contract addresses used by the live build
 
-For practical purposes, that means:
-
-- the flows should feel intentional and coherent
-- the copy should match what the contracts and backend actually do
-- the routes should degrade clearly when services are unavailable
-- the Sepolia path should behave as the final proving ground before mainnet
-
-## Start here
+## Start Here
 
 | Page | Purpose |
 |------|---------|
-| [Architecture](./Architecture.md) | System shape, environments, routes, and service boundaries |
-| [Contracts](./Contracts.md) | Contract roles, current validated deployment addresses, and on-chain responsibilities |
-| [Profiles and Identity](./Profiles-and-Identity.md) | Profile setup, ENS linkage, public profile routing, and identity data sources |
-| [ENS Integration](./ENS-Integration.md) | What is on-chain vs linked off-chain in the ENS model |
-| [Finality](./Finality.md) | Irreversible actions and collector-verifiable guarantees |
+| [Architecture](./Architecture.md) | Real route surface, service boundaries, and indexer API shape |
+| [Contracts](./Contracts.md) | Contract roles and the current app-wired Sepolia addresses |
+| [Profiles and Identity](./Profiles-and-Identity.md) | What `/profile`, `/profile/setup`, and `/profile/[name]` actually do |
+| [ENS Integration](./ENS-Integration.md) | What NFTFactory creates on-chain vs what it only links |
+| [Finality](./Finality.md) | What is and is not irreversible in creator-owned collections |
 
 ## Operations
 
 | Page | Purpose |
 |------|---------|
-| [Operations and Governance](./Operations-and-Governance.md) | Ownership boundaries, admin controls, moderator model, and production control surfaces |
-| [Deployment and Launch](./Deployment-and-Launch.md) | Local, Sepolia, and mainnet rollout guidance |
-| [Infrastructure and Operations](./Infrastructure-and-Operations.md) | Practical service layout, env wiring, process control, and troubleshooting |
-| [UI Lockdown Plan](./UI-Lockdown-Plan.md) | Page-by-page criteria for locking Mint, List, Discover, and Profile before mainnet |
-| [Upgrade Runbook](./Upgrade-Runbook.md) | UUPS upgrade path for creator collections |
-| [Testing and Validation](./Testing-and-Validation.md) | Recommended verification flow for contracts, app wiring, and release readiness |
+| [Operations and Governance](./Operations-and-Governance.md) | Ownership boundaries, auth model, moderator flow, and admin controls |
+| [Deployment and Launch](./Deployment-and-Launch.md) | Current local, Sepolia, and mainnet rollout posture |
+| [Infrastructure and Operations](./Infrastructure-and-Operations.md) | Real env wiring, process model, and troubleshooting |
+| [UI Lockdown Plan](./UI-Lockdown-Plan.md) | Page-level lock criteria for Mint, List, Discover, and Profile |
+| [Upgrade Runbook](./Upgrade-Runbook.md) | UUPS upgrade path for creator-owned collections |
+| [Testing and Validation](./Testing-and-Validation.md) | Practical validation order for contracts, web, and indexer |
 
 ## Reference
 
 | Page | Purpose |
 |------|---------|
-| [Security and Audit](./Security-and-Audit.md) | Security review focus areas and practical risk posture |
-| [Contract Dependencies](./Contract-Dependencies.md) | High-level dependency map and generation notes |
-| [Archive](./Archive.md) | Historical and superseded documentation |
+| [Security and Audit](./Security-and-Audit.md) | Current contract and operational risk posture |
+| [Contract Dependencies](./Contract-Dependencies.md) | High-level contract relationships that matter operationally |
+| [Archive](./Archive.md) | Historical notes and superseded docs |

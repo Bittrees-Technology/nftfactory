@@ -2,59 +2,67 @@
 
 ## Purpose
 
-This page is the human-readable dependency summary for the contract suite.
+This page is the human-readable dependency summary for the current contract suite.
 
-The full generated dependency dump belongs in the archive. The active wiki should keep only the structural relationships that matter for reasoning about upgrades, authority, and integration boundaries.
+It keeps only the relationships that matter when reasoning about deployment order, authority, upgrades, and integration boundaries.
 
 ## Core internal relationships
 
+### `NftFactoryRegistry`
+
+- uses `Owned`
+- stores factory authorization, creator registrations, protocol fee, treasury, and blocklist state
+
+This is the core policy and registry surface that other protocol contracts read from.
+
 ### `CreatorFactory`
 
-- depends on `NftFactoryRegistry`
-- deploys `CreatorCollection721`
-- deploys `CreatorCollection1155`
 - uses `Owned`
+- depends on `NftFactoryRegistry`
+- depends on `CreatorCollection721`
+- depends on `CreatorCollection1155`
+- depends on `ERC1967Proxy`
 
-This is the deploy-time hinge between the registry and creator-owned collections.
+This is the deploy-time hinge for creator-owned collections.
 
 ### `Marketplace`
 
+- uses `Owned`
 - depends on `NftFactoryRegistry`
 - uses `IERC721Lite`
 - uses `IERC1155Lite`
 - uses `IERC20`
-- uses `Owned`
 
-This is the settlement surface and one of the most sensitive integration points in the system.
-
-### `SharedMint721` and `SharedMint1155`
-
-- both depend on `SubnameRegistrar`
-- both use `Owned`
-
-These are the low-friction publish surfaces that optionally interact with the identity namespace for attribution.
+This is the primary settlement surface and one of the highest-risk integrations.
 
 ### `SubnameRegistrar`
 
 - uses `Owned`
 
-This is the root of the product-controlled identity namespace under `nftfactory.eth`.
+This is the root of the protocol-managed `nftfactory.eth` namespace.
 
-### `NftFactoryRegistry`
+### `ModeratorRegistry`
 
 - uses `Owned`
 
-This is the central on-chain policy and registry contract.
+This is a separate protocol-owned list of moderator accounts. The web app does not call it directly, but the indexer can treat it as canonical when `MODERATOR_REGISTRY_ADDRESS` is configured.
 
 ### `RoyaltySplitRegistry`
 
 - uses `Owned`
 
-This is a supporting registry and should still be treated as part of the protocol-owned control surface.
+This is a supporting protocol registry and should still be treated as part of the governance surface.
+
+### `SharedMint721` and `SharedMint1155`
+
+- both use `Owned`
+- both depend on `SubnameRegistrar`
+
+These are the low-friction publish paths that can optionally record subname attribution.
 
 ## Upgradeable path
 
-The upgradeable creator-collection path depends on OpenZeppelin upgradeable primitives:
+Only the creator-owned collection path uses OpenZeppelin upgradeable primitives:
 
 | Contract | OpenZeppelin dependencies |
 |----------|--------------------------|
@@ -63,36 +71,32 @@ The upgradeable creator-collection path depends on OpenZeppelin upgradeable prim
 
 ## Proxy boundary
 
-`CreatorFactory` depends on `ERC1967Proxy` to instantiate creator-owned collections.
+The upgrade boundary is:
 
-The upgrade boundary in the creator-collection path is:
+- **implementation contract**: logic
+- **ERC-1967 proxy**: state
+- **owner-controlled UUPS authorization**: upgrade authority
 
-- **implementation contract** — where the logic lives
-- **proxy state** — where the data lives
-- **owner-controlled UUPS authorization** — who can trigger an upgrade
-
-Once `finalizeUpgrades()` is called, the upgrade boundary is permanently closed.
+Once `finalizeUpgrades()` is called on a creator-owned collection, that upgrade boundary is permanently closed for that collection.
 
 ## Why this matters
 
-These dependencies are important because they define:
+These dependencies define:
 
 - where protocol authority lives
+- which contracts are coupled during deployment and publish flows
 - where upgrades are possible
 - which integrations are safety-critical
-- which contracts are tightly coupled during deploy or publish flows
 
 ## Generated output
 
-The machine-generated dependency tree should be treated as archival output.
+The machine-generated dependency tree belongs in archive output.
 
 Regenerate it with:
 
 ```bash
-bash scripts/generate-contract-dependency-tree.sh
+npm run docs:contracts-deps
 ```
-
-The generated file now belongs under `docs/archive/generated/`.
 
 ## Related pages
 

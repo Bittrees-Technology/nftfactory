@@ -2,82 +2,67 @@
 
 ## Core principle
 
-NFTFactory uses ENS as a creator-facing identity layer, but the current build intentionally separates:
+NFTFactory uses ENS as an identity layer, but the current build keeps a strict distinction between:
 
-- **what is created on-chain by NFTFactory**
-- **what is linked in the app as identity metadata**
+- names NFTFactory creates on-chain
+- names the app only links and renders
 
-This distinction matters because the current contracts do **not** manage arbitrary ENS names.
+That distinction still matters.
 
 ## What NFTFactory creates on-chain today
 
-The only native ENS creation flow currently supported by the contracts is:
+The only native ENS creation flow owned by NFTFactory contracts is:
 
 - a subname under `nftfactory.eth`
 
-This is handled by `SubnameRegistrar`.
+That flow is handled by `SubnameRegistrar`.
 
 Example:
 
 - input label: `studio`
 - resulting name: `studio.nftfactory.eth`
 
-## What NFTFactory links at the app level
+## What the app links
 
-The profile system can also link:
+The app can also work with:
 
-- an external ENS name — example: `artist.eth`
-- an external ENS subname — example: `drops.artist.eth`
+- a freshly registered `.eth` name created through the ENS controller flow in `/profile/setup`
+- an existing external ENS name such as `artist.eth`
+- an existing external ENS subname such as `drops.artist.eth`
 
-These are valid product identities, but they are **not** minted or managed by NFTFactory contracts. They are linked through the profile registry and surfaced in the UI and indexer.
+These are product-level identity links. They are not names minted by NFTFactory contracts.
 
-## SubnameRegistrar
+## Current setup reality
 
-`SubnameRegistrar` is responsible for:
+`/profile/setup` currently supports:
 
-- registering `nftfactory.eth` subnames
-- storing label-to-owner mappings for that namespace
-- supporting shared-mint attribution with `recordMint`
+- checking `.eth` name availability
+- running the ENS controller commit/register flow for a fresh `.eth` name when the controller env is configured
+- linking an existing external ENS name
+- linking an existing external ENS subname
+- creating a new `nftfactory.eth` subname on-chain
 
-It should be treated as the authoritative contract for the NFTFactory-managed subname namespace only.
+It does **not** currently create external ENS subnames on-chain for you.
 
 ## Shared mint attribution
 
-Shared mint contracts accept an optional subname label during publish.
+Shared mint contracts accept an optional NFTFactory subname label during publish.
 
 Current behavior:
 
 - the creator can pass a label
 - the shared mint contract attempts to call `recordMint`
-- failures do not block the mint
+- failure in attribution should not block the mint itself
 
-Attribution is useful for discovery and optional — it is not currently a hard ownership gate for minting.
-
-## Creator collection identity
-
-Creator collections can carry ENS-related identity metadata in the product, but collection identity and full creator-profile presentation are currently driven by indexer-backed profile records, linked collection metadata, and owner-based lookups.
-
-The collection contract itself is not the canonical source for the full public profile.
-
-## Current profile resolution model
-
-The current build resolves creators through the indexer using linked ENS names, subnames, `nftfactory.eth` subnames, and creator profile slugs.
-
-| Route | Role |
-|-------|------|
-| `/profile` | Owner-based profile lookup and redirect |
-| `/profile/setup` | Links or creates the creator identity |
-| `/profile/[name]` | Resolves and renders the public creator page |
+Attribution is useful metadata, not a hard mint gate.
 
 ## Current limits
 
 The current build does **not**:
 
-- mint arbitrary `.eth` names
+- mint arbitrary `.eth` names from NFTFactory contracts
 - manage external ENS parent domains
-- prove external ENS ownership on-chain inside NFTFactory contracts
-
-Those identity modes are currently product-level links, not protocol-owned ENS mutation paths.
+- turn linked external ENS names into on-chain NFTFactory-owned records
 
 ## Related pages
 

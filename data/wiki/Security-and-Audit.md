@@ -2,27 +2,28 @@
 
 ## Security focus
 
-The highest-value security work in NFTFactory is still in the smart contract layer.
+The highest-value security work is still in the smart contract layer, but release risk is not only contract risk anymore.
 
-The practical release posture depends on three categories:
+The practical security posture depends on:
 
 1. contract safety
 2. operational correctness
-3. product-flow validation
+3. indexer and env reliability
 
 ## Contract audit priorities
 
 ### Highest-risk contracts
 
-- `Marketplace` — settlement logic, payment routing, approval assumptions, stale listing behavior
-- `SubnameRegistrar` — fee handling, treasury forwarding, subname registration rules
+- `Marketplace`
+- `SubnameRegistrar`
+- `CreatorFactory`
 
 ### Medium-risk contracts
 
 - `NftFactoryRegistry`
-- `CreatorFactory`
 - `CreatorCollection721`
 - `CreatorCollection1155`
+- `ModeratorRegistry`
 - `RoyaltySplitRegistry`
 
 ### Lower-risk but still important
@@ -31,25 +32,14 @@ The practical release posture depends on three categories:
 - `SharedMint1155`
 - `Owned`
 
-## Resolved findings
-
-The following issues were identified and resolved during internal audit hardening (PR #9):
-
-| Finding | Contract | Resolution |
-|---------|----------|------------|
-| Duplicate creator registrations possible | `NftFactoryRegistry` / `CreatorFactory` | Added uniqueness enforcement |
-| Token minting lacked input validation | `CreatorCollection721/1155` | Tightened minting and subname validation |
-| Marketplace verification path incomplete | `Marketplace` | Clarified verification target |
-| Registry fees and subname renewals not hardened | `SubnameRegistrar` | Hardened fee and renewal logic |
-
 ## Current review themes
 
 ### Marketplace correctness
 
 - listing lifecycle integrity
-- stale or revoked listing behavior
-- approval and balance preflights
-- value transfer ordering
+- stale approvals and stale listings
+- payment-token handling
+- settlement ordering
 
 ### Creator collection safety
 
@@ -61,29 +51,30 @@ The following issues were identified and resolved during internal audit hardenin
 
 - subname registration behavior
 - advisory nature of shared-mint attribution
-- separation between on-chain ENS creation and off-chain linked identity
+- clear separation between on-chain identity creation and linked ENS metadata
 
 ## Non-contract release risks
 
-Even when contracts are correct, the product can still fail operationally through:
+Current non-contract risks include:
 
-- bad env wiring
-- wrong chain configuration
-- stale indexer data
+- wrong contract addresses in env files
+- web and indexer pointing at different chains
+- stale or incomplete indexed data
 - broken IPFS upload credentials
-- mismatched contract addresses between web and indexer
+- long-running recovery jobs timing out or being abandoned
+- poor RPC provider throughput during `eth_getLogs` backfills
 
-Those are release risks, even if they are not contract vulnerabilities.
+Those are still release blockers even when the contracts are sound.
 
-## Practical security posture
+## Practical posture
 
 The current recommended posture is:
 
 - Safe-based ownership for protocol contracts
 - receipt-confirmed transaction flows in the UI
 - explicit Sepolia validation before mainnet
-- strict env review before deployment
-- conservative assumptions around external ENS claims
+- conservative assumptions around linked external ENS claims
+- documented admin recovery paths for index repair
 
 ## Related pages
 

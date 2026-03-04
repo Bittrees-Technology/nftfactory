@@ -2,16 +2,16 @@
 
 ## Scope
 
-This runbook applies to:
+This runbook applies only to:
 
 - `CreatorCollection721`
 - `CreatorCollection1155`
 
-These are the only contracts in the current product that use the creator-owned UUPS upgrade path.
+These are the only contracts in the current product with a creator-owned UUPS upgrade path.
 
 ## Important context
 
-The current product direction should prefer:
+The product direction should still prefer:
 
 - minimal upgrades
 - explicit collection ownership
@@ -31,36 +31,40 @@ State lives in the proxy. Logic lives in the implementation. The collection owne
 
 ## When an upgrade is justified
 
-Valid upgrade reasons include:
+Valid reasons include:
 
 - a security fix
 - a serious logic bug
-- a narrowly scoped additive feature that requires a contract change
+- a narrowly scoped additive feature that truly requires a contract change
 
-Avoid upgrading for cosmetic or product-layer changes that can be handled in the app or indexer.
+Do not upgrade for product-layer copy or UI changes that belong in the app or indexer.
 
 ## Preconditions
 
 Before upgrading, confirm:
 
-- [ ] new implementation is thoroughly tested
-- [ ] storage compatibility is verified
-- [ ] new implementation is deployed
-- [ ] proxy has **not** been finalized (`finalizeUpgrades()` not yet called)
-- [ ] correct owner or Safe is the signer
+- [ ] the new implementation is tested
+- [ ] storage compatibility is reviewed
+- [ ] the new implementation is deployed
+- [ ] the target proxy has not been finalized
+- [ ] the signer is the current collection owner or Safe
 
 ## Execution
 
-### 1. Deploy the implementation
+### 1. Deploy the new implementation
+
+ERC-721 example:
 
 ```bash
-cd packages/contracts
+cd /home/robert/nftfactory/packages/contracts
 forge create src/token/CreatorCollection721.sol:CreatorCollection721 \
   --rpc-url $RPC_URL \
   --private-key $DEPLOYER_KEY \
   --verify \
   --etherscan-api-key $ETHERSCAN_API_KEY
 ```
+
+Use the ERC-1155 implementation contract path instead when upgrading a `CreatorCollection1155` proxy.
 
 ### 2. Upgrade the proxy
 
@@ -72,6 +76,8 @@ cast send $PROXY_ADDRESS \
   --rpc-url $RPC_URL \
   --private-key $OWNER_KEY
 ```
+
+The `CreatorFactory` is not the runtime upgrader. The proxy owner is.
 
 ### 3. Verify the implementation slot
 
@@ -87,6 +93,7 @@ Verify:
 - token metadata resolves correctly
 - royalty behavior still matches expectations
 - existing state remains intact
+- `owner()` is unchanged
 
 ## After the upgrade
 
@@ -99,9 +106,9 @@ Document:
 
 ## Finality interaction
 
-Once `finalizeUpgrades()` has been called, this runbook no longer applies to that collection.
+Once `finalizeUpgrades()` has been called on a collection, this runbook no longer applies to that collection.
 
-That is the intended end state for collections that are ready to be frozen.
+That is the intended end state for collections that are ready to freeze.
 
 ## Related pages
 

@@ -1,28 +1,29 @@
 # Contracts
 
-## Current validated Sepolia deployment
+## Current app-wired Sepolia addresses
 
-These are the validated Sepolia addresses from the current deployment set used during contract verification.
+These are the addresses currently wired into the local Sepolia env files in this repo. They reflect the build that the web app and indexer are currently pointed at.
 
-| Contract | Address |
-|----------|---------|
-| `NftFactoryRegistry` | `0x3310b3ef8bb540589549bb8ed937e1928fcd0f9d` |
-| `RoyaltySplitRegistry` | `0x1dc5f2fdc789b25c3d7cdd346a82ad5efbe32996` |
-| `SubnameRegistrar` | `0xca200f16493a95834d78c86cebbad5b76e45fe5c` |
-| `SharedMint721` | `0x60d33d3478f5f888211e6006edbbd1240f89c2e9` |
-| `SharedMint1155` | `0x47c7968b5bac06fdf1854c55bc0c9c2a7bb7ad52` |
-| `CreatorCollection721` implementation | `0x5a32693d05c3904a199157a370c0cbac7001a25a` |
-| `CreatorCollection1155` implementation | `0x6db8041980debcba3fcfbcfa94289bf89432e45c` |
-| `CreatorFactory` | `0x3a734889c9308d0907698793931f98e3fe834c0d` |
-| `Marketplace` | `0xd92fdd08d788b1ed23a4ddffed8bf1a195f2a11d` |
+| Contract | Address | Source |
+|----------|---------|--------|
+| `NftFactoryRegistry` | `0x1c8124F401Ac7A067f0c3dD39ce102D3623F4DE3` | web + indexer env |
+| `Marketplace` | `0xc0098BCC01e2179A5018EFabf64a9c74a2E6244B` | web env |
+| `SharedMint721` | `0x4018dD11271CecFAbb275656631896F7A8811965` | web env |
+| `SharedMint1155` | `0x530C5f6F1728dCF60C3399e6D9d3aC729a7637Ce` | web env |
+| `SubnameRegistrar` | `0x0e8027b4b1E9B288E0e3Eedb50C52C20b8291294` | web env |
+| `CreatorFactory` | `0xe2E33E37A7bA2cAe9DEf60B1E1643c2803458DA8` | web env |
+| `ModeratorRegistry` | `0x0ff43403902fA2D6D8dcD587429dc94a23CC1CBC` | indexer env |
+
+This page no longer hard-codes implementation addresses that are not present in the active env snapshot. If you need implementation or deployment-history addresses, pull them from deployment logs or scripts, not stale wiki tables.
 
 ## Contract families
 
-NFTFactory currently has three contract families:
+NFTFactory currently has four practical contract groups:
 
 1. shared publishing
 2. creator-owned collections
-3. registry, identity, and marketplace infrastructure
+3. registry and protocol control surfaces
+4. marketplace and moderation support
 
 ## Shared mint contracts
 
@@ -30,99 +31,89 @@ NFTFactory currently has three contract families:
 
 `SharedMint721` and `SharedMint1155` provide the fastest path to publishing:
 
-- no contract deployment step
-- no creator-owned collection needed
-- immediate publish from the UI after IPFS metadata is prepared
+- no creator contract deployment step
+- publish directly from the UI after media/metadata preparation
+- optional subname attribution through `SubnameRegistrar`
 
 ### Current behavior
 
-- immutable contract logic (no proxy, no upgrades)
-- no royalty configuration
-- no post-mint metadata editing path
-- optional attribution using a subname label
-
-### Best use
-
-Use shared mint when speed matters more than per-collection branding, or for one-off and experimental drops.
+- immutable contract logic
+- not proxy-based
+- no upgrade path
+- no creator-specific royalty configuration at the contract level
 
 ## Creator-owned collections
 
 ### Purpose
 
-`CreatorCollection721` and `CreatorCollection1155` are deployed through `CreatorFactory` as **ERC-1967 proxies**. Each creator collection has its own contract address, with state living in the proxy and logic in the implementation contract.
+`CreatorCollection721` and `CreatorCollection1155` are deployed by `CreatorFactory` as ERC-1967 proxies.
 
 ### Current behavior
 
-- only the collection owner can mint
-- royalties are configurable at deploy time
-- metadata can be locked per token
+- creator-owned by default
+- upgradeable until `finalizeUpgrades()` is called
 - ownership can be transferred
-- upgrades are possible until `finalizeUpgrades()` is called
+- royalty defaults are configurable at deployment
+- token-level metadata can be locked
 
-### Best use
-
-Use a creator-owned collection when the creator wants a stable contract identity, configurable royalties, or plans to manage ownership or finality explicitly.
+These are the only contracts in the current product with a live upgrade path.
 
 ## CreatorFactory
 
-`CreatorFactory` is the deployment surface for creator collections.
+`CreatorFactory`:
 
-Its responsibilities:
-
-- deploy the correct collection proxy
-- initialize the deployed collection
-- register the collection in `NftFactoryRegistry`
-- expose implementation pointers for the ERC-721 and ERC-1155 paths
+- stores implementation pointers for the ERC-721 and ERC-1155 paths
+- deploys the correct proxy type
+- initializes the deployed proxy
+- registers the new collection in `NftFactoryRegistry`
 
 ## NftFactoryRegistry
 
-`NftFactoryRegistry` is the central on-chain bookkeeping and policy contract.
+`NftFactoryRegistry` is the central protocol policy and bookkeeping surface.
 
-It currently tracks:
+It tracks:
 
-- creator collection records
-- factory authorization
-- blocklist state used by marketplace policy checks
-- treasury and fee configuration
+- authorized factories
+- creator-to-collection registrations
+- blocklist state
+- treasury address
+- protocol fee bps
 
-It does **not**:
-
-- resolve arbitrary ENS names
-- store full public profile content
-- act as the discovery index
-
-Those product-facing concerns live in the indexer.
+It does not act as the discovery index or public profile registry.
 
 ## SubnameRegistrar
 
-`SubnameRegistrar` is the only on-chain identity creation surface currently exposed by the product.
+`SubnameRegistrar` is the current on-chain identity creation surface exposed by NFTFactory.
 
 It supports:
 
 - `nftfactory.eth` subname registration
-- shared-mint attribution via `recordMint`
+- subname renewal under current contract rules
+- shared-mint attribution through `recordMint`
+- minter authorization for shared mint contracts
 
-It does **not** create arbitrary external ENS names or external ENS subdomains.
+It does not manage arbitrary external ENS parent domains.
+
+## ModeratorRegistry
+
+`ModeratorRegistry` is a protocol-owned contract for canonical moderator records.
+
+The app does not require it to boot, but the indexer will read from it when `MODERATOR_REGISTRY_ADDRESS` is configured.
 
 ## Marketplace
 
 `Marketplace` provides:
 
 - listing creation
-- cancellation
+- listing cancellation
 - purchase settlement
+- per-collection marketplace blocklist toggles
 
-It depends on:
-
-- registry policy state
-- valid token ownership and approvals
-- seller/buyer compliance checks
-
-The UI and tests currently treat marketplace settlement as a strict preflight + receipt-confirmed flow.
+It depends on registry blocklist and fee state at runtime.
 
 ## RoyaltySplitRegistry
 
-`RoyaltySplitRegistry` is a supporting registry for royalty split metadata. It is not the primary user-facing contract, but it is part of the protocol-owned control surface and should be included in deployment and ownership-transfer checklists.
+`RoyaltySplitRegistry` still exists in the contract suite, but it is not directly referenced by the current web or indexer env snapshot. Treat it as a protocol-owned supporting registry, not a removed contract.
 
 ## Related pages
 

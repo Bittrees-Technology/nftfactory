@@ -6,7 +6,14 @@ This page is the practical validation checklist for the current build.
 
 ## 1. Contract validation
 
-Run the core contract checks first:
+Run the contract checks first:
+
+```bash
+cd /home/robert/nftfactory
+npm run test:contracts
+```
+
+Or directly inside the contracts workspace:
 
 ```bash
 cd packages/contracts
@@ -14,103 +21,100 @@ forge build
 forge test -q
 ```
 
-Use this before reasoning about deployment quality or frontend behavior.
+## 2. Web validation
 
-## 2. Deployment validation
-
-For a deployed network, verify:
-
-- code exists at each deployed address
-- key owners and pointers match expectations
-- factory and registrar wiring is correct
-
-Typical checks:
+Run the web gates:
 
 ```bash
-cast code <address> --rpc-url "$SEPOLIA_RPC_URL"
-cast call <address> "owner()(address)" --rpc-url "$SEPOLIA_RPC_URL"
-```
-
-For current validated Sepolia addresses, see [Contracts](./Contracts.md).
-
-## 3. Indexer unit tests
-
-Run the indexer test suite (65 tests expected):
-
-```bash
-npm run test:indexer
-```
-
-This validates the request handler, routing, rate limiting, admin auth, and feed endpoint behavior. Tests run in CI on the `docs/wiki-review-and-polish` branch and on every pull from `origin/main` via the watchdog script.
-
-## 4. Web validation
-
-The current web release gates are:
-
-```bash
+cd /home/robert/nftfactory
 npm run typecheck:web
 npm run build:web
+npm run test:web
 ```
 
-Then verify the core product paths manually:
+Then manually validate:
 
-- mint and publish
-- collection management
-- profile setup
-- public profile rendering
-- listing and discovery
-- admin and moderation
+- `/mint`
+- `/list`
+- `/discover`
+- `/profile`
+- `/profile/setup`
+- `/profile/[name]`
+- `/mod`
+- `/admin`
 
-## 5. Indexer service validation
+## 3. Indexer validation
 
-Validate the indexer separately:
+Run the indexer gates:
 
 ```bash
+cd /home/robert/nftfactory
 npm run typecheck:indexer
+npm run test:indexer
 ```
 
 Then confirm:
 
-- the service starts on port `8791`
-- `/health` responds with `{"ok":true}`
-- profile and collection lookup routes behave as expected
-- moderation endpoints behave as expected
+- the service starts
+- `/health` returns `{"ok":true}`
+- collection, profile, and feed routes behave as expected
+- admin auth behaves as expected
+- listing sync and backfill endpoints work with the configured env
 
-If Prisma is unavailable locally, confirm the degraded startup mode still supports the expected local testing path.
+If Prisma is unavailable locally, also confirm the degraded startup mode still supports the local testing path you need.
 
-## 6. Environment validation
+## 4. Deployment validation
 
-Before testing flows, confirm:
+For a deployed network, verify:
 
-- web and indexer are pointed at the same chain
-- contract addresses match the intended deployment set
+- code exists at the configured addresses
+- registry, marketplace, and factory addresses match the env files
+- key owners and pointers match expectations
+
+Typical checks:
+
+```bash
+cast code <address> --rpc-url "$RPC_URL"
+cast call <address> "owner()(address)" --rpc-url "$RPC_URL"
+```
+
+For the current app-wired addresses, see [Contracts](./Contracts.md).
+
+## 5. Environment validation
+
+Before running flows, confirm:
+
+- web and indexer use the same chain
+- web and indexer use the same registry/marketplace deployment set
+- `NEXT_PUBLIC_INDEXER_API_URL` is reachable from the browser
 - wallet and IPFS env vars are present
-- the configured chain matches what the UI expects
+- admin token and address allowlist behavior match your intended protection model
 
-Most "the app is broken" issues in the current build are environment mismatches, not logic defects.
+Most "the app is broken" failures are still env mismatches.
 
-## 7. Manual Sepolia flow matrix
+## 6. Manual Sepolia flow matrix
 
-Use this as the current end-to-end acceptance path:
+Use this as the acceptance path:
 
 1. connect wallet on Sepolia
-2. publish via shared mint
+2. publish through shared mint
 3. deploy or select a creator collection
 4. mint into the creator collection
 5. create or link a creator profile
 6. open the public profile route
 7. create a listing
 8. verify discovery
-9. submit and review a moderation action
+9. submit and resolve a moderation action
+10. confirm admin recovery actions if the index is intentionally lagged
 
 ## Validation rhythm
 
 The intended order is:
 
 1. local iteration
-2. local checks (contracts, indexer tests, typecheck, build)
+2. local checks
 3. Sepolia smoke tests
-4. ownership and deployment verification
+4. address and ownership verification
 5. only then consider mainnet
 
 ## Related pages

@@ -2,28 +2,29 @@
 
 ## Overview
 
-NFTFactory has two distinct operational layers:
+NFTFactory currently has two operational layers:
 
 1. **protocol-owned surfaces**
 2. **creator-owned surfaces**
 
-The operational goal is to keep protocol controls narrow, explicit, and suitable for Safe-based ownership, while creator-level controls remain with the creator unless intentionally transferred.
+The intended production posture is still to keep protocol controls narrow and explicit, and to move them under Safe-based ownership rather than a personal deployer wallet.
 
 ## Protocol-owned surfaces
 
-These should be treated as protocol governance endpoints:
+These should be treated as governance endpoints:
 
 - `NftFactoryRegistry`
 - `RoyaltySplitRegistry`
 - `SubnameRegistrar`
+- `ModeratorRegistry`
 - `Marketplace`
 - `CreatorFactory`
 
-These are the places where protocol-wide policy, identity namespace, deployment behavior, and marketplace rules can change.
+These are where protocol-wide policy, marketplace behavior, deployment permissions, and the NFTFactory namespace can change.
 
 ## Creator-owned surfaces
 
-These should remain creator-controlled by default:
+These remain creator-controlled by default:
 
 - `CreatorCollection721`
 - `CreatorCollection1155`
@@ -32,48 +33,51 @@ Current creator controls include:
 
 - minting
 - ownership transfer
-- metadata-related settings
-- royalties
+- metadata locking
+- royalty defaults set at deploy time
 - upgrades until finalization
 
 ## Admin and moderation model
 
-The product's moderation and admin behavior is primarily implemented in the indexer and admin UI.
+Most product-level moderation and admin behavior is implemented in the indexer and web UI, not directly in contracts.
 
 Current operational controls include:
 
 - moderation report intake
-- hidden-list visibility state
-- moderation action history
-- manual visibility changes
-- moderator lists
+- moderation resolution history
+- hidden listing state
+- moderator management
+- payment token review
+- listing sync
+- collection/token backfill jobs
 
-### Auth controls
+## Auth controls
 
 Admin mutation paths in the indexer can be gated with:
 
-- `INDEXER_ADMIN_TOKEN` — bearer token checked on write endpoints
-- `INDEXER_ADMIN_ALLOWLIST` — IP-based allowlist for privileged operations
+- `INDEXER_ADMIN_TOKEN`: bearer-token check on admin writes
+- `INDEXER_ADMIN_ALLOWLIST`: address-based allowlist checked against `x-admin-address` or payload actor
 
-### Moderator model
+This is **not** an IP allowlist.
 
-The current build supports a moderator list managed through the admin workflow. When `MODERATOR_REGISTRY_ADDRESS` is configured, the contract-backed moderator list is treated as canonical for reads and allowlist enforcement. In local or degraded environments, the list can fall back to JSON-backed storage.
+If both are unset, the indexer logs a warning and admin routes are effectively unprotected.
 
-## Safe-based production posture
+## Moderator model
 
-The intended production posture is:
+The current build supports two layers:
 
-- move protocol ownership to a Safe
-- do not leave long-term admin authority in a personal deployer wallet
-- verify post-transfer admin operations from the Safe before launch
+1. JSON-backed local moderator persistence for degraded/local operation
+2. `ModeratorRegistry` as the canonical on-chain source when `MODERATOR_REGISTRY_ADDRESS` is configured
+
+The indexer can merge dynamic moderator records into the effective admin allowlist for relevant actions.
 
 ## Incident mindset
 
-Operational guidance should assume:
+Operational assumptions should remain:
 
-- moderation can hide content from discovery
-- on-chain ownership remains unchanged
-- the product should fail closed on privileged actions when auth is missing
+- moderation hides content from indexed discovery, not from the chain
+- privileged writes should fail closed when auth is missing or actor checks fail
+- slow RPC providers can make recovery jobs operationally expensive, so recovery paths need clear tooling
 
 ## Related pages
 
