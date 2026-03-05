@@ -2,7 +2,7 @@
 
 ## Security focus
 
-The highest-value security work is still in the smart contract layer, but release risk is not only contract risk anymore.
+The highest-value security work is in the smart contract layer, but release risk extends beyond the contract layer.
 
 The practical security posture depends on:
 
@@ -55,8 +55,6 @@ The practical security posture depends on:
 
 ## Non-contract release risks
 
-Current non-contract risks include:
-
 - wrong contract addresses in env files
 - web and indexer pointing at different chains
 - stale or incomplete indexed data
@@ -64,11 +62,11 @@ Current non-contract risks include:
 - long-running recovery jobs timing out or being abandoned
 - poor RPC provider throughput during `eth_getLogs` backfills
 
-Those are still release blockers even when the contracts are sound.
+These are release blockers even when the contracts are sound.
 
 ## Practical posture
 
-The current recommended posture is:
+Recommended posture:
 
 - Safe-based ownership for protocol contracts
 - receipt-confirmed transaction flows in the UI

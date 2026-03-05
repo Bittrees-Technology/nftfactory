@@ -1,10 +1,6 @@
 # Contract Dependencies
 
-## Purpose
-
-This page is the human-readable dependency summary for the current contract suite.
-
-It keeps only the relationships that matter when reasoning about deployment order, authority, upgrades, and integration boundaries.
+This page covers the relationships in the current contract suite that matter when reasoning about deployment order, authority, upgrades, and integration boundaries.
 
 ## Core internal relationships
 
@@ -51,7 +47,7 @@ This is a separate protocol-owned list of moderator accounts. The web app does n
 
 - uses `Owned`
 
-This is a supporting protocol registry and should still be treated as part of the governance surface.
+This is a supporting protocol registry and is part of the governance surface.
 
 ### `SharedMint721` and `SharedMint1155`
 

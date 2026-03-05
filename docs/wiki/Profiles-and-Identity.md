@@ -4,7 +4,7 @@
 
 NFTFactory treats creator identity as a product layer built on top of wallets, creator collections, and ENS-linked names.
 
-The important current distinction is:
+The key distinction is:
 
 - some identities are created on-chain by NFTFactory
 - others are linked in the app and indexed as metadata
@@ -19,7 +19,7 @@ The important current distinction is:
 
 ## Current identity modes
 
-The current build supports these identity modes:
+Supported identity modes:
 
 | Mode | Example | Created by NFTFactory? |
 |------|---------|------------------------|
@@ -32,7 +32,7 @@ Only the `nftfactory.eth` subname mode is a native NFTFactory contract-owned ide
 
 ## `/profile/setup`
 
-This route currently supports:
+This route supports:
 
 - checking `.eth` availability and estimated pricing through the ENS controller
 - running the `.eth` commit/register flow when the controller env is configured
@@ -41,11 +41,11 @@ This route currently supports:
 - creating a new `nftfactory.eth` subname
 - associating a collection with the profile
 
-It does not currently create external ENS subnames on-chain.
+It does not create external ENS subnames on-chain.
 
 ## `/profile/[name]`
 
-The public creator page currently renders:
+The public creator page renders:
 
 - resolved identity
 - display name
@@ -59,7 +59,7 @@ The public creator page currently renders:
 
 ## Data sources
 
-Profile data should currently be sourced in this order:
+Profile data is sourced in this order:
 
 1. indexer-backed profile registry
 2. indexer-backed owner collection lookup
@@ -74,9 +74,9 @@ The browser should not chain-scan to discover profile state.
 - `POST /api/profiles/transfer`
 - `GET /api/profile/:name`
 
-## Near-term reality
+## Current status
 
-The profile system is functional, but it is still being hardened around:
+The profile system is functional. Ongoing work includes:
 
 - better canonical-profile selection for wallets with multiple identities
 - clearer ownership validation for linked identities

@@ -1,9 +1,5 @@
 # NFTFactory Wiki
 
-This wiki is the active documentation surface for the current NFTFactory build.
-
-The maintainer docs and the in-app `/wiki` route now both read directly from `docs/wiki`.
-
 ## Current build scope
 
 The current product is a Sepolia-first creator flow with these live surfaces:
@@ -24,11 +20,11 @@ The current product is a Sepolia-first creator flow with these live surfaces:
    - the indexer mirrors chain state, serves read APIs, and exposes admin backfill/sync tools
    - the in-app wiki is exposed at `/wiki`
 
-## Current release focus
+## Release focus
 
-The release focus is hardening the current build, not broad feature expansion.
+The focus is hardening the current build, not broad feature expansion.
 
-The main work still in flight is:
+Active work:
 
 - tightening Mint, List, Discover, and Profile UX before mainnet
 - keeping indexer-backed discovery and profile routes reliable on Sepolia

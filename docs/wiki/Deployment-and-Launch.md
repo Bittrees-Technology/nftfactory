@@ -2,7 +2,7 @@
 
 ## Deployment posture
 
-The current posture is still:
+The current posture:
 
 1. local iteration first
 2. Sepolia validation second

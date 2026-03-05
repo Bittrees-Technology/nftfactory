@@ -8,7 +8,7 @@ NFTFactory currently ships as a Sepolia-first Ethereum app with three runtime la
 2. **Web application**
 3. **Indexer service**
 
-The chain remains the source of truth for ownership, mints, and contract policy. The indexer is the product-facing mirror used for discovery, creator profiles, moderation state, and admin recovery tooling.
+The chain is the source of truth for ownership, mints, and contract policy. The indexer is the product-facing mirror used for discovery, creator profiles, moderation state, and admin recovery tooling.
 
 ## Environment model
 
@@ -18,7 +18,7 @@ The chain remains the source of truth for ownership, mints, and contract policy.
 | **Sepolia** | Canonical proving ground | Current active chain id is `11155111` |
 | **Mainnet** | Release target only | Do not treat mainnet as the debugging environment |
 
-The intended path remains: local iteration -> Sepolia validation -> ownership transfer -> mainnet.
+The intended path is: local iteration → Sepolia validation → ownership transfer → mainnet.
 
 ## Contract layer
 
@@ -107,7 +107,7 @@ The current build stores and serves:
 
 ## Data-source strategy
 
-The intended precedence remains:
+The intended precedence is:
 
 1. on-chain state for ownership and contract truth
 2. indexer-backed reads for normal product queries

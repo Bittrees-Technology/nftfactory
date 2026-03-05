@@ -1,12 +1,10 @@
 # Roadmap
 
-## Purpose
+This page tracks the path from the current Sepolia-wired build toward a mainnet-ready release.
 
-This page tracks the path from the current Sepolia-wired build toward a mainnet-ready release without overstating what is already complete.
+## What is live
 
-## What is already live
-
-The current build already has:
+Live today:
 
 - [x] unified `/mint` flow for shared and creator-owned paths
 - [x] creator collection management inside the mint surface
@@ -15,7 +13,7 @@ The current build already has:
 - [x] admin tooling for payment tokens, moderators, listing sync, and collection/token backfills
 - [x] indexer and web test suites wired into the root workspace scripts
 
-The current work is mostly hardening, not greenfield feature creation.
+The focus is hardening the existing build, not broad feature expansion.
 
 ## Active release work
 
@@ -50,7 +48,7 @@ Before expanding scope again, the current stack should be solid on:
 
 ## Deferred scope
 
-Treat these as future scope unless implemented and verified:
+Out of scope for the current release unless explicitly implemented and validated:
 
 - arbitrary ENS-name minting by NFTFactory contracts
 - external ENS subdomain creation managed by NFTFactory contracts

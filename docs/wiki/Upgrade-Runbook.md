@@ -11,7 +11,7 @@ These are the only contracts in the current product with a creator-owned UUPS up
 
 ## Important context
 
-The product direction should still prefer:
+Prefer:
 
 - minimal upgrades
 - explicit collection ownership
@@ -56,7 +56,7 @@ Before upgrading, confirm:
 ERC-721 example:
 
 ```bash
-cd /home/robert/nftfactory/packages/contracts
+cd packages/contracts
 forge create src/token/CreatorCollection721.sol:CreatorCollection721 \
   --rpc-url $RPC_URL \
   --private-key $DEPLOYER_KEY \
@@ -89,9 +89,9 @@ cast storage $PROXY_ADDRESS 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920
 
 Verify:
 
-- minting still works
+- minting works
 - token metadata resolves correctly
-- royalty behavior still matches expectations
+- royalty behavior matches expectations
 - existing state remains intact
 - `owner()` is unchanged
 

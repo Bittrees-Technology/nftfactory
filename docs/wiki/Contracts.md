@@ -14,7 +14,7 @@ These are the addresses currently wired into the local Sepolia env files in this
 | `CreatorFactory` | `0xe2E33E37A7bA2cAe9DEf60B1E1643c2803458DA8` | web env |
 | `ModeratorRegistry` | `0x0ff43403902fA2D6D8dcD587429dc94a23CC1CBC` | indexer env |
 
-This page no longer hard-codes implementation addresses that are not present in the active env snapshot. If you need implementation or deployment-history addresses, pull them from deployment logs or scripts, not stale wiki tables.
+For implementation addresses or deployment history, refer to deployment logs and scripts.
 
 ## Contract families
 
@@ -113,7 +113,7 @@ It depends on registry blocklist and fee state at runtime.
 
 ## RoyaltySplitRegistry
 
-`RoyaltySplitRegistry` still exists in the contract suite, but it is not directly referenced by the current web or indexer env snapshot. Treat it as a protocol-owned supporting registry, not a removed contract.
+`RoyaltySplitRegistry` exists in the contract suite but is not directly referenced by the current web or indexer env snapshot. Treat it as a protocol-owned supporting registry, not a removed contract.
 
 ## Related pages
 

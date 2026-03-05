@@ -1,10 +1,6 @@
 # UI Lockdown Plan
 
-## Purpose
-
-This page tracks the page-level work that still matters before mainnet.
-
-It is narrower than the roadmap. The roadmap covers overall direction; this page tracks the lock criteria for the live user-facing routes.
+This page tracks the lock criteria for the four mainnet-critical routes. For overall direction and deferred scope, see [Roadmap](./Roadmap.md).
 
 ## Mainnet-critical pages
 

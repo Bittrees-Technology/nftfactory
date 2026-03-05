@@ -2,12 +2,12 @@
 
 ## Overview
 
-NFTFactory currently has two operational layers:
+NFTFactory has two operational layers:
 
 1. **protocol-owned surfaces**
 2. **creator-owned surfaces**
 
-The intended production posture is still to keep protocol controls narrow and explicit, and to move them under Safe-based ownership rather than a personal deployer wallet.
+The intended production posture is to keep protocol controls narrow and explicit, and to move them under Safe-based ownership rather than a personal deployer wallet.
 
 ## Protocol-owned surfaces
 
@@ -29,7 +29,7 @@ These remain creator-controlled by default:
 - `CreatorCollection721`
 - `CreatorCollection1155`
 
-Current creator controls include:
+Creator controls:
 
 - minting
 - ownership transfer
@@ -41,7 +41,7 @@ Current creator controls include:
 
 Most product-level moderation and admin behavior is implemented in the indexer and web UI, not directly in contracts.
 
-Current operational controls include:
+Operational controls:
 
 - moderation report intake
 - moderation resolution history
@@ -73,7 +73,7 @@ The indexer can merge dynamic moderator records into the effective admin allowli
 
 ## Incident mindset
 
-Operational assumptions should remain:
+Operational assumptions:
 
 - moderation hides content from indexed discovery, not from the chain
 - privileged writes should fail closed when auth is missing or actor checks fail

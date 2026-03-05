@@ -1,9 +1,5 @@
 # Infrastructure and Operations
 
-This page is the practical operating model for the current NFTFactory build.
-
-It describes the real local service layout, the env keys the code actually reads, and the current process model.
-
 ## Monorepo layout
 
 ```text
@@ -15,16 +11,14 @@ nftfactory/
 ├── services/
 │   └── indexer/             Node HTTP API + Prisma
 ├── docs/
-│   └── wiki/                Maintainer docs
-├── data/
-│   └── wiki/                In-app wiki source
+│   └── wiki/                Wiki source (used by maintainers and the in-app /wiki route)
 ├── scripts/                 Project helpers
 └── package.json             npm workspace root
 ```
 
 ## Service model
 
-The current operating model is:
+Service layout:
 
 - **Web app**
   - Next.js 15
@@ -41,7 +35,7 @@ The current operating model is:
 
 ## Active app surfaces
 
-The current user-facing routes are:
+Active user-facing routes:
 
 - `/`
 - `/mint`
@@ -117,21 +111,25 @@ Note: `services/indexer/.env.example` is also a minimal example, not a full mirr
 Use this sequence for local Sepolia-connected work:
 
 ```bash
-cd /home/robert/nftfactory
 npm install
 ```
 
 Start the indexer:
 
 ```bash
-cd /home/robert/nftfactory/services/indexer
+cd services/indexer
 INDEXER_HOST=0.0.0.0 INDEXER_PORT=8791 npm run dev
+```
+
+Or from the workspace root:
+
+```bash
+npm run dev:indexer
 ```
 
 Start the web app:
 
 ```bash
-cd /home/robert/nftfactory
 npm --workspace apps/web run dev -- --hostname 0.0.0.0 --port 3000
 ```
 
@@ -185,7 +183,7 @@ Most often this means:
 Typical fix:
 
 ```bash
-cd /home/robert/nftfactory/services/indexer
+cd services/indexer
 fuser -k 8791/tcp
 INDEXER_HOST=0.0.0.0 INDEXER_PORT=8791 npm run dev
 ```
@@ -203,7 +201,7 @@ Check:
 
 The current build has explicit long-running backfill routes. If HTTP is still unreliable for a large recovery job, use the standalone indexer script path from `services/indexer/scripts` instead of keeping the browser request open.
 
-## Related docs
+## Related pages
 
 - [Architecture](./Architecture.md)
 - [Deployment and Launch](./Deployment-and-Launch.md)

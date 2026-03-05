@@ -1,15 +1,12 @@
 # Testing and Validation
 
-## Purpose
-
-This page is the practical validation checklist for the current build.
+Run these steps in order to validate the full stack before a deployment or release candidate.
 
 ## 1. Contract validation
 
 Run the contract checks first:
 
 ```bash
-cd /home/robert/nftfactory
 npm run test:contracts
 ```
 
@@ -26,7 +23,6 @@ forge test -q
 Run the web gates:
 
 ```bash
-cd /home/robert/nftfactory
 npm run typecheck:web
 npm run build:web
 npm run test:web
@@ -48,7 +44,6 @@ Then manually validate:
 Run the indexer gates:
 
 ```bash
-cd /home/robert/nftfactory
 npm run typecheck:indexer
 npm run test:indexer
 ```
@@ -90,7 +85,7 @@ Before running flows, confirm:
 - wallet and IPFS env vars are present
 - admin token and address allowlist behavior match your intended protection model
 
-Most "the app is broken" failures are still env mismatches.
+Most "the app is broken" failures are env mismatches.
 
 ## 6. Manual Sepolia flow matrix
 
