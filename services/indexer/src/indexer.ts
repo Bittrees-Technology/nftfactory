@@ -12,7 +12,9 @@ import { isAddress, isZeroAddress, normalizeSubname, parseBearerToken, getClient
 const log = pino({ level: process.env.LOG_LEVEL || "info" });
 
 type CreateReportPayload = {
-  listingId: number;
+  listingId?: number;
+  listingRecordId?: string;
+  marketplaceVersion?: string;
   collectionAddress: string;
   tokenId: string;
   sellerAddress: string;
@@ -47,6 +49,7 @@ type BackfillCollectionTokensPayload = {
   ensSubname?: string | null;
   isFactoryCreated?: boolean;
   isUpgradeable?: boolean;
+  fromBlock?: number;
 };
 
 type ModeratorPayload = {
@@ -140,6 +143,9 @@ type SyncMintedTokenPayload = {
   ensSubname?: string | null;
   finalizedAt?: string | null;
   mintTxHash?: string | null;
+  draftName?: string | null;
+  draftDescription?: string | null;
+  mintedAmountRaw?: string | null;
   metadataCid: string;
   mediaCid?: string | null;
   immutable?: boolean;
@@ -154,9 +160,12 @@ const TRUST_PROXY = process.env.TRUST_PROXY === "true";
 const MODERATOR_REGISTRY_ADDRESS = process.env.MODERATOR_REGISTRY_ADDRESS || "";
 const REGISTRY_ADDRESS = process.env.REGISTRY_ADDRESS || process.env.NEXT_PUBLIC_REGISTRY_ADDRESS || "";
 const MARKETPLACE_ADDRESS = process.env.MARKETPLACE_ADDRESS || process.env.NEXT_PUBLIC_MARKETPLACE_ADDRESS || "";
+const MARKETPLACE_V2_ADDRESS = process.env.MARKETPLACE_V2_ADDRESS || process.env.NEXT_PUBLIC_MARKETPLACE_V2_ADDRESS || "";
 const MODERATOR_FILE = process.env.INDEXER_MODERATOR_FILE || path.join(process.cwd(), "data", "moderators.json");
 const PROFILE_FILE = process.env.INDEXER_PROFILE_FILE || path.join(process.cwd(), "data", "profiles.json");
 const PAYMENT_TOKEN_FILE = process.env.INDEXER_PAYMENT_TOKEN_FILE || path.join(process.cwd(), "data", "payment-tokens.json");
+const TOKEN_PRESENTATION_FILE =
+  process.env.INDEXER_TOKEN_PRESENTATION_FILE || path.join(process.cwd(), "data", "token-presentation.json");
 const ADMIN_ALLOWLIST = new Set(
   (process.env.INDEXER_ADMIN_ALLOWLIST || "")
     .split(",")
@@ -182,6 +191,7 @@ function createFallbackPrisma(): PrismaClient {
       findMany: async () => [],
       findUnique: async () => null,
       upsert: async () => ({}),
+      updateMany: async () => ({ count: 0 }),
       count: async () => 0
     },
     collection: {
@@ -192,8 +202,23 @@ function createFallbackPrisma(): PrismaClient {
     },
     token: {
       findMany: async () => [],
+      findFirst: async () => null,
       upsert: async () => ({}),
+      update: async () => ({}),
       count: async () => 0
+    },
+    tokenHolding: {
+      findMany: async () => [],
+      findUnique: async () => null,
+      upsert: async () => ({}),
+      deleteMany: async () => ({ count: 0 }),
+      count: async () => 0
+    },
+    offer: {
+      findMany: async () => [],
+      findUnique: async () => null,
+      count: async () => 0,
+      upsert: async () => ({})
     }
   } as unknown as PrismaClient;
 }
@@ -221,6 +246,7 @@ type RequestHandlerConfig = {
   adminAllowlist: Set<string>;
   trustProxy: boolean;
   marketplaceAddress: `0x${string}` | null;
+  marketplaceV2Address: `0x${string}` | null;
   registryAddress: `0x${string}` | null;
   moderatorRegistryAddress: `0x${string}` | null;
 };
@@ -228,6 +254,15 @@ type IndexerDeps = {
   prisma: PrismaClient;
   getClientIpImpl: typeof getClientIp;
   isRateLimitedImpl: typeof isRateLimited;
+};
+
+type TokenPresentationRecord = {
+  contractAddress: string;
+  tokenId: string;
+  draftName: string | null;
+  draftDescription: string | null;
+  mintedAmountRaw: string | null;
+  updatedAt: string;
 };
 
 function assertEnv(name: string): string {
@@ -393,6 +428,18 @@ const ownableReadAbi = [
   }
 ] as const;
 
+const creatorRegisteredEvent = {
+  type: "event",
+  name: "CreatorRegistered",
+  inputs: [
+    { indexed: true, name: "creator", type: "address" },
+    { indexed: true, name: "contractAddress", type: "address" },
+    { indexed: false, name: "ensSubname", type: "string" },
+    { indexed: false, name: "standard", type: "string" },
+    { indexed: false, name: "isNftFactoryCreated", type: "bool" }
+  ]
+} as const;
+
 const marketplaceReadAbi = [
   {
     type: "function",
@@ -420,11 +467,106 @@ const marketplaceReadAbi = [
   }
 ] as const;
 
+const marketplaceV2ReadAbi = [
+  ...marketplaceReadAbi,
+  {
+    type: "function",
+    name: "nextOfferId",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }]
+  },
+  {
+    type: "function",
+    name: "offers",
+    stateMutability: "view",
+    inputs: [{ name: "", type: "uint256" }],
+    outputs: [
+      { name: "buyer", type: "address" },
+      { name: "nft", type: "address" },
+      { name: "tokenId", type: "uint256" },
+      { name: "quantity", type: "uint256" },
+      { name: "standard", type: "string" },
+      { name: "paymentToken", type: "address" },
+      { name: "price", type: "uint256" },
+      { name: "expiresAt", type: "uint256" },
+      { name: "active", type: "bool" }
+    ]
+  }
+] as const;
+
+const marketplaceSaleEvent = {
+  type: "event",
+  name: "Sale",
+  inputs: [
+    { indexed: true, name: "listingId", type: "uint256" },
+    { indexed: true, name: "buyer", type: "address" },
+    { indexed: false, name: "price", type: "uint256" },
+    { indexed: false, name: "paymentToken", type: "address" }
+  ]
+} as const;
+
+const marketplaceCancelledEvent = {
+  type: "event",
+  name: "Cancelled",
+  inputs: [{ indexed: true, name: "listingId", type: "uint256" }]
+} as const;
+
+const marketplaceOfferCreatedEvent = {
+  type: "event",
+  name: "OfferCreated",
+  inputs: [
+    { indexed: true, name: "offerId", type: "uint256" },
+    { indexed: true, name: "buyer", type: "address" },
+    { indexed: true, name: "nft", type: "address" },
+    { indexed: false, name: "tokenId", type: "uint256" },
+    { indexed: false, name: "quantity", type: "uint256" },
+    { indexed: false, name: "standard", type: "string" },
+    { indexed: false, name: "paymentToken", type: "address" },
+    { indexed: false, name: "price", type: "uint256" },
+    { indexed: false, name: "expiresAt", type: "uint256" }
+  ]
+} as const;
+
+const marketplaceOfferCancelledEvent = {
+  type: "event",
+  name: "OfferCancelled",
+  inputs: [{ indexed: true, name: "offerId", type: "uint256" }]
+} as const;
+
+const marketplaceOfferAcceptedEvent = {
+  type: "event",
+  name: "OfferAccepted",
+  inputs: [
+    { indexed: true, name: "offerId", type: "uint256" },
+    { indexed: true, name: "seller", type: "address" },
+    { indexed: true, name: "buyer", type: "address" },
+    { indexed: false, name: "nft", type: "address" },
+    { indexed: false, name: "tokenId", type: "uint256" },
+    { indexed: false, name: "quantity", type: "uint256" },
+    { indexed: false, name: "paymentToken", type: "address" },
+    { indexed: false, name: "price", type: "uint256" }
+  ]
+} as const;
+
 const LISTING_SYNC_BATCH_SIZE = 20;
 const LISTING_SYNC_TTL_MS = 30_000;
+const MARKETPLACE_V2_SYNC_TTL_MS = 30_000;
 let lastListingSyncAt = 0;
 let lastListingSyncCount = 0;
 let listingSyncPromise: Promise<void> | null = null;
+let lastMarketplaceV2SyncAt = 0;
+let lastMarketplaceV2ListingSyncCount = 0;
+let lastOfferSyncCount = 0;
+let marketplaceV2SyncPromise: Promise<void> | null = null;
+type ListingSnapshot = {
+  listingId: string;
+  amountRaw: string;
+  standard: string;
+  expiresAtRaw: string;
+  active: boolean;
+};
+let listingSnapshotCache = new Map<string, ListingSnapshot>();
 
 async function readOnchainModeratorRecords(config: RequestHandlerConfig): Promise<ModeratorRecord[]> {
   if (!config.moderatorRegistryAddress) return [];
@@ -512,6 +654,232 @@ async function readPaymentTokenRecords(): Promise<PaymentTokenRecord[]> {
 async function writePaymentTokenRecords(records: PaymentTokenRecord[]): Promise<void> {
   await mkdir(path.dirname(PAYMENT_TOKEN_FILE), { recursive: true });
   await writeFile(PAYMENT_TOKEN_FILE, JSON.stringify(records, null, 2), "utf8");
+}
+
+function tokenPresentationKey(contractAddress: string, tokenId: string): string {
+  return `${contractAddress.toLowerCase()}:${tokenId}`;
+}
+
+function sanitizeDraftText(value: string | null | undefined, max = 280): string | null {
+  const trimmed = String(value || "").trim();
+  if (!trimmed) return null;
+  return trimmed.slice(0, max);
+}
+
+function sanitizeMintedAmountRaw(value: string | null | undefined): string | null {
+  const trimmed = String(value || "").trim();
+  return /^[1-9][0-9]*$/.test(trimmed) ? trimmed : null;
+}
+
+async function readTokenPresentationRecords(): Promise<TokenPresentationRecord[]> {
+  try {
+    const raw = await readFile(TOKEN_PRESENTATION_FILE, "utf8");
+    const parsed = JSON.parse(raw) as TokenPresentationRecord[];
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((item) => item && isAddress(String(item.contractAddress || "").toLowerCase()) && String(item.tokenId || "").trim())
+      .map((item) => ({
+        contractAddress: String(item.contractAddress).trim().toLowerCase(),
+        tokenId: String(item.tokenId).trim(),
+        draftName: sanitizeDraftText(item.draftName, 160),
+        draftDescription: sanitizeDraftText(item.draftDescription, 1200),
+        mintedAmountRaw: sanitizeMintedAmountRaw(item.mintedAmountRaw),
+        updatedAt: item.updatedAt || new Date().toISOString()
+      }));
+  } catch {
+    return [];
+  }
+}
+
+async function writeTokenPresentationRecords(records: TokenPresentationRecord[]): Promise<void> {
+  await mkdir(path.dirname(TOKEN_PRESENTATION_FILE), { recursive: true });
+  await writeFile(TOKEN_PRESENTATION_FILE, JSON.stringify(records, null, 2), "utf8");
+}
+
+async function readTokenPresentationIndex(): Promise<Map<string, TokenPresentationRecord>> {
+  const records = await readTokenPresentationRecords();
+  return new Map(records.map((item) => [tokenPresentationKey(item.contractAddress, item.tokenId), item]));
+}
+
+async function upsertTokenPresentationRecord(payload: {
+  contractAddress: string;
+  tokenId: string;
+  draftName?: string | null;
+  draftDescription?: string | null;
+  mintedAmountRaw?: string | null;
+}): Promise<void> {
+  const contractAddress = String(payload.contractAddress || "").trim().toLowerCase();
+  const tokenId = String(payload.tokenId || "").trim();
+  if (!isAddress(contractAddress) || !tokenId) return;
+
+  const draftName = sanitizeDraftText(payload.draftName, 160);
+  const draftDescription = sanitizeDraftText(payload.draftDescription, 1200);
+  const mintedAmountRaw = sanitizeMintedAmountRaw(payload.mintedAmountRaw);
+  if (!draftName && !draftDescription && !mintedAmountRaw) return;
+
+  const current = await readTokenPresentationRecords();
+  const key = tokenPresentationKey(contractAddress, tokenId);
+  const existing = current.find((item) => tokenPresentationKey(item.contractAddress, item.tokenId) === key);
+  const nextRecord: TokenPresentationRecord = {
+    contractAddress,
+    tokenId,
+    draftName: draftName ?? existing?.draftName ?? null,
+    draftDescription: draftDescription ?? existing?.draftDescription ?? null,
+    mintedAmountRaw: mintedAmountRaw ?? existing?.mintedAmountRaw ?? null,
+    updatedAt: new Date().toISOString()
+  };
+  const next = [nextRecord, ...current.filter((item) => tokenPresentationKey(item.contractAddress, item.tokenId) !== key)];
+  await writeTokenPresentationRecords(next);
+}
+
+function withTokenPresentation<T extends { tokenId: string; [key: string]: unknown }>(
+  token: T,
+  contractAddress: string | null | undefined,
+  presentationIndex?: Map<string, TokenPresentationRecord>
+): T & {
+  draftName?: string | null;
+  draftDescription?: string | null;
+  mintedAmountRaw?: string | null;
+} {
+  const normalizedContract = String(contractAddress || "").trim().toLowerCase();
+  if (!presentationIndex || !isAddress(normalizedContract)) return token;
+  const record = presentationIndex.get(tokenPresentationKey(normalizedContract, token.tokenId));
+  if (!record) return token;
+  const currentDraftName = sanitizeDraftText((token as { draftName?: string | null }).draftName, 160);
+  const currentDraftDescription = sanitizeDraftText((token as { draftDescription?: string | null }).draftDescription, 1200);
+  const currentMintedAmountRaw = sanitizeMintedAmountRaw((token as { mintedAmountRaw?: string | null }).mintedAmountRaw);
+  return {
+    ...token,
+    draftName: currentDraftName ?? record.draftName,
+    draftDescription: currentDraftDescription ?? record.draftDescription,
+    mintedAmountRaw: currentMintedAmountRaw ?? record.mintedAmountRaw
+  };
+}
+
+function tokenPresentationSelect(enabled: boolean): Record<string, true> {
+  return enabled
+    ? {
+        draftName: true,
+        draftDescription: true,
+        mintedAmountRaw: true
+      }
+    : {};
+}
+
+function listingV2Select(enabled: boolean): Record<string, true> {
+  return enabled
+    ? {
+        marketplaceVersion: true,
+        amountRaw: true,
+        standard: true,
+        expiresAtRaw: true,
+        buyerAddress: true,
+        txHash: true,
+        cancelledAt: true,
+        soldAt: true,
+        lastSyncedAt: true
+      }
+    : {};
+}
+
+function tokenListingSelect(enabled: boolean): Record<string, true> {
+  return {
+    listingId: true,
+    sellerAddress: true,
+    paymentToken: true,
+    priceRaw: true,
+    active: true,
+    createdAt: true,
+    updatedAt: true,
+    ...(enabled
+      ? {
+          marketplaceVersion: true,
+          amountRaw: true,
+          standard: true,
+          expiresAtRaw: true,
+          lastSyncedAt: true
+        }
+      : {})
+  };
+}
+
+function normalizePublicListingId(value: string | null | undefined): string {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  return raw.startsWith("v2:") ? raw.slice(3) : raw;
+}
+
+function getMarketplaceAddressForVersion(
+  config: RequestHandlerConfig,
+  marketplaceVersion: string | null | undefined
+): string | null {
+  return String(marketplaceVersion || "v1").toLowerCase() === "v2"
+    ? config.marketplaceV2Address || null
+    : config.marketplaceAddress || null;
+}
+
+function pickPrimaryActiveListing(rows: any[] | null | undefined): any | null {
+  if (!Array.isArray(rows) || rows.length === 0) return null;
+  return [...rows].sort((a, b) => {
+    const aVersion = String(a?.marketplaceVersion || "v1").toLowerCase();
+    const bVersion = String(b?.marketplaceVersion || "v1").toLowerCase();
+    if (aVersion !== bVersion) {
+      if (aVersion === "v2") return -1;
+      if (bVersion === "v2") return 1;
+    }
+
+    const aUpdated = new Date(a?.updatedAt || 0).getTime();
+    const bUpdated = new Date(b?.updatedAt || 0).getTime();
+    if (aUpdated !== bUpdated) {
+      return bUpdated - aUpdated;
+    }
+
+    const aCreated = new Date(a?.createdAt || 0).getTime();
+    const bCreated = new Date(b?.createdAt || 0).getTime();
+    if (aCreated !== bCreated) {
+      return bCreated - aCreated;
+    }
+
+    const aId = Number.parseInt(normalizePublicListingId(a?.listingId), 10) || 0;
+    const bId = Number.parseInt(normalizePublicListingId(b?.listingId), 10) || 0;
+    return bId - aId;
+  })[0] || null;
+}
+
+function toActiveListingApiShape(item: any, config: RequestHandlerConfig) {
+  if (!item) return null;
+  const listingRecordId = String(item.listingId || "").trim();
+  const listingId = normalizePublicListingId(listingRecordId);
+  const marketplaceVersion = String(item.marketplaceVersion || (listingRecordId.startsWith("v2:") ? "v2" : "v1")).toLowerCase();
+  return {
+    listingId,
+    listingRecordId: listingRecordId || listingId,
+    marketplaceVersion,
+    marketplaceAddress: getMarketplaceAddressForVersion(config, marketplaceVersion),
+    sellerAddress: item.sellerAddress,
+    paymentToken: item.paymentToken,
+    priceRaw: item.priceRaw,
+    amountRaw: item.amountRaw || null,
+    standard: item.standard || null,
+    expiresAtRaw: item.expiresAtRaw || null,
+    active: item.active,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+    lastSyncedAt: item.lastSyncedAt || item.updatedAt || null
+  };
+}
+
+function toNormalizedOptionalText(value: string | null | undefined): string | null {
+  const normalized = String(value || "").trim();
+  return normalized ? normalized : null;
+}
+
+function toBigIntOrZero(value: unknown): bigint {
+  try {
+    return BigInt(String(value ?? "0"));
+  } catch {
+    return 0n;
+  }
 }
 
 function normalizeProfileInput(name: string, source: ProfileLinkSource): { slug: string; fullName: string } | null {
@@ -681,7 +1049,8 @@ function sendJson(res: ServerResponse, status: number, payload: unknown): void {
 
 function parseListingId(value: string | undefined): number | null {
   if (!value) return null;
-  const parsed = Number.parseInt(value, 10);
+  const normalized = value.startsWith("v2:") ? value.slice(3) : value;
+  const parsed = Number.parseInt(normalized, 10);
   if (!Number.isInteger(parsed) || parsed < 0) return null;
   return parsed;
 }
@@ -696,63 +1065,450 @@ function buildGatewayUrl(cidLike: string | null | undefined): string | null {
   return value;
 }
 
-function toTokenApiShape(item: any) {
+function getPublicActiveListingWhere(includeListingV2 = true): Record<string, unknown> {
   return {
+    active: true,
+    ...(includeListingV2 ? { marketplaceVersion: "v1" } : {})
+  };
+}
+
+function getListingRecordId(version: "v1" | "v2", listingId: string | number): string {
+  const normalized = String(listingId);
+  return version === "v2" ? `v2:${normalized}` : normalized;
+}
+
+function resolveListingRecordId(input: {
+  listingRecordId?: string | null;
+  listingId?: number | string | null;
+  marketplaceVersion?: string | null;
+}): string | null {
+  const recordId = String(input.listingRecordId || "").trim();
+  if (recordId) {
+    return recordId;
+  }
+
+  const listingIdValue = input.listingId;
+  if (listingIdValue === null || listingIdValue === undefined || String(listingIdValue).trim() === "") {
+    return null;
+  }
+
+  const normalizedId = String(listingIdValue).trim();
+  return String(input.marketplaceVersion || "v1").toLowerCase() === "v2"
+    ? getListingRecordId("v2", normalizedId)
+    : normalizedId;
+}
+
+type OfferApiShape = {
+  id: string;
+  offerId: string;
+  chainId: number;
+  marketplaceVersion: string;
+  collectionAddress: string;
+  tokenId: string;
+  standard: string;
+  currentOwnerAddress: string | null;
+  currentOwnerAddresses: string[];
+  buyerAddress: string;
+  paymentToken: string;
+  quantityRaw: string;
+  priceRaw: string;
+  expiresAtRaw: string;
+  status: string;
+  active: boolean;
+  acceptedByAddress: string | null;
+  acceptedSellerAddress: string | null;
+  acceptedTxHash: string | null;
+  cancelledTxHash: string | null;
+  createdAt: string;
+  updatedAt: string;
+  lastSyncedAt: string;
+};
+
+function tokenMarketKey(collectionAddress: string | null | undefined, tokenId: string | null | undefined): string {
+  return `${String(collectionAddress || "").trim().toLowerCase()}:${String(tokenId || "").trim()}`;
+}
+
+function toOfferApiShape(item: any): OfferApiShape {
+  const holdingOwners = Array.isArray(item.token?.holdings)
+    ? (item.token.holdings as Array<{ ownerAddress: string | null; quantityRaw?: string | null }>)
+        .map((entry) => {
+          const ownerAddress = String(entry.ownerAddress || "").trim().toLowerCase();
+          return isAddress(ownerAddress) && sanitizeMintedAmountRaw(entry.quantityRaw) ? ownerAddress : null;
+        })
+        .filter((entry: string | null): entry is string => Boolean(entry))
+    : [];
+  const currentOwnerAddresses =
+    holdingOwners.length > 0
+      ? holdingOwners
+      : (() => {
+          const ownerAddress = String(item.token?.ownerAddress || "").trim().toLowerCase();
+          return isAddress(ownerAddress) ? [ownerAddress] : [];
+        })();
+  return {
+    id: item.id,
+    offerId: item.offerId,
+    chainId: item.chainId,
+    marketplaceVersion: item.marketplaceVersion || "v2",
+    collectionAddress: item.collectionAddress,
+    tokenId: item.tokenId,
+    standard: String(item.standard || item.token?.collection?.standard || "").trim() || "UNKNOWN",
+    currentOwnerAddress: currentOwnerAddresses[0] || null,
+    currentOwnerAddresses,
+    buyerAddress: item.buyerAddress,
+    paymentToken: item.paymentToken,
+    quantityRaw: item.quantityRaw,
+    priceRaw: item.priceRaw,
+    expiresAtRaw: item.expiresAtRaw,
+    status: item.status,
+    active: Boolean(item.active),
+    acceptedByAddress: item.acceptedByAddress || null,
+    acceptedSellerAddress: item.acceptedSellerAddress || null,
+    acceptedTxHash: item.acceptedTxHash || null,
+    cancelledTxHash: item.cancelledTxHash || null,
+    createdAt: item.createdAt instanceof Date ? item.createdAt.toISOString() : item.createdAt,
+    updatedAt: item.updatedAt instanceof Date ? item.updatedAt.toISOString() : item.updatedAt,
+    lastSyncedAt: item.lastSyncedAt instanceof Date ? item.lastSyncedAt.toISOString() : item.lastSyncedAt
+  };
+}
+
+async function readOfferRows(
+  deps: IndexerDeps,
+  options?: {
+    where?: Record<string, unknown>;
+    take?: number;
+    skip?: number;
+    orderBy?: Array<Record<string, "asc" | "desc">>;
+  }
+): Promise<any[]> {
+  if (!(await hasOfferTable(deps))) return [];
+  const offerDelegate = (deps.prisma as any).offer;
+  if (!offerDelegate || typeof offerDelegate.findMany !== "function") {
+    return [];
+  }
+  try {
+    const includeTokenHoldings = await hasTokenHoldingTable(deps);
+    return await offerDelegate.findMany({
+      where: options?.where || {},
+      take: options?.take,
+      skip: options?.skip,
+      orderBy: options?.orderBy || [{ updatedAt: "desc" }, { createdAt: "desc" }],
+      include: {
+        token: {
+          select: {
+            ownerAddress: true,
+            ...(includeTokenHoldings
+              ? {
+                  holdings: {
+                    select: {
+                      ownerAddress: true,
+                      quantityRaw: true
+                    }
+                  }
+                }
+              : {}),
+            collection: {
+              select: {
+                standard: true
+              }
+            }
+          }
+        }
+      }
+    });
+  } catch {
+    return [];
+  }
+}
+
+async function countOffers(deps: IndexerDeps, where?: Record<string, unknown>): Promise<number> {
+  if (!(await hasOfferTable(deps))) return 0;
+  const offerDelegate = (deps.prisma as any).offer;
+  if (!offerDelegate || typeof offerDelegate.count !== "function") {
+    return 0;
+  }
+  try {
+    return await offerDelegate.count({ where: where || {} });
+  } catch {
+    return 0;
+  }
+}
+
+async function attachOfferSummaries(
+  items: Array<{
+    tokenId: string;
+    collection?: { contractAddress: string } | null;
+    bestOffer?: OfferApiShape | null;
+    offerCount?: number;
+  }>,
+  deps: IndexerDeps
+): Promise<void> {
+  if (items.length === 0) return;
+
+  const tokenFilters = items
+    .map((item) => {
+      const contractAddress = String(item.collection?.contractAddress || "").trim().toLowerCase();
+      return isAddress(contractAddress) && item.tokenId
+        ? { collectionAddress: contractAddress, tokenId: item.tokenId }
+        : null;
+    })
+    .filter((item): item is { collectionAddress: string; tokenId: string } => Boolean(item));
+  if (tokenFilters.length === 0) {
+    for (const item of items) {
+      item.bestOffer = null;
+      item.offerCount = 0;
+    }
+    return;
+  }
+
+  const rows = await readOfferRows(deps, {
+    where: {
+      active: true,
+      OR: tokenFilters
+    },
+    orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }]
+  });
+
+  const bestOfferByToken = new Map<string, OfferApiShape>();
+  const bestOfferValueByToken = new Map<string, bigint>();
+  const offerCountByToken = new Map<string, number>();
+  for (const row of rows) {
+    const key = tokenMarketKey(row.collectionAddress, row.tokenId);
+    offerCountByToken.set(key, (offerCountByToken.get(key) || 0) + 1);
+    const rowValue = toBigIntOrZero(row.priceRaw);
+    const existingValue = bestOfferValueByToken.get(key);
+    if (existingValue === undefined || rowValue > existingValue) {
+      bestOfferValueByToken.set(key, rowValue);
+      bestOfferByToken.set(key, toOfferApiShape(row));
+    }
+  }
+
+  for (const item of items) {
+    const key = tokenMarketKey(item.collection?.contractAddress, item.tokenId);
+    item.bestOffer = bestOfferByToken.get(key) || null;
+    item.offerCount = offerCountByToken.get(key) || 0;
+  }
+}
+
+function toTokenApiShape(
+  item: any,
+  config: RequestHandlerConfig,
+  presentationIndex?: Map<string, TokenPresentationRecord>
+) {
+  return withTokenPresentation({
     id: item.id,
     tokenId: item.tokenId,
     creatorAddress: item.creatorAddress,
     ownerAddress: item.ownerAddress,
     mintTxHash: item.mintTxHash || null,
+    draftName: item.draftName || null,
+    draftDescription: item.draftDescription || null,
+    mintedAmountRaw: item.mintedAmountRaw || null,
     metadataCid: item.metadataCid,
     metadataUrl: buildGatewayUrl(item.metadataCid),
     mediaCid: item.mediaCid,
     mediaUrl: buildGatewayUrl(item.mediaCid),
     immutable: item.immutable,
     mintedAt: item.mintedAt,
-    activeListing: item.listings?.[0]
-      ? {
-          listingId: item.listings[0].listingId,
-          sellerAddress: item.listings[0].sellerAddress,
-          paymentToken: item.listings[0].paymentToken,
-          priceRaw: item.listings[0].priceRaw,
-          active: item.listings[0].active,
-          createdAt: item.listings[0].createdAt,
-          updatedAt: item.listings[0].updatedAt
-        }
-      : null
+    bestOffer: null,
+    offerCount: 0,
+    activeListing: toActiveListingApiShape(pickPrimaryActiveListing(item.listings), config)
+  }, item.collection?.contractAddress, presentationIndex);
+}
+
+function resolveOwnedTokenHeldAmountRaw(item: any, ownerAddress: string): string | null {
+  const normalizedOwner = String(ownerAddress || "").trim().toLowerCase();
+  if (!isAddress(normalizedOwner)) return null;
+
+  const holdingQuantity = Array.isArray(item.holdings)
+    ? sanitizeMintedAmountRaw(
+        (item.holdings as Array<{ ownerAddress?: string | null; quantityRaw?: string | null }>)
+          .find((entry) => String(entry.ownerAddress || "").trim().toLowerCase() === normalizedOwner)
+          ?.quantityRaw
+      )
+    : null;
+  if (holdingQuantity) {
+    return holdingQuantity;
+  }
+
+  const tokenOwnerAddress = String(item.ownerAddress || "").trim().toLowerCase();
+  if (!isAddress(tokenOwnerAddress) || tokenOwnerAddress !== normalizedOwner) {
+    return null;
+  }
+
+  if (String(item.collection?.standard || "").trim().toUpperCase() === "ERC721") {
+    return "1";
+  }
+
+  return sanitizeMintedAmountRaw(item.mintedAmountRaw) || "1";
+}
+
+function getOwnerScopedActiveListings(item: any, ownerAddress: string): any[] {
+  const normalizedOwner = String(ownerAddress || "").trim().toLowerCase();
+  if (!isAddress(normalizedOwner) || !Array.isArray(item?.listings)) {
+    return [];
+  }
+
+  return (item.listings as any[]).filter((listing) => {
+    if (!listing || listing.active === false) return false;
+    const sellerAddress = String(listing.sellerAddress || "").trim().toLowerCase();
+    return isAddress(sellerAddress) && sellerAddress === normalizedOwner;
+  });
+}
+
+function getOwnerScopedListingAvailability(
+  item: any,
+  ownerAddress: string
+): { activeListing: any | null; reservedAmountRaw: string | null; availableAmountRaw: string | null } {
+  const standard = String(item?.collection?.standard || "").trim().toUpperCase();
+  const heldAmountRaw = resolveOwnedTokenHeldAmountRaw(item, ownerAddress);
+  const heldAmount = heldAmountRaw ? BigInt(heldAmountRaw) : null;
+  const ownerListings = getOwnerScopedActiveListings(item, ownerAddress);
+  const activeListing = pickPrimaryActiveListing(ownerListings);
+
+  if (standard === "ERC721") {
+    const reservedAmountRaw = activeListing ? "1" : "0";
+    return {
+      activeListing,
+      reservedAmountRaw,
+      availableAmountRaw: heldAmount === null ? null : activeListing ? "0" : heldAmount.toString()
+    };
+  }
+
+  if (standard !== "ERC1155") {
+    return {
+      activeListing,
+      reservedAmountRaw: null,
+      availableAmountRaw: heldAmountRaw
+    };
+  }
+
+  if (ownerListings.length === 0) {
+    return {
+      activeListing,
+      reservedAmountRaw: "0",
+      availableAmountRaw: heldAmountRaw
+    };
+  }
+
+  let reservedAmount = 0n;
+  for (const listing of ownerListings) {
+    const amountRaw = sanitizeMintedAmountRaw(listing?.amountRaw);
+    if (!amountRaw) {
+      return {
+        activeListing,
+        reservedAmountRaw: null,
+        availableAmountRaw: null
+      };
+    }
+    reservedAmount += BigInt(amountRaw);
+  }
+
+  return {
+    activeListing,
+    reservedAmountRaw: reservedAmount.toString(),
+    availableAmountRaw: heldAmount === null ? null : (heldAmount > reservedAmount ? heldAmount - reservedAmount : 0n).toString()
   };
 }
 
-function toListingApiShape(item: any) {
+function toOwnerHoldingApiShape(
+  item: any,
+  ownerAddress: string,
+  config: RequestHandlerConfig,
+  presentationIndex?: Map<string, TokenPresentationRecord>
+) {
+  const normalizedOwner = String(ownerAddress || "").trim().toLowerCase();
+  const { activeListing, reservedAmountRaw, availableAmountRaw } = getOwnerScopedListingAvailability(item, normalizedOwner);
+  return withTokenPresentation({
+    id: item.id,
+    tokenId: item.tokenId,
+    creatorAddress: item.creatorAddress,
+    ownerAddress: normalizedOwner,
+    heldAmountRaw: resolveOwnedTokenHeldAmountRaw(item, normalizedOwner),
+    reservedAmountRaw,
+    availableAmountRaw,
+    mintTxHash: item.mintTxHash || null,
+    draftName: item.draftName || null,
+    draftDescription: item.draftDescription || null,
+    mintedAmountRaw: item.mintedAmountRaw || null,
+    metadataCid: item.metadataCid,
+    metadataUrl: buildGatewayUrl(item.metadataCid),
+    mediaCid: item.mediaCid,
+    mediaUrl: buildGatewayUrl(item.mediaCid),
+    immutable: item.immutable,
+    mintedAt: item.mintedAt,
+    bestOffer: null,
+    offerCount: 0,
+    activeListing: toActiveListingApiShape(activeListing, config),
+    collection: item.collection
+      ? {
+          chainId: item.collection.chainId,
+          contractAddress: item.collection.contractAddress,
+          ownerAddress: item.collection.ownerAddress,
+          ensSubname: item.collection.ensSubname,
+          standard: item.collection.standard,
+          isFactoryCreated: item.collection.isFactoryCreated,
+          isUpgradeable: item.collection.isUpgradeable,
+          finalizedAt: item.collection.finalizedAt,
+          createdAt: item.collection.createdAt,
+          updatedAt: item.collection.updatedAt
+        }
+      : null
+  }, item.collection?.contractAddress, presentationIndex);
+}
+
+function toListingApiShape(
+  item: any,
+  config: RequestHandlerConfig,
+  presentationIndex?: Map<string, TokenPresentationRecord>
+) {
   const token = item.token || null;
   const collection = token?.collection || null;
+  const snapshot = listingSnapshotCache.get(String(item.listingId || ""));
+  const listingRecordId = String(item.listingId || "");
+  const listingId = normalizePublicListingId(listingRecordId);
+  const marketplaceVersion = String(item.marketplaceVersion || (listingRecordId.startsWith("v2:") ? "v2" : "v1")).toLowerCase();
 
   return {
-    id: Number.parseInt(item.listingId, 10) || 0,
-    listingId: item.listingId,
+    id: Number.parseInt(listingId, 10) || 0,
+    listingId,
+    listingRecordId,
+    marketplaceVersion,
+    marketplaceAddress: getMarketplaceAddressForVersion(config, marketplaceVersion),
     sellerAddress: item.sellerAddress,
     collectionAddress: item.collectionAddress,
     tokenId: item.tokenId,
-    amountRaw: "1",
-    standard: collection?.standard || "UNKNOWN",
+    amountRaw: item.amountRaw || snapshot?.amountRaw || "1",
+    standard: item.standard || snapshot?.standard || collection?.standard || "UNKNOWN",
     paymentToken: item.paymentToken,
     priceRaw: item.priceRaw,
-    expiresAtRaw: "0",
+    expiresAtRaw: item.expiresAtRaw || snapshot?.expiresAtRaw || "0",
     active: item.active,
+    buyerAddress: item.buyerAddress || null,
+    txHash: item.txHash || null,
+    cancelledAt: item.cancelledAt || null,
+    soldAt: item.soldAt || null,
+    lastSyncedAt: item.lastSyncedAt || item.updatedAt,
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
     token: token
-      ? {
+      ? withTokenPresentation({
           id: token.id,
+          tokenId: item.tokenId,
           creatorAddress: token.creatorAddress,
           ownerAddress: token.ownerAddress,
           mintTxHash: token.mintTxHash || null,
+          draftName: token.draftName || null,
+          draftDescription: token.draftDescription || null,
+          mintedAmountRaw: token.mintedAmountRaw || null,
           metadataCid: token.metadataCid,
           metadataUrl: buildGatewayUrl(token.metadataCid),
           mediaCid: token.mediaCid,
           mediaUrl: buildGatewayUrl(token.mediaCid),
           immutable: token.immutable,
           mintedAt: token.mintedAt,
+          bestOffer: null,
+          offerCount: 0,
+          activeListing: toActiveListingApiShape(pickPrimaryActiveListing(token.listings), config),
           collection: collection
             ? {
                 chainId: collection.chainId,
@@ -767,21 +1523,51 @@ function toListingApiShape(item: any) {
                 updatedAt: collection.updatedAt
               }
             : null
-        }
+        }, collection?.contractAddress, presentationIndex)
       : null
   };
 }
 
-let mintTxHashColumnAvailableCache: boolean | null = null;
+const schemaAvailabilityCache = new Map<string, boolean>();
 
-async function hasMintTxHashColumn(deps: IndexerDeps): Promise<boolean> {
-  if (mintTxHashColumnAvailableCache !== null) {
-    return mintTxHashColumnAvailableCache;
+async function hasSchemaTable(deps: IndexerDeps, tableName: string): Promise<boolean> {
+  const cacheKey = `table:${tableName}`;
+  if (schemaAvailabilityCache.has(cacheKey)) {
+    return Boolean(schemaAvailabilityCache.get(cacheKey));
   }
 
   const prismaAny = deps.prisma as any;
   if (typeof prismaAny.$queryRawUnsafe !== "function") {
-    mintTxHashColumnAvailableCache = false;
+    schemaAvailabilityCache.set(cacheKey, false);
+    return false;
+  }
+
+  try {
+    const rows = (await prismaAny.$queryRawUnsafe(`
+      SELECT 1
+      FROM information_schema.tables
+      WHERE table_schema = 'public'
+        AND table_name = '${tableName}'
+      LIMIT 1
+    `)) as Array<unknown>;
+    const available = rows.length > 0;
+    schemaAvailabilityCache.set(cacheKey, available);
+    return available;
+  } catch {
+    schemaAvailabilityCache.set(cacheKey, false);
+    return false;
+  }
+}
+
+async function hasSchemaColumn(deps: IndexerDeps, tableName: string, columnName: string): Promise<boolean> {
+  const cacheKey = `column:${tableName}:${columnName}`;
+  if (schemaAvailabilityCache.has(cacheKey)) {
+    return Boolean(schemaAvailabilityCache.get(cacheKey));
+  }
+
+  const prismaAny = deps.prisma as any;
+  if (typeof prismaAny.$queryRawUnsafe !== "function") {
+    schemaAvailabilityCache.set(cacheKey, false);
     return false;
   }
 
@@ -790,16 +1576,284 @@ async function hasMintTxHashColumn(deps: IndexerDeps): Promise<boolean> {
       SELECT 1
       FROM information_schema.columns
       WHERE table_schema = 'public'
-        AND table_name = 'Token'
-        AND column_name = 'mintTxHash'
+        AND table_name = '${tableName}'
+        AND column_name = '${columnName}'
       LIMIT 1
     `)) as Array<unknown>;
-    mintTxHashColumnAvailableCache = rows.length > 0;
-    return mintTxHashColumnAvailableCache;
+    const available = rows.length > 0;
+    schemaAvailabilityCache.set(cacheKey, available);
+    return available;
   } catch {
-    mintTxHashColumnAvailableCache = false;
+    schemaAvailabilityCache.set(cacheKey, false);
     return false;
   }
+}
+
+async function hasMintTxHashColumn(deps: IndexerDeps): Promise<boolean> {
+  return hasSchemaColumn(deps, "Token", "mintTxHash");
+}
+
+async function hasTokenPresentationColumns(deps: IndexerDeps): Promise<boolean> {
+  const [draftName, draftDescription, mintedAmountRaw] = await Promise.all([
+    hasSchemaColumn(deps, "Token", "draftName"),
+    hasSchemaColumn(deps, "Token", "draftDescription"),
+    hasSchemaColumn(deps, "Token", "mintedAmountRaw")
+  ]);
+  return draftName && draftDescription && mintedAmountRaw;
+}
+
+async function hasListingV2Columns(deps: IndexerDeps): Promise<boolean> {
+  const requiredColumns = [
+    "marketplaceVersion",
+    "amountRaw",
+    "standard",
+    "expiresAtRaw",
+    "lastSyncedAt",
+    "cancelledAt",
+    "soldAt",
+    "buyerAddress",
+    "txHash"
+  ];
+  const availability = await Promise.all(requiredColumns.map((column) => hasSchemaColumn(deps, "Listing", column)));
+  return availability.every(Boolean);
+}
+
+async function hasOfferTable(deps: IndexerDeps): Promise<boolean> {
+  return hasSchemaTable(deps, "Offer");
+}
+
+async function hasTokenHoldingTable(deps: IndexerDeps): Promise<boolean> {
+  return hasSchemaTable(deps, "TokenHolding");
+}
+
+async function syncIndexedTokenHolding(
+  deps: IndexerDeps,
+  tokenRefId: string,
+  ownerAddress: string,
+  quantityRaw: string | null | undefined,
+  standard: string
+): Promise<void> {
+  if (!(await hasTokenHoldingTable(deps))) return;
+
+  const tokenHoldingDelegate = (deps.prisma as any).tokenHolding;
+  if (!tokenHoldingDelegate || typeof tokenHoldingDelegate.upsert !== "function") {
+    return;
+  }
+
+  const normalizedOwner = String(ownerAddress || "").trim().toLowerCase();
+  const normalizedQuantity = sanitizeMintedAmountRaw(quantityRaw);
+  if (!tokenRefId || !isAddress(normalizedOwner)) return;
+
+  if (String(standard || "").toUpperCase() === "ERC721") {
+    try {
+      if (typeof tokenHoldingDelegate.deleteMany === "function") {
+        await tokenHoldingDelegate.deleteMany({
+          where: {
+            tokenId: tokenRefId,
+            ownerAddress: { not: normalizedOwner }
+          }
+        });
+      }
+      await tokenHoldingDelegate.upsert({
+        where: {
+          tokenId_ownerAddress: {
+            tokenId: tokenRefId,
+            ownerAddress: normalizedOwner
+          }
+        },
+        update: {
+          quantityRaw: "1"
+        },
+        create: {
+          tokenId: tokenRefId,
+          ownerAddress: normalizedOwner,
+          quantityRaw: "1"
+        }
+      });
+    } catch {
+      // Ignore holding sync failures so token metadata sync can still succeed.
+    }
+    return;
+  }
+
+  try {
+    if (!normalizedQuantity) {
+      if (typeof tokenHoldingDelegate.deleteMany === "function") {
+        await tokenHoldingDelegate.deleteMany({
+          where: {
+            tokenId: tokenRefId,
+            ownerAddress: normalizedOwner
+          }
+        });
+      }
+      return;
+    }
+
+    await tokenHoldingDelegate.upsert({
+      where: {
+        tokenId_ownerAddress: {
+          tokenId: tokenRefId,
+          ownerAddress: normalizedOwner
+        }
+      },
+      update: {
+        quantityRaw: normalizedQuantity
+      },
+      create: {
+        tokenId: tokenRefId,
+        ownerAddress: normalizedOwner,
+        quantityRaw: normalizedQuantity
+      }
+    });
+  } catch {
+    // Ignore holding sync failures so token metadata sync can still succeed.
+  }
+}
+
+async function clearIndexedCollectionHoldingsForOwner(
+  deps: IndexerDeps,
+  contractAddress: string,
+  ownerAddress: string,
+  retainedTokenIds: Set<string>
+): Promise<void> {
+  if (!(await hasTokenHoldingTable(deps))) return;
+
+  const tokenHoldingDelegate = (deps.prisma as any).tokenHolding;
+  const tokenDelegate = (deps.prisma.token as any);
+  if (!tokenHoldingDelegate || typeof tokenHoldingDelegate.deleteMany !== "function" || !tokenDelegate || typeof tokenDelegate.findMany !== "function") {
+    return;
+  }
+
+  try {
+    const collectionTokens = await tokenDelegate.findMany({
+      where: {
+        collection: {
+          is: {
+            contractAddress
+          }
+        }
+      },
+      select: {
+        id: true,
+        tokenId: true
+      }
+    });
+
+    const staleTokenRefIds = (collectionTokens as Array<{ id: string; tokenId: string }>)
+      .filter((item) => !retainedTokenIds.has(item.tokenId))
+      .map((item) => item.id);
+
+    if (staleTokenRefIds.length === 0) return;
+
+    await tokenHoldingDelegate.deleteMany({
+      where: {
+        ownerAddress,
+        tokenId: { in: staleTokenRefIds }
+      }
+    });
+  } catch {
+    // Ignore pruning failures. The next owner sync can correct stale holding rows.
+  }
+}
+
+async function applyAcceptedOfferOwnership(
+  deps: IndexerDeps,
+  tokenRefId: string | null | undefined,
+  params: {
+    buyerAddress: string;
+    sellerAddress: string;
+    quantityRaw: string;
+    standard: string;
+  }
+): Promise<void> {
+  if (!tokenRefId) return;
+
+  const tokenDelegate = (deps.prisma.token as any);
+  if (!tokenDelegate || typeof tokenDelegate.update !== "function") {
+    return;
+  }
+
+  const buyerAddress = String(params.buyerAddress || "").trim().toLowerCase();
+  const sellerAddress = String(params.sellerAddress || "").trim().toLowerCase();
+  const standard = String(params.standard || "").trim().toUpperCase();
+  const quantityRaw = sanitizeMintedAmountRaw(params.quantityRaw);
+  if (!isAddress(buyerAddress) || !isAddress(sellerAddress)) return;
+
+  try {
+    await tokenDelegate.update({
+      where: { id: tokenRefId },
+      data: {
+        ownerAddress: buyerAddress
+      }
+    });
+  } catch {
+    // Ignore ownership mirror failures if the token row is not writable in this runtime.
+  }
+
+  if (standard === "ERC721") {
+    await syncIndexedTokenHolding(deps, tokenRefId, buyerAddress, "1", "ERC721");
+    return;
+  }
+
+  if (!(await hasTokenHoldingTable(deps)) || !quantityRaw) return;
+
+  const tokenHoldingDelegate = (deps.prisma as any).tokenHolding;
+  if (!tokenHoldingDelegate || typeof tokenHoldingDelegate.findUnique !== "function" || typeof tokenHoldingDelegate.upsert !== "function") {
+    return;
+  }
+
+  try {
+    const transferAmount = BigInt(quantityRaw);
+    const [sellerHolding, buyerHolding] = await Promise.all([
+      tokenHoldingDelegate.findUnique({
+        where: {
+          tokenId_ownerAddress: {
+            tokenId: tokenRefId,
+            ownerAddress: sellerAddress
+          }
+        }
+      }),
+      tokenHoldingDelegate.findUnique({
+        where: {
+          tokenId_ownerAddress: {
+            tokenId: tokenRefId,
+            ownerAddress: buyerAddress
+          }
+        }
+      })
+    ]);
+
+    const nextSellerQuantity = sellerHolding?.quantityRaw ? BigInt(String(sellerHolding.quantityRaw)) - transferAmount : 0n;
+    if (nextSellerQuantity > 0n) {
+      await syncIndexedTokenHolding(deps, tokenRefId, sellerAddress, nextSellerQuantity.toString(), "ERC1155");
+    } else {
+      await syncIndexedTokenHolding(deps, tokenRefId, sellerAddress, null, "ERC1155");
+    }
+
+    const nextBuyerQuantity = (buyerHolding?.quantityRaw ? BigInt(String(buyerHolding.quantityRaw)) : 0n) + transferAmount;
+    await syncIndexedTokenHolding(deps, tokenRefId, buyerAddress, nextBuyerQuantity.toString(), "ERC1155");
+  } catch {
+    // Ignore settlement-holding failures. A later owner backfill can correct them.
+  }
+}
+
+async function buildOwnedTokenWhere(deps: IndexerDeps, ownerAddress: string): Promise<Record<string, unknown>> {
+  const normalizedOwner = String(ownerAddress || "").trim().toLowerCase();
+  if (!(await hasTokenHoldingTable(deps))) {
+    return { ownerAddress: normalizedOwner };
+  }
+  return {
+    OR: [
+      { ownerAddress: normalizedOwner },
+      {
+        holdings: {
+          some: {
+            ownerAddress: normalizedOwner
+          }
+        }
+      }
+    ]
+  };
 }
 
 async function attachMintTxHashes(
@@ -928,7 +1982,7 @@ async function attachMintTxHashes(
   );
 }
 
-async function findTokenRefIdForListing(
+async function findTokenRefIdForAsset(
   collectionAddress: string,
   tokenId: string,
   deps: IndexerDeps
@@ -968,6 +2022,7 @@ async function syncMarketplaceListingsIfStale(
       const client = createPublicClient({
         transport: http(config.rpcUrl)
       });
+      const includeListingV2 = await hasListingV2Columns(deps);
 
       const nextListingId = (await client.readContract({
         address: config.marketplaceAddress as `0x${string}`,
@@ -977,6 +2032,7 @@ async function syncMarketplaceListingsIfStale(
 
       const activeListingIds = new Set<string>();
       const currentUnix = BigInt(Math.floor(Date.now() / 1000));
+      const nextListingSnapshots = new Map<string, ListingSnapshot>();
 
       for (let offset = 0; offset < Number(nextListingId); offset += LISTING_SYNC_BATCH_SIZE) {
         const batchIds: number[] = [];
@@ -1002,36 +2058,58 @@ async function syncMarketplaceListingsIfStale(
         await Promise.all(
           rows.map(async (row, index) => {
             const listingId = String(batchIds[index]);
+            const syncedAt = new Date();
+            const amountRaw = row[3].toString();
+            const standard = String(row[4] || "UNKNOWN").trim().toUpperCase() || "UNKNOWN";
+            const expiresAtRaw = row[7].toString();
+            nextListingSnapshots.set(listingId, {
+              listingId,
+              amountRaw,
+              standard,
+              expiresAtRaw,
+              active: Boolean(row[8])
+            });
             const isActive = row[8] && row[7] > currentUnix;
             if (!isActive) return;
 
             activeListingIds.add(listingId);
             const collectionAddress = row[1].toLowerCase();
             const tokenId = row[2].toString();
-            const tokenRefId = await findTokenRefIdForListing(collectionAddress, tokenId, deps);
+            const tokenRefId = await findTokenRefIdForAsset(collectionAddress, tokenId, deps);
+            const baseListingData = {
+              chainId: config.chainId,
+              collectionAddress,
+              tokenId,
+              sellerAddress: row[0].toLowerCase(),
+              paymentToken: row[5].toLowerCase(),
+              priceRaw: row[6].toString(),
+              active: true,
+              tokenRefId
+            };
+            const listingV2Data = includeListingV2
+              ? {
+                  marketplaceVersion: "v1",
+                  amountRaw,
+                  standard,
+                  expiresAtRaw,
+                  lastSyncedAt: syncedAt,
+                  buyerAddress: null,
+                  cancelledAt: null,
+                  soldAt: null,
+                  txHash: null
+                }
+              : {};
 
             await deps.prisma.listing.upsert({
               where: { listingId },
               update: {
-                chainId: config.chainId,
-                collectionAddress,
-                tokenId,
-                sellerAddress: row[0].toLowerCase(),
-                paymentToken: row[5].toLowerCase(),
-                priceRaw: row[6].toString(),
-                active: true,
-                tokenRefId
+                ...baseListingData,
+                ...listingV2Data
               },
               create: {
                 listingId,
-                chainId: config.chainId,
-                collectionAddress,
-                tokenId,
-                sellerAddress: row[0].toLowerCase(),
-                paymentToken: row[5].toLowerCase(),
-                priceRaw: row[6].toString(),
-                active: true,
-                tokenRefId
+                ...baseListingData,
+                ...listingV2Data
               }
             });
           })
@@ -1042,13 +2120,16 @@ async function syncMarketplaceListingsIfStale(
         where: {
           chainId: config.chainId,
           active: true,
+          ...(includeListingV2 ? { marketplaceVersion: "v1" } : {}),
           ...(activeListingIds.size > 0 ? { listingId: { notIn: Array.from(activeListingIds) } } : {})
         },
         data: {
-          active: false
+          active: false,
+          ...(includeListingV2 ? { lastSyncedAt: new Date() } : {})
         }
       });
 
+      listingSnapshotCache = nextListingSnapshots;
       lastListingSyncAt = Date.now();
       lastListingSyncCount = activeListingIds.size;
     } catch (err) {
@@ -1059,6 +2140,321 @@ async function syncMarketplaceListingsIfStale(
   })();
 
   await listingSyncPromise;
+}
+
+async function syncMarketplaceV2Listings(
+  deps: IndexerDeps,
+  config: RequestHandlerConfig,
+  client: ReturnType<typeof createPublicClient>
+): Promise<number> {
+  if (!config.marketplaceV2Address) return 0;
+  if (!(await hasListingV2Columns(deps))) return 0;
+
+  const nextListingId = (await client.readContract({
+    address: config.marketplaceV2Address as `0x${string}`,
+    abi: marketplaceReadAbi,
+    functionName: "nextListingId"
+  })) as bigint;
+
+  const activeListingIds = new Set<string>();
+  const currentUnix = BigInt(Math.floor(Date.now() / 1000));
+
+  for (let offset = 0; offset < Number(nextListingId); offset += LISTING_SYNC_BATCH_SIZE) {
+    const batchIds: number[] = [];
+    for (let id = offset; id < Math.min(Number(nextListingId), offset + LISTING_SYNC_BATCH_SIZE); id += 1) {
+      batchIds.push(id);
+    }
+
+    const rows = (await Promise.all(
+      batchIds.map((id) =>
+        client.readContract({
+          address: config.marketplaceV2Address as `0x${string}`,
+          abi: marketplaceReadAbi,
+          functionName: "listings",
+          args: [BigInt(id)]
+        })
+      )
+    )) as readonly (readonly [`0x${string}`, `0x${string}`, bigint, bigint, string, `0x${string}`, bigint, bigint, boolean])[];
+
+    await Promise.all(
+      rows.map(async (row, index) => {
+        const listingId = getListingRecordId("v2", batchIds[index]);
+        const syncedAt = new Date();
+        const amountRaw = row[3].toString();
+        const standard = String(row[4] || "UNKNOWN").trim().toUpperCase() || "UNKNOWN";
+        const expiresAtRaw = row[7].toString();
+        const isActive = row[8] && row[7] > currentUnix;
+        if (isActive) {
+          activeListingIds.add(listingId);
+        }
+
+        const collectionAddress = row[1].toLowerCase();
+        const tokenId = row[2].toString();
+        const tokenRefId = await findTokenRefIdForAsset(collectionAddress, tokenId, deps);
+
+        await deps.prisma.listing.upsert({
+          where: { listingId },
+          update: {
+            chainId: config.chainId,
+            marketplaceVersion: "v2",
+            collectionAddress,
+            tokenId,
+            sellerAddress: row[0].toLowerCase(),
+            amountRaw,
+            standard,
+            paymentToken: row[5].toLowerCase(),
+            priceRaw: row[6].toString(),
+            expiresAtRaw,
+            active: isActive,
+            tokenRefId,
+            lastSyncedAt: syncedAt,
+            buyerAddress: null,
+            cancelledAt: null,
+            soldAt: null,
+            txHash: null
+          },
+          create: {
+            listingId,
+            chainId: config.chainId,
+            marketplaceVersion: "v2",
+            collectionAddress,
+            tokenId,
+            sellerAddress: row[0].toLowerCase(),
+            amountRaw,
+            standard,
+            paymentToken: row[5].toLowerCase(),
+            priceRaw: row[6].toString(),
+            expiresAtRaw,
+            active: isActive,
+            tokenRefId,
+            lastSyncedAt: syncedAt,
+            buyerAddress: null,
+            cancelledAt: null,
+            soldAt: null,
+            txHash: null
+          }
+        });
+      })
+    );
+  }
+
+  await deps.prisma.listing.updateMany({
+    where: {
+      chainId: config.chainId,
+      marketplaceVersion: "v2",
+      active: true,
+      ...(activeListingIds.size > 0 ? { listingId: { notIn: Array.from(activeListingIds) } } : {})
+    },
+    data: {
+      active: false,
+      lastSyncedAt: new Date()
+    }
+  });
+
+  return activeListingIds.size;
+}
+
+async function syncMarketplaceV2Offers(
+  deps: IndexerDeps,
+  config: RequestHandlerConfig,
+  client: ReturnType<typeof createPublicClient>
+): Promise<number> {
+  if (!config.marketplaceV2Address) return 0;
+  if (!(await hasOfferTable(deps))) return 0;
+
+  const offerDelegate = (deps.prisma as any).offer;
+  if (!offerDelegate || typeof offerDelegate.upsert !== "function") return 0;
+
+  const nextOfferId = (await client.readContract({
+    address: config.marketplaceV2Address as `0x${string}`,
+    abi: marketplaceV2ReadAbi,
+    functionName: "nextOfferId"
+  })) as bigint;
+
+  const [cancelledLogs, acceptedLogs] = await Promise.all([
+    getLogsChunked(client, {
+      address: config.marketplaceV2Address as `0x${string}`,
+      event: marketplaceOfferCancelledEvent,
+      fromBlock: 0n
+    }),
+    getLogsChunked(client, {
+      address: config.marketplaceV2Address as `0x${string}`,
+      event: marketplaceOfferAcceptedEvent,
+      fromBlock: 0n
+    })
+  ]);
+
+  const cancelledByOfferId = new Map<string, { txHash: string }>();
+  for (const logEntry of cancelledLogs) {
+    const offerId = logEntry.args.offerId?.toString();
+    if (!offerId) continue;
+    cancelledByOfferId.set(offerId, { txHash: logEntry.transactionHash });
+  }
+
+  const acceptedByOfferId = new Map<string, { sellerAddress: string; buyerAddress: string; quantityRaw: string; txHash: string }>();
+  for (const logEntry of acceptedLogs) {
+    const offerId = logEntry.args.offerId?.toString();
+    const sellerAddress = String(logEntry.args.seller || "").toLowerCase();
+    const buyerAddress = String(logEntry.args.buyer || "").toLowerCase();
+    const quantityRaw = logEntry.args.quantity?.toString() || "";
+    if (!offerId || !isAddress(sellerAddress) || !isAddress(buyerAddress) || !sanitizeMintedAmountRaw(quantityRaw)) continue;
+    acceptedByOfferId.set(offerId, {
+      sellerAddress,
+      buyerAddress,
+      quantityRaw,
+      txHash: logEntry.transactionHash
+    });
+  }
+
+  const currentUnix = BigInt(Math.floor(Date.now() / 1000));
+
+  for (let offset = 0; offset < Number(nextOfferId); offset += LISTING_SYNC_BATCH_SIZE) {
+    const batchIds: number[] = [];
+    for (let id = offset; id < Math.min(Number(nextOfferId), offset + LISTING_SYNC_BATCH_SIZE); id += 1) {
+      batchIds.push(id);
+    }
+
+    const rows = (await Promise.all(
+      batchIds.map((id) =>
+        client.readContract({
+          address: config.marketplaceV2Address as `0x${string}`,
+          abi: marketplaceV2ReadAbi,
+          functionName: "offers",
+          args: [BigInt(id)]
+        })
+      )
+    )) as readonly (readonly [`0x${string}`, `0x${string}`, bigint, bigint, string, `0x${string}`, bigint, bigint, boolean])[];
+
+    await Promise.all(
+      rows.map(async (row, index) => {
+        const offerId = String(batchIds[index]);
+        const syncedAt = new Date();
+        const collectionAddress = row[1].toLowerCase();
+        const tokenId = row[2].toString();
+        const accepted = acceptedByOfferId.get(offerId);
+        const cancelled = cancelledByOfferId.get(offerId);
+        const expiresAtRaw = row[7].toString();
+        const expired = row[7] <= currentUnix;
+        const active = Boolean(row[8]) && !expired && !accepted && !cancelled;
+        const status = accepted
+          ? "accepted"
+          : cancelled
+            ? "cancelled"
+            : expired
+              ? "expired"
+              : active
+                ? "active"
+                : "inactive";
+        const tokenRefId = await findTokenRefIdForAsset(collectionAddress, tokenId, deps);
+        const previousOffer = typeof offerDelegate.findUnique === "function"
+          ? await offerDelegate.findUnique({
+              where: { offerId },
+              select: { acceptedTxHash: true }
+            })
+          : null;
+
+        await offerDelegate.upsert({
+          where: { offerId },
+          update: {
+            chainId: config.chainId,
+            marketplaceVersion: "v2",
+            collectionAddress,
+            tokenId,
+            buyerAddress: row[0].toLowerCase(),
+            paymentToken: row[5].toLowerCase(),
+            quantityRaw: row[3].toString(),
+            priceRaw: row[6].toString(),
+            expiresAtRaw,
+            status,
+            active,
+            acceptedByAddress: accepted?.sellerAddress || null,
+            acceptedSellerAddress: accepted?.sellerAddress || null,
+            acceptedTxHash: accepted?.txHash || null,
+            cancelledTxHash: cancelled?.txHash || null,
+            tokenRefId,
+            lastSyncedAt: syncedAt
+          },
+          create: {
+            offerId,
+            chainId: config.chainId,
+            marketplaceVersion: "v2",
+            collectionAddress,
+            tokenId,
+            buyerAddress: row[0].toLowerCase(),
+            paymentToken: row[5].toLowerCase(),
+            quantityRaw: row[3].toString(),
+            priceRaw: row[6].toString(),
+            expiresAtRaw,
+            status,
+            active,
+            acceptedByAddress: accepted?.sellerAddress || null,
+            acceptedSellerAddress: accepted?.sellerAddress || null,
+            acceptedTxHash: accepted?.txHash || null,
+            cancelledTxHash: cancelled?.txHash || null,
+            tokenRefId,
+            lastSyncedAt: syncedAt
+          }
+        });
+
+        if (accepted?.txHash && accepted.txHash !== previousOffer?.acceptedTxHash) {
+          await applyAcceptedOfferOwnership(deps, tokenRefId, {
+            buyerAddress: accepted.buyerAddress,
+            sellerAddress: accepted.sellerAddress,
+            quantityRaw: accepted.quantityRaw,
+            standard: String(row[4] || "UNKNOWN")
+          });
+        }
+      })
+    );
+  }
+
+  return Number(nextOfferId);
+}
+
+async function syncMarketplaceV2IfStale(
+  deps: IndexerDeps,
+  config: RequestHandlerConfig,
+  options?: { force?: boolean; includeListings?: boolean; includeOffers?: boolean }
+): Promise<void> {
+  if (!config.marketplaceV2Address) return;
+
+  const shouldSyncListings =
+    options?.includeListings !== false &&
+    (!config.marketplaceAddress || config.marketplaceV2Address.toLowerCase() !== config.marketplaceAddress.toLowerCase());
+  const shouldSyncOffers = options?.includeOffers !== false;
+  if (!shouldSyncListings && !shouldSyncOffers) return;
+
+  const now = Date.now();
+  if (marketplaceV2SyncPromise) {
+    await marketplaceV2SyncPromise;
+    return;
+  }
+  if (!options?.force && now - lastMarketplaceV2SyncAt < MARKETPLACE_V2_SYNC_TTL_MS) {
+    return;
+  }
+
+  marketplaceV2SyncPromise = (async () => {
+    try {
+      const client = createPublicClient({
+        transport: http(config.rpcUrl)
+      });
+
+      if (shouldSyncListings) {
+        lastMarketplaceV2ListingSyncCount = await syncMarketplaceV2Listings(deps, config, client);
+      }
+      if (shouldSyncOffers) {
+        lastOfferSyncCount = await syncMarketplaceV2Offers(deps, config, client);
+      }
+
+      lastMarketplaceV2SyncAt = Date.now();
+    } catch (err) {
+      log.warn({ err }, "marketplace_v2_sync_failed");
+    } finally {
+      marketplaceV2SyncPromise = null;
+    }
+  })();
+
+  await marketplaceV2SyncPromise;
 }
 
 async function readJsonBody<T>(req: IncomingMessage): Promise<T> {
@@ -1119,9 +2515,18 @@ async function ensureTokenForListing(
       immutable: true
     }
   });
+  const includeListingV2 = await hasListingV2Columns(deps);
+  const listingSyncedAt = new Date();
+  const listingRecordId = resolveListingRecordId(payload);
+  if (!listingRecordId) {
+    throw new BadRequestError("Invalid report payload");
+  }
+  const marketplaceVersion = String(payload.marketplaceVersion || (listingRecordId.startsWith("v2:") ? "v2" : "v1")).toLowerCase() === "v2"
+    ? "v2"
+    : "v1";
 
   const listing = await deps.prisma.listing.upsert({
-    where: { listingId: String(payload.listingId) },
+    where: { listingId: listingRecordId },
     update: {
       chainId: config.chainId,
       collectionAddress,
@@ -1129,17 +2534,35 @@ async function ensureTokenForListing(
       sellerAddress,
       paymentToken: "0x0000000000000000000000000000000000000000",
       priceRaw: "0",
-      tokenRefId: token.id
+      tokenRefId: token.id,
+      ...(includeListingV2
+        ? {
+            marketplaceVersion,
+            amountRaw: "1",
+            standard,
+            expiresAtRaw: "0",
+            lastSyncedAt: listingSyncedAt
+          }
+        : {})
     },
     create: {
-      listingId: String(payload.listingId),
+      listingId: listingRecordId,
       chainId: config.chainId,
       collectionAddress,
       tokenId: payload.tokenId,
       sellerAddress,
       paymentToken: "0x0000000000000000000000000000000000000000",
       priceRaw: "0",
-      tokenRefId: token.id
+      tokenRefId: token.id,
+      ...(includeListingV2
+        ? {
+            marketplaceVersion,
+            amountRaw: "1",
+            standard,
+            expiresAtRaw: "0",
+            lastSyncedAt: listingSyncedAt
+          }
+        : {})
     }
   });
 
@@ -1161,11 +2584,18 @@ async function upsertMintedToken(
   const mediaCid = payload.mediaCid?.trim() || null;
   const ensSubname = payload.ensSubname?.trim() || null;
   const mintTxHash = payload.mintTxHash?.trim() || null;
+  const draftName = toNormalizedOptionalText(payload.draftName);
+  const draftDescription = toNormalizedOptionalText(payload.draftDescription);
+  const mintedAmountRaw = toNormalizedOptionalText(payload.mintedAmountRaw);
   const mintedAt = payload.mintedAt?.trim() ? new Date(payload.mintedAt) : new Date();
   const finalizedAt =
     payload.finalizedAt && payload.finalizedAt.trim()
       ? new Date(payload.finalizedAt)
       : null;
+  const [includeTokenPresentation, includeListingV2] = await Promise.all([
+    hasTokenPresentationColumns(deps),
+    hasListingV2Columns(deps)
+  ]);
 
   if (
     (typeof payload.chainId === "number" && payload.chainId !== config.chainId) ||
@@ -1212,6 +2642,13 @@ async function upsertMintedToken(
       creatorAddress,
       ownerAddress,
       mintTxHash,
+      ...(includeTokenPresentation
+        ? {
+            draftName,
+            draftDescription,
+            mintedAmountRaw
+          }
+        : {}),
       metadataCid,
       mediaCid,
       immutable: payload.immutable !== false,
@@ -1223,6 +2660,13 @@ async function upsertMintedToken(
       creatorAddress,
       ownerAddress,
       mintTxHash,
+      ...(includeTokenPresentation
+        ? {
+            draftName,
+            draftDescription,
+            mintedAmountRaw
+          }
+        : {}),
       metadataCid,
       mediaCid,
       immutable: payload.immutable !== false,
@@ -1232,13 +2676,76 @@ async function upsertMintedToken(
       collection: true,
       listings: {
         where: { active: true },
-        orderBy: { createdAt: "desc" },
-        take: 1
+        orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+        take: includeListingV2 ? 5 : 1,
+        select: tokenListingSelect(includeListingV2)
       }
     }
   });
 
+  await syncIndexedTokenHolding(
+    deps,
+    token.id,
+    ownerAddress,
+    standard === "ERC1155" ? mintedAmountRaw || "1" : "1",
+    standard
+  );
+
   return token;
+}
+
+function isRangeTooLargeError(err: unknown): boolean {
+  const msg = String(err instanceof Error ? err.message : err);
+  return msg.includes("block range") || msg.includes("Block range") || msg.includes("-32600");
+}
+
+function isRateLimitError(err: unknown): boolean {
+  const msg = String(err instanceof Error ? err.message : err);
+  return msg.includes("429") || msg.toLowerCase().includes("too many requests") || msg.includes("rate limit");
+}
+
+async function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function getLogsChunked(
+  client: ReturnType<typeof createPublicClient>,
+  params: any,
+  initialChunkSize = 2000n
+): Promise<any[]> {
+  const currentBlock = await client.getBlockNumber();
+  const fromBlock: bigint = params.fromBlock ?? 0n;
+  const toBlock: bigint = params.toBlock ?? currentBlock;
+
+  const allLogs: any[] = [];
+  let chunkSize = initialChunkSize;
+  let start = fromBlock;
+
+  while (start <= toBlock) {
+    const end = start + chunkSize - 1n > toBlock ? toBlock : start + chunkSize - 1n;
+    let retryDelay = 2000;
+    let advanced = false;
+    while (!advanced) {
+      try {
+        const chunk = await client.getLogs({ ...params, fromBlock: start, toBlock: end });
+        allLogs.push(...(chunk as any[]));
+        start = end + 1n;
+        advanced = true;
+      } catch (err) {
+        if (isRateLimitError(err)) {
+          await sleep(retryDelay);
+          retryDelay = Math.min(retryDelay * 2, 30_000);
+        } else if (isRangeTooLargeError(err) && chunkSize > 1n) {
+          chunkSize = chunkSize / 2n < 1n ? 1n : chunkSize / 2n;
+          break; // restart inner loop with smaller chunk
+        } else {
+          throw err;
+        }
+      }
+    }
+  }
+
+  return allLogs;
 }
 
 async function backfillCollectionTokens(
@@ -1313,15 +2820,16 @@ async function backfillCollectionTokens(
   }
 
   const effectiveOwnerAddress = requestedOwner || chainOwnerAddress || existingCollection?.ownerAddress || null;
+  const effectiveIsUpgradeable = payload.isUpgradeable ?? existingCollection?.isUpgradeable ?? true;
+  const scanFromBlock = payload.fromBlock != null ? BigInt(payload.fromBlock) : 0n;
   let scanned = 0;
   let upserted = 0;
 
   if (standard === "ERC721") {
-    const logs = await client.getLogs({
+    const logs = await getLogsChunked(client, {
       address: contractAddress as `0x${string}`,
       event: erc721TransferEvent,
-      fromBlock: 0n,
-      toBlock: "latest"
+      fromBlock: scanFromBlock
     });
     const mintedLogs = logs.filter((log) => String(log.args.from || "").toLowerCase() === ZERO_ADDRESS);
     scanned = mintedLogs.length;
@@ -1371,13 +2879,13 @@ async function backfillCollectionTokens(
           ownerAddress: currentOwner,
           standard,
           isFactoryCreated: payload.isFactoryCreated ?? existingCollection?.isFactoryCreated ?? false,
-          isUpgradeable: payload.isUpgradeable ?? existingCollection?.isUpgradeable ?? true,
+          isUpgradeable: effectiveIsUpgradeable,
           ensSubname: payload.ensSubname ?? existingCollection?.ensSubname ?? null,
           finalizedAt: existingCollection?.finalizedAt?.toISOString() || null,
           mintTxHash: log.transactionHash,
           metadataCid,
           mediaCid: null,
-          immutable: existingCollection?.isUpgradeable === false ? true : true
+          immutable: !effectiveIsUpgradeable
         },
         deps,
         config
@@ -1390,17 +2898,15 @@ async function backfillCollectionTokens(
       throw new BadRequestError("ownerAddress is required to backfill ERC1155 collections");
     }
 
-    const singleLogs = await client.getLogs({
+    const singleLogs = await getLogsChunked(client, {
       address: contractAddress as `0x${string}`,
       event: erc1155TransferSingleEvent,
-      fromBlock: 0n,
-      toBlock: "latest"
+      fromBlock: scanFromBlock
     });
-    const batchLogs = await client.getLogs({
+    const batchLogs = await getLogsChunked(client, {
       address: contractAddress as `0x${string}`,
       event: erc1155TransferBatchEvent,
-      fromBlock: 0n,
-      toBlock: "latest"
+      fromBlock: scanFromBlock
     });
 
     const tokenIds = new Set<string>();
@@ -1426,6 +2932,7 @@ async function backfillCollectionTokens(
     }
 
     scanned = tokenIds.size;
+    const positiveTokenIds = new Set<string>();
     for (const tokenId of tokenIds) {
       let balance = 0n;
       try {
@@ -1441,6 +2948,7 @@ async function backfillCollectionTokens(
         balance = 0n;
       }
       if (balance <= 0n) continue;
+      positiveTokenIds.add(tokenId);
 
       let metadataCid = "";
       try {
@@ -1467,10 +2975,11 @@ async function backfillCollectionTokens(
           ownerAddress: targetOwner,
           standard,
           isFactoryCreated: payload.isFactoryCreated ?? existingCollection?.isFactoryCreated ?? false,
-          isUpgradeable: payload.isUpgradeable ?? existingCollection?.isUpgradeable ?? true,
+          isUpgradeable: effectiveIsUpgradeable,
           ensSubname: payload.ensSubname ?? existingCollection?.ensSubname ?? null,
           finalizedAt: existingCollection?.finalizedAt?.toISOString() || null,
           mintTxHash: mintTxByTokenId.get(tokenId) || null,
+          mintedAmountRaw: balance.toString(),
           metadataCid,
           mediaCid: null,
           immutable: true
@@ -1480,6 +2989,8 @@ async function backfillCollectionTokens(
       );
       upserted += 1;
     }
+
+    await clearIndexedCollectionHoldingsForOwner(deps, contractAddress, targetOwner, positiveTokenIds);
   }
 
   return {
@@ -1490,7 +3001,77 @@ async function backfillCollectionTokens(
   };
 }
 
-async function listHiddenListingIds(deps: IndexerDeps): Promise<number[]> {
+async function backfillRegistryCollections(
+  deps: IndexerDeps,
+  config: RequestHandlerConfig,
+  fromBlock = 0n
+): Promise<{ discovered: number; scanned: number; upserted: number }> {
+  if (!config.registryAddress) {
+    throw new BadRequestError("REGISTRY_ADDRESS is not configured");
+  }
+
+  const client = createPublicClient({ transport: http(config.rpcUrl) });
+
+  const logs = await getLogsChunked(client, {
+    address: config.registryAddress,
+    event: creatorRegisteredEvent,
+    fromBlock
+  });
+
+  // Deduplicate by contractAddress; last registration wins
+  const collectionMap = new Map<string, {
+    creator: string;
+    contractAddress: string;
+    ensSubname: string;
+    standard: string;
+    isNftFactoryCreated: boolean;
+  }>();
+
+  for (const logEntry of logs) {
+    const addr = String(logEntry.args.contractAddress || "").toLowerCase();
+    const creator = String(logEntry.args.creator || "").toLowerCase();
+    if (!isAddress(addr) || !isAddress(creator)) continue;
+    collectionMap.set(addr, {
+      creator,
+      contractAddress: addr,
+      ensSubname: String(logEntry.args.ensSubname || "").trim(),
+      standard: String(logEntry.args.standard || "").trim().toUpperCase(),
+      isNftFactoryCreated: Boolean(logEntry.args.isNftFactoryCreated)
+    });
+  }
+
+  let totalScanned = 0;
+  let totalUpserted = 0;
+
+  for (const collection of collectionMap.values()) {
+    try {
+      const result = await backfillCollectionTokens(
+        {
+          contractAddress: collection.contractAddress,
+          ownerAddress: collection.creator,
+          standard: collection.standard as "ERC721" | "ERC1155" | undefined,
+          ensSubname: collection.ensSubname || null,
+          isFactoryCreated: collection.isNftFactoryCreated,
+          fromBlock: Number(fromBlock)
+        },
+        deps,
+        config
+      );
+      totalScanned += result.scanned;
+      totalUpserted += result.upserted;
+      log.info(
+        { contractAddress: collection.contractAddress, scanned: result.scanned, upserted: result.upserted },
+        "Backfilled collection"
+      );
+    } catch (err) {
+      log.warn({ err, contractAddress: collection.contractAddress }, "Skipped collection during registry backfill");
+    }
+  }
+
+  return { discovered: collectionMap.size, scanned: totalScanned, upserted: totalUpserted };
+}
+
+async function listHiddenListings(deps: IndexerDeps): Promise<{ listingIds: number[]; listingRecordIds: string[] }> {
   const actions = await deps.prisma.moderationAction.findMany({
     orderBy: { createdAt: "desc" },
     select: {
@@ -1516,20 +3097,35 @@ async function listHiddenListingIds(deps: IndexerDeps): Promise<number[]> {
     .filter(([, hidden]) => hidden)
     .map(([tokenId]) => tokenId);
 
-  if (hiddenTokenIds.length === 0) return [];
+  if (hiddenTokenIds.length === 0) {
+    return {
+      listingIds: [],
+      listingRecordIds: []
+    };
+  }
 
   const listings = await deps.prisma.listing.findMany({
     where: {
       tokenRefId: { in: hiddenTokenIds },
       active: true
     },
+    orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
     select: { listingId: true }
   });
 
-  return listings
-    .map((item: { listingId: string }) => Number.parseInt(item.listingId, 10))
-    .filter((id: number) => Number.isInteger(id) && id >= 0)
+  const listingRecordIds = listings
+    .map((item: { listingId: string }) => String(item.listingId || "").trim())
+    .filter(Boolean)
+    .sort((a: string, b: string) => a.localeCompare(b));
+  const listingIds = listingRecordIds
+    .map((listingId) => parseListingId(listingId))
+    .filter((id): id is number => Number.isInteger(id) && (id as number) >= 0)
     .sort((a: number, b: number) => a - b);
+
+  return {
+    listingIds,
+    listingRecordIds
+  };
 }
 
 async function handleRequest(
@@ -1552,18 +3148,34 @@ async function handleRequest(
   const path = url.pathname;
 
   if (req.method === "GET" && path === "/health") {
-    const mintTxHashColumnAvailable = await hasMintTxHashColumn(deps);
+    const [mintTxHashColumnAvailable, tokenPresentationColumnsAvailable, listingV2ColumnsAvailable, offerTableAvailable, tokenHoldingTableAvailable] =
+      await Promise.all([
+        hasMintTxHashColumn(deps),
+        hasTokenPresentationColumns(deps),
+        hasListingV2Columns(deps),
+        hasOfferTable(deps),
+        hasTokenHoldingTable(deps)
+      ]);
     sendJson(res, 200, {
       ok: true,
       service: "indexer-api",
       schema: {
-        mintTxHashColumnAvailable
+        mintTxHashColumnAvailable,
+        tokenPresentationColumnsAvailable,
+        listingV2ColumnsAvailable,
+        offerTableAvailable,
+        tokenHoldingTableAvailable
       },
       marketplace: {
         configured: Boolean(config.marketplaceAddress),
         syncInProgress: Boolean(listingSyncPromise),
         lastListingSyncAt: lastListingSyncAt > 0 ? new Date(lastListingSyncAt).toISOString() : null,
-        lastListingSyncCount
+        lastListingSyncCount,
+        v2Configured: Boolean(config.marketplaceV2Address),
+        v2SyncInProgress: Boolean(marketplaceV2SyncPromise),
+        lastMarketplaceV2SyncAt: lastMarketplaceV2SyncAt > 0 ? new Date(lastMarketplaceV2SyncAt).toISOString() : null,
+        lastMarketplaceV2ListingSyncCount,
+        lastOfferSyncCount
       }
     });
     return;
@@ -1575,14 +3187,17 @@ async function handleRequest(
       sendJson(res, 400, { error: "Invalid status query. Expected 'open' or 'resolved'" });
       return;
     }
+    const includeListingV2 = await hasListingV2Columns(deps);
     const reports = await deps.prisma.report.findMany({
       where: status ? { status } : undefined,
       include: {
         token: {
           include: {
             listings: {
-              take: 1,
-              orderBy: { createdAt: "desc" }
+              where: { active: true },
+              take: includeListingV2 ? 5 : 1,
+              orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+              select: tokenListingSelect(includeListingV2)
             }
           }
         }
@@ -1593,25 +3208,33 @@ async function handleRequest(
     sendJson(
       res,
       200,
-      reports.map((report: any) => ({
-        id: report.id,
-        listingId: parseListingId(report.token.listings[0]?.listingId),
-        reason: report.reason,
-        reporterAddress: report.reporterAddress,
-        status: report.status,
-        evidence: report.evidence,
-        createdAt: report.createdAt.toISOString(),
-        updatedAt: report.updatedAt.toISOString()
-      }))
+      reports.map((report: any) => {
+        const activeListing = pickPrimaryActiveListing(report.token.listings);
+        const listingRecordId = String(activeListing?.listingId || "").trim() || null;
+        return {
+          id: report.id,
+          listingId: parseListingId(listingRecordId || undefined),
+          listingRecordId,
+          marketplaceVersion: listingRecordId
+            ? String(activeListing?.marketplaceVersion || (listingRecordId.startsWith("v2:") ? "v2" : "v1")).toLowerCase()
+            : null,
+          reason: report.reason,
+          reporterAddress: report.reporterAddress,
+          status: report.status,
+          evidence: report.evidence,
+          createdAt: report.createdAt.toISOString(),
+          updatedAt: report.updatedAt.toISOString()
+        };
+      })
     );
     return;
   }
 
   if (req.method === "POST" && path === "/api/moderation/reports") {
     const payload = await readJsonBody<CreateReportPayload>(req);
+    const listingRecordId = resolveListingRecordId(payload);
     if (
-      !Number.isInteger(payload.listingId) ||
-      payload.listingId < 0 ||
+      !listingRecordId ||
       !isAddress(payload.collectionAddress) ||
       !isAddress(payload.sellerAddress) ||
       !isAddress(payload.reporterAddress) ||
@@ -1650,9 +3273,17 @@ async function handleRequest(
 
     const payload = await readJsonBody<SyncMintedTokenPayload>(req);
     const token = await upsertMintedToken(payload, deps, config);
+    await upsertTokenPresentationRecord({
+      contractAddress: payload.contractAddress,
+      tokenId: payload.tokenId,
+      draftName: payload.draftName,
+      draftDescription: payload.draftDescription,
+      mintedAmountRaw: payload.mintedAmountRaw
+    });
+    const presentationIndex = await readTokenPresentationIndex();
     sendJson(res, 200, {
       ok: true,
-      token: toTokenApiShape(token)
+      token: toTokenApiShape(token, config, presentationIndex)
     });
     return;
   }
@@ -1703,6 +3334,7 @@ async function handleRequest(
   }
 
   if (req.method === "GET" && path === "/api/moderation/actions") {
+    const includeListingV2 = await hasListingV2Columns(deps);
     const actions = await deps.prisma.moderationAction.findMany({
       orderBy: { createdAt: "desc" },
       take: 200,
@@ -1710,8 +3342,10 @@ async function handleRequest(
         token: {
           include: {
             listings: {
-              take: 1,
-              orderBy: { createdAt: "desc" }
+              where: { active: true },
+              take: includeListingV2 ? 5 : 1,
+              orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+              select: tokenListingSelect(includeListingV2)
             }
           }
         }
@@ -1721,22 +3355,29 @@ async function handleRequest(
     sendJson(
       res,
       200,
-      actions.map((action: any) => ({
-        id: action.id,
-        action: action.action,
-        actor: action.actor,
-        notes: action.notes,
-        reportId: action.reportId,
-        listingId: parseListingId(action.token.listings[0]?.listingId),
-        createdAt: action.createdAt.toISOString()
-      }))
+      actions.map((action: any) => {
+        const activeListing = pickPrimaryActiveListing(action.token.listings);
+        const listingRecordId = String(activeListing?.listingId || "").trim() || null;
+        return {
+          id: action.id,
+          action: action.action,
+          actor: action.actor,
+          notes: action.notes,
+          reportId: action.reportId,
+          listingId: parseListingId(listingRecordId || undefined),
+          listingRecordId,
+          marketplaceVersion: listingRecordId
+            ? String(activeListing?.marketplaceVersion || (listingRecordId.startsWith("v2:") ? "v2" : "v1")).toLowerCase()
+            : null,
+          createdAt: action.createdAt.toISOString()
+        };
+      })
     );
     return;
   }
 
   if (req.method === "GET" && path === "/api/moderation/hidden-listings") {
-    const listingIds = await listHiddenListingIds(deps);
-    sendJson(res, 200, { listingIds });
+    sendJson(res, 200, await listHiddenListings(deps));
     return;
   }
 
@@ -1745,7 +3386,7 @@ async function handleRequest(
       sendJson(res, 429, { error: "Too many requests" });
       return;
     }
-    const listingId = path.split("/")[4];
+    const listingId = String(decodeURIComponent(path.split("/")[4] || "")).trim();
     const payload = await readJsonBody<SetListingVisibilityPayload>(req);
     if (typeof payload.hidden !== "boolean" || !payload.actor?.trim()) {
       sendJson(res, 400, { error: "Invalid visibility payload" });
@@ -2005,6 +3646,23 @@ async function handleRequest(
     return;
   }
 
+  if (req.method === "POST" && path === "/api/admin/collections/backfill-registry") {
+    if (deps.isRateLimitedImpl(deps.getClientIpImpl(req, config.trustProxy))) {
+      sendJson(res, 429, { error: "Too many requests" });
+      return;
+    }
+    const auth = await assertAdminRequest(req, config);
+    if (!auth.ok) {
+      sendJson(res, 401, { error: auth.error });
+      return;
+    }
+    const body = await readJsonBody<{ fromBlock?: number }>(req);
+    const fromBlock = body.fromBlock != null ? BigInt(body.fromBlock) : 0n;
+    const result = await backfillRegistryCollections(deps, config, fromBlock);
+    sendJson(res, 200, { ok: true, ...result });
+    return;
+  }
+
   if (req.method === "POST" && path === "/api/admin/tokens/backfill-mint-tx") {
     if (deps.isRateLimitedImpl(deps.getClientIpImpl(req, config.trustProxy))) {
       sendJson(res, 429, { error: "Too many requests" });
@@ -2152,16 +3810,282 @@ async function handleRequest(
     return;
   }
 
+  if (req.method === "POST" && (path === "/api/admin/offers/sync" || path === "/api/admin/marketplace-v2/sync")) {
+    if (deps.isRateLimitedImpl(deps.getClientIpImpl(req, config.trustProxy))) {
+      sendJson(res, 429, { error: "Too many requests" });
+      return;
+    }
+    const auth = await assertAdminRequest(req, config, undefined, { includeDynamicModerators: false });
+    if (!auth.ok) {
+      sendJson(res, 401, { error: auth.error });
+      return;
+    }
+    if (!config.marketplaceV2Address) {
+      sendJson(res, 409, { error: "Marketplace V2 sync is not configured" });
+      return;
+    }
+    const syncOffersOnly = path === "/api/admin/offers/sync";
+    await syncMarketplaceV2IfStale(deps, config, {
+      force: true,
+      includeListings: !syncOffersOnly,
+      includeOffers: true
+    });
+    sendJson(res, 200, {
+      ok: true,
+      configured: true,
+      syncInProgress: Boolean(marketplaceV2SyncPromise),
+      lastMarketplaceV2SyncAt: lastMarketplaceV2SyncAt > 0 ? new Date(lastMarketplaceV2SyncAt).toISOString() : null,
+      lastMarketplaceV2ListingSyncCount,
+      lastOfferSyncCount
+    });
+    return;
+  }
+
+  if (req.method === "GET" && path === "/api/offers") {
+    await syncMarketplaceV2IfStale(deps, config, { includeListings: false, includeOffers: true });
+    const cursor = Math.max(0, Number.parseInt(String(url.searchParams.get("cursor") || "0"), 10) || 0);
+    const limit = Math.min(100, Math.max(1, Number.parseInt(String(url.searchParams.get("limit") || "50"), 10) || 50));
+    const buyerAddress = String(url.searchParams.get("buyer") || "").trim().toLowerCase();
+    const collectionAddress = String(url.searchParams.get("collectionAddress") || "").trim().toLowerCase();
+    const tokenId = String(url.searchParams.get("tokenId") || "").trim();
+    const status = String(url.searchParams.get("status") || "").trim();
+    const active = String(url.searchParams.get("active") || "").trim().toLowerCase();
+
+    if (buyerAddress && !isAddress(buyerAddress)) {
+      sendJson(res, 400, { error: "Valid buyer query param is required" });
+      return;
+    }
+    if (collectionAddress && !isAddress(collectionAddress)) {
+      sendJson(res, 400, { error: "Valid collectionAddress query param is required" });
+      return;
+    }
+    if (active && active !== "true" && active !== "false") {
+      sendJson(res, 400, { error: "Active query must be true or false" });
+      return;
+    }
+
+    const where: Record<string, unknown> = {};
+    if (buyerAddress) where.buyerAddress = buyerAddress;
+    if (collectionAddress) where.collectionAddress = collectionAddress;
+    if (tokenId) where.tokenId = tokenId;
+    if (status) where.status = status;
+    if (active) {
+      where.active = active === "true";
+    } else if (!status) {
+      where.active = true;
+    }
+
+    const rows = await readOfferRows(deps, {
+      where,
+      skip: cursor,
+      take: limit
+    });
+
+    sendJson(res, 200, {
+      cursor,
+      nextCursor: cursor + rows.length,
+      canLoadMore: rows.length === limit,
+      items: rows.map((item: any) => toOfferApiShape(item))
+    });
+    return;
+  }
+
+  if (req.method === "GET" && /^\/api\/users\/[^/]+\/offers-made$/.test(path)) {
+    await syncMarketplaceV2IfStale(deps, config, { includeListings: false, includeOffers: true });
+    const address = String(decodeURIComponent(path.split("/")[3] || "")).trim().toLowerCase();
+    if (!address || !isAddress(address)) {
+      sendJson(res, 400, { error: "Valid user address is required" });
+      return;
+    }
+
+    const cursor = Math.max(0, Number.parseInt(String(url.searchParams.get("cursor") || "0"), 10) || 0);
+    const limit = Math.min(100, Math.max(1, Number.parseInt(String(url.searchParams.get("limit") || "50"), 10) || 50));
+    const rows = await readOfferRows(deps, {
+      where: {
+        buyerAddress: address,
+        active: true
+      },
+      skip: cursor,
+      take: limit
+    });
+
+    sendJson(res, 200, {
+      ownerAddress: address,
+      cursor,
+      nextCursor: cursor + rows.length,
+      canLoadMore: rows.length === limit,
+      items: rows.map((item: any) => toOfferApiShape(item))
+    });
+    return;
+  }
+
+  if (req.method === "GET" && /^\/api\/users\/[^/]+\/holdings$/.test(path)) {
+    await Promise.all([
+      syncMarketplaceListingsIfStale(deps, config),
+      syncMarketplaceV2IfStale(deps, config, { includeListings: true, includeOffers: true })
+    ]);
+    const address = String(decodeURIComponent(path.split("/")[3] || "")).trim().toLowerCase();
+    if (!address || !isAddress(address)) {
+      sendJson(res, 400, { error: "Valid user address is required" });
+      return;
+    }
+
+    const cursor = Math.max(0, Number.parseInt(String(url.searchParams.get("cursor") || "0"), 10) || 0);
+    const limit = Math.min(100, Math.max(1, Number.parseInt(String(url.searchParams.get("limit") || "50"), 10) || 50));
+    const standardParam = String(url.searchParams.get("standard") || "").trim().toUpperCase();
+    const standardFilter = standardParam === "ERC721" || standardParam === "ERC1155" ? standardParam : null;
+    const [includeMintTxHash, includeTokenPresentation, includeListingV2, includeTokenHoldings, ownedTokenWhere] = await Promise.all([
+      hasMintTxHashColumn(deps),
+      hasTokenPresentationColumns(deps),
+      hasListingV2Columns(deps),
+      hasTokenHoldingTable(deps),
+      buildOwnedTokenWhere(deps, address)
+    ]);
+    const presentationIndex = await readTokenPresentationIndex();
+
+    const where = standardFilter
+      ? {
+          AND: [
+            ownedTokenWhere,
+            {
+              collection: {
+                is: {
+                  standard: standardFilter
+                }
+              }
+            }
+          ]
+        }
+      : ownedTokenWhere;
+
+    const items = await (deps.prisma.token as any).findMany({
+      where,
+      skip: cursor,
+      take: limit,
+      orderBy: [{ mintedAt: "desc" }, { id: "desc" }],
+      select: {
+        id: true,
+        tokenId: true,
+        creatorAddress: true,
+        ownerAddress: true,
+        ...(includeMintTxHash ? { mintTxHash: true } : {}),
+        ...tokenPresentationSelect(includeTokenPresentation),
+        metadataCid: true,
+        mediaCid: true,
+        immutable: true,
+        mintedAt: true,
+        ...(includeTokenHoldings
+          ? {
+              holdings: {
+                where: {
+                  ownerAddress: address
+                },
+                select: {
+                  ownerAddress: true,
+                  quantityRaw: true
+                }
+              }
+            }
+          : {}),
+        collection: {
+          select: {
+            chainId: true,
+            contractAddress: true,
+            ownerAddress: true,
+            ensSubname: true,
+            standard: true,
+            isFactoryCreated: true,
+            isUpgradeable: true,
+            finalizedAt: true,
+            createdAt: true,
+            updatedAt: true
+          }
+        },
+        listings: {
+          where: { active: true, sellerAddress: address },
+          orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+          take: includeListingV2 ? 50 : 1,
+          select: tokenListingSelect(includeListingV2)
+        }
+      }
+    });
+
+    const responseItems = items.map((item: any) => toOwnerHoldingApiShape(item, address, config, presentationIndex));
+    await attachOfferSummaries(responseItems as Array<any>, deps);
+
+    sendJson(res, 200, {
+      ownerAddress: address,
+      cursor,
+      nextCursor: cursor + items.length,
+      canLoadMore: items.length === limit,
+      items: responseItems
+    });
+    return;
+  }
+
+  if (req.method === "GET" && /^\/api\/users\/[^/]+\/offers-received$/.test(path)) {
+    await syncMarketplaceV2IfStale(deps, config, { includeListings: false, includeOffers: true });
+    const address = String(decodeURIComponent(path.split("/")[3] || "")).trim().toLowerCase();
+    if (!address || !isAddress(address)) {
+      sendJson(res, 400, { error: "Valid user address is required" });
+      return;
+    }
+
+    const cursor = Math.max(0, Number.parseInt(String(url.searchParams.get("cursor") || "0"), 10) || 0);
+    const limit = Math.min(100, Math.max(1, Number.parseInt(String(url.searchParams.get("limit") || "50"), 10) || 50));
+    const ownedTokenWhere = await buildOwnedTokenWhere(deps, address);
+    const rows = await readOfferRows(deps, {
+      where: {
+        active: true,
+        token: {
+          is: ownedTokenWhere
+        }
+      },
+      skip: cursor,
+      take: limit
+    });
+
+    sendJson(res, 200, {
+      ownerAddress: address,
+      cursor,
+      nextCursor: cursor + rows.length,
+      canLoadMore: rows.length === limit,
+      items: rows.map((item: any) => toOfferApiShape(item))
+    });
+    return;
+  }
+
   if (req.method === "GET" && /^\/api\/owners\/[^/]+\/summary$/.test(path)) {
     const owner = String(decodeURIComponent(path.split("/")[3] || "")).trim().toLowerCase();
     if (!owner || !isAddress(owner)) {
       sendJson(res, 400, { error: "Valid owner address is required" });
       return;
     }
-    await syncMarketplaceListingsIfStale(deps, config);
-    const includeMintTxHash = await hasMintTxHashColumn(deps);
+    await Promise.all([
+      syncMarketplaceListingsIfStale(deps, config),
+      syncMarketplaceV2IfStale(deps, config, { includeListings: true, includeOffers: true })
+    ]);
+    const [includeMintTxHash, includeTokenPresentation, includeListingV2, includeTokenHoldings, ownedTokenWhere] = await Promise.all([
+      hasMintTxHashColumn(deps),
+      hasTokenPresentationColumns(deps),
+      hasListingV2Columns(deps),
+      hasTokenHoldingTable(deps),
+      buildOwnedTokenWhere(deps, owner)
+    ]);
+    const presentationIndex = await readTokenPresentationIndex();
 
-    const [linkedProfiles, collections, ownedTokenCount, createdTokenCount, activeListings, recentOwnedTokens] = await Promise.all([
+    const [
+      linkedProfiles,
+      collections,
+      ownedTokenCount,
+      createdTokenCount,
+      activeListings,
+      offersMade,
+      offersReceived,
+      recentOffersMade,
+      recentOffersReceived,
+      recentOwnedTokens
+    ] = await Promise.all([
       readProfileRecords().then((records) => records.filter((item) => item.ownerAddress === owner).map(toProfileResponse)),
       deps.prisma.collection.findMany({
         where: { ownerAddress: owner },
@@ -2185,20 +4109,65 @@ async function handleRequest(
           }
         }
       }),
-      deps.prisma.token.count({ where: { ownerAddress: owner } }),
+      deps.prisma.token.count({ where: ownedTokenWhere }),
       deps.prisma.token.count({ where: { creatorAddress: owner } }),
-      deps.prisma.listing.count({ where: { sellerAddress: owner, active: true } }),
+      deps.prisma.listing.count({ where: { sellerAddress: owner, ...getPublicActiveListingWhere(includeListingV2) } }),
+      countOffers(deps, { buyerAddress: owner, active: true }),
+      countOffers(deps, {
+        active: true,
+        token: {
+          is: ownedTokenWhere
+        }
+      }),
+      readOfferRows(deps, {
+        where: {
+          buyerAddress: owner,
+          active: true
+        },
+        take: 5
+      }),
+      readOfferRows(deps, {
+        where: {
+          active: true,
+          token: {
+            is: ownedTokenWhere
+          }
+        },
+        take: 5
+      }),
       (deps.prisma.token as any).findMany({
-        where: { ownerAddress: owner },
+        where: ownedTokenWhere,
         take: 5,
         orderBy: [{ mintedAt: "desc" }, { id: "desc" }],
         select: {
           id: true,
           tokenId: true,
-          ...(includeMintTxHash ? { mintTxHash: true } : {}),
-          metadataCid: true,
-          mediaCid: true,
-          mintedAt: true,
+          creatorAddress: true,
+          ownerAddress: true,
+        ...(includeMintTxHash ? { mintTxHash: true } : {}),
+        ...tokenPresentationSelect(includeTokenPresentation),
+        metadataCid: true,
+        mediaCid: true,
+        mintedAt: true,
+        ...(includeTokenHoldings
+          ? {
+              holdings: {
+                where: {
+                  ownerAddress: owner
+                },
+                select: {
+                  ownerAddress: true,
+                  quantityRaw: true
+                }
+              }
+            }
+          : {}),
+        listings: {
+          where: { active: true, sellerAddress: owner },
+          orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+            take: includeListingV2 ? 50 : 1,
+            select: tokenListingSelect(includeListingV2)
+          },
           collection: {
             select: {
               contractAddress: true,
@@ -2230,6 +4199,7 @@ async function handleRequest(
             creatorAddress: true,
             ownerAddress: true,
             ...(includeMintTxHash ? { mintTxHash: true } : {}),
+            ...tokenPresentationSelect(includeTokenPresentation),
             metadataCid: true,
             mediaCid: true,
             immutable: true,
@@ -2237,17 +4207,9 @@ async function handleRequest(
             collectionId: true,
             listings: {
               where: { active: true },
-              orderBy: { createdAt: "desc" },
-              take: 1,
-              select: {
-                listingId: true,
-                sellerAddress: true,
-                paymentToken: true,
-                priceRaw: true,
-                active: true,
-                createdAt: true,
-                updatedAt: true
-              }
+              orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+              take: includeListingV2 ? 5 : 1,
+              select: tokenListingSelect(includeListingV2)
             }
           }
         })
@@ -2303,7 +4265,9 @@ async function handleRequest(
         if (!isAddress(contractAddress)) continue;
 
         const existing = dbFactoryByAddress.get(contractAddress);
-        const existingTokens = existing ? (tokensByCollectionId.get(existing.id) || []).map(toTokenApiShape) : [];
+        const existingTokens = existing
+          ? (tokensByCollectionId.get(existing.id) || []).map((token: any) => toTokenApiShape(token, config, presentationIndex))
+          : [];
         if (existing && existingTokens.length > 0) {
           hydratedFactoryCollections.push({
             chainId: existing.chainId,
@@ -2363,20 +4327,25 @@ async function handleRequest(
                   metadataCid = "";
                 }
 
-                tokens.push({
+                tokens.push(withTokenPresentation({
                   id: `chain:${contractAddress}:${tokenId}`,
                   tokenId,
                   creatorAddress: owner,
                   ownerAddress: owner,
                   mintTxHash: log.transactionHash,
+                  draftName: null,
+                  draftDescription: null,
+                  mintedAmountRaw: null,
                   metadataCid,
                   metadataUrl: buildGatewayUrl(metadataCid),
                   mediaCid: null,
                   mediaUrl: null,
                   immutable: true,
                   mintedAt: createdAt,
+                  bestOffer: null,
+                  offerCount: 0,
                   activeListing: null
-                });
+                }, contractAddress, presentationIndex));
               } catch {
                 // ignore unreadable token
               }
@@ -2448,20 +4417,25 @@ async function handleRequest(
                   metadataCid = "";
                 }
 
-                tokens.push({
+                tokens.push(withTokenPresentation({
                   id: `chain:${contractAddress}:${tokenId}`,
                   tokenId,
                   creatorAddress: owner,
                   ownerAddress: owner,
                   mintTxHash: mintTxByTokenId.get(tokenId) || null,
+                  draftName: null,
+                  draftDescription: null,
+                  mintedAmountRaw: balance.toString(),
                   metadataCid,
                   metadataUrl: buildGatewayUrl(metadataCid),
                   mediaCid: null,
                   mediaUrl: null,
                   immutable: true,
                   mintedAt: createdAt,
+                  bestOffer: null,
+                  offerCount: 0,
                   activeListing: null
-                });
+                }, contractAddress, presentationIndex));
               } catch {
                 // ignore unreadable token
               }
@@ -2507,8 +4481,14 @@ async function handleRequest(
               createdAt: item.createdAt,
               updatedAt: item.updatedAt,
               tokenCount: item._count?.tokens || 0,
-              tokens: (tokensByCollectionId.get(item.id) || []).map(toTokenApiShape)
+              tokens: (tokensByCollectionId.get(item.id) || []).map((token: any) => toTokenApiShape(token, config, presentationIndex))
             }));
+
+    await Promise.all(
+      mergedFactoryCollections.map((item) => attachOfferSummaries(item.tokens as Array<any>, deps))
+    );
+    const recentOwnedMints = recentOwnedTokens.map((item: any) => toOwnerHoldingApiShape(item, owner, config, presentationIndex));
+    await attachOfferSummaries(recentOwnedMints as Array<any>, deps);
 
     sendJson(res, 200, {
       ownerAddress: owner,
@@ -2520,7 +4500,9 @@ async function handleRequest(
           mergedFactoryCollections.reduce((sum, item) => sum + item.tokens.length, 0)
         ),
         createdTokens: createdTokenCount,
-        activeListings
+        activeListings,
+        offersMade,
+        offersReceived
       },
       profiles: linkedProfiles,
       collections: collections.map((item: any) => ({
@@ -2537,22 +4519,9 @@ async function handleRequest(
         tokenCount: item._count?.tokens || 0
       })),
       factoryCollections: mergedFactoryCollections,
-      recentOwnedMints: recentOwnedTokens.map((item: any) => ({
-        id: item.id,
-        tokenId: item.tokenId,
-        mintTxHash: includeMintTxHash ? item.mintTxHash || null : null,
-        metadataCid: item.metadataCid,
-        metadataUrl: buildGatewayUrl(item.metadataCid),
-        mediaCid: item.mediaCid,
-        mediaUrl: buildGatewayUrl(item.mediaCid),
-        mintedAt: item.mintedAt,
-        collection: {
-          contractAddress: item.collection.contractAddress,
-          ensSubname: item.collection.ensSubname,
-          standard: item.collection.standard,
-          isFactoryCreated: item.collection.isFactoryCreated
-        }
-      }))
+      recentOwnedMints,
+      recentOffersMade: recentOffersMade.map((item: any) => toOfferApiShape(item)),
+      recentOffersReceived: recentOffersReceived.map((item: any) => toOfferApiShape(item))
     });
     return;
   }
@@ -2844,9 +4813,18 @@ async function handleRequest(
     const cursor = Math.max(0, Number.parseInt(String(url.searchParams.get("cursor") || "0"), 10) || 0);
     const limit = Math.min(100, Math.max(1, Number.parseInt(String(url.searchParams.get("limit") || "50"), 10) || 50));
     const seller = String(url.searchParams.get("seller") || "").trim().toLowerCase();
-    const includeMintTxHash = await hasMintTxHashColumn(deps);
+    const includeAllMarkets = String(url.searchParams.get("includeAllMarkets") || "").trim().toLowerCase() === "true";
+    const [includeMintTxHash, includeTokenPresentation, includeListingV2] = await Promise.all([
+      hasMintTxHashColumn(deps),
+      hasTokenPresentationColumns(deps),
+      hasListingV2Columns(deps)
+    ]);
+    if (includeAllMarkets) {
+      await syncMarketplaceV2IfStale(deps, config, { includeListings: true, includeOffers: false });
+    }
+    const presentationIndex = await readTokenPresentationIndex();
 
-    const where: Record<string, unknown> = { active: true };
+    const where: Record<string, unknown> = includeAllMarkets ? { active: true } : getPublicActiveListingWhere(includeListingV2);
     if (seller && isAddress(seller)) {
       where.sellerAddress = seller;
     }
@@ -2864,6 +4842,7 @@ async function handleRequest(
         sellerAddress: true,
         collectionAddress: true,
         tokenId: true,
+        ...listingV2Select(includeListingV2),
         paymentToken: true,
         priceRaw: true,
         active: true,
@@ -2879,6 +4858,7 @@ async function handleRequest(
             immutable: true,
             mintedAt: true,
             ...(includeMintTxHash ? { mintTxHash: true } : {}),
+            ...tokenPresentationSelect(includeTokenPresentation),
             collection: {
               select: {
                 chainId: true,
@@ -2898,11 +4878,19 @@ async function handleRequest(
       }
     });
 
+    const responseItems = rows.map((item: any) => toListingApiShape(item, config, presentationIndex));
+    await attachOfferSummaries(
+      responseItems
+        .map((item: any) => item.token)
+        .filter((item: any) => Boolean(item)),
+      deps
+    );
+
     sendJson(res, 200, {
       cursor,
       nextCursor: cursor + rows.length,
       canLoadMore: rows.length === limit,
-      items: rows.map((item: any) => toListingApiShape(item))
+      items: responseItems
     });
     return;
   }
@@ -2912,8 +4900,16 @@ async function handleRequest(
     const cursorRaw = Number.parseInt(String(url.searchParams.get("cursor") || "0"), 10);
     const limit = Number.isInteger(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 100) : 50;
     const cursor = Number.isInteger(cursorRaw) && cursorRaw >= 0 ? cursorRaw : 0;
-    await syncMarketplaceListingsIfStale(deps, config);
-    const includeMintTxHash = await hasMintTxHashColumn(deps);
+    await Promise.all([
+      syncMarketplaceListingsIfStale(deps, config),
+      syncMarketplaceV2IfStale(deps, config, { includeListings: true, includeOffers: true })
+    ]);
+    const [includeMintTxHash, includeTokenPresentation, includeListingV2] = await Promise.all([
+      hasMintTxHashColumn(deps),
+      hasTokenPresentationColumns(deps),
+      hasListingV2Columns(deps)
+    ]);
+    const presentationIndex = await readTokenPresentationIndex();
 
     const items = await (deps.prisma.token as any).findMany({
       take: limit,
@@ -2925,6 +4921,7 @@ async function handleRequest(
         creatorAddress: true,
         ownerAddress: true,
         ...(includeMintTxHash ? { mintTxHash: true } : {}),
+        ...tokenPresentationSelect(includeTokenPresentation),
         metadataCid: true,
         mediaCid: true,
         immutable: true,
@@ -2945,58 +4942,46 @@ async function handleRequest(
         },
         listings: {
           where: { active: true },
-          orderBy: { createdAt: "desc" },
-          take: 1,
-          select: {
-            listingId: true,
-            sellerAddress: true,
-            paymentToken: true,
-            priceRaw: true,
-            active: true,
-            createdAt: true,
-            updatedAt: true
-          }
+          orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+          take: includeListingV2 ? 5 : 1,
+          select: tokenListingSelect(includeListingV2)
         }
       }
     });
 
-    const responseItems = items.map((item: any) => ({
-      id: item.id,
-      tokenId: item.tokenId,
-      creatorAddress: item.creatorAddress,
-      ownerAddress: item.ownerAddress,
-      mintTxHash: includeMintTxHash ? item.mintTxHash || null : null,
-      metadataCid: item.metadataCid,
-      metadataUrl: buildGatewayUrl(item.metadataCid),
-      mediaCid: item.mediaCid,
-      mediaUrl: buildGatewayUrl(item.mediaCid),
-      immutable: item.immutable,
-      mintedAt: item.mintedAt,
-      collection: {
-        chainId: item.collection.chainId,
-        contractAddress: item.collection.contractAddress,
-        ownerAddress: item.collection.ownerAddress,
-        ensSubname: item.collection.ensSubname,
-        standard: item.collection.standard,
-        isFactoryCreated: item.collection.isFactoryCreated,
-        isUpgradeable: item.collection.isUpgradeable,
-        finalizedAt: item.collection.finalizedAt,
-        createdAt: item.collection.createdAt,
-        updatedAt: item.collection.updatedAt
-      },
-      activeListing: item.listings?.[0]
-        ? {
-            listingId: item.listings[0].listingId,
-            sellerAddress: item.listings[0].sellerAddress,
-            paymentToken: item.listings[0].paymentToken,
-            priceRaw: item.listings[0].priceRaw,
-            active: item.listings[0].active,
-            createdAt: item.listings[0].createdAt,
-            updatedAt: item.listings[0].updatedAt
-          }
-        : null
-    }));
+    const responseItems = items.map((item: any) =>
+      withTokenPresentation({
+        id: item.id,
+        tokenId: item.tokenId,
+        creatorAddress: item.creatorAddress,
+        ownerAddress: item.ownerAddress,
+        mintTxHash: includeMintTxHash ? item.mintTxHash || null : null,
+        draftName: item.draftName || null,
+        draftDescription: item.draftDescription || null,
+        mintedAmountRaw: item.mintedAmountRaw || null,
+        metadataCid: item.metadataCid,
+        metadataUrl: buildGatewayUrl(item.metadataCid),
+        mediaCid: item.mediaCid,
+        mediaUrl: buildGatewayUrl(item.mediaCid),
+        immutable: item.immutable,
+        mintedAt: item.mintedAt,
+        collection: {
+          chainId: item.collection.chainId,
+          contractAddress: item.collection.contractAddress,
+          ownerAddress: item.collection.ownerAddress,
+          ensSubname: item.collection.ensSubname,
+          standard: item.collection.standard,
+          isFactoryCreated: item.collection.isFactoryCreated,
+          isUpgradeable: item.collection.isUpgradeable,
+          finalizedAt: item.collection.finalizedAt,
+          createdAt: item.collection.createdAt,
+          updatedAt: item.collection.updatedAt
+        },
+        activeListing: toActiveListingApiShape(pickPrimaryActiveListing(item.listings), config)
+      }, item.collection.contractAddress, presentationIndex)
+    );
 
+    await attachOfferSummaries(responseItems, deps);
     await attachMintTxHashes(responseItems, config, includeMintTxHash ? deps : undefined);
 
     sendJson(res, 200, {
@@ -3010,13 +4995,14 @@ async function handleRequest(
 
   if (req.method === "GET" && path === "/api/overview") {
     await syncMarketplaceListingsIfStale(deps, config);
-    const [collectionCount, tokenCount, activeListingCount, openReportCount, hiddenListingIds, profiles, paymentTokens, moderators] =
+    const includeListingV2 = await hasListingV2Columns(deps);
+    const [collectionCount, tokenCount, activeListingCount, openReportCount, hiddenListingRefs, profiles, paymentTokens, moderators] =
       await Promise.all([
         deps.prisma.collection.count(),
         deps.prisma.token.count(),
-        deps.prisma.listing.count({ where: { active: true } }),
+        deps.prisma.listing.count({ where: getPublicActiveListingWhere(includeListingV2) }),
         deps.prisma.report.count({ where: { status: "open" } }),
-        listHiddenListingIds(deps),
+        listHiddenListings(deps),
         readProfileRecords(),
         readPaymentTokenRecords(),
         readEffectiveModeratorRecords(config)
@@ -3029,7 +5015,7 @@ async function handleRequest(
         tokens: tokenCount,
         activeListings: activeListingCount,
         openReports: openReportCount,
-        hiddenListings: hiddenListingIds.length,
+        hiddenListings: hiddenListingRefs.listingRecordIds.length,
         linkedProfiles: profiles.length,
         trackedPaymentTokens: paymentTokens.length,
         moderators: moderators.length
@@ -3046,6 +5032,7 @@ async function handleRequest(
       return;
     }
 
+    const includeListingV2 = await hasListingV2Columns(deps);
     const collections = await deps.prisma.collection.findMany({
       where: {
         ownerAddress: owner
@@ -3074,7 +5061,7 @@ async function handleRequest(
     const activeListings = contractAddresses.length
       ? await deps.prisma.listing.findMany({
           where: {
-            active: true,
+            ...getPublicActiveListingWhere(includeListingV2),
             collectionAddress: { in: contractAddresses }
           },
           select: { collectionAddress: true }
@@ -3112,7 +5099,13 @@ async function handleRequest(
       sendJson(res, 400, { error: "Valid contract address is required" });
       return;
     }
-    const includeMintTxHash = await hasMintTxHashColumn(deps);
+    await syncMarketplaceV2IfStale(deps, config, { includeListings: true, includeOffers: true });
+    const [includeMintTxHash, includeTokenPresentation, includeListingV2] = await Promise.all([
+      hasMintTxHashColumn(deps),
+      hasTokenPresentationColumns(deps),
+      hasListingV2Columns(deps)
+    ]);
+    const presentationIndex = await readTokenPresentationIndex();
 
     const tokens = await (deps.prisma.token as any).findMany({
       where: {
@@ -3127,6 +5120,7 @@ async function handleRequest(
         creatorAddress: true,
         ownerAddress: true,
         ...(includeMintTxHash ? { mintTxHash: true } : {}),
+        ...tokenPresentationSelect(includeTokenPresentation),
         metadataCid: true,
         mediaCid: true,
         immutable: true,
@@ -3147,39 +5141,34 @@ async function handleRequest(
         },
         listings: {
           where: { active: true },
-          orderBy: { createdAt: "desc" },
-          take: 1,
-          select: {
-            listingId: true,
-            sellerAddress: true,
-            paymentToken: true,
-            priceRaw: true,
-            active: true,
-            createdAt: true,
-            updatedAt: true
-          }
+          orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+          take: includeListingV2 ? 5 : 1,
+          select: tokenListingSelect(includeListingV2)
         }
       }
     });
 
+    const responseTokens = tokens.map((item: any) => ({
+      ...toTokenApiShape(item, config, presentationIndex),
+      collection: {
+        chainId: item.collection.chainId,
+        contractAddress: item.collection.contractAddress,
+        ownerAddress: item.collection.ownerAddress,
+        ensSubname: item.collection.ensSubname,
+        standard: item.collection.standard,
+        isFactoryCreated: item.collection.isFactoryCreated,
+        isUpgradeable: item.collection.isUpgradeable,
+        finalizedAt: item.collection.finalizedAt,
+        createdAt: item.collection.createdAt,
+        updatedAt: item.collection.updatedAt
+      }
+    }));
+    await attachOfferSummaries(responseTokens as Array<any>, deps);
+
     sendJson(res, 200, {
       contractAddress,
       count: tokens.length,
-      tokens: tokens.map((item: any) => ({
-        ...toTokenApiShape(item),
-        collection: {
-          chainId: item.collection.chainId,
-          contractAddress: item.collection.contractAddress,
-          ownerAddress: item.collection.ownerAddress,
-          ensSubname: item.collection.ensSubname,
-          standard: item.collection.standard,
-          isFactoryCreated: item.collection.isFactoryCreated,
-          isUpgradeable: item.collection.isUpgradeable,
-          finalizedAt: item.collection.finalizedAt,
-          createdAt: item.collection.createdAt,
-          updatedAt: item.collection.updatedAt
-        }
-      }))
+      tokens: responseTokens
     });
     return;
   }
@@ -3231,6 +5220,10 @@ export async function main() {
         MARKETPLACE_ADDRESS && isAddress(MARKETPLACE_ADDRESS.toLowerCase())
           ? (MARKETPLACE_ADDRESS.toLowerCase() as `0x${string}`)
           : null,
+      marketplaceV2Address:
+        MARKETPLACE_V2_ADDRESS && isAddress(MARKETPLACE_V2_ADDRESS.toLowerCase())
+          ? (MARKETPLACE_V2_ADDRESS.toLowerCase() as `0x${string}`)
+          : null,
       registryAddress:
         REGISTRY_ADDRESS && isAddress(REGISTRY_ADDRESS.toLowerCase())
           ? (REGISTRY_ADDRESS.toLowerCase() as `0x${string}`)
@@ -3242,6 +5235,7 @@ export async function main() {
     }
   );
   const server = createServer(handler);
+  server.requestTimeout = 0; // disable for long-running admin backfills
 
   server.listen(PORT, HOST, () => {
     log.info({ host: HOST, port: PORT }, "Indexer API listening");

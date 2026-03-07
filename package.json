@@ -19,6 +19,7 @@
     "test:contracts": "npm --workspace packages/contracts run test",
     "docs:contracts-deps": "bash scripts/generate-contract-dependency-tree.sh",
     "check:ensv2": "node scripts/check-ensv2-readiness.mjs",
+    "check:release": "bash scripts/release-readiness.sh",
     "typecheck:all": "npm run typecheck:web && npm run typecheck:indexer",
     "test:all": "npm run test:web && npm run test:indexer && npm run test:contracts",
     "check:all": "npm run typecheck:all && npm run test:all"

@@ -8,6 +8,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
+    "admin:backfill-registry": "node --import tsx ./scripts/run-backfill.ts",
+    "admin:backfill-token-presentation": "tsx scripts/backfill-token-presentation.ts",
     "admin:backfill-subname": "tsx scripts/backfill-subnames.ts",
     "admin:backfill-subnames-file": "tsx scripts/backfill-subnames.ts --file",
     "test": "vitest run",

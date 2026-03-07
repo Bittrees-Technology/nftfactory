@@ -123,6 +123,9 @@ type LocalMintFeedItem = {
   creatorAddress: string;
   ownerAddress: string;
   mintTxHash?: string | null;
+  draftName?: string | null;
+  draftDescription?: string | null;
+  mintedAmountRaw?: string | null;
   metadataCid: string;
   metadataUrl: string | null;
   mediaCid: string | null;
@@ -942,6 +945,9 @@ export default function MintClient({
         creatorAddress: account.toLowerCase(),
         ownerAddress: account.toLowerCase(),
         mintTxHash: txHash,
+        draftName: name.trim() || null,
+        draftDescription: description.trim() || null,
+        mintedAmountRaw: standard === "ERC1155" ? String(amount) : "1",
         metadataCid: effectiveMetadataUri,
         metadataUrl: toGatewayUrl(effectiveMetadataUri, gateway),
         mediaCid: uploadReceipt.imageUri || uploadReceipt.audioUri || null,
@@ -976,6 +982,9 @@ export default function MintClient({
           ensSubname: mintMode === "custom" ? selectedKnownCollection?.ensSubname ?? null : null,
           finalizedAt: null,
           mintTxHash: txHash,
+          draftName: name.trim() || null,
+          draftDescription: description.trim() || null,
+          mintedAmountRaw: standard === "ERC1155" ? String(amount) : "1",
           metadataCid: effectiveMetadataUri,
           mediaCid: uploadReceipt.imageUri || uploadReceipt.audioUri || null,
           immutable: standard === "ERC721" ? (mintMode === "shared" ? true : lockMetadata) : lockMetadata,

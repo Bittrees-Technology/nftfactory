@@ -8,7 +8,10 @@ import {
   encodeErc20Approve,
   encodeCancelListing,
   encodeBuyListing,
-  encodeRegisterSubname
+  encodeRegisterSubname,
+  encodeCreateOffer,
+  encodeCancelOffer,
+  encodeAcceptOffer
 } from "./abi";
 
 describe("toWeiBigInt", () => {
@@ -124,6 +127,35 @@ describe("encodeBuyListing", () => {
   it("starts with correct selector", () => {
     const result = encodeBuyListing(1n);
     expect(result.startsWith("0xd96a094a")).toBe(true);
+  });
+});
+
+describe("encodeCreateOffer", () => {
+  it("starts with the V2 selector", () => {
+    const result = encodeCreateOffer(
+      "0x0000000000000000000000000000000000000001",
+      7n,
+      2n,
+      "ERC1155",
+      "0x0000000000000000000000000000000000000002",
+      42n,
+      14n
+    );
+    expect(result.startsWith("0x6ae3f097")).toBe(true);
+  });
+});
+
+describe("encodeCancelOffer", () => {
+  it("starts with correct selector", () => {
+    const result = encodeCancelOffer(42n);
+    expect(result.startsWith("0xef706adf")).toBe(true);
+  });
+});
+
+describe("encodeAcceptOffer", () => {
+  it("starts with correct selector", () => {
+    const result = encodeAcceptOffer(42n);
+    expect(result.startsWith("0xc815729d")).toBe(true);
   });
 });
 

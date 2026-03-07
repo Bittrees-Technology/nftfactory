@@ -15,6 +15,22 @@ Live today:
 
 The focus is hardening the existing build, not broad feature expansion.
 
+## Current audit (March 5, 2026)
+
+Validated in-repo today:
+
+- [x] `npm run typecheck:web`
+- [x] `npm run typecheck:indexer`
+- [x] `npm run test:web`
+- [x] `npm run test:indexer`
+- [x] `npm run test:contracts`
+- [ ] `npm run build:web` (intermittent `/_document` page collection failure; not stable yet)
+
+Notes:
+
+- Web production build still intermittently fails with a Next.js `/_document` page collection error during `Collecting page data`; pages fallbacks were added under `apps/web/pages/*` but this is not fully resolved yet.
+- Primary release risk is now split between this flaky production build step and remaining integration/environment validation.
+
 ## Active release work
 
 ### UX lock before mainnet
@@ -40,11 +56,11 @@ The focus is hardening the existing build, not broad feature expansion.
 
 Before expanding scope again, the current stack should be solid on:
 
-- [ ] env wiring
-- [ ] address correctness
-- [ ] Sepolia validation
-- [ ] admin recovery paths
-- [ ] visual and behavioral stability of Mint, List, Discover, and Profile
+- [ ] env wiring (automation exists; production values still need operator validation)
+- [ ] address correctness (requires deployed-network verification)
+- [ ] Sepolia validation (manual matrix still required)
+- [ ] admin recovery paths (manual run-through still required)
+- [ ] visual and behavioral stability of Mint, List, Discover, and Profile (manual UX pass still required)
 
 ## Deferred scope
 

@@ -143,6 +143,39 @@ export function encodeBuyListing(listingId: bigint): string {
   return `0x${selector}${arg}`;
 }
 
+export function encodeCreateOffer(
+  nft: `0x${string}`,
+  tokenId: bigint,
+  quantity: bigint,
+  standard: "ERC721" | "ERC1155",
+  paymentToken: `0x${string}`,
+  priceWei: bigint,
+  durationDays: bigint
+): string {
+  const selector = "6ae3f097";
+  const standardBody = encodeStringData(standard);
+  const head1 = encodeAddress(nft);
+  const head2 = encodeUint256(tokenId);
+  const head3 = encodeUint256(quantity);
+  const head4 = wordFromBytes(224);
+  const head5 = encodeAddress(paymentToken);
+  const head6 = encodeUint256(priceWei);
+  const head7 = encodeUint256(durationDays);
+  return `0x${selector}${head1}${head2}${head3}${head4}${head5}${head6}${head7}${standardBody}`;
+}
+
+export function encodeCancelOffer(offerId: bigint): string {
+  const selector = "ef706adf";
+  const arg = encodeUint256(offerId);
+  return `0x${selector}${arg}`;
+}
+
+export function encodeAcceptOffer(offerId: bigint): string {
+  const selector = "c815729d";
+  const arg = encodeUint256(offerId);
+  return `0x${selector}${arg}`;
+}
+
 export function toHexWei(ethAmount: string): string {
   const [wholeRaw, fracRaw = ""] = ethAmount.trim().split(".");
   const whole = wholeRaw === "" ? "0" : wholeRaw;

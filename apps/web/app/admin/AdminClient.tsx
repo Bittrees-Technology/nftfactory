@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import ListingSummaryRow from "../../components/ListingSummaryRow";
 import {
   backfillMintTxHashes,
+  fetchActiveListings,
   fetchIndexerHealth,
   fetchTrackedPaymentTokens,
-  fetchHiddenListingIds,
+  fetchHiddenListings,
   fetchModerators,
   fetchModerationActions,
   fetchModerationReports,
@@ -19,9 +21,12 @@ import {
   type ApiPaymentTokenRecord,
   type ApiModerator,
   type ApiModeratorsResponse,
+  type ApiActiveListingItem,
   type ApiModerationAction,
-  type ApiModerationReport
+  type ApiModerationReport,
+  type ApiHiddenListings
 } from "../../lib/indexerApi";
+import { toListingViewModel, type ListingViewModel } from "../../lib/listingPresentation";
 import { useLogScanStatsSnapshot } from "../../lib/useLogScanStatsSnapshot";
 import LogScanDebugPanel from "../components/LogScanDebugPanel";
 
@@ -78,17 +83,32 @@ function clearMintBackfillHistory(): void {
   }
 }
 
+function formatListingRef(item: {
+  listingId?: number | null;
+  listingRecordId?: string | null;
+  marketplaceVersion?: string | null;
+}): string {
+  if (item.listingRecordId) {
+    const version = item.marketplaceVersion ? item.marketplaceVersion.toUpperCase() : null;
+    const numericId = item.listingId === null || item.listingId === undefined ? item.listingRecordId : `#${item.listingId}`;
+    return version ? `${version} ${numericId}` : numericId;
+  }
+  if (item.listingId === null || item.listingId === undefined) return "-";
+  return `#${item.listingId}`;
+}
+
 export default function AdminClient() {
   const [actor, setActor] = useState("safe-admin");
   const [adminAddress, setAdminAddress] = useState("");
   const [adminToken, setAdminToken] = useState("");
   const [reports, setReports] = useState<ApiModerationReport[]>([]);
   const [actions, setActions] = useState<ApiModerationAction[]>([]);
-  const [hiddenListings, setHiddenListings] = useState<number[]>([]);
+  const [hiddenListings, setHiddenListings] = useState<ApiHiddenListings>({ listingIds: [], listingRecordIds: [] });
   const [moderators, setModerators] = useState<ApiModerator[]>([]);
   const [moderatorSource, setModeratorSource] = useState<ApiModeratorsResponse["source"]>("local");
   const [moderatorRegistryAddress, setModeratorRegistryAddress] = useState<string | null>(null);
   const [paymentTokens, setPaymentTokens] = useState<ApiPaymentTokenRecord[]>([]);
+  const [activeListings, setActiveListings] = useState<ApiActiveListingItem[]>([]);
   const [indexerHealth, setIndexerHealth] = useState<ApiIndexerHealth | null>(null);
   const [mintBackfillHistory, setMintBackfillHistory] = useState<MintBackfillRun[]>([]);
   const [manualListingId, setManualListingId] = useState("");
@@ -111,28 +131,71 @@ export default function AdminClient() {
     syncLogScanStats,
     resetBrowserLogScanStats
   } = useLogScanStatsSnapshot();
-  const manualListingNumeric = Number.parseInt(manualListingId, 10);
+  const manualListingRef = manualListingId.trim();
   const canWrite = Boolean(adminToken || adminAddress);
   const canEditModerators = canWrite && moderatorSource !== "onchain+local";
-  const hasManualListingId = Number.isInteger(manualListingNumeric) && manualListingNumeric >= 0;
+  const hasManualListingId = Boolean(manualListingRef);
   const mintTxHashColumnAvailable = Boolean(indexerHealth?.schema?.mintTxHashColumnAvailable);
   const marketplaceSyncConfigured = Boolean(indexerHealth?.marketplace?.configured);
   const marketplaceSyncInProgress = Boolean(indexerHealth?.marketplace?.syncInProgress);
+  const chainId = Number(process.env.NEXT_PUBLIC_CHAIN_ID || "11155111");
+  const ipfsGateway = (process.env.NEXT_PUBLIC_IPFS_GATEWAY || "https://gateway.pinata.cloud/ipfs").replace(/\/$/, "");
+  const activeListingByRef = useMemo(() => {
+    const next = new Map<string, ListingViewModel>();
+    for (const item of activeListings) {
+      const view = toListingViewModel(item);
+      next.set(view.key, view);
+      next.set(`${String(view.marketplaceVersion || "v1").toLowerCase()}:${view.id}`, view);
+      if (!view.key.includes(":")) {
+        next.set(String(view.id), view);
+      }
+    }
+    return next;
+  }, [activeListings]);
+
+  function getListingView(item: {
+    listingId?: number | null;
+    listingRecordId?: string | null;
+    marketplaceVersion?: string | null;
+  }): ListingViewModel | null {
+    const recordId = String(item.listingRecordId || "").trim();
+    if (recordId) {
+      const marketplaceVersion = String(
+        item.marketplaceVersion || (recordId.startsWith("v2:") ? "v2" : "v1")
+      ).toLowerCase();
+      const numericId = recordId.startsWith("v2:") ? recordId.slice(3) : recordId;
+      return (
+        activeListingByRef.get(recordId) ||
+        activeListingByRef.get(`${marketplaceVersion}:${numericId}`) ||
+        activeListingByRef.get(numericId) ||
+        null
+      );
+    }
+    if (item.listingId === null || item.listingId === undefined) return null;
+    const marketplaceVersion = String(item.marketplaceVersion || "v1").toLowerCase();
+    return (
+      activeListingByRef.get(`${marketplaceVersion}:${item.listingId}`) ||
+      activeListingByRef.get(String(item.listingId)) ||
+      null
+    );
+  }
 
   async function refresh(): Promise<void> {
     try {
       setError("");
       syncLogScanStats();
-      const [health, openReports, actionHistory, hidden] = await Promise.all([
+      const [health, openReports, actionHistory, hidden, listingState] = await Promise.all([
         fetchIndexerHealth(),
         fetchModerationReports("open"),
         fetchModerationActions(),
-        fetchHiddenListingIds()
+        fetchHiddenListings(),
+        fetchActiveListings(0, 250, undefined, { includeAllMarkets: true })
       ]);
       setIndexerHealth(health);
       setReports(openReports);
       setActions(actionHistory);
       setHiddenListings(hidden);
+      setActiveListings(listingState.items || []);
       if (canWrite) {
         try {
           const auth = {
@@ -202,12 +265,11 @@ export default function AdminClient() {
   }
 
   async function setManualHidden(hidden: boolean): Promise<void> {
-    const id = Number.parseInt(manualListingId, 10);
-    if (!Number.isInteger(id) || id < 0) return;
+    if (!manualListingRef) return;
     try {
       setError("");
       await setListingVisibility({
-        listingId: id,
+        listingRecordId: manualListingRef,
         hidden,
         actor,
         auth: {
@@ -348,8 +410,8 @@ export default function AdminClient() {
             <input value={adminToken} onChange={(e) => setAdminToken(e.target.value)} placeholder="optional bearer token" />
           </label>
           <label>
-            Manual listing ID
-            <input value={manualListingId} onChange={(e) => setManualListingId(e.target.value)} placeholder="42" />
+            Manual listing ref
+            <input value={manualListingId} onChange={(e) => setManualListingId(e.target.value)} placeholder="42 or v2:42" />
           </label>
         </div>
         <div className="row">
@@ -364,7 +426,7 @@ export default function AdminClient() {
           </button>
         </div>
         {!hasManualListingId ? (
-          <p className="hint">Enter a numeric listing ID to use the manual hide or restore actions.</p>
+          <p className="hint">Enter a listing reference such as `42` or `v2:42` to use the manual hide or restore actions.</p>
         ) : null}
       </div>
 
@@ -398,7 +460,7 @@ export default function AdminClient() {
         </article>
         <article className="card">
           <h3>Hidden Listings</h3>
-          <p>{hiddenListings.length}</p>
+          <p>{hiddenListings.listingRecordIds.length}</p>
         </article>
         <article className="card">
           <h3>Action Log Entries</h3>
@@ -460,7 +522,7 @@ export default function AdminClient() {
         ) : null}
       </div>
 
-      {!error && openReports.length === 0 && hiddenListings.length === 0 && actions.length === 0 ? (
+      {!error && openReports.length === 0 && hiddenListings.listingRecordIds.length === 0 && actions.length === 0 ? (
         <div className="card formCard">
           <h3>Admin Feed Is Clear</h3>
           <p className="hint">
@@ -655,62 +717,150 @@ export default function AdminClient() {
         </p>
         {openReports.length === 0 ? <p className="hint">No open reports.</p> : null}
         <div className="listTable">
-          {openReports.map((report) => (
-            <article key={report.id} className="listRow">
-              <span>
-                <strong>Report</strong> {report.id}
-              </span>
-              <span>
-                <strong>Listing</strong> {report.listingId === null ? "-" : `#${report.listingId}`}
-              </span>
-              <span>
-                <strong>Reason</strong> {report.reason}
-              </span>
-              <span>
-                <strong>Reporter</strong> {report.reporterAddress}
-              </span>
-              <span>
-                <strong>Created</strong> {formatIso(report.createdAt)}
-              </span>
-              {pendingDecision?.reportId === report.id ? (
-                <div className="reportInline">
-                  <input
-                    value={notesDraft}
-                    onChange={(e) => setNotesDraft(e.target.value)}
-                    placeholder="Optional note..."
-                  />
-                  <button type="button" className="miniBtn" disabled={!canWrite} onClick={() => void confirmDecision()}>
-                    Confirm {pendingDecision.decision}
-                  </button>
-                  <button type="button" className="miniBtn" onClick={() => { setPendingDecision(null); setNotesDraft(""); }}>
-                    Cancel
-                  </button>
-                </div>
-              ) : (
-                <div className="row">
-                  <button type="button" className="miniBtn" disabled={!canWrite} onClick={() => { setPendingDecision({ reportId: report.id, decision: "hide" }); setNotesDraft(""); }}>
-                    Hide
-                  </button>
-                  <button type="button" className="miniBtn" disabled={!canWrite} onClick={() => { setPendingDecision({ reportId: report.id, decision: "restore" }); setNotesDraft(""); }}>
-                    Restore
-                  </button>
-                  <button type="button" className="miniBtn" disabled={!canWrite} onClick={() => { setPendingDecision({ reportId: report.id, decision: "dismiss" }); setNotesDraft(""); }}>
-                    Dismiss
-                  </button>
-                </div>
-              )}
-            </article>
-          ))}
+          {openReports.map((report) => {
+            const listing = getListingView(report);
+            const actionControls = pendingDecision?.reportId === report.id ? (
+              <>
+                <span>
+                  <strong>Report</strong> {report.id}
+                </span>
+                <span>
+                  <strong>Reason</strong> {report.reason}
+                </span>
+                <span className="mono">
+                  <strong>Reporter</strong> {report.reporterAddress}
+                </span>
+                <span>
+                  <strong>Created</strong> {formatIso(report.createdAt)}
+                </span>
+                <input
+                  value={notesDraft}
+                  onChange={(e) => setNotesDraft(e.target.value)}
+                  placeholder="Optional note..."
+                />
+                <button type="button" className="miniBtn" disabled={!canWrite} onClick={() => void confirmDecision()}>
+                  Confirm {pendingDecision.decision}
+                </button>
+                <button type="button" className="miniBtn" onClick={() => { setPendingDecision(null); setNotesDraft(""); }}>
+                  Cancel
+                </button>
+              </>
+            ) : (
+              <>
+                <span>
+                  <strong>Report</strong> {report.id}
+                </span>
+                <span>
+                  <strong>Reason</strong> {report.reason}
+                </span>
+                <span className="mono">
+                  <strong>Reporter</strong> {report.reporterAddress}
+                </span>
+                <span>
+                  <strong>Created</strong> {formatIso(report.createdAt)}
+                </span>
+                <button type="button" className="miniBtn" disabled={!canWrite} onClick={() => { setPendingDecision({ reportId: report.id, decision: "hide" }); setNotesDraft(""); }}>
+                  Hide
+                </button>
+                <button type="button" className="miniBtn" disabled={!canWrite} onClick={() => { setPendingDecision({ reportId: report.id, decision: "restore" }); setNotesDraft(""); }}>
+                  Restore
+                </button>
+                <button type="button" className="miniBtn" disabled={!canWrite} onClick={() => { setPendingDecision({ reportId: report.id, decision: "dismiss" }); setNotesDraft(""); }}>
+                  Dismiss
+                </button>
+              </>
+            );
+
+            return listing ? (
+              <ListingSummaryRow
+                key={report.id}
+                item={listing}
+                chainId={chainId}
+                ipfsGateway={ipfsGateway}
+                className="listRow"
+                actions={actionControls}
+              />
+            ) : (
+              <article key={report.id} className="listRow">
+                <span>
+                  <strong>Report</strong> {report.id}
+                </span>
+                <span>
+                  <strong>Listing</strong> {formatListingRef(report)}
+                </span>
+                {report.listingRecordId ? (
+                  <span className="mono">
+                    <strong>Record</strong> {report.listingRecordId}
+                  </span>
+                ) : null}
+                <span>
+                  <strong>Reason</strong> {report.reason}
+                </span>
+                <span>
+                  <strong>Reporter</strong> {report.reporterAddress}
+                </span>
+                <span>
+                  <strong>Created</strong> {formatIso(report.createdAt)}
+                </span>
+                {pendingDecision?.reportId === report.id ? (
+                  <div className="reportInline">
+                    <input
+                      value={notesDraft}
+                      onChange={(e) => setNotesDraft(e.target.value)}
+                      placeholder="Optional note..."
+                    />
+                    <button type="button" className="miniBtn" disabled={!canWrite} onClick={() => void confirmDecision()}>
+                      Confirm {pendingDecision.decision}
+                    </button>
+                    <button type="button" className="miniBtn" onClick={() => { setPendingDecision(null); setNotesDraft(""); }}>
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <div className="row">
+                    <button type="button" className="miniBtn" disabled={!canWrite} onClick={() => { setPendingDecision({ reportId: report.id, decision: "hide" }); setNotesDraft(""); }}>
+                      Hide
+                    </button>
+                    <button type="button" className="miniBtn" disabled={!canWrite} onClick={() => { setPendingDecision({ reportId: report.id, decision: "restore" }); setNotesDraft(""); }}>
+                      Restore
+                    </button>
+                    <button type="button" className="miniBtn" disabled={!canWrite} onClick={() => { setPendingDecision({ reportId: report.id, decision: "dismiss" }); setNotesDraft(""); }}>
+                      Dismiss
+                    </button>
+                  </div>
+                )}
+              </article>
+            );
+          })}
         </div>
       </div>
 
       <div className="card">
-        <h3>Hidden Listing IDs</h3>
+        <h3>Hidden Listing Refs</h3>
         <p className="sectionLead">
           The current hidden-list snapshot exposed by the moderation API.
         </p>
-        {hiddenListings.length === 0 ? <p className="hint">No hidden listings.</p> : null}
-        {hiddenListings.length > 0 ? <p className="mono">{hiddenListings.join(", ")}</p> : null}
+        {hiddenListings.listingRecordIds.length === 0 ? <p className="hint">No hidden listings.</p> : null}
+        {hiddenListings.listingRecordIds.length > 0 ? (
+          <div className="listTable">
+            {hiddenListings.listingRecordIds.map((listingRecordId) => (
+              getListingView({ listingRecordId }) ? (
+                <ListingSummaryRow
+                  key={listingRecordId}
+                  item={getListingView({ listingRecordId })!}
+                  chainId={chainId}
+                  ipfsGateway={ipfsGateway}
+                  className="listRow"
+                  actions={<span className="mono"><strong>Record</strong> {listingRecordId}</span>}
+                />
+              ) : (
+                <article key={listingRecordId} className="listRow">
+                  <span className="mono">{listingRecordId}</span>
+                </article>
+              )
+            ))}
+          </div>
+        ) : null}
       </div>
 
       <div className="card">
@@ -720,25 +870,57 @@ export default function AdminClient() {
         </p>
         {actions.length === 0 ? <p className="hint">No actions recorded yet.</p> : null}
         <div className="listTable">
-          {actions.map((action) => (
-            <article key={action.id} className="listRow">
-              <span>
-                <strong>Action</strong> {action.action}
-              </span>
-              <span>
-                <strong>Listing</strong> {action.listingId === null ? "-" : `#${action.listingId}`}
-              </span>
-              <span>
-                <strong>Actor</strong> {action.actor}
-              </span>
-              <span>
-                <strong>Created</strong> {formatIso(action.createdAt)}
-              </span>
-              <span className="mono">
-                <strong>Report</strong> {action.reportId || "-"}
-              </span>
-            </article>
-          ))}
+          {actions.map((action) => {
+            const listing = getListingView(action);
+            return listing ? (
+              <ListingSummaryRow
+                key={action.id}
+                item={listing}
+                chainId={chainId}
+                ipfsGateway={ipfsGateway}
+                className="listRow"
+                actions={
+                  <>
+                    <span>
+                      <strong>Action</strong> {action.action}
+                    </span>
+                    <span className="mono">
+                      <strong>Actor</strong> {action.actor}
+                    </span>
+                    <span>
+                      <strong>Created</strong> {formatIso(action.createdAt)}
+                    </span>
+                    <span className="mono">
+                      <strong>Report</strong> {action.reportId || "-"}
+                    </span>
+                  </>
+                }
+              />
+            ) : (
+              <article key={action.id} className="listRow">
+                <span>
+                  <strong>Action</strong> {action.action}
+                </span>
+                <span>
+                  <strong>Listing</strong> {formatListingRef(action)}
+                </span>
+                {action.listingRecordId ? (
+                  <span className="mono">
+                    <strong>Record</strong> {action.listingRecordId}
+                  </span>
+                ) : null}
+                <span>
+                  <strong>Actor</strong> {action.actor}
+                </span>
+                <span>
+                  <strong>Created</strong> {formatIso(action.createdAt)}
+                </span>
+                <span className="mono">
+                  <strong>Report</strong> {action.reportId || "-"}
+                </span>
+              </article>
+            );
+          })}
         </div>
       </div>
     </section>

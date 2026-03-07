@@ -3,26 +3,14 @@
 import type { Address } from "viem";
 import { truncateHash } from "../../lib/abi";
 import { getAppChain, getExplorerBaseUrl } from "../../lib/chains";
-import { formatListingPrice, type MarketplaceListing } from "../../lib/marketplace";
+import { getListingPresentation, type ListingViewModel } from "../../lib/listingPresentation";
 import { ipfsToGatewayUrl, useNftMetadataPreview } from "../../lib/nftMetadata";
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
-export type ListingRow = {
-  id: number;
-  seller: Address;
-  nft: Address;
-  tokenId: bigint;
-  amount: bigint;
-  standard: string;
-  paymentToken: Address;
-  price: bigint;
-  expiresAt: bigint;
-  active: boolean;
-  metadataCid?: string | null;
-  mediaCid?: string | null;
-  mintedAt?: string | null;
-  mintTxHash?: string | null;
+export type ListingRow = ListingViewModel & {
+  marketplaceAddress: Address;
+  marketplaceLabel: string;
 };
 
 type Props = {
@@ -36,7 +24,7 @@ type Props = {
   isCanceling: boolean;
   copiedKey: string;
   onBuy: (item: ListingRow) => void;
-  onCancel: (id: number) => void;
+  onCancel: (item: ListingRow) => void;
   onUpdate: (item: ListingRow) => void;
   onCopy: (key: string, value: string) => void;
   variant: "mine" | "marketplace";
@@ -59,6 +47,7 @@ export default function ListingCard({
   variant
 }: Props) {
   const prefix = variant === "mine" ? "my" : "all";
+  const itemKeySuffix = `${item.marketplaceAddress.toLowerCase()}-${item.id}`;
   const isMine = !!currentAddress && item.seller.toLowerCase() === currentAddress.toLowerCase();
   const canBuy = !isMine && isConnected && !wrongNetwork;
   const appChain = getAppChain(chainId);
@@ -71,12 +60,7 @@ export default function ListingCard({
     mediaUri: item.mediaCid,
     gateway: ipfsGateway
   });
-  const title = preview.name || `Token #${item.tokenId.toString()}`;
-  const description = preview.description || "No metadata description available.";
-  const expiresAtLabel =
-    item.expiresAt > 0n
-      ? new Date(Number(item.expiresAt) * 1000).toLocaleDateString()
-      : "Indexed";
+  const presentation = getListingPresentation(item, preview);
   const mintedAtLabel = item.mintedAt
     ? Number.isNaN(new Date(item.mintedAt).getTime())
       ? item.mintedAt
@@ -90,7 +74,7 @@ export default function ListingCard({
         {preview.imageUrl ? (
           <img
             src={preview.imageUrl}
-            alt={title}
+            alt={presentation.title}
             className="feedCardImage"
             loading="lazy"
           />
@@ -113,14 +97,15 @@ export default function ListingCard({
 
         <div className="feedCardContent">
           <div className="feedCardTop">
-            <span className="feedCardStatus">Listing #{item.id}</span>
+            <span className="feedCardStatus">{presentation.listingLabel}</span>
           </div>
 
           <div className="feedCardBody">
             <div className="feedCardMain">
               <p className="feedCardEyebrow">{item.standard}</p>
-              <h3 className="feedCardTitle">{title}</h3>
-              <p className="feedCardMetaLine">{description}</p>
+              <h3 className="feedCardTitle">{presentation.title}</h3>
+              <p className="feedCardMetaLine">{presentation.description}</p>
+              {presentation.collectionIdentity ? <p className="feedCardMetaLine">Collection {presentation.collectionIdentity}</p> : null}
               <p className="feedCardMetaLine">
                 Created{" "}
                 {txLink ? (
@@ -141,15 +126,19 @@ export default function ListingCard({
               </div>
               <div className="feedFact">
                 <span className="feedFactLabel">Amount</span>
-                <span className="detailValue">{item.amount.toString()}</span>
+                <span className="detailValue">{presentation.amountLabel}</span>
               </div>
               <div className="feedFact">
                 <span className="feedFactLabel">Price</span>
-                <span className="detailValue">{formatListingPrice(item as MarketplaceListing)}</span>
+                <span className="detailValue">{presentation.priceLabel}</span>
+              </div>
+              <div className="feedFact">
+                <span className="feedFactLabel">Market</span>
+                <span className="detailValue">{presentation.marketLabel}</span>
               </div>
               <div className="feedFact">
                 <span className="feedFactLabel">Ends</span>
-                <span className="detailValue">{expiresAtLabel}</span>
+                <span className="detailValue">{presentation.expiresAtLabel}</span>
               </div>
             </div>
           </div>
@@ -159,15 +148,15 @@ export default function ListingCard({
       <div className="feedCardLinks">
           <p className="mono">
             {truncateHash(item.nft)}{" "}
-            <button type="button" className="miniBtn" onClick={() => onCopy(`${prefix}-nft-${item.id}`, item.nft)}>
-              {copiedKey === `${prefix}-nft-${item.id}` ? "Copied" : "Copy"}
+            <button type="button" className="miniBtn" onClick={() => onCopy(`${prefix}-nft-${itemKeySuffix}`, item.nft)}>
+              {copiedKey === `${prefix}-nft-${itemKeySuffix}` ? "Copied" : "Copy"}
             </button>
           </p>
           {variant === "marketplace" ? (
             <p className="mono">
               {truncateHash(item.seller)}{" "}
-              <button type="button" className="miniBtn" onClick={() => onCopy(`seller-${item.id}`, item.seller)}>
-                {copiedKey === `seller-${item.id}` ? "Copied" : "Copy"}
+              <button type="button" className="miniBtn" onClick={() => onCopy(`seller-${itemKeySuffix}`, item.seller)}>
+                {copiedKey === `seller-${itemKeySuffix}` ? "Copied" : "Copy"}
               </button>
             </p>
           ) : null}
@@ -193,7 +182,7 @@ export default function ListingCard({
               </button>
               <button
                 type="button"
-                onClick={() => onCancel(item.id)}
+                onClick={() => onCancel(item)}
                 disabled={isCanceling || wrongNetwork || !isConnected}
               >
                 {isCanceling ? "Canceling..." : "Cancel"}

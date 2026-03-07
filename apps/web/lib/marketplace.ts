@@ -15,8 +15,45 @@ export type MarketplaceListing = {
   active: boolean;
 };
 
+export type MarketplaceOffer = {
+  id: number;
+  buyer: Address;
+  nft: Address;
+  tokenId: bigint;
+  quantity: bigint;
+  standard: string;
+  indexedRecipients?: Address[];
+  paymentToken: Address;
+  price: bigint;
+  expiresAt: bigint;
+  active: boolean;
+};
+
 export const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
-const LISTING_READ_BATCH_SIZE = 20;
+const MARKETPLACE_READ_BATCH_SIZE = 20;
+
+const erc721OwnerOfAbi = [
+  {
+    type: "function",
+    name: "ownerOf",
+    stateMutability: "view",
+    inputs: [{ name: "tokenId", type: "uint256" }],
+    outputs: [{ name: "", type: "address" }]
+  }
+] as const;
+
+const erc1155BalanceOfAbi = [
+  {
+    type: "function",
+    name: "balanceOf",
+    stateMutability: "view",
+    inputs: [
+      { name: "account", type: "address" },
+      { name: "id", type: "uint256" }
+    ],
+    outputs: [{ name: "", type: "uint256" }]
+  }
+] as const;
 
 export const marketplaceAbi = [
   {
@@ -45,6 +82,34 @@ export const marketplaceAbi = [
   }
 ] as const;
 
+export const marketplaceV2Abi = [
+  ...marketplaceAbi,
+  {
+    type: "function",
+    name: "nextOfferId",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }]
+  },
+  {
+    type: "function",
+    name: "offers",
+    stateMutability: "view",
+    inputs: [{ name: "", type: "uint256" }],
+    outputs: [
+      { name: "buyer", type: "address" },
+      { name: "nft", type: "address" },
+      { name: "tokenId", type: "uint256" },
+      { name: "quantity", type: "uint256" },
+      { name: "standard", type: "string" },
+      { name: "paymentToken", type: "address" },
+      { name: "price", type: "uint256" },
+      { name: "expiresAt", type: "uint256" },
+      { name: "active", type: "bool" }
+    ]
+  }
+] as const;
+
 export function toExplorerAddress(address: string, chainId: number): string | null {
   const baseUrl = getExplorerBaseUrl(chainId);
   return baseUrl ? `${baseUrl}/address/${address}` : null;
@@ -56,10 +121,18 @@ export function truncateAddress(address: string): string {
 }
 
 export function formatListingPrice(listing: MarketplaceListing): string {
-  if (listing.paymentToken === ZERO_ADDRESS) {
-    return `${formatEther(listing.price)} ETH`;
+  return formatMarketplacePrice(listing.paymentToken, listing.price);
+}
+
+export function formatOfferPrice(offer: MarketplaceOffer): string {
+  return formatMarketplacePrice(offer.paymentToken, offer.price);
+}
+
+export function formatMarketplacePrice(paymentToken: Address, price: bigint): string {
+  if (paymentToken === ZERO_ADDRESS) {
+    return `${formatEther(price)} ETH`;
   }
-  return `${listing.price.toString()} raw ERC20 units`;
+  return `${price.toString()} raw ERC20 units`;
 }
 
 export async function fetchActiveListingsBatch(params: {
@@ -91,8 +164,8 @@ export async function fetchActiveListingsBatch(params: {
     ids.push(id);
   }
 
-  for (let offset = 0; offset < ids.length; offset += LISTING_READ_BATCH_SIZE) {
-    const batch = ids.slice(offset, offset + LISTING_READ_BATCH_SIZE);
+  for (let offset = 0; offset < ids.length; offset += MARKETPLACE_READ_BATCH_SIZE) {
+    const batch = ids.slice(offset, offset + MARKETPLACE_READ_BATCH_SIZE);
     const listings = (await Promise.all(
       batch.map((id) =>
         publicClient.readContract({
@@ -134,4 +207,132 @@ export async function fetchActiveListingsBatch(params: {
     nextCursor: start,
     canLoadMore: start > 0
   };
+}
+
+export async function fetchActiveOffersBatch(params: {
+  chainId: number;
+  rpcUrl: string;
+  marketplace: Address;
+  cursor?: number | null;
+  limit: number;
+}): Promise<{ offers: MarketplaceOffer[]; nextCursor: number; canLoadMore: boolean }> {
+  const { chainId, rpcUrl, marketplace, cursor = null, limit } = params;
+
+  const publicClient = createPublicClient({
+    chain: getAppChain(chainId),
+    transport: http(rpcUrl)
+  });
+
+  const nextId = (await publicClient.readContract({
+    address: marketplace,
+    abi: marketplaceV2Abi,
+    functionName: "nextOfferId"
+  })) as bigint;
+
+  const end = cursor === null ? Number(nextId) : cursor;
+  const start = Math.max(0, end - limit);
+  const currentUnix = BigInt(Math.floor(Date.now() / 1000));
+  const rows: MarketplaceOffer[] = [];
+
+  const ids: number[] = [];
+  for (let id = end - 1; id >= start; id -= 1) {
+    ids.push(id);
+  }
+
+  for (let offset = 0; offset < ids.length; offset += MARKETPLACE_READ_BATCH_SIZE) {
+    const batch = ids.slice(offset, offset + MARKETPLACE_READ_BATCH_SIZE);
+    const offers = (await Promise.all(
+      batch.map((id) =>
+        publicClient.readContract({
+          address: marketplace,
+          abi: marketplaceV2Abi,
+          functionName: "offers",
+          args: [BigInt(id)]
+        })
+      )
+    )) as readonly (readonly [Address, Address, bigint, bigint, string, Address, bigint, bigint, boolean])[];
+
+    for (let i = 0; i < offers.length; i += 1) {
+      const offer = offers[i];
+      const id = batch[i];
+      if (!offer[8]) continue;
+      if (offer[7] <= currentUnix) continue;
+
+      rows.push({
+        id,
+        buyer: offer[0],
+        nft: offer[1],
+        tokenId: offer[2],
+        quantity: offer[3],
+        standard: offer[4],
+        paymentToken: offer[5],
+        price: offer[6],
+        expiresAt: offer[7],
+        active: offer[8]
+      });
+    }
+  }
+
+  return {
+    offers: rows,
+    nextCursor: start,
+    canLoadMore: start > 0
+  };
+}
+
+export async function resolveOfferRecipients(params: {
+  chainId: number;
+  rpcUrl: string;
+  offers: MarketplaceOffer[];
+  candidateAddresses: Address[];
+}): Promise<Record<number, Address[]>> {
+  const { chainId, rpcUrl, offers, candidateAddresses } = params;
+  const normalizedCandidates = candidateAddresses.map((item) => item.toLowerCase() as Address);
+  if (offers.length === 0 || normalizedCandidates.length === 0) {
+    return {};
+  }
+
+  const publicClient = createPublicClient({
+    chain: getAppChain(chainId),
+    transport: http(rpcUrl)
+  });
+
+  const entries = await Promise.all(
+    offers.map(async (offer) => {
+      if (offer.standard.toUpperCase() === "ERC721") {
+        try {
+          const owner = (await publicClient.readContract({
+            address: offer.nft,
+            abi: erc721OwnerOfAbi,
+            functionName: "ownerOf",
+            args: [offer.tokenId]
+          })) as Address;
+          const normalizedOwner = owner.toLowerCase() as Address;
+          return [offer.id, normalizedCandidates.includes(normalizedOwner) ? [normalizedOwner] : []] as const;
+        } catch {
+          return [offer.id, []] as const;
+        }
+      }
+
+      const holders = await Promise.all(
+        normalizedCandidates.map(async (candidate) => {
+          try {
+            const balance = (await publicClient.readContract({
+              address: offer.nft,
+              abi: erc1155BalanceOfAbi,
+              functionName: "balanceOf",
+              args: [candidate, offer.tokenId]
+            })) as bigint;
+            return balance > 0n ? candidate : null;
+          } catch {
+            return null;
+          }
+        })
+      );
+
+      return [offer.id, holders.filter((item): item is Address => Boolean(item))] as const;
+    })
+  );
+
+  return Object.fromEntries(entries);
 }

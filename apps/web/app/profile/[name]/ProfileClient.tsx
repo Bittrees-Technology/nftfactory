@@ -2,23 +2,49 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import type { Address } from "viem";
-import { useAccount } from "wagmi";
+import type { Address, Hex } from "viem";
+import { useAccount, useChainId, usePublicClient, useWalletClient } from "wagmi";
+import { encodeAcceptOffer, encodeCancelOffer, encodeSetApprovalForAll } from "../../../lib/abi";
 import { getContractsConfig } from "../../../lib/contracts";
 import {
-  fetchActiveListingsBatch,
   formatListingPrice,
+  formatOfferPrice,
+  resolveOfferRecipients,
   toExplorerAddress,
   truncateAddress,
-  type MarketplaceListing
+  type MarketplaceOffer
 } from "../../../lib/marketplace";
+import ListingSummaryRow from "../../../components/ListingSummaryRow";
 import {
-  fetchHiddenListingIds,
+  fetchActiveListings,
+  fetchOffers,
+  fetchHiddenListings,
+  fetchOwnerHoldings,
   fetchProfileResolution,
   linkProfileIdentity,
   transferProfileOwnership,
+  type ApiActiveListingItem,
+  type ApiOfferSummary,
   type ApiProfileResolution
 } from "../../../lib/indexerApi";
+import {
+  getOwnerHoldingPresentation,
+  normalizeOwnerHoldingAmountRaw
+} from "../../../lib/ownerHoldingPresentation";
+import { getListingPresentation, toListingViewModel, type ListingViewModel } from "../../../lib/listingPresentation";
+
+const APPROVAL_FOR_ALL_ABI = [
+  {
+    type: "function",
+    name: "isApprovedForAll",
+    stateMutability: "view",
+    inputs: [
+      { name: "owner", type: "address" },
+      { name: "operator", type: "address" }
+    ],
+    outputs: [{ name: "", type: "bool" }]
+  }
+] as const;
 
 function isAddress(value: string): value is Address {
   return /^0x[a-fA-F0-9]{40}$/.test(value);
@@ -36,19 +62,127 @@ function getFeaturedMediaKind(url: string | null | undefined): "image" | "audio"
   return "link";
 }
 
+function formatUnixTimestamp(value: bigint): string {
+  const timestamp = Number(value) * 1000;
+  if (!Number.isFinite(timestamp)) return value.toString();
+  const date = new Date(timestamp);
+  return Number.isNaN(date.getTime()) ? value.toString() : date.toLocaleString();
+}
+
+function formatAddressList(addresses: Address[]): string {
+  if (addresses.length === 0) return "Owner not resolved";
+  return addresses.map((item) => truncateAddress(item)).join(", ");
+}
+
+function parsePositiveQuantityRaw(value: string | null | undefined): bigint | null {
+  const normalized = String(value || "").trim();
+  if (!/^[1-9][0-9]*$/.test(normalized)) return null;
+  try {
+    return BigInt(normalized);
+  } catch {
+    return null;
+  }
+}
+
+function holdingBalanceKey(ownerAddress: string, nft: Address, tokenId: bigint): string {
+  return `${ownerAddress.toLowerCase()}:${nft.toLowerCase()}:${tokenId.toString()}`;
+}
+
+function formatEditionBalance(value: bigint): string {
+  return `${value.toString()} edition${value === 1n ? "" : "s"}`;
+}
+
+type ProfileListing = ListingViewModel;
+
+type ProfileHolding = Awaited<ReturnType<typeof fetchOwnerHoldings>>["items"][number];
+
+function toProfileListing(item: ApiActiveListingItem): ProfileListing {
+  return toListingViewModel(item);
+}
+
+function toMarketplaceOffer(item: ApiOfferSummary): MarketplaceOffer {
+  const indexedRecipients = (item.currentOwnerAddresses || [])
+    .map((entry) => String(entry || "").trim().toLowerCase())
+    .filter((entry): entry is Address => isAddress(entry));
+  return {
+    id: Number.parseInt(item.offerId || item.id, 10) || 0,
+    buyer: item.buyerAddress as Address,
+    nft: item.collectionAddress as Address,
+    tokenId: BigInt(item.tokenId),
+    quantity: BigInt(item.quantityRaw || "0"),
+    standard: item.standard || "UNKNOWN",
+    indexedRecipients,
+    paymentToken: item.paymentToken as Address,
+    price: BigInt(item.priceRaw || "0"),
+    expiresAt: BigInt(item.expiresAtRaw || "0"),
+    active: Boolean(item.active)
+  };
+}
+
+function getOfferRecipients(offer: MarketplaceOffer, resolvedRecipients: Record<number, Address[]>): Address[] {
+  const recipients = [...(offer.indexedRecipients || []), ...(resolvedRecipients[offer.id] || [])];
+  const unique = new Map<string, Address>();
+  for (const recipient of recipients) {
+    unique.set(recipient.toLowerCase(), recipient);
+  }
+  return [...unique.values()];
+}
+
+function getOfferRecipientBalance(
+  offer: MarketplaceOffer,
+  recipient: Address | string | null | undefined,
+  balances: Record<string, string>
+): bigint | null {
+  const normalizedRecipient = String(recipient || "").trim().toLowerCase();
+  if (!isAddress(normalizedRecipient) || offer.standard.toUpperCase() !== "ERC1155") {
+    return offer.standard.toUpperCase() === "ERC721" && isAddress(normalizedRecipient) ? 1n : null;
+  }
+  return parsePositiveQuantityRaw(balances[holdingBalanceKey(normalizedRecipient, offer.nft, offer.tokenId)] || null);
+}
+
+function formatOfferRecipientBalances(
+  offer: MarketplaceOffer,
+  recipients: Address[],
+  balances: Record<string, string>
+): string | null {
+  if (offer.standard.toUpperCase() !== "ERC1155") return null;
+  const parts = recipients
+    .map((recipient) => {
+      const balance = getOfferRecipientBalance(offer, recipient, balances);
+      return balance === null ? null : `${truncateAddress(recipient)} (${balance.toString()})`;
+    })
+    .filter((entry): entry is string => Boolean(entry));
+  return parts.length > 0 ? parts.join(", ") : null;
+}
+
 export default function ProfileClient({ name }: { name: string }) {
   const config = useMemo(() => getContractsConfig(), []);
   const { address: connectedAddress, isConnected } = useAccount();
+  const chainId = useChainId();
+  const publicClient = usePublicClient();
+  const { data: walletClient } = useWalletClient();
   const canonicalRoute = `/profile/${name}`;
+  const offerMarketplace = (config.marketplaceV2 || null) as Address | null;
 
   const [sellerAddress, setSellerAddress] = useState("");
   const [scanDepth, setScanDepth] = useState("250");
-  const [allListings, setAllListings] = useState<MarketplaceListing[]>([]);
-  const [hiddenListingIds, setHiddenListingIds] = useState<number[]>([]);
+  const [allListings, setAllListings] = useState<ProfileListing[]>([]);
+  const [allOffers, setAllOffers] = useState<MarketplaceOffer[]>([]);
+  const [offerRecipients, setOfferRecipients] = useState<Record<number, Address[]>>({});
+  const [offerHoldingBalances, setOfferHoldingBalances] = useState<Record<string, string>>({});
+  const [creatorHoldings, setCreatorHoldings] = useState<ProfileHolding[]>([]);
+  const [isLoadingHoldings, setIsLoadingHoldings] = useState(false);
+  const [holdingsError, setHoldingsError] = useState("");
+  const [hiddenListingRecordIds, setHiddenListingRecordIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingOffers, setIsLoadingOffers] = useState(false);
   const [error, setError] = useState("");
   const [resolutionNote, setResolutionNote] = useState("");
   const [indexerError, setIndexerError] = useState("");
+  const [offerActionState, setOfferActionState] = useState<{ status: "idle" | "pending" | "success" | "error"; message?: string }>({
+    status: "idle"
+  });
+  const [actingOfferId, setActingOfferId] = useState<number | null>(null);
   const [profileResolution, setProfileResolution] = useState<ApiProfileResolution | null>(null);
   const [editTagline, setEditTagline] = useState("");
   const [editDisplayName, setEditDisplayName] = useState("");
@@ -72,18 +206,14 @@ export default function ProfileClient({ name }: { name: string }) {
     try {
       const parsedDepth = Number.parseInt(scanDepth, 10);
       const limit = Number.isInteger(parsedDepth) && parsedDepth > 0 ? parsedDepth : 250;
-      const result = await fetchActiveListingsBatch({
-        chainId: config.chainId,
-        rpcUrl: config.rpcUrl,
-        marketplace: config.marketplace as Address,
-        cursor: null,
-        limit
-      });
-      setAllListings(result.listings);
+      const result = await fetchActiveListings(0, limit, undefined, { includeAllMarkets: true });
+      setAllListings((result.items || []).map(toProfileListing));
       try {
-        setHiddenListingIds(await fetchHiddenListingIds());
+        const hidden = await fetchHiddenListings();
+        setHiddenListingRecordIds(hidden.listingRecordIds || []);
+        setIndexerError("");
       } catch {
-        setHiddenListingIds([]);
+        setHiddenListingRecordIds([]);
         setIndexerError("Indexer moderation filters are unavailable, so hidden-list filtering is currently disabled.");
       }
     } catch (err) {
@@ -91,11 +221,41 @@ export default function ProfileClient({ name }: { name: string }) {
     } finally {
       setIsLoading(false);
     }
-  }, [config.marketplace, config.rpcUrl, scanDepth]);
+  }, [scanDepth]);
+
+  const loadOffers = useCallback(async (): Promise<void> => {
+    if (!offerMarketplace) {
+      setAllOffers([]);
+      setOfferRecipients({});
+      return;
+    }
+
+    setIsLoadingOffers(true);
+    try {
+      const parsedDepth = Number.parseInt(scanDepth, 10);
+      const limit = Number.isInteger(parsedDepth) && parsedDepth > 0 ? parsedDepth : 250;
+      const result = await fetchOffers({
+        cursor: 0,
+        limit,
+        active: true
+      });
+      setAllOffers((result.items || []).map(toMarketplaceOffer));
+    } catch (err) {
+      setAllOffers([]);
+      setOfferRecipients({});
+      setError(err instanceof Error ? err.message : "Failed to load indexed marketplace offers.");
+    } finally {
+      setIsLoadingOffers(false);
+    }
+  }, [offerMarketplace, scanDepth]);
 
   useEffect(() => {
     void loadListings();
   }, [loadListings]);
+
+  useEffect(() => {
+    void loadOffers();
+  }, [loadOffers]);
 
   useEffect(() => {
     const run = async (): Promise<void> => {
@@ -176,14 +336,180 @@ export default function ProfileClient({ name }: { name: string }) {
     if (isAddress(sellerAddress)) return [sellerAddress.toLowerCase()];
     return resolvedSellerAddresses.map((item) => item.toLowerCase());
   }, [resolvedSellerAddresses, sellerAddress]);
+  const wrongNetwork = isConnected && chainId !== config.chainId;
+  const connectedAddressLower = connectedAddress?.toLowerCase() || "";
+
+  useEffect(() => {
+    if (!offerMarketplace || activeSellerAddresses.length === 0 || allOffers.length === 0) {
+      setOfferRecipients({});
+      return;
+    }
+
+    const indexedRecipients = Object.fromEntries(
+      allOffers
+        .filter((offer) => (offer.indexedRecipients || []).length > 0)
+        .map((offer) => [offer.id, offer.indexedRecipients || []])
+    );
+    const offersNeedingResolution = allOffers.filter((offer) => (offer.indexedRecipients || []).length === 0);
+    if (offersNeedingResolution.length === 0) {
+      setOfferRecipients(indexedRecipients);
+      return;
+    }
+
+    let cancelled = false;
+    void resolveOfferRecipients({
+      chainId: config.chainId,
+      rpcUrl: config.rpcUrl,
+      offers: offersNeedingResolution,
+      candidateAddresses: activeSellerAddresses as Address[]
+    }).then((result) => {
+      if (!cancelled) {
+        setOfferRecipients({ ...indexedRecipients, ...result });
+      }
+    }).catch(() => {
+      if (!cancelled) {
+        setOfferRecipients(indexedRecipients);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSellerAddresses, allOffers, config.chainId, config.rpcUrl, offerMarketplace]);
+
+  useEffect(() => {
+    if (!allOffers.some((offer) => offer.standard.toUpperCase() === "ERC1155")) {
+      setOfferHoldingBalances({});
+      return;
+    }
+
+    const targetAddresses = [...new Set([
+      ...activeSellerAddresses,
+      ...allOffers.flatMap((offer) =>
+        getOfferRecipients(offer, offerRecipients).map((recipient) => recipient.toLowerCase())
+      )
+    ])].filter((item): item is Address => isAddress(item));
+    if (targetAddresses.length === 0) {
+      setOfferHoldingBalances({});
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const nextBalances: Record<string, string> = {};
+        for (const ownerAddress of targetAddresses) {
+          let cursor = 0;
+          for (let page = 0; page < 20; page += 1) {
+            const result = await fetchOwnerHoldings(ownerAddress, cursor, 100, { standard: "ERC1155" });
+            if (cancelled) return;
+            for (const item of result.items || []) {
+              if (!item.collection) continue;
+              const balance = parsePositiveQuantityRaw(item.heldAmountRaw || null);
+              if (balance === null) continue;
+              nextBalances[holdingBalanceKey(ownerAddress, item.collection.contractAddress as Address, BigInt(item.tokenId))] = balance.toString();
+            }
+            if (!result.canLoadMore) break;
+            cursor = result.nextCursor;
+          }
+        }
+        if (!cancelled) {
+          setOfferHoldingBalances(nextBalances);
+        }
+      } catch {
+        if (!cancelled) {
+          setOfferHoldingBalances({});
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSellerAddresses, allOffers, offerRecipients]);
+
+  useEffect(() => {
+    if (activeSellerAddresses.length === 0) {
+      setCreatorHoldings([]);
+      setHoldingsError("");
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        setIsLoadingHoldings(true);
+        setHoldingsError("");
+        const rows: ProfileHolding[] = [];
+        for (const ownerAddress of activeSellerAddresses) {
+          const result = await fetchOwnerHoldings(ownerAddress, 0, 12);
+          if (cancelled) return;
+          for (const item of result.items || []) {
+            if (item.collection) {
+              rows.push(item);
+            }
+          }
+        }
+        const deduped = new Map<string, ProfileHolding>();
+        for (const row of rows) {
+          if (!row.collection) continue;
+          const key = `${row.ownerAddress.toLowerCase()}:${row.collection.contractAddress.toLowerCase()}:${row.tokenId}`;
+          const existing = deduped.get(key);
+          if (!existing) {
+            deduped.set(key, row);
+            continue;
+          }
+          const existingTime = new Date(existing.mintedAt).getTime();
+          const nextTime = new Date(row.mintedAt).getTime();
+          if (nextTime > existingTime) {
+            deduped.set(key, row);
+          }
+        }
+        const nextRows = [...deduped.values()]
+          .sort((a, b) => new Date(b.mintedAt).getTime() - new Date(a.mintedAt).getTime())
+          .slice(0, 12);
+        if (!cancelled) {
+          setCreatorHoldings(nextRows);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setCreatorHoldings([]);
+          setHoldingsError(err instanceof Error ? err.message : "Failed to load indexed holdings.");
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingHoldings(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSellerAddresses]);
 
   const creatorListings = useMemo(() => {
     if (activeSellerAddresses.length === 0) return [];
-    const hidden = new Set(hiddenListingIds);
+    const hidden = new Set(hiddenListingRecordIds);
     return allListings.filter(
-      (listing) => activeSellerAddresses.includes(listing.seller.toLowerCase()) && !hidden.has(listing.id)
+      (listing) =>
+        activeSellerAddresses.includes(listing.seller.toLowerCase()) &&
+        !hidden.has(listing.key)
     );
-  }, [activeSellerAddresses, allListings, hiddenListingIds]);
+  }, [activeSellerAddresses, allListings, hiddenListingRecordIds]);
+
+  const creatorOffersMade = useMemo(
+    () => allOffers.filter((offer) => activeSellerAddresses.includes(offer.buyer.toLowerCase())),
+    [activeSellerAddresses, allOffers]
+  );
+
+  const creatorOffersReceived = useMemo(
+    () =>
+      allOffers.filter((offer) =>
+        getOfferRecipients(offer, offerRecipients).some((recipient) => activeSellerAddresses.includes(recipient.toLowerCase()))
+      ),
+    [activeSellerAddresses, allOffers, offerRecipients]
+  );
 
   const collectionSummaries = useMemo(() => {
     const listingCounts = new Map<string, number>();
@@ -211,6 +537,8 @@ export default function ProfileClient({ name }: { name: string }) {
     if (creatorListings.length === 0) {
       return {
         listings: 0,
+        offersMade: creatorOffersMade.length,
+        offersReceived: creatorOffersReceived.length,
         uniqueCollections: collectionSummaries.length,
         floorPrice: "-",
         resolvedWallets: resolvedSellerAddresses.length
@@ -227,11 +555,13 @@ export default function ProfileClient({ name }: { name: string }) {
 
     return {
       listings: creatorListings.length,
+      offersMade: creatorOffersMade.length,
+      offersReceived: creatorOffersReceived.length,
       uniqueCollections: collections.size,
       floorPrice: floorListing ? formatListingPrice(floorListing) : "ERC20 only",
       resolvedWallets: resolvedSellerAddresses.length
     };
-  }, [collectionSummaries.length, creatorListings, resolvedSellerAddresses.length]);
+  }, [collectionSummaries.length, creatorListings, creatorOffersMade.length, creatorOffersReceived.length, resolvedSellerAddresses.length]);
 
   const featuredListing = useMemo(() => {
     if (creatorListings.length === 0) return null;
@@ -241,6 +571,10 @@ export default function ProfileClient({ name }: { name: string }) {
     }
     return creatorListings[0];
   }, [creatorListings]);
+  const featuredListingPresentation = useMemo(
+    () => (featuredListing ? getListingPresentation(featuredListing) : null),
+    [featuredListing]
+  );
 
   const hasResolvedIdentity = resolvedSellerAddresses.length > 0;
   const hasManualWallet = Boolean(sellerAddress.trim());
@@ -347,6 +681,103 @@ export default function ProfileClient({ name }: { name: string }) {
     }
   }
 
+  async function cancelOffer(offer: MarketplaceOffer): Promise<void> {
+    if (!offerMarketplace) {
+      setOfferActionState({ status: "error", message: "Marketplace V2 is not configured for this app." });
+      return;
+    }
+    if (!walletClient?.account || !publicClient || !connectedAddress) {
+      setOfferActionState({ status: "error", message: "Connect the buyer wallet first." });
+      return;
+    }
+    if (wrongNetwork) {
+      setOfferActionState({ status: "error", message: `Switch to chain ${config.chainId} before canceling offers.` });
+      return;
+    }
+    if (connectedAddress.toLowerCase() !== offer.buyer.toLowerCase()) {
+      setOfferActionState({ status: "error", message: "Connect the wallet that created this offer to cancel it." });
+      return;
+    }
+
+    try {
+      setActingOfferId(offer.id);
+      setOfferActionState({ status: "pending", message: `Canceling offer #${offer.id}...` });
+      const hash = await walletClient.sendTransaction({
+        account: walletClient.account,
+        to: offerMarketplace,
+        data: encodeCancelOffer(BigInt(offer.id)) as Hex
+      });
+      await publicClient.waitForTransactionReceipt({ hash });
+      await Promise.all([loadListings(), loadOffers()]);
+      setOfferActionState({ status: "success", message: `Canceled offer #${offer.id}.` });
+    } catch (err) {
+      setOfferActionState({ status: "error", message: err instanceof Error ? err.message : "Failed to cancel offer." });
+    } finally {
+      setActingOfferId(null);
+    }
+  }
+
+  async function acceptOffer(offer: MarketplaceOffer): Promise<void> {
+    if (!offerMarketplace) {
+      setOfferActionState({ status: "error", message: "Marketplace V2 is not configured for this app." });
+      return;
+    }
+    if (!walletClient?.account || !publicClient || !connectedAddress) {
+      setOfferActionState({ status: "error", message: "Connect the seller wallet first." });
+      return;
+    }
+    if (wrongNetwork) {
+      setOfferActionState({ status: "error", message: `Switch to chain ${config.chainId} before accepting offers.` });
+      return;
+    }
+    const recipients = getOfferRecipients(offer, offerRecipients);
+    if (!recipients.some((item) => item.toLowerCase() === connectedAddress.toLowerCase())) {
+      setOfferActionState({ status: "error", message: "Connect a current owner wallet for this token before accepting." });
+      return;
+    }
+    const connectedBalance = getOfferRecipientBalance(offer, connectedAddress, offerHoldingBalances);
+    if (offer.standard.toUpperCase() === "ERC1155" && connectedBalance !== null && connectedBalance < offer.quantity) {
+      setOfferActionState({
+        status: "error",
+        message: `Connected wallet only holds ${formatEditionBalance(connectedBalance)} for this token, but the offer requires ${formatEditionBalance(offer.quantity)}.`
+      });
+      return;
+    }
+
+    try {
+      setActingOfferId(offer.id);
+      setOfferActionState({ status: "pending", message: `Accepting offer #${offer.id}...` });
+      const isApproved = (await publicClient.readContract({
+        address: offer.nft,
+        abi: APPROVAL_FOR_ALL_ABI,
+        functionName: "isApprovedForAll",
+        args: [connectedAddress, offerMarketplace]
+      })) as boolean;
+
+      if (!isApproved) {
+        const approvalHash = await walletClient.sendTransaction({
+          account: walletClient.account,
+          to: offer.nft,
+          data: encodeSetApprovalForAll(offerMarketplace, true) as Hex
+        });
+        await publicClient.waitForTransactionReceipt({ hash: approvalHash });
+      }
+
+      const hash = await walletClient.sendTransaction({
+        account: walletClient.account,
+        to: offerMarketplace,
+        data: encodeAcceptOffer(BigInt(offer.id)) as Hex
+      });
+      await publicClient.waitForTransactionReceipt({ hash });
+      await Promise.all([loadListings(), loadOffers()]);
+      setOfferActionState({ status: "success", message: `Accepted offer #${offer.id}.` });
+    } catch (err) {
+      setOfferActionState({ status: "error", message: err instanceof Error ? err.message : "Failed to accept offer." });
+    } finally {
+      setActingOfferId(null);
+    }
+  }
+
   return (
     <section className="wizard">
       <div className="profileShell">
@@ -428,14 +859,15 @@ export default function ProfileClient({ name }: { name: string }) {
           ) : null}
           {featuredListing ? (
             <>
-              <h3>Listing #{featuredListing.id}</h3>
+              <h3>{featuredListingPresentation?.listingLabel || `Listing #${featuredListing.id}`}</h3>
               <p className="sectionLead">
-                {featuredListing.standard} token #{featuredListing.tokenId.toString()} listed for {formatListingPrice(featuredListing)}.
+                {featuredListingPresentation?.title || `Token #${featuredListing.tokenId.toString()}`}
               </p>
+              <p className="hint">{featuredListingPresentation?.description}</p>
               <div className="detailGrid">
                 <div className="detailItem">
                   <span className="detailLabel">Collection</span>
-                  <p className="detailValue mono">{truncateAddress(featuredListing.nft)}</p>
+                  <p className="detailValue">{featuredListingPresentation?.collectionIdentity || truncateAddress(featuredListing.nft)}</p>
                 </div>
                 <div className="detailItem">
                   <span className="detailLabel">Seller</span>
@@ -443,11 +875,19 @@ export default function ProfileClient({ name }: { name: string }) {
                 </div>
                 <div className="detailItem">
                   <span className="detailLabel">Amount</span>
-                  <p className="detailValue">{featuredListing.amount.toString()}</p>
+                  <p className="detailValue">{featuredListingPresentation?.amountLabel || featuredListing.amount.toString()}</p>
                 </div>
                 <div className="detailItem">
                   <span className="detailLabel">Pricing</span>
-                  <p className="detailValue">{featuredListing.paymentToken === "0x0000000000000000000000000000000000000000" ? "ETH" : "ERC-20"}</p>
+                  <p className="detailValue">{featuredListingPresentation?.priceLabel || formatListingPrice(featuredListing)}</p>
+                </div>
+                <div className="detailItem">
+                  <span className="detailLabel">Market</span>
+                  <p className="detailValue">{featuredListingPresentation?.marketLabel || "Marketplace V1"}</p>
+                </div>
+                <div className="detailItem">
+                  <span className="detailLabel">Ends</span>
+                  <p className="detailValue">{featuredListingPresentation?.expiresAtLabel || "Indexed"}</p>
                 </div>
               </div>
             </>
@@ -483,6 +923,12 @@ export default function ProfileClient({ name }: { name: string }) {
             <div className="detailItem">
               <span className="detailLabel">Live Listings</span>
               <p className="detailValue">{stats.listings}</p>
+            </div>
+            <div className="detailItem">
+              <span className="detailLabel">Offers</span>
+              <p className="detailValue">
+                {offerMarketplace ? `${stats.offersReceived} received / ${stats.offersMade} made` : "V2 not configured"}
+              </p>
             </div>
             <div className="detailItem">
               <span className="detailLabel">Collections</span>
@@ -560,8 +1006,14 @@ export default function ProfileClient({ name }: { name: string }) {
           </label>
         </div>
         <div className="row">
-          <button type="button" onClick={() => void loadListings()} disabled={isLoading}>
-            {isLoading ? "Loading..." : "Refresh Profile"}
+          <button
+            type="button"
+            onClick={() => {
+              void Promise.all([loadListings(), loadOffers()]);
+            }}
+            disabled={isLoading || isLoadingOffers}
+          >
+            {isLoading || isLoadingOffers ? "Loading..." : "Refresh Profile"}
           </button>
           <Link href="/discover" className="ctaLink secondaryLink">Browse all listings</Link>
         </div>
@@ -620,6 +1072,14 @@ export default function ProfileClient({ name }: { name: string }) {
           <p>{stats.listings}</p>
         </article>
         <article className="card">
+          <h3>Offers Received</h3>
+          <p>{offerMarketplace ? stats.offersReceived : "-"}</p>
+        </article>
+        <article className="card">
+          <h3>Offers Made</h3>
+          <p>{offerMarketplace ? stats.offersMade : "-"}</p>
+        </article>
+        <article className="card">
           <h3>Resolved Wallets</h3>
           <p>{stats.resolvedWallets}</p>
         </article>
@@ -631,6 +1091,265 @@ export default function ProfileClient({ name }: { name: string }) {
           <h3>Floor Price</h3>
           <p>{stats.floorPrice}</p>
         </article>
+      </div>
+
+      <div className="card formCard">
+        <h3>Holdings Snapshot</h3>
+        <p className="sectionLead">
+          Owner-scoped indexed holdings across the resolved wallets for this profile. `Held`, `Listed`, and `Available` come from the same holdings API used by `/list`.
+        </p>
+        {isLoadingHoldings ? <p className="hint">Loading indexed holdings...</p> : null}
+        {holdingsError ? <p className="error">{holdingsError}</p> : null}
+        {!isLoadingHoldings && creatorHoldings.length === 0 ? (
+          <p className="hint">No indexed holdings were found for the resolved wallets yet.</p>
+        ) : null}
+        {creatorHoldings.length > 0 ? (
+          <div className="listTable">
+            {creatorHoldings.map((holding) => {
+              if (!holding.collection) return null;
+              const ownerHolding = getOwnerHoldingPresentation({
+                standard: holding.collection.standard,
+                tokenId: holding.tokenId,
+                ensSubname: holding.collection.ensSubname,
+                draftName: holding.draftName || null,
+                draftDescription: holding.draftDescription || null,
+                heldAmountRaw: holding.heldAmountRaw || null,
+                reservedAmountRaw: normalizeOwnerHoldingAmountRaw(holding.reservedAmountRaw),
+                availableAmountRaw: normalizeOwnerHoldingAmountRaw(holding.availableAmountRaw),
+                mintedAmountRaw: holding.mintedAmountRaw || null,
+                activeListing: holding.activeListing
+                  ? {
+                      listingId: holding.activeListing.listingId,
+                      paymentToken: holding.activeListing.paymentToken,
+                      priceRaw: holding.activeListing.priceRaw
+                    }
+                  : null
+              });
+              return (
+                <article
+                  key={`${holding.ownerAddress.toLowerCase()}:${holding.collection.contractAddress.toLowerCase()}:${holding.tokenId}`}
+                  className="listRow profileListingRow"
+                >
+                  <span>
+                    <strong>{ownerHolding.title}</strong>
+                  </span>
+                  <span>{ownerHolding.description}</span>
+                  <span>
+                    <strong>Status</strong> {ownerHolding.statusLabel}
+                  </span>
+                  <span>
+                    <strong>Standard</strong> {holding.collection.standard}
+                  </span>
+                  <span>
+                    <strong>Token</strong> #{holding.tokenId}
+                  </span>
+                  <span>
+                    <strong>Held</strong> {ownerHolding.heldAmountLabel}
+                  </span>
+                  {ownerHolding.reservedAmountLabel ? (
+                    <span>
+                      <strong>Listed</strong> {ownerHolding.reservedAmountLabel}
+                    </span>
+                  ) : null}
+                  {ownerHolding.availableAmountLabel ? (
+                    <span>
+                      <strong>Available</strong> {ownerHolding.availableAmountLabel}
+                    </span>
+                  ) : null}
+                  <span>
+                    <strong>Owner</strong> {truncateAddress(holding.ownerAddress)}
+                  </span>
+                  {ownerHolding.collectionIdentity ? (
+                    <span>
+                      <strong>Collection</strong> {ownerHolding.collectionIdentity}
+                    </span>
+                  ) : null}
+                  {toExplorerAddress(holding.collection.contractAddress, config.chainId) ? (
+                    <a
+                      href={toExplorerAddress(holding.collection.contractAddress, config.chainId)!}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mono"
+                    >
+                      Contract {truncateAddress(holding.collection.contractAddress)}
+                    </a>
+                  ) : (
+                    <span className="mono">Contract {truncateAddress(holding.collection.contractAddress)}</span>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+        ) : null}
+      </div>
+
+      <div className="card formCard">
+        <h3>Offers</h3>
+        {!offerMarketplace ? (
+          <p className="sectionLead">
+            Wallet-to-wallet offers need `NEXT_PUBLIC_MARKETPLACE_V2_ADDRESS`. Listing activity now indexes across both Marketplace V1 and V2.
+          </p>
+        ) : (
+          <>
+            <p className="sectionLead">
+              Active V2 offers tied to this profile. Indexed ownership and ERC-1155 balances are used first, with on-chain fallback only for unresolved legacy rows.
+            </p>
+            {isLoadingOffers ? <p className="hint">Loading active offers from Marketplace V2...</p> : null}
+            {wrongNetwork ? <p className="hint">Switch to chain {config.chainId} to accept or cancel offers from this profile.</p> : null}
+            {offerActionState.status === "pending" ? <p className="hint">{offerActionState.message}</p> : null}
+            {offerActionState.status === "error" ? <p className="error">{offerActionState.message}</p> : null}
+            {offerActionState.status === "success" ? <p className="success">{offerActionState.message}</p> : null}
+
+            <div className="profileShell">
+              <section className="card profileIdentityCard">
+                <p className="eyebrow">Received</p>
+                <h3>Received Offers</h3>
+                {creatorOffersReceived.length === 0 ? (
+                  <p className="hint">No active offers currently target tokens owned by this profile’s resolved wallets.</p>
+                ) : (
+                  <div className="listTable">
+                    {creatorOffersReceived.map((offer) => {
+                      const recipients = getOfferRecipients(offer, offerRecipients);
+                      const hasConnectedRecipient = isConnected && recipients.some((item) => item.toLowerCase() === connectedAddressLower);
+                      const connectedRecipientBalance = hasConnectedRecipient
+                        ? getOfferRecipientBalance(offer, connectedAddressLower, offerHoldingBalances)
+                        : null;
+                      const hasEnoughConnectedBalance =
+                        offer.standard.toUpperCase() !== "ERC1155" ||
+                        connectedRecipientBalance === null ||
+                        connectedRecipientBalance >= offer.quantity;
+                      const canAccept = Boolean(hasConnectedRecipient && hasEnoughConnectedBalance);
+                      const indexedBalanceSummary = formatOfferRecipientBalances(offer, recipients, offerHoldingBalances);
+                      return (
+                        <article key={`received-${offer.id}`} className="listRow profileListingRow">
+                          <span>
+                            <strong>Offer</strong> #{offer.id}
+                          </span>
+                          <span>
+                            <strong>Standard</strong> {offer.standard}
+                          </span>
+                          <span>
+                            <strong>Token</strong> #{offer.tokenId.toString()}
+                          </span>
+                          <span>
+                            <strong>Quantity</strong> {offer.quantity.toString()}
+                          </span>
+                          <span>
+                            <strong>Price</strong> {formatOfferPrice(offer)}
+                          </span>
+                          <span>
+                            <strong>Buyer</strong> {truncateAddress(offer.buyer)}
+                          </span>
+                          <span>
+                            <strong>Recipients</strong> {formatAddressList(recipients)}
+                          </span>
+                          {indexedBalanceSummary ? (
+                            <span>
+                              <strong>Indexed balances</strong> {indexedBalanceSummary}
+                            </span>
+                          ) : null}
+                          <span>
+                            <strong>Expires</strong> {formatUnixTimestamp(offer.expiresAt)}
+                          </span>
+                          {toExplorerAddress(offer.nft, config.chainId) ? (
+                            <a href={toExplorerAddress(offer.nft, config.chainId)!} target="_blank" rel="noreferrer" className="mono">
+                              Contract {truncateAddress(offer.nft)}
+                            </a>
+                          ) : (
+                            <span className="mono">Contract {truncateAddress(offer.nft)}</span>
+                          )}
+                          <div className="row">
+                            <button
+                              type="button"
+                              onClick={() => void acceptOffer(offer)}
+                              disabled={actingOfferId === offer.id || !canAccept || wrongNetwork}
+                            >
+                              {actingOfferId === offer.id ? "Accepting..." : "Accept offer"}
+                            </button>
+                            {!isConnected ? <span className="hint">Connect a current owner wallet to accept.</span> : null}
+                            {isConnected && !hasConnectedRecipient ? <span className="hint">Connect one of the current owner wallets to accept.</span> : null}
+                            {isConnected && hasConnectedRecipient && !hasEnoughConnectedBalance ? (
+                              <span className="hint">
+                                Connected wallet balance is {connectedRecipientBalance ? formatEditionBalance(connectedRecipientBalance) : "unavailable"}, but this offer needs {formatEditionBalance(offer.quantity)}.
+                              </span>
+                            ) : null}
+                            {isConnected && hasConnectedRecipient && hasEnoughConnectedBalance && connectedRecipientBalance !== null ? (
+                              <span className="hint">Connected wallet balance: {formatEditionBalance(connectedRecipientBalance)}.</span>
+                            ) : null}
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </div>
+                )}
+              </section>
+
+              <section className="card profileFeatureCard">
+                <p className="eyebrow">Made</p>
+                <h3>Offers Made</h3>
+                {creatorOffersMade.length === 0 ? (
+                  <p className="hint">No active offers have been created from this profile’s resolved wallets yet.</p>
+                ) : (
+                  <div className="listTable">
+                    {creatorOffersMade.map((offer) => {
+                      const canCancel = isConnected && connectedAddressLower === offer.buyer.toLowerCase();
+                      const recipients = getOfferRecipients(offer, offerRecipients);
+                      const indexedBalanceSummary = formatOfferRecipientBalances(offer, recipients, offerHoldingBalances);
+                      return (
+                        <article key={`made-${offer.id}`} className="listRow profileListingRow">
+                          <span>
+                            <strong>Offer</strong> #{offer.id}
+                          </span>
+                          <span>
+                            <strong>Standard</strong> {offer.standard}
+                          </span>
+                          <span>
+                            <strong>Token</strong> #{offer.tokenId.toString()}
+                          </span>
+                          <span>
+                            <strong>Quantity</strong> {offer.quantity.toString()}
+                          </span>
+                          <span>
+                            <strong>Price</strong> {formatOfferPrice(offer)}
+                          </span>
+                          <span>
+                            <strong>Payment</strong> {offer.paymentToken.toLowerCase() === "0x0000000000000000000000000000000000000000" ? "ETH" : truncateAddress(offer.paymentToken)}
+                          </span>
+                          <span>
+                            <strong>Expires</strong> {formatUnixTimestamp(offer.expiresAt)}
+                          </span>
+                          {indexedBalanceSummary ? (
+                            <span>
+                              <strong>Indexed balances</strong> {indexedBalanceSummary}
+                            </span>
+                          ) : null}
+                          {toExplorerAddress(offer.nft, config.chainId) ? (
+                            <a href={toExplorerAddress(offer.nft, config.chainId)!} target="_blank" rel="noreferrer" className="mono">
+                              Contract {truncateAddress(offer.nft)}
+                            </a>
+                          ) : (
+                            <span className="mono">Contract {truncateAddress(offer.nft)}</span>
+                          )}
+                          <div className="row">
+                            <button
+                              type="button"
+                              onClick={() => void cancelOffer(offer)}
+                              disabled={actingOfferId === offer.id || !canCancel || wrongNetwork}
+                            >
+                              {actingOfferId === offer.id ? "Canceling..." : "Cancel offer"}
+                            </button>
+                            {!isConnected ? <span className="hint">Connect the buyer wallet to cancel.</span> : null}
+                            {isConnected && !canCancel ? <span className="hint">Connect the wallet that created this offer to cancel it.</span> : null}
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </div>
+                )}
+              </section>
+            </div>
+          </>
+        )}
       </div>
 
       <div className="card formCard">
@@ -807,7 +1526,7 @@ export default function ProfileClient({ name }: { name: string }) {
       <div className="card formCard">
         <h3>Storefront Feed</h3>
         <p className="sectionLead">
-          Storefront inventory currently visible for the resolved wallets on the configured marketplace.
+          Storefront inventory currently indexed for the resolved wallets across Marketplace V1 and V2.
         </p>
         {creatorListings.length === 0 ? (
           <p className="hint">
@@ -821,44 +1540,19 @@ export default function ProfileClient({ name }: { name: string }) {
               Set Scan Depth To 500
             </button>
             <button type="button" onClick={() => void loadListings()} disabled={isLoading}>
-              {isLoading ? "Refreshing..." : "Retry Profile Scan"}
+              {isLoading ? "Refreshing..." : "Retry Indexed Scan"}
             </button>
           </div>
         ) : null}
         {creatorListings.length > 0 ? (
           <div className="listTable">
             {creatorListings.map((listing) => (
-              <article key={listing.id} className="listRow profileListingRow">
-                <span>
-                  <strong>Listing</strong> #{listing.id}
-                </span>
-                <span>
-                  <strong>Standard</strong> {listing.standard}
-                </span>
-                <span>
-                  <strong>Token</strong> #{listing.tokenId.toString()}
-                </span>
-                <span>
-                  <strong>Amount</strong> {listing.amount.toString()}
-                </span>
-                <span>
-                  <strong>Price</strong> {formatListingPrice(listing)}
-                </span>
-                {toExplorerAddress(listing.nft, config.chainId) ? (
-                  <a href={toExplorerAddress(listing.nft, config.chainId)!} target="_blank" rel="noreferrer" className="mono">
-                    Contract {truncateAddress(listing.nft)}
-                  </a>
-                ) : (
-                  <span className="mono">Contract {truncateAddress(listing.nft)}</span>
-                )}
-                {toExplorerAddress(listing.seller, config.chainId) ? (
-                  <a href={toExplorerAddress(listing.seller, config.chainId)!} target="_blank" rel="noreferrer" className="mono">
-                    Seller {truncateAddress(listing.seller)}
-                  </a>
-                ) : (
-                  <span className="mono">Seller {truncateAddress(listing.seller)}</span>
-                )}
-              </article>
+              <ListingSummaryRow
+                key={listing.key}
+                item={listing}
+                chainId={config.chainId}
+                ipfsGateway={process.env.NEXT_PUBLIC_IPFS_GATEWAY || "https://gateway.pinata.cloud/ipfs"}
+              />
             ))}
           </div>
         ) : null}

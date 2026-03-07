@@ -29,12 +29,17 @@ model Token {
   creatorAddress     String
   ownerAddress       String
   mintTxHash         String?
+  draftName          String?
+  draftDescription   String?
+  mintedAmountRaw    String?
   metadataCid        String
   mediaCid           String?
   immutable          Boolean  @default(true)
   mintedAt           DateTime @default(now())
   tags               TokenTag[]
+  holdings           TokenHolding[]
   listings           Listing[]
+  offers             Offer[]
   reports            Report[]
   moderationActions  ModerationAction[]
 
@@ -47,17 +52,71 @@ model Listing {
   id                 String   @id @default(cuid())
   listingId          String   @unique
   chainId            Int
+  marketplaceVersion String   @default("v1")
   collectionAddress  String
   tokenId            String
   sellerAddress      String
+  amountRaw          String   @default("1")
+  standard           String   @default("UNKNOWN")
   paymentToken       String
   priceRaw           String
+  expiresAtRaw       String   @default("0")
   active             Boolean  @default(true)
+  lastSyncedAt       DateTime @default(now())
+  cancelledAt        DateTime?
+  soldAt             DateTime?
+  buyerAddress       String?
+  txHash             String?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
   tokenRefId         String?
 
   token              Token?   @relation(fields: [tokenRefId], references: [id], onDelete: SetNull)
+}
+
+model Offer {
+  id                   String   @id @default(cuid())
+  offerId              String   @unique
+  chainId              Int
+  marketplaceVersion   String   @default("v2")
+  collectionAddress    String
+  tokenId              String
+  buyerAddress         String
+  paymentToken         String
+  quantityRaw          String
+  priceRaw             String
+  expiresAtRaw         String
+  status               String
+  active               Boolean  @default(true)
+  acceptedByAddress    String?
+  acceptedSellerAddress String?
+  acceptedTxHash       String?
+  cancelledTxHash      String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  lastSyncedAt         DateTime @default(now())
+  tokenRefId           String?
+
+  token                Token?   @relation(fields: [tokenRefId], references: [id], onDelete: SetNull)
+
+  @@index([buyerAddress, active, updatedAt])
+  @@index([collectionAddress, tokenId, active, updatedAt])
+  @@index([status, updatedAt])
+}
+
+model TokenHolding {
+  id                 String   @id @default(cuid())
+  tokenId            String
+  ownerAddress       String
+  quantityRaw        String   @default("0")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  token              Token    @relation(fields: [tokenId], references: [id], onDelete: Cascade)
+
+  @@unique([tokenId, ownerAddress])
+  @@index([ownerAddress, updatedAt])
+  @@index([tokenId, updatedAt])
 }
 
 model Tag {

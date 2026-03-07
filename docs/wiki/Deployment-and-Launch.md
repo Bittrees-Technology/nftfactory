@@ -93,6 +93,7 @@ Before deployment or release validation:
 
 ## Operational launch gates
 
+- [ ] `npm run check:release` passes (aggregates typechecks, tests, web build, secret scan, and env presence checks)
 - [ ] `npm run typecheck:web` passes
 - [ ] `npm run build:web` passes
 - [ ] `npm run typecheck:indexer` passes

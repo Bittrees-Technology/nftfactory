@@ -4,9 +4,19 @@ function getBaseUrl(): string {
 
 const INDEXER_REQUEST_TIMEOUT_MS = 12_000;
 
-function withTimeout(init?: RequestInit): { init: RequestInit; cleanup: () => void } {
+function withTimeout(
+  init?: RequestInit,
+  timeoutMs = INDEXER_REQUEST_TIMEOUT_MS
+): { init: RequestInit; cleanup: () => void } {
+  if (timeoutMs <= 0) {
+    return {
+      init: { ...init },
+      cleanup: () => {}
+    };
+  }
+
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), INDEXER_REQUEST_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   return {
     init: {
       ...init,
@@ -16,8 +26,9 @@ function withTimeout(init?: RequestInit): { init: RequestInit; cleanup: () => vo
   };
 }
 
-async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const { init: requestInit, cleanup } = withTimeout(init);
+async function fetchJson<T>(path: string, init?: RequestInit, timeoutMs?: number): Promise<T> {
+  const effectiveTimeoutMs = timeoutMs ?? INDEXER_REQUEST_TIMEOUT_MS;
+  const { init: requestInit, cleanup } = withTimeout(init, effectiveTimeoutMs);
   try {
     const response = await fetch(`${getBaseUrl()}${path}`, {
       ...requestInit,
@@ -46,7 +57,7 @@ async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
     return (await response.json()) as T;
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
-      throw new Error(`Indexer request timed out after ${INDEXER_REQUEST_TIMEOUT_MS}ms`);
+      throw new Error(`Indexer request timed out after ${effectiveTimeoutMs}ms`);
     }
     throw error;
   } finally {
@@ -73,6 +84,8 @@ function adminHeaders(auth?: AdminAuth): Record<string, string> {
 export type ApiModerationReport = {
   id: string;
   listingId: number | null;
+  listingRecordId?: string | null;
+  marketplaceVersion?: string | null;
   reason: string;
   reporterAddress: string;
   status: string;
@@ -88,7 +101,14 @@ export type ApiModerationAction = {
   notes?: string | null;
   reportId?: string | null;
   listingId: number | null;
+  listingRecordId?: string | null;
+  marketplaceVersion?: string | null;
   createdAt: string;
+};
+
+export type ApiHiddenListings = {
+  listingIds: number[];
+  listingRecordIds: string[];
 };
 
 export type ApiModerator = {
@@ -167,18 +187,69 @@ export type ApiOwnedProfiles = {
   profiles: ApiProfileRecord[];
 };
 
+export type ApiOfferSummary = {
+  id: string;
+  offerId: string;
+  chainId: number;
+  marketplaceVersion: string;
+  collectionAddress: string;
+  tokenId: string;
+  standard: string;
+  currentOwnerAddress: string | null;
+  currentOwnerAddresses: string[];
+  buyerAddress: string;
+  paymentToken: string;
+  quantityRaw: string;
+  priceRaw: string;
+  expiresAtRaw: string;
+  status: string;
+  active: boolean;
+  acceptedByAddress: string | null;
+  acceptedSellerAddress: string | null;
+  acceptedTxHash: string | null;
+  cancelledTxHash: string | null;
+  createdAt: string;
+  updatedAt: string;
+  lastSyncedAt: string;
+};
+
+export type ApiTokenActiveListing = {
+  listingId: string;
+  listingRecordId?: string;
+  marketplaceVersion?: string;
+  marketplaceAddress?: string | null;
+  sellerAddress: string;
+  paymentToken: string;
+  priceRaw: string;
+  amountRaw?: string | null;
+  standard?: string | null;
+  expiresAtRaw?: string | null;
+  active?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+  lastSyncedAt?: string | null;
+};
+
 export type ApiMintFeedItem = {
   id: string;
   tokenId: string;
   creatorAddress: string;
   ownerAddress: string;
+  heldAmountRaw?: string | null;
+  reservedAmountRaw?: string | null;
+  availableAmountRaw?: string | null;
   mintTxHash?: string | null;
+  draftName?: string | null;
+  draftDescription?: string | null;
+  mintedAmountRaw?: string | null;
   metadataCid: string;
   metadataUrl?: string | null;
   mediaCid: string | null;
   mediaUrl?: string | null;
   immutable: boolean;
   mintedAt: string;
+  bestOffer?: ApiOfferSummary | null;
+  offerCount?: number;
   collection: {
     chainId: number;
     contractAddress: string;
@@ -191,15 +262,7 @@ export type ApiMintFeedItem = {
     createdAt?: string;
     updatedAt?: string;
   };
-  activeListing: {
-    listingId: string;
-    sellerAddress: string;
-    paymentToken: string;
-    priceRaw: string;
-    active?: boolean;
-    createdAt?: string;
-    updatedAt?: string;
-  } | null;
+  activeListing: ApiTokenActiveListing | null;
 };
 
 export type ApiMintFeedResponse = {
@@ -209,9 +272,24 @@ export type ApiMintFeedResponse = {
   items: ApiMintFeedItem[];
 };
 
+export type ApiOwnerHoldingsResponse = {
+  ownerAddress: string;
+  cursor: number;
+  nextCursor: number;
+  canLoadMore: boolean;
+  items: Array<
+    Omit<ApiMintFeedItem, "collection"> & {
+      collection: ApiMintFeedItem["collection"] | null;
+    }
+  >;
+};
+
 export type ApiActiveListingItem = {
   id: number;
   listingId: string;
+  listingRecordId?: string;
+  marketplaceVersion: string;
+  marketplaceAddress?: string | null;
   sellerAddress: string;
   collectionAddress: string;
   tokenId: string;
@@ -221,6 +299,11 @@ export type ApiActiveListingItem = {
   priceRaw: string;
   expiresAtRaw: string;
   active: boolean;
+  buyerAddress: string | null;
+  txHash: string | null;
+  cancelledAt: string | null;
+  soldAt: string | null;
+  lastSyncedAt: string;
   createdAt: string;
   updatedAt: string;
   token: (Omit<ApiMintFeedItem, "activeListing"> & {
@@ -255,12 +338,21 @@ export type ApiIndexerHealth = {
   service: string;
   schema?: {
     mintTxHashColumnAvailable?: boolean;
+    tokenPresentationColumnsAvailable?: boolean;
+    listingV2ColumnsAvailable?: boolean;
+    offerTableAvailable?: boolean;
+    tokenHoldingTableAvailable?: boolean;
   };
   marketplace?: {
     configured?: boolean;
     syncInProgress?: boolean;
     lastListingSyncAt?: string | null;
     lastListingSyncCount?: number;
+    v2Configured?: boolean;
+    v2SyncInProgress?: boolean;
+    lastMarketplaceV2SyncAt?: string | null;
+    lastMarketplaceV2ListingSyncCount?: number;
+    lastOfferSyncCount?: number;
   };
 };
 
@@ -272,6 +364,8 @@ export type ApiOwnerSummary = {
     ownedTokens: number;
     createdTokens: number;
     activeListings: number;
+    offersMade: number;
+    offersReceived: number;
   };
   profiles: ApiProfileRecord[];
   collections: ApiOwnedCollections["collections"];
@@ -292,23 +386,40 @@ export type ApiOwnerSummary = {
       tokenId: string;
       creatorAddress: string;
       ownerAddress: string;
+      draftName?: string | null;
+      draftDescription?: string | null;
+      mintedAmountRaw?: string | null;
       metadataCid: string;
       metadataUrl: string | null;
       mediaCid: string | null;
       mediaUrl: string | null;
       immutable: boolean;
       mintedAt: string;
+      bestOffer?: ApiOfferSummary | null;
+      offerCount?: number;
       activeListing: ApiMintFeedItem["activeListing"];
     }>;
   }>;
   recentOwnedMints: Array<{
     id: string;
     tokenId: string;
+    creatorAddress: string;
+    ownerAddress: string;
+    heldAmountRaw?: string | null;
+    reservedAmountRaw?: string | null;
+    availableAmountRaw?: string | null;
+    mintTxHash: string | null;
+    draftName?: string | null;
+    draftDescription?: string | null;
+    mintedAmountRaw?: string | null;
     metadataCid: string;
     metadataUrl: string | null;
     mediaCid: string | null;
     mediaUrl: string | null;
     mintedAt: string;
+    bestOffer?: ApiOfferSummary | null;
+    offerCount?: number;
+    activeListing: ApiMintFeedItem["activeListing"];
     collection: {
       contractAddress: string;
       ensSubname: string | null;
@@ -316,6 +427,8 @@ export type ApiOwnerSummary = {
       isFactoryCreated: boolean;
     };
   }>;
+  recentOffersMade: ApiOfferSummary[];
+  recentOffersReceived: ApiOfferSummary[];
 };
 
 export type ApiCollectionTokens = {
@@ -328,13 +441,34 @@ export type ApiCollectionTokens = {
   >;
 };
 
+export type ApiOffersResponse = {
+  cursor: number;
+  nextCursor: number;
+  canLoadMore: boolean;
+  items: ApiOfferSummary[];
+};
+
+export type ApiUserOffersResponse = ApiOffersResponse & {
+  ownerAddress: string;
+};
+
+export async function fetchHiddenListings(): Promise<ApiHiddenListings> {
+  const payload = await fetchJson<ApiHiddenListings>("/api/moderation/hidden-listings");
+  return {
+    listingIds: payload.listingIds || [],
+    listingRecordIds: payload.listingRecordIds || []
+  };
+}
+
 export async function fetchHiddenListingIds(): Promise<number[]> {
-  const payload = await fetchJson<{ listingIds: number[] }>("/api/moderation/hidden-listings");
-  return payload.listingIds || [];
+  const payload = await fetchHiddenListings();
+  return payload.listingIds;
 }
 
 export async function createModerationReport(payload: {
-  listingId: number;
+  listingId?: number;
+  listingRecordId?: string;
+  marketplaceVersion?: string;
   collectionAddress: string;
   tokenId: string;
   sellerAddress: string;
@@ -372,13 +506,18 @@ export async function resolveModerationReport(payload: {
 }
 
 export async function setListingVisibility(payload: {
-  listingId: number;
+  listingId?: number;
+  listingRecordId?: string;
   hidden: boolean;
   actor: string;
   notes?: string;
   auth?: AdminAuth;
 }): Promise<void> {
-  await fetchJson(`/api/moderation/listings/${payload.listingId}/visibility`, {
+  const listingRef = String(payload.listingRecordId ?? payload.listingId ?? "").trim();
+  if (!listingRef) {
+    throw new Error("A listing reference is required.");
+  }
+  await fetchJson(`/api/moderation/listings/${encodeURIComponent(listingRef)}/visibility`, {
     method: "POST",
     headers: adminHeaders(payload.auth),
     body: JSON.stringify({
@@ -477,14 +616,64 @@ export async function fetchMintFeed(cursor = 0, limit = 50): Promise<ApiMintFeed
   );
 }
 
-export async function fetchActiveListings(cursor = 0, limit = 50, seller?: string): Promise<ApiActiveListingsResponse> {
+export async function fetchActiveListings(
+  cursor = 0,
+  limit = 50,
+  seller?: string,
+  options?: { includeAllMarkets?: boolean }
+): Promise<ApiActiveListingsResponse> {
   const params = new URLSearchParams();
   params.set("cursor", String(cursor));
   params.set("limit", String(limit));
   if (seller) {
     params.set("seller", seller);
   }
+  if (options?.includeAllMarkets) {
+    params.set("includeAllMarkets", "true");
+  }
   return fetchJson<ApiActiveListingsResponse>(`/api/listings?${params.toString()}`);
+}
+
+export async function fetchOffers(params?: {
+  cursor?: number;
+  limit?: number;
+  buyer?: string;
+  collectionAddress?: string;
+  tokenId?: string;
+  status?: string;
+  active?: boolean;
+}): Promise<ApiOffersResponse> {
+  const query = new URLSearchParams();
+  query.set("cursor", String(params?.cursor ?? 0));
+  query.set("limit", String(params?.limit ?? 50));
+  if (params?.buyer) {
+    query.set("buyer", params.buyer);
+  }
+  if (params?.collectionAddress) {
+    query.set("collectionAddress", params.collectionAddress);
+  }
+  if (params?.tokenId) {
+    query.set("tokenId", params.tokenId);
+  }
+  if (params?.status) {
+    query.set("status", params.status);
+  }
+  if (typeof params?.active === "boolean") {
+    query.set("active", String(params.active));
+  }
+  return fetchJson<ApiOffersResponse>(`/api/offers?${query.toString()}`);
+}
+
+export async function fetchOffersMade(ownerAddress: string, cursor = 0, limit = 50): Promise<ApiUserOffersResponse> {
+  return fetchJson<ApiUserOffersResponse>(
+    `/api/users/${encodeURIComponent(ownerAddress)}/offers-made?cursor=${encodeURIComponent(String(cursor))}&limit=${encodeURIComponent(String(limit))}`
+  );
+}
+
+export async function fetchOffersReceived(ownerAddress: string, cursor = 0, limit = 50): Promise<ApiUserOffersResponse> {
+  return fetchJson<ApiUserOffersResponse>(
+    `/api/users/${encodeURIComponent(ownerAddress)}/offers-received?cursor=${encodeURIComponent(String(cursor))}&limit=${encodeURIComponent(String(limit))}`
+  );
 }
 
 export async function fetchIndexerOverview(): Promise<ApiIndexerOverview> {
@@ -497,6 +686,23 @@ export async function fetchIndexerHealth(): Promise<ApiIndexerHealth> {
 
 export async function fetchOwnerSummary(ownerAddress: string): Promise<ApiOwnerSummary> {
   return fetchJson<ApiOwnerSummary>(`/api/owners/${encodeURIComponent(ownerAddress)}/summary`);
+}
+
+export async function fetchOwnerHoldings(
+  ownerAddress: string,
+  cursor = 0,
+  limit = 50,
+  options?: { standard?: "ERC721" | "ERC1155" | string | null }
+): Promise<ApiOwnerHoldingsResponse> {
+  const params = new URLSearchParams({
+    cursor: String(cursor),
+    limit: String(limit)
+  });
+  const standard = String(options?.standard || "").trim().toUpperCase();
+  if (standard === "ERC721" || standard === "ERC1155") {
+    params.set("standard", standard);
+  }
+  return fetchJson<ApiOwnerHoldingsResponse>(`/api/users/${encodeURIComponent(ownerAddress)}/holdings?${params.toString()}`);
 }
 
 export async function fetchCollectionTokens(contractAddress: string): Promise<ApiCollectionTokens> {
@@ -516,6 +722,9 @@ export async function syncMintedToken(payload: {
   ensSubname?: string | null;
   finalizedAt?: string | null;
   mintTxHash?: string | null;
+  draftName?: string | null;
+  draftDescription?: string | null;
+  mintedAmountRaw?: string | null;
   metadataCid: string;
   mediaCid?: string | null;
   immutable: boolean;
@@ -599,6 +808,21 @@ export async function backfillCollectionTokens(payload: {
         isUpgradeable: payload.isUpgradeable
       })
     }
+  );
+}
+
+export async function backfillRegistryCollections(payload?: {
+  fromBlock?: number;
+  auth?: AdminAuth;
+}): Promise<{ ok: boolean; discovered: number; scanned: number; upserted: number }> {
+  return fetchJson<{ ok: boolean; discovered: number; scanned: number; upserted: number }>(
+    "/api/admin/collections/backfill-registry",
+    {
+      method: "POST",
+      headers: adminHeaders(payload?.auth),
+      body: JSON.stringify({ fromBlock: payload?.fromBlock })
+    },
+    0
   );
 }
 

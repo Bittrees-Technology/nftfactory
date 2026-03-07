@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAccount, useChainId, usePublicClient, useWalletClient } from "wagmi";
 import { formatEther, type Address, type Hex } from "viem";
 import {
@@ -12,12 +12,24 @@ import {
 import { getContractsConfig } from "../../lib/contracts";
 import {
   fetchActiveListings,
-  fetchCollectionTokens,
-  fetchCollectionsByOwner,
-  logPaymentTokenUsage
+  fetchMintFeed,
+  fetchOwnerHoldings,
+  logPaymentTokenUsage,
+  type ApiActiveListingItem
 } from "../../lib/indexerApi";
 import { getAppChain } from "../../lib/chains";
 import { ipfsToGatewayUrl, useNftMetadataPreview } from "../../lib/nftMetadata";
+import {
+  getMintAmountLabel,
+  getMintSourceLabel
+} from "../../lib/nftPresentation";
+import {
+  findInsufficientErc1155Availability,
+  getErc1155ListingAvailability,
+  getSmallestErc1155AvailableBalance,
+  type Erc1155ListingAvailability
+} from "../../lib/listingAvailability";
+import { getOwnerHoldingPresentation } from "../../lib/ownerHoldingPresentation";
 import TxStatus, { type TxState } from "./TxStatus";
 import ListingCard, { type ListingRow } from "./ListingCard";
 
@@ -32,10 +44,24 @@ type OwnedMintRow = {
   contractAddress: string;
   standard: Standard;
   source: "shared" | "custom";
+  ownerAddress: string;
+  creatorAddress: string;
+  ensSubname: string | null;
+  mintTxHash: string | null;
+  heldAmountRaw?: string | null;
+  reservedAmountRaw?: string | null;
+  availableAmountRaw?: string | null;
+  draftName?: string | null;
+  draftDescription?: string | null;
+  mintedAmountRaw?: string | null;
   metadataCid: string;
   mediaCid: string | null;
   mintedAt: string;
-  activeListingId: string | null;
+  activeListing: {
+    listingId: string;
+    paymentToken: string;
+    priceRaw: string;
+  } | null;
 };
 
 type ContractOption = {
@@ -45,8 +71,82 @@ type ContractOption = {
 
 type InventorySort = "newest" | "oldest";
 
+type LocalMintFeedItem = {
+  tokenId: string;
+  creatorAddress?: string;
+  ownerAddress: string;
+  heldAmountRaw?: string | null;
+  reservedAmountRaw?: string | null;
+  availableAmountRaw?: string | null;
+  mintTxHash?: string | null;
+  draftName?: string | null;
+  draftDescription?: string | null;
+  mintedAmountRaw?: string | null;
+  metadataCid: string;
+  mediaCid: string | null;
+  mintedAt: string;
+  collection: {
+    contractAddress: string;
+    ensSubname?: string | null;
+    standard: string;
+  };
+};
+
 function isAddress(value: string): value is `0x${string}` {
   return /^0x[a-fA-F0-9]{40}$/.test(value);
+}
+
+function localMintFeedKey(chainId: number): string {
+  return `nftfactory:local-mint-feed:v1:${chainId}`;
+}
+
+function readLocalMintRows(
+  chainId: number,
+  ownerAddress: string,
+  config: ReturnType<typeof getContractsConfig>
+): OwnedMintRow[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(localMintFeedKey(chainId));
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as LocalMintFeedItem[];
+    if (!Array.isArray(parsed)) return [];
+    const normalizedOwner = ownerAddress.toLowerCase();
+    return parsed
+      .filter(
+        (item) =>
+          item &&
+          item.ownerAddress?.toLowerCase() === normalizedOwner &&
+          isAddress(String(item.collection?.contractAddress || "")) &&
+          (item.collection?.standard === "ERC721" || item.collection?.standard === "ERC1155")
+      )
+      .map((item) =>
+        createOwnedMintRow(
+          {
+            tokenId: item.tokenId,
+            contractAddress: item.collection.contractAddress,
+            standard: item.collection.standard,
+            ownerAddress: item.ownerAddress,
+            creatorAddress: item.creatorAddress || item.ownerAddress,
+            heldAmountRaw: item.heldAmountRaw || item.mintedAmountRaw || null,
+            reservedAmountRaw: item.reservedAmountRaw || null,
+            availableAmountRaw: item.availableAmountRaw || null,
+            ensSubname: item.collection.ensSubname || null,
+            mintTxHash: item.mintTxHash || null,
+            draftName: item.draftName || null,
+            draftDescription: item.draftDescription || null,
+            mintedAmountRaw: item.mintedAmountRaw || null,
+            metadataCid: item.metadataCid,
+            mediaCid: item.mediaCid,
+            mintedAt: item.mintedAt,
+            activeListing: null
+          },
+          config
+        )
+      );
+  } catch {
+    return [];
+  }
 }
 
 function truncateAddress(value: string): string {
@@ -65,16 +165,96 @@ function formatContractLabel(
   return `Creator Collection ${truncateAddress(address)}`;
 }
 
+function getOwnedMintSource(
+  contractAddress: string,
+  config: ReturnType<typeof getContractsConfig>
+): "shared" | "custom" {
+  const normalizedContract = contractAddress.toLowerCase();
+  return normalizedContract === config.shared721.toLowerCase() || normalizedContract === config.shared1155.toLowerCase()
+    ? "shared"
+    : "custom";
+}
+
+function createOwnedMintRow(
+  params: {
+    tokenId: string;
+    contractAddress: string;
+    standard: string;
+    ownerAddress: string;
+    creatorAddress: string;
+    heldAmountRaw?: string | null;
+    reservedAmountRaw?: string | null;
+    availableAmountRaw?: string | null;
+    ensSubname?: string | null;
+    mintTxHash?: string | null;
+    draftName?: string | null;
+    draftDescription?: string | null;
+    mintedAmountRaw?: string | null;
+    metadataCid: string;
+    mediaCid: string | null;
+    mintedAt: string;
+    activeListing?: {
+      listingId: string;
+      paymentToken: string;
+      priceRaw: string;
+    } | null;
+  },
+  config: ReturnType<typeof getContractsConfig>
+): OwnedMintRow {
+  const standard = params.standard === "ERC1155" ? "ERC1155" : "ERC721";
+  return {
+    key: `${params.contractAddress.toLowerCase()}:${params.tokenId}`,
+    tokenId: params.tokenId,
+    contractAddress: params.contractAddress,
+    standard,
+    source: getOwnedMintSource(params.contractAddress, config),
+    ownerAddress: params.ownerAddress,
+    creatorAddress: params.creatorAddress,
+    heldAmountRaw: standard === "ERC1155" ? params.heldAmountRaw || params.mintedAmountRaw || null : "1",
+    reservedAmountRaw: standard === "ERC1155" ? params.reservedAmountRaw || null : params.activeListing ? "1" : "0",
+    availableAmountRaw:
+      standard === "ERC1155"
+        ? params.availableAmountRaw || params.heldAmountRaw || params.mintedAmountRaw || null
+        : params.activeListing
+          ? "0"
+          : "1",
+    ensSubname: params.ensSubname || null,
+    mintTxHash: params.mintTxHash || null,
+    draftName: params.draftName || null,
+    draftDescription: params.draftDescription || null,
+    mintedAmountRaw: params.mintedAmountRaw || (standard === "ERC1155" ? null : "1"),
+    metadataCid: params.metadataCid,
+    mediaCid: params.mediaCid,
+    mintedAt: params.mintedAt,
+    activeListing: params.activeListing || null
+  };
+}
+
+function listingMetadataKey(contractAddress: string, tokenId: string): string {
+  return `${contractAddress.toLowerCase()}:${tokenId}`;
+}
+
+function listingMarketKey(marketplaceAddress: string, listingId: number): string {
+  return `${marketplaceAddress.toLowerCase()}:${listingId}`;
+}
+
+function getOwnedMintHeldAmountRaw(item: Pick<OwnedMintRow, "standard" | "heldAmountRaw" | "mintedAmountRaw">): string | null {
+  if (item.standard === "ERC721") return "1";
+  return item.heldAmountRaw || item.mintedAmountRaw || null;
+}
+
 function InventoryTokenCard({
   item,
   ipfsGateway,
   selected,
-  onSelect
+  onSelect,
+  availability
 }: {
   item: OwnedMintRow;
   ipfsGateway: string;
   selected: boolean;
   onSelect: () => void;
+  availability?: Erc1155ListingAvailability | null;
 }) {
   const metadataUrl = ipfsToGatewayUrl(item.metadataCid, ipfsGateway);
   const mediaUrl = ipfsToGatewayUrl(item.mediaCid, ipfsGateway);
@@ -84,9 +264,30 @@ function InventoryTokenCard({
     gateway: ipfsGateway
   });
 
+  const ownerHolding = getOwnerHoldingPresentation(
+    {
+      standard: item.standard,
+      tokenId: item.tokenId,
+      ensSubname: item.ensSubname,
+      draftName: item.draftName,
+      draftDescription: item.draftDescription,
+      previewName: preview.name,
+      previewDescription: preview.description,
+      heldAmountRaw: item.heldAmountRaw,
+      reservedAmountRaw:
+        item.standard === "ERC1155"
+          ? availability?.reservedAmount.toString() || item.reservedAmountRaw || null
+          : item.reservedAmountRaw || null,
+      availableAmountRaw:
+        item.standard === "ERC1155"
+          ? availability?.availableAmount?.toString() || item.availableAmountRaw || null
+          : item.availableAmountRaw || null,
+      mintedAmountRaw: item.mintedAmountRaw,
+      activeListing: item.activeListing
+    },
+    { showZeroReserved: true }
+  );
   const mediaTypeLabel = preview.imageUrl ? "Image" : preview.audioUrl ? "Audio" : "Metadata";
-  const title = preview.name || `Token #${item.tokenId}`;
-  const description = preview.description || "No metadata description available.";
 
   return (
     <div
@@ -104,7 +305,7 @@ function InventoryTokenCard({
       <div className="feedCardHero">
         <div className="feedCardMedia">
           {preview.imageUrl ? (
-            <img src={preview.imageUrl} alt={title} className="feedCardImage" loading="lazy" />
+            <img src={preview.imageUrl} alt={ownerHolding.title} className="feedCardImage" loading="lazy" />
           ) : preview.audioUrl ? (
             <div className="feedCardMediaFallback">
               <span className="feedCardFallbackLabel">Audio</span>
@@ -124,15 +325,14 @@ function InventoryTokenCard({
 
         <div className="feedCardContent">
           <div className="feedCardTop">
-            <span className="feedCardStatus">{mediaTypeLabel}</span>
+            <span className="feedCardStatus">{ownerHolding.statusLabel}</span>
           </div>
           <div className="feedCardBody">
             <div className="feedCardMain">
-              <p className="feedCardEyebrow">
-                {item.source === "shared" ? "NFTFactory shared" : "Creator collection"} · {item.standard}
-              </p>
-              <h3 className="feedCardTitle">{title}</h3>
-              <p className="feedCardMetaLine">{description}</p>
+              <p className="feedCardEyebrow">{getMintSourceLabel(item.source === "shared")}</p>
+              <h3 className="feedCardTitle">{ownerHolding.title}</h3>
+              <p className="feedCardMetaLine">{ownerHolding.description}</p>
+              {ownerHolding.collectionIdentity ? <p className="feedCardMetaLine">Collection {ownerHolding.collectionIdentity}</p> : null}
               <p className="feedCardMetaLine">Created {new Date(item.mintedAt).toLocaleString()}</p>
             </div>
             <div className="feedCardFacts">
@@ -141,8 +341,28 @@ function InventoryTokenCard({
                 <span className="detailValue">#{item.tokenId}</span>
               </div>
               <div className="feedFact">
-                <span className="feedFactLabel">Status</span>
-                <span className="detailValue">{item.activeListingId ? `Listed #${item.activeListingId}` : "Ready to list"}</span>
+                <span className="feedFactLabel">Held</span>
+                <span className="detailValue">{ownerHolding.heldAmountLabel}</span>
+              </div>
+              {ownerHolding.reservedAmountLabel ? (
+                <div className="feedFact">
+                  <span className="feedFactLabel">Listed</span>
+                  <span className="detailValue">{ownerHolding.reservedAmountLabel}</span>
+                </div>
+              ) : null}
+              {ownerHolding.availableAmountLabel ? (
+                <div className="feedFact">
+                  <span className="feedFactLabel">Available</span>
+                  <span className="detailValue">{ownerHolding.availableAmountLabel}</span>
+                </div>
+              ) : null}
+              <div className="feedFact">
+                <span className="feedFactLabel">Contract</span>
+                <span className="detailValue mono">{truncateAddress(item.contractAddress)}</span>
+              </div>
+              <div className="feedFact">
+                <span className="feedFactLabel">Media</span>
+                <span className="detailValue">{mediaTypeLabel}</span>
               </div>
             </div>
           </div>
@@ -159,6 +379,10 @@ function InventoryTokenCard({
             <a href={mediaUrl} target="_blank" rel="noreferrer" className="ctaLink secondaryLink" onClick={(e) => e.stopPropagation()}>
               Media
             </a>
+          ) : null}
+          {item.standard === "ERC1155" ? <span className="feedLinkPill muted">Choose quantity below</span> : null}
+          {item.standard === "ERC1155" && availability?.oversubscribed ? (
+            <span className="error">Active listings already consume more than the indexed balance for this token.</span>
           ) : null}
         </span>
       </div>
@@ -188,19 +412,18 @@ export default function ListClient() {
   const [editingListing, setEditingListing] = useState<ListingRow | null>(null);
   const [listingsLoading, setListingsLoading] = useState(false);
   const [listingsError, setListingsError] = useState("");
-  const [cancelingId, setCancelingId] = useState<number | null>(null);
+  const [cancelingKey, setCancelingKey] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState("");
   const [ownedMints, setOwnedMints] = useState<OwnedMintRow[]>([]);
+  const [localOwnedMints, setLocalOwnedMints] = useState<OwnedMintRow[]>([]);
   const [mintInventoryLoading, setMintInventoryLoading] = useState(false);
   const [mintInventoryError, setMintInventoryError] = useState("");
 
   const wrongNetwork = isConnected && chainId !== config.chainId;
   const ipfsGateway = process.env.NEXT_PUBLIC_IPFS_GATEWAY || "https://gateway.pinata.cloud/ipfs";
-
-  useEffect(() => {
-    void loadListings();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [address]);
+  const listingMarketplace = (config.marketplaceV2 || config.marketplace) as Address;
+  const listingMarketplaceLabel = config.marketplaceV2 ? "Marketplace V2" : "Marketplace";
+  const listingReadLabel = config.marketplaceV2 ? "Marketplace V2 + Marketplace V1" : "Marketplace";
 
   useEffect(() => {
     let cancelled = false;
@@ -216,40 +439,95 @@ export default function ListClient() {
       setMintInventoryError("");
       try {
         const normalizedOwner = address.toLowerCase();
-        const collections = await fetchCollectionsByOwner(address);
-        if (cancelled) return;
         const byKey = new Map<string, OwnedMintRow>();
 
         const addRow = (row: OwnedMintRow): void => {
           byKey.set(row.key, row);
         };
 
-        const tokenResults = await Promise.allSettled(
-          (collections.collections || []).map((collection) => fetchCollectionTokens(collection.contractAddress))
-        );
-        if (cancelled) return;
+        let cursor = 0;
+        for (let page = 0; page < 20; page += 1) {
+          const holdings = await fetchOwnerHoldings(address, cursor, 100, { standard });
+          if (cancelled) return;
 
-        for (const result of tokenResults) {
-          if (result.status !== "fulfilled") continue;
-          for (const token of result.value.tokens || []) {
+          for (const token of holdings.items || []) {
+            if (!token.collection || (token.collection.standard !== "ERC1155" && token.collection.standard !== "ERC721")) continue;
             if (token.ownerAddress.toLowerCase() !== normalizedOwner) continue;
-            const contractAddress = token.collection.contractAddress;
-            const normalizedContract = contractAddress.toLowerCase();
-            const rowSource =
-              normalizedContract === config.shared721.toLowerCase() || normalizedContract === config.shared1155.toLowerCase()
-                ? "shared"
-                : "custom";
-            addRow({
-              key: `${normalizedContract}:${token.tokenId}`,
-              tokenId: token.tokenId,
-              contractAddress,
-              standard: token.collection.standard === "ERC1155" ? "ERC1155" : "ERC721",
-              source: rowSource,
-              metadataCid: token.metadataCid,
-              mediaCid: token.mediaCid,
-              mintedAt: token.mintedAt,
-              activeListingId: token.activeListing?.listingId || null
-            });
+            addRow(
+              createOwnedMintRow(
+                {
+                  tokenId: token.tokenId,
+                  contractAddress: token.collection.contractAddress,
+                  standard: token.collection.standard,
+                  ownerAddress: token.ownerAddress,
+                  creatorAddress: token.creatorAddress,
+                  heldAmountRaw: token.heldAmountRaw || null,
+                  reservedAmountRaw: token.reservedAmountRaw || null,
+                  availableAmountRaw: token.availableAmountRaw || null,
+                  ensSubname: token.collection.ensSubname,
+                  mintTxHash: token.mintTxHash || null,
+                  draftName: token.draftName || null,
+                  draftDescription: token.draftDescription || null,
+                  mintedAmountRaw: token.mintedAmountRaw || null,
+                  metadataCid: token.metadataCid,
+                  mediaCid: token.mediaCid,
+                  mintedAt: token.mintedAt,
+                  activeListing: token.activeListing
+                    ? {
+                        listingId: token.activeListing.listingId,
+                        paymentToken: token.activeListing.paymentToken,
+                        priceRaw: token.activeListing.priceRaw
+                      }
+                    : null
+                },
+                config
+              )
+            );
+          }
+
+          if (!holdings.canLoadMore) break;
+          cursor = holdings.nextCursor;
+        }
+
+        if (byKey.size === 0) {
+          cursor = 0;
+          for (let page = 0; page < 4; page += 1) {
+            const feed = await fetchMintFeed(cursor, 100);
+            for (const token of feed.items || []) {
+              if (token.ownerAddress.toLowerCase() !== normalizedOwner) continue;
+              addRow(
+                createOwnedMintRow(
+                  {
+                    tokenId: token.tokenId,
+                    contractAddress: token.collection.contractAddress,
+                    standard: token.collection.standard,
+                    ownerAddress: token.ownerAddress,
+                    creatorAddress: token.creatorAddress,
+                    heldAmountRaw: token.heldAmountRaw || token.mintedAmountRaw || null,
+                    reservedAmountRaw: token.reservedAmountRaw || null,
+                    availableAmountRaw: token.availableAmountRaw || token.heldAmountRaw || token.mintedAmountRaw || null,
+                    ensSubname: token.collection.ensSubname,
+                    mintTxHash: token.mintTxHash || null,
+                    draftName: token.draftName || null,
+                    draftDescription: token.draftDescription || null,
+                    mintedAmountRaw: token.mintedAmountRaw || null,
+                    metadataCid: token.metadataCid,
+                    mediaCid: token.mediaCid,
+                    mintedAt: token.mintedAt,
+                    activeListing: token.activeListing
+                      ? {
+                          listingId: token.activeListing.listingId,
+                          paymentToken: token.activeListing.paymentToken,
+                          priceRaw: token.activeListing.priceRaw
+                        }
+                      : null
+                  },
+                  config
+                )
+              );
+            }
+            if (!feed.canLoadMore) break;
+            cursor = feed.nextCursor;
           }
         }
 
@@ -268,12 +546,52 @@ export default function ListClient() {
     return () => {
       cancelled = true;
     };
-  }, [address]);
+  }, [address, config, standard]);
+
+  useEffect(() => {
+    if (!address) {
+      setLocalOwnedMints([]);
+      return;
+    }
+
+    const syncLocalInventory = (): void => {
+      setLocalOwnedMints(readLocalMintRows(config.chainId, address, config));
+    };
+
+    syncLocalInventory();
+    window.addEventListener("storage", syncLocalInventory);
+    window.addEventListener("focus", syncLocalInventory);
+    return () => {
+      window.removeEventListener("storage", syncLocalInventory);
+      window.removeEventListener("focus", syncLocalInventory);
+    };
+  }, [address, config]);
+
+  const mergedOwnedMints = useMemo(() => {
+    const byKey = new Map<string, OwnedMintRow>();
+    for (const item of ownedMints) {
+      byKey.set(item.key, item);
+    }
+    for (const item of localOwnedMints) {
+      if (!byKey.has(item.key)) {
+        byKey.set(item.key, item);
+      }
+    }
+    return [...byKey.values()];
+  }, [localOwnedMints, ownedMints]);
 
   const filteredOwnedMints = useMemo(
-    () => ownedMints.filter((item) => item.standard === standard),
-    [ownedMints, standard]
+    () => mergedOwnedMints.filter((item) => item.standard === standard),
+    [mergedOwnedMints, standard]
   );
+
+  const listingMetadata = useMemo(() => {
+    const rows = new Map<string, OwnedMintRow>();
+    for (const item of mergedOwnedMints) {
+      rows.set(listingMetadataKey(item.contractAddress, item.tokenId), item);
+    }
+    return rows;
+  }, [mergedOwnedMints]);
 
   const contractOptions = useMemo<ContractOption[]>(() => {
     const unique = new Map<string, OwnedMintRow[]>();
@@ -326,6 +644,41 @@ export default function ListClient() {
     [availableTokens, selectedTokenKeys]
   );
 
+  const erc1155AvailabilityByKey = useMemo(() => {
+    const availability = new Map<string, Erc1155ListingAvailability>();
+    for (const item of filteredOwnedMints) {
+      if (item.standard !== "ERC1155") continue;
+      availability.set(item.key, getErc1155ListingAvailability(item, myListings));
+    }
+    return availability;
+  }, [filteredOwnedMints, myListings]);
+
+  const erc1155ListingTargets = useMemo(() => {
+    if (standard !== "ERC1155") return [] as OwnedMintRow[];
+    return editingListing
+      ? [
+          listingMetadata.get(
+            listingMetadataKey(String(editingListing.nft), editingListing.tokenId.toString())
+          )
+        ].filter((item): item is OwnedMintRow => Boolean(item))
+      : selectedTokens;
+  }, [editingListing, listingMetadata, selectedTokens, standard]);
+
+  const selectedErc1155Availability = useMemo(() => {
+    if (erc1155ListingTargets.length !== 1) return null;
+    return getErc1155ListingAvailability(erc1155ListingTargets[0], myListings, {
+      excludeListingKey: editingListing?.key || null
+    });
+  }, [editingListing?.key, erc1155ListingTargets, myListings]);
+
+  const selectedErc1155AvailableCap = useMemo(
+    () =>
+      getSmallestErc1155AvailableBalance(erc1155ListingTargets, myListings, {
+        excludeListingKey: editingListing?.key || null
+      }),
+    [editingListing?.key, erc1155ListingTargets, myListings]
+  );
+
   const listingExpiryDate = useMemo(() => {
     const parsedDays = Number.parseInt(listingDays, 10);
     if (!Number.isInteger(parsedDays) || parsedDays <= 0) return null;
@@ -333,7 +686,41 @@ export default function ListClient() {
     return new Date(expiresAt);
   }, [listingDays]);
 
-  async function loadListings(): Promise<void> {
+  const buildListingRow = useCallback((listing: ApiActiveListingItem): ListingRow => {
+    const metadata = listing.token || listingMetadata.get(listingMetadataKey(listing.collectionAddress, listing.tokenId));
+    const metadataCollection = metadata && "collection" in metadata ? metadata.collection : null;
+    const metadataEnsSubname = metadata && "ensSubname" in metadata ? metadata.ensSubname : null;
+    const marketplaceVersion = String(listing.marketplaceVersion || "v1").toLowerCase();
+    const marketplaceAddress =
+      ((listing.marketplaceAddress ||
+        (marketplaceVersion === "v2" ? config.marketplaceV2 || config.marketplace : config.marketplace)) as Address);
+    const marketplaceLabel =
+      marketplaceVersion === "v2" ? "Marketplace V2" : config.marketplaceV2 ? "Marketplace V1" : "Marketplace";
+    return {
+      key: listing.listingRecordId || listingMarketKey(marketplaceAddress, listing.id),
+      id: listing.id,
+      seller: listing.sellerAddress as Address,
+      nft: listing.collectionAddress as Address,
+      tokenId: BigInt(listing.tokenId),
+      amount: BigInt(listing.amountRaw || "1"),
+      standard: listing.standard,
+      paymentToken: listing.paymentToken as Address,
+      price: BigInt(listing.priceRaw),
+      expiresAt: BigInt(listing.expiresAtRaw || "0"),
+      active: listing.active,
+      metadataCid: metadata?.metadataCid,
+      mediaCid: metadata?.mediaCid,
+      mintedAt: metadata?.mintedAt || null,
+      mintTxHash: metadata?.mintTxHash || null,
+      draftName: metadata?.draftName || null,
+      draftDescription: metadata?.draftDescription || null,
+      ensSubname: metadataCollection?.ensSubname || metadataEnsSubname || null,
+      marketplaceAddress,
+      marketplaceLabel
+    };
+  }, [config.marketplace, config.marketplaceV2, listingMetadata]);
+
+  const loadListings = useCallback(async (): Promise<void> => {
     setListingsLoading(true);
     setListingsError("");
     try {
@@ -342,36 +729,16 @@ export default function ListClient() {
         return;
       }
 
-      const account = address.toLowerCase();
-      const listingRows = new Map<number, ListingRow>();
+      const listingRows = new Map<string, ListingRow>();
 
       let cursor = 0;
       let page = 0;
       let canLoadMore = true;
       while (canLoadMore && page < 10) {
-        const response = await fetchActiveListings(cursor, 100, account);
-        for (const item of response.items) {
-          if (!item.token || !item.token.collection) continue;
-
-          const listingId = Number.parseInt(item.listingId, 10) || item.id || 0;
-          if (listingRows.has(listingId)) continue;
-
-          listingRows.set(listingId, {
-            id: listingId,
-            seller: item.sellerAddress as Address,
-            nft: item.collectionAddress as Address,
-            tokenId: BigInt(item.tokenId),
-            amount: BigInt(item.amountRaw || "1"),
-            standard: item.standard,
-            paymentToken: item.paymentToken as Address,
-            price: BigInt(item.priceRaw),
-            expiresAt: BigInt(item.expiresAtRaw || "0"),
-            active: item.active !== false,
-            metadataCid: item.token.metadataCid,
-            mediaCid: item.token.mediaCid,
-            mintedAt: item.token.mintedAt,
-            mintTxHash: item.token.mintTxHash || null
-          });
+        const response = await fetchActiveListings(cursor, 100, address, { includeAllMarkets: true });
+        for (const listing of response.items || []) {
+          const row = buildListingRow(listing);
+          listingRows.set(row.key, row);
         }
 
         canLoadMore = response.canLoadMore;
@@ -379,14 +746,23 @@ export default function ListClient() {
         page += 1;
       }
 
-      const nextListings = [...listingRows.values()].sort((a, b) => b.id - a.id);
+      const nextListings = [...listingRows.values()].sort((a, b) => {
+        const aPriority = a.marketplaceAddress.toLowerCase() === listingMarketplace.toLowerCase() ? 0 : 1;
+        const bPriority = b.marketplaceAddress.toLowerCase() === listingMarketplace.toLowerCase() ? 0 : 1;
+        if (aPriority !== bPriority) return aPriority - bPriority;
+        return b.id - a.id;
+      });
       setMyListings(nextListings);
     } catch (err) {
       setListingsError(err instanceof Error ? err.message : "Failed to load listings");
     } finally {
       setListingsLoading(false);
     }
-  }
+  }, [address, buildListingRow, listingMarketplace]);
+
+  useEffect(() => {
+    void loadListings();
+  }, [loadListings]);
 
   async function sendTransaction(to: `0x${string}`, data: `0x${string}`, value?: bigint): Promise<`0x${string}`> {
     if (!walletClient || !walletClient.account) throw new Error("Connect wallet first.");
@@ -436,7 +812,10 @@ export default function ListClient() {
     setListingDays(nextDays.toString());
     setState({
       status: "idle",
-      message: `Editing listing #${item.id}. Submitting will cancel the current listing and create a replacement.`
+      message:
+        item.marketplaceAddress.toLowerCase() === listingMarketplace.toLowerCase()
+          ? `Editing ${item.marketplaceLabel} listing #${item.id}. Submitting will replace it on ${listingMarketplaceLabel}.`
+          : `Editing ${item.marketplaceLabel} listing #${item.id}. Submitting will cancel it and recreate the listing on ${listingMarketplaceLabel}.`
     });
   }
 
@@ -519,37 +898,89 @@ export default function ListClient() {
       return;
     }
 
+    const tokensToList = editingListing
+      ? [
+          listingMetadata.get(
+            listingMetadataKey(String(editingListing.nft), editingListing.tokenId.toString())
+          )
+        ].filter((item): item is OwnedMintRow => Boolean(item))
+      : selectedTokens;
+
+    if (submitStandard === "ERC1155") {
+      if (listingsLoading) {
+        setState({ status: "error", message: "Active listings are still loading. Wait for the indexed balance check, then try again." });
+        return;
+      }
+      if (listingsError) {
+        setState({ status: "error", message: "Current active listings could not be verified. Refresh listings before creating an ERC-1155 listing." });
+        return;
+      }
+      if (tokensToList.length === 0) {
+        setState({ status: "error", message: "Indexed ERC-1155 balances are still loading. Refresh and try again." });
+        return;
+      }
+      const requestedAmount = BigInt(parsedAmount);
+      const insufficientToken = findInsufficientErc1155Availability(tokensToList, myListings, requestedAmount, {
+        excludeListingKey: editingListing?.key || null
+      });
+      if (insufficientToken) {
+        const availableLabel =
+          insufficientToken.availability.availableAmount !== null
+            ? getMintAmountLabel("ERC1155", insufficientToken.availability.availableAmount.toString(), "0 editions")
+            : getMintAmountLabel(
+                "ERC1155",
+                insufficientToken.availability.heldBalance?.toString() || null,
+                "Balance not indexed"
+              );
+        const reservedLabel =
+          insufficientToken.availability.reservedAmount > 0n
+            ? getMintAmountLabel("ERC1155", insufficientToken.availability.reservedAmount.toString(), "0 editions")
+            : null;
+        setState({
+          status: "error",
+          message:
+            tokensToList.length === 1
+              ? `Copies per listing exceeds the indexed available balance for token #${insufficientToken.item.tokenId}. Available: ${availableLabel}.${reservedLabel ? ` Already reserved by active listings: ${reservedLabel}.` : ""}`
+              : "Copies per listing exceeds the indexed available balance for at least one selected ERC-1155 token after subtracting active listings."
+        });
+        return;
+      }
+    }
+
     try {
       if (editingListing) {
-        setCancelingId(editingListing.id);
-        setState({ status: "pending", message: `Canceling listing #${editingListing.id} before replacement...` });
+        setCancelingKey(editingListing.key);
+        setState({
+          status: "pending",
+          message: `Canceling ${editingListing.marketplaceLabel} listing #${editingListing.id} before replacement...`
+        });
         const cancelTx = await sendTransaction(
-          config.marketplace as `0x${string}`,
+          editingListing.marketplaceAddress as `0x${string}`,
           encodeCancelListing(BigInt(editingListing.id)) as `0x${string}`
         );
         await waitForReceipt(cancelTx);
       }
 
-      setState({ status: "pending", message: "Approving marketplace for selected collection..." });
+      setState({ status: "pending", message: `Approving ${listingMarketplaceLabel} for the selected collection...` });
       const approvalTx = await sendTransaction(
         submitContract as `0x${string}`,
-        encodeSetApprovalForAll(config.marketplace as `0x${string}`, true) as `0x${string}`
+        encodeSetApprovalForAll(listingMarketplace as `0x${string}`, true) as `0x${string}`
       );
       await waitForReceipt(approvalTx);
 
       let latestHash = approvalTx;
-      const tokensToList = editingListing
+      const listingTargets = editingListing
         ? [{ tokenId: editingListing.tokenId.toString() }]
-        : selectedTokens;
-      for (let index = 0; index < tokensToList.length; index += 1) {
-        const token = tokensToList[index];
+        : tokensToList;
+      for (let index = 0; index < listingTargets.length; index += 1) {
+        const token = listingTargets[index];
         setState({
           status: "pending",
           hash: latestHash,
-          message: `Creating listing ${index + 1} of ${tokensToList.length}...`
+          message: `Creating ${listingMarketplaceLabel} listing ${index + 1} of ${listingTargets.length}...`
         });
         const listingTx = await sendTransaction(
-          config.marketplace as `0x${string}`,
+          listingMarketplace as `0x${string}`,
           encodeCreateListing(
             submitContract as `0x${string}`,
             BigInt(token.tokenId),
@@ -569,7 +1000,7 @@ export default function ListClient() {
           await logPaymentTokenUsage({
             tokenAddress: paymentToken,
             sellerAddress: address || "",
-            listingIds: tokensToList.map((item) => item.tokenId)
+            listingIds: listingTargets.map((item) => item.tokenId)
           });
         } catch {
           // Token logging is best-effort and should not fail the listing flow.
@@ -581,10 +1012,10 @@ export default function ListClient() {
         hash: latestHash,
         message:
           editingListing
-            ? `Listing #${editingListing.id} was replaced successfully.`
+            ? `Listing #${editingListing.id} was replaced on ${listingMarketplaceLabel}.`
             : selectedTokens.length === 1
-              ? "Listing submitted successfully."
-              : `${selectedTokens.length} listings submitted successfully.`
+              ? `${listingMarketplaceLabel} listing submitted successfully.`
+              : `${selectedTokens.length} ${listingMarketplaceLabel} listings submitted successfully.`
       });
       setEditingListing(null);
       setSelectedTokenKeys([]);
@@ -592,11 +1023,11 @@ export default function ListClient() {
     } catch (err) {
       setState({ status: "error", message: err instanceof Error ? err.message : "Listing failed" });
     } finally {
-      setCancelingId(null);
+      setCancelingKey(null);
     }
   }
 
-  async function onCancelListing(listingId: number): Promise<void> {
+  async function onCancelListing(item: ListingRow): Promise<void> {
     if (!isConnected) {
       setState({ status: "error", message: "Connect wallet first." });
       return;
@@ -607,19 +1038,19 @@ export default function ListClient() {
     }
 
     try {
-      setCancelingId(listingId);
-      setState({ status: "pending", message: `Canceling listing #${listingId}...` });
+      setCancelingKey(item.key);
+      setState({ status: "pending", message: `Canceling ${item.marketplaceLabel} listing #${item.id}...` });
       const txHash = await sendTransaction(
-        config.marketplace as `0x${string}`,
-        encodeCancelListing(BigInt(listingId)) as `0x${string}`
+        item.marketplaceAddress as `0x${string}`,
+        encodeCancelListing(BigInt(item.id)) as `0x${string}`
       );
       await waitForReceipt(txHash);
-      setState({ status: "success", hash: txHash, message: `Cancellation submitted for listing #${listingId}.` });
+      setState({ status: "success", hash: txHash, message: `Cancellation submitted for ${item.marketplaceLabel} listing #${item.id}.` });
       await loadListings();
     } catch (err) {
       setState({ status: "error", message: err instanceof Error ? err.message : "Cancel failed" });
     } finally {
-      setCancelingId(null);
+      setCancelingKey(null);
     }
   }
 
@@ -715,6 +1146,7 @@ export default function ListClient() {
                         item={item}
                         ipfsGateway={ipfsGateway}
                         selected={selected}
+                        availability={erc1155AvailabilityByKey.get(item.key) || null}
                         onSelect={() => toggleSelectedToken(item.key)}
                       />
                     );
@@ -728,7 +1160,32 @@ export default function ListClient() {
           {standard === "ERC1155" ? (
             <label>
               Copies per listing
-              <input value={erc1155Amount} onChange={(e) => setErc1155Amount(e.target.value)} inputMode="numeric" placeholder="1" />
+              <input
+                value={erc1155Amount}
+                onChange={(e) => setErc1155Amount(e.target.value)}
+                inputMode="numeric"
+                min="1"
+                max={selectedErc1155AvailableCap ? selectedErc1155AvailableCap.toString() : undefined}
+                placeholder="1"
+              />
+              {selectedErc1155Availability ? (
+                <>
+                  <span className="hint">
+                    Indexed held balance: {selectedErc1155Availability.heldBalance?.toString() || "unknown"}. Active listings already reserve{" "}
+                    {selectedErc1155Availability.reservedAmount.toString()}. Available for a new listing:{" "}
+                    {selectedErc1155Availability.availableAmount?.toString() || "unknown"}.
+                  </span>
+                  {selectedErc1155Availability.oversubscribed ? (
+                    <span className="error">
+                      Active listings already consume more than the indexed balance for this token. Cancel or reduce another listing before adding a new one.
+                    </span>
+                  ) : null}
+                </>
+              ) : selectedErc1155AvailableCap !== null ? (
+                <span className="hint">Lowest indexed balance still available across selected tokens: {selectedErc1155AvailableCap.toString()}</span>
+              ) : (
+                <span className="hint">Select ERC-1155 items to load indexed balances and subtract any already-active listings.</span>
+              )}
             </label>
           ) : null}
         </div>
@@ -736,11 +1193,18 @@ export default function ListClient() {
         <div className="card formCard">
           <h3>2. Create Listing</h3>
           <p className="hint">Set the payment asset, choose the fixed price, and choose how long the listing should stay live.</p>
+          <p className="hint">
+            New listings target {listingMarketplaceLabel}. Existing V1 and V2 listings below are loaded from the indexer and still cancel against their original marketplace.
+          </p>
           {editingListing ? (
             <div className="selectionCard">
               <span className="detailLabel">Editing Listing</span>
-              <p className="detailValue">#{editingListing.id} for token #{editingListing.tokenId.toString()}</p>
-              <p className="hint">Submitting this form will cancel the current listing and create a replacement with the updated terms.</p>
+              <p className="detailValue">
+                {editingListing.marketplaceLabel} #{editingListing.id} for token #{editingListing.tokenId.toString()}
+              </p>
+              <p className="hint">
+                Submitting this form will cancel the current listing and create a replacement with the updated terms on {listingMarketplaceLabel}.
+              </p>
               <div className="row">
                 <button type="button" className="miniBtn" onClick={clearListingUpdate}>
                   Clear Update Mode
@@ -814,7 +1278,7 @@ export default function ListClient() {
             <div className="listTable">
               {myListings.map((item) => (
                 <ListingCard
-                  key={item.id}
+                  key={item.key}
                   item={item}
                   ipfsGateway={ipfsGateway}
                   chainId={config.chainId}
@@ -822,7 +1286,7 @@ export default function ListClient() {
                   wrongNetwork={wrongNetwork}
                   isConnected={isConnected}
                   isBuying={false}
-                  isCanceling={cancelingId === item.id}
+                  isCanceling={cancelingKey === item.key}
                   copiedKey={copiedKey}
                   onBuy={(_item) => undefined}
                   onCancel={onCancelListing}
@@ -835,7 +1299,7 @@ export default function ListClient() {
           ) : null}
           {myListings.length > 0 ? (
             <p className="hint">
-              Each listing stays independent, so any single listing can be canceled by ID even if it was created in the same batch.
+              Showing indexed listings from {listingReadLabel}. Each listing stays independent, so any single listing can be canceled by its original marketplace and ID.
             </p>
           ) : null}
         </div>
