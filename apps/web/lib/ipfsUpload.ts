@@ -89,6 +89,28 @@ export function buildIpfsAddUrl(baseUrl: string): string {
   return url.toString();
 }
 
+export function buildIpfsVersionUrl(baseUrl: string): string {
+  const normalized = baseUrl.trim();
+  if (!normalized) {
+    throw new Error("IPFS_API_URL is required.");
+  }
+
+  const url = new URL(normalized);
+  const pathname = url.pathname.replace(/\/+$/, "");
+
+  if (pathname.endsWith("/api/v0/version")) {
+    url.pathname = pathname;
+  } else if (pathname.endsWith("/api/v0/add")) {
+    url.pathname = pathname.replace(/\/add$/, "/version");
+  } else if (pathname.endsWith("/api/v0")) {
+    url.pathname = `${pathname}/version`;
+  } else {
+    url.pathname = `${pathname}/api/v0/version`;
+  }
+
+  return url.toString();
+}
+
 export function buildIpfsAuthHeaders(env: EnvLike = process.env): HeadersInit {
   const bearerToken = String(env.IPFS_API_BEARER_TOKEN || "").trim();
   if (bearerToken) {

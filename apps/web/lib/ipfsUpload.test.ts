@@ -3,6 +3,7 @@ import {
   buildIpfsAddUrl,
   buildIpfsAuthHeaders,
   buildIpfsReachabilityError,
+  buildIpfsVersionUrl,
   isPrivateOrLocalUrl,
   parseIpfsAddResponse
 } from "./ipfsUpload";
@@ -23,6 +24,18 @@ describe("ipfsUpload", () => {
   it("preserves an explicit add endpoint and existing query params", () => {
     expect(buildIpfsAddUrl("http://127.0.0.1:5001/api/v0/add?stream-channels=true")).toBe(
       "http://127.0.0.1:5001/api/v0/add?stream-channels=true&pin=true&cid-version=1&wrap-with-directory=false"
+    );
+  });
+
+  it("builds a Kubo version URL from add and base paths", () => {
+    expect(buildIpfsVersionUrl("http://127.0.0.1:5001")).toBe(
+      "http://127.0.0.1:5001/api/v0/version"
+    );
+    expect(buildIpfsVersionUrl("http://127.0.0.1:5001/api/v0")).toBe(
+      "http://127.0.0.1:5001/api/v0/version"
+    );
+    expect(buildIpfsVersionUrl("http://127.0.0.1:5001/api/v0/add?pin=true")).toBe(
+      "http://127.0.0.1:5001/api/v0/version?pin=true"
     );
   });
 
