@@ -311,10 +311,12 @@ function createLocalProfileRecord(args: {
 
 export default function ProfileLandingClient({
   initialLabel = "",
-  initialCollectionAddress = ""
+  initialCollectionAddress = "",
+  initialIdentityMode = ""
 }: {
   initialLabel?: string;
   initialCollectionAddress?: string;
+  initialIdentityMode?: string;
 }) {
   const config = useMemo(() => getContractsConfig(), []);
   const appChain = useMemo(() => getAppChain(config.chainId), [config.chainId]);
@@ -322,6 +324,21 @@ export default function ProfileLandingClient({
   const chainId = useChainId();
   const publicClient = usePublicClient();
   const { data: walletClient } = useWalletClient();
+
+  const normalizedInitialIdentityMode = useMemo<
+    "register-eth" | "register-eth-subname" | "ens" | "external-subname" | "nftfactory-subname"
+  >(() => {
+    switch (initialIdentityMode) {
+      case "register-eth":
+      case "register-eth-subname":
+      case "ens":
+      case "external-subname":
+      case "nftfactory-subname":
+        return initialIdentityMode;
+      default:
+        return "nftfactory-subname";
+    }
+  }, [initialIdentityMode]);
 
   const [identityName, setIdentityName] = useState(initialLabel);
   const [subnameParent, setSubnameParent] = useState("");
@@ -331,7 +348,7 @@ export default function ProfileLandingClient({
   const [selectedCollection, setSelectedCollection] = useState("");
   const [identityMode, setIdentityMode] = useState<
     "register-eth" | "register-eth-subname" | "ens" | "external-subname" | "nftfactory-subname"
-  >("nftfactory-subname");
+  >(normalizedInitialIdentityMode);
   const [registrationYears, setRegistrationYears] = useState("1");
   const [pendingEnsRegistration, setPendingEnsRegistration] = useState<PendingEnsRegistration | null>(null);
   const [registrationCountdown, setRegistrationCountdown] = useState(0);

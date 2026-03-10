@@ -134,6 +134,39 @@ function getProfileSourceLabel(source: ApiProfileRecord["source"] | "collection-
   return "Collection Record Only";
 }
 
+function inferIdentityModeFromValue(value: string | null | undefined): "ens" | "external-subname" | "nftfactory-subname" {
+  const normalized = normalizeCollectionIdentity(value);
+  if (!normalized) return "nftfactory-subname";
+  if (normalized.endsWith(".nftfactory.eth")) return "nftfactory-subname";
+  const parts = normalized.split(".").filter(Boolean);
+  return parts.length <= 2 ? "ens" : "external-subname";
+}
+
+function normalizeIdentityLabelForSetup(value: string | null | undefined, mode: "ens" | "external-subname" | "nftfactory-subname"): string {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  if (mode === "nftfactory-subname") {
+    return raw.replace(/\.nftfactory\.eth$/i, "").trim();
+  }
+  return raw;
+}
+
+function buildProfileSetupFixHref(params: {
+  routeName: string;
+  collectionAddress?: string | null;
+  identityValue?: string | null;
+  source?: ApiProfileRecord["source"] | null;
+}): string {
+  const mode = params.source || inferIdentityModeFromValue(params.identityValue);
+  const label = normalizeIdentityLabelForSetup(params.identityValue, mode);
+  const search = new URLSearchParams();
+  if (label) search.set("label", label);
+  if (params.collectionAddress?.trim()) search.set("collection", params.collectionAddress.trim());
+  search.set("mode", mode);
+  const query = search.toString();
+  return query ? `/profile/setup?${query}` : `/profile/setup?label=${encodeURIComponent(params.routeName)}`;
+}
+
 export default function ProfileClient({ name }: { name: string }) {
   const config = useMemo(() => getContractsConfig(), []);
   const { address: connectedAddress, isConnected } = useAccount();
@@ -564,10 +597,16 @@ export default function ProfileClient({ name }: { name: string }) {
         normalizedCollectionIdentity,
         normalizedAttachedIdentity,
         status,
-        sourceLabel: getProfileSourceLabel(primaryAttachedProfile?.source || "collection-record-only")
+        sourceLabel: getProfileSourceLabel(primaryAttachedProfile?.source || "collection-record-only"),
+        fixHref: buildProfileSetupFixHref({
+          routeName: name,
+          collectionAddress: collection.contractAddress,
+          identityValue: primaryAttachedProfile?.fullName || collection.ensSubname || null,
+          source: primaryAttachedProfile?.source || null
+        })
       };
     });
-  }, [collectionSummaries, linkedProfiles]);
+  }, [collectionSummaries, linkedProfiles, name]);
 
   const stats = useMemo(() => {
     if (creatorListings.length === 0) {
@@ -1244,6 +1283,11 @@ export default function ProfileClient({ name }: { name: string }) {
                         <strong>Profile Route</strong> Not attached
                       </span>
                     )}
+                    <div className="row">
+                      <Link href={collection.fixHref} className="ctaLink secondaryLink">
+                        Fix in setup
+                      </Link>
+                    </div>
                   </div>
                 );
               })}
