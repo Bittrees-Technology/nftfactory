@@ -25,6 +25,7 @@ import {
 import { getContractsConfig } from "../../lib/contracts";
 import { anvil, getAppChain, getExplorerBaseUrl } from "../../lib/chains";
 import { fetchCollectionTokens, fetchCollectionsByOwner, fetchProfileResolution, syncMintedToken } from "../../lib/indexerApi";
+import { normalizeBackendFetchError, parseJsonResponse } from "../../lib/networkErrors";
 import {
   getMintAmountLabel,
   getMintDisplayDescription,
@@ -1051,7 +1052,13 @@ export default function MintClient({
         form.append("external_url", externalUrl.trim());
       }
       const res = await fetch("/api/ipfs/metadata", { method: "POST", body: form });
-      const payload = await res.json() as UploadReceipt & { error?: string };
+      const responseText = await res.text();
+      const payload = parseJsonResponse<UploadReceipt & { error?: string }>(
+        responseText,
+        res.ok
+          ? "IPFS upload route returned an invalid response."
+          : `IPFS upload route returned ${res.status}. Check the deployment logs for the backend error.`
+      );
       if (!res.ok || !payload.metadataUri) throw new Error(payload.error || "Upload failed");
       setImageUri(payload.imageUri || "");
       setAudioUri(payload.audioUri || "");
@@ -1060,9 +1067,12 @@ export default function MintClient({
       setUploadTx({ status: "success", message: "Uploaded to IPFS. Continuing to mint…" });
       return payload.metadataUri;
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Upload failed";
+      const message = normalizeBackendFetchError(err, {
+        serviceLabel: "IPFS upload route",
+        envVarName: "IPFS_API_URL"
+      }).message;
       setUploadTx({ status: "error", message });
-      throw err instanceof Error ? err : new Error(message);
+      throw new Error(message);
     }
   }
 

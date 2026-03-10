@@ -3,6 +3,7 @@ import {
   getScopedChainPublicEnv
 } from "./publicEnv";
 import { isPrivateOrLocalUrl } from "./ipfsUpload";
+import { normalizeBackendFetchError } from "./networkErrors";
 
 export type IndexerRequestOptions = {
   chainId?: number;
@@ -90,7 +91,11 @@ async function fetchJson<T>(path: string, init?: RequestInit, timeoutMs?: number
     if (error instanceof Error && error.name === "AbortError") {
       throw new Error(`Indexer request timed out after ${effectiveTimeoutMs}ms`);
     }
-    throw error;
+    throw normalizeBackendFetchError(error, {
+      serviceLabel: "Indexer API",
+      envVarName: "NEXT_PUBLIC_INDEXER_API_URL",
+      baseUrl
+    });
   } finally {
     cleanup();
   }
