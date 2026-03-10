@@ -39,6 +39,19 @@ const ENS_REGISTRY_ABI = [
     outputs: [{ name: "", type: "address" }]
   }
 ] as const;
+const ENS_REGISTRY_WRITE_ABI = [
+  {
+    type: "function",
+    name: "setSubnodeOwner",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "node", type: "bytes32" },
+      { name: "label", type: "bytes32" },
+      { name: "owner", type: "address" }
+    ],
+    outputs: []
+  }
+] as const;
 const ENS_NAME_WRAPPER_ABI = [
   {
     type: "function",
@@ -509,7 +522,7 @@ export default function ProfileLandingClient({
     if (!slug || !normalizedFullName) return "";
     if (checkedIdentityReady) {
       if (identityMode === "register-eth") return "Status: available in ENS";
-      if (identityMode === "register-eth-subname") return "Status: parent ownership confirmed";
+      if (identityMode === "register-eth-subname") return "Status: parent ownership confirmed and ready to create";
       if (identityMode === "nftfactory-subname") return "Status: available on-chain";
       return "Status: owned in ENS and ready to link";
     }
@@ -534,11 +547,7 @@ export default function ProfileLandingClient({
       return;
     }
     if (identityMode === "register-eth-subname") {
-      setSetupState({
-        status: "error",
-        message:
-          "External ENS subname creation is not fully wired here yet. Use Link existing ENS subname, or create an nftfactory.eth subname."
-      });
+      await createEthSubname();
       return;
     }
     if (identityMode === "ens") {
@@ -648,37 +657,54 @@ export default function ProfileLandingClient({
     }
   }
 
-  async function checkEthSubnameRegistrationAvailability(cancelled = false): Promise<void> {
+  async function resolveEthSubnameCreationContext(): Promise<{
+    fullName: string;
+    label: string;
+    parentName: string;
+    parentNode: Hex;
+    current: { owner: string; wrapped: boolean };
+    parent: { owner: string; wrapped: boolean };
+  }> {
     if (!publicClient) {
-      if (!cancelled) {
-        setCheckedIdentityReady(false);
-        setLookupNote("ENS registry lookup is unavailable right now.");
-      }
-      return;
+      throw new Error("ENS registry lookup is unavailable right now.");
     }
 
     const fullName = normalizeIdentityFullName(identityName, "register-eth-subname");
     const parts = fullName.split(".").filter(Boolean);
     if (parts.length < 3 || !fullName.endsWith(".eth")) {
-      if (!cancelled) {
-        setCheckedIdentityReady(false);
-        setLookupNote("Enter a full .eth subname like music.artist.eth.");
-      }
-      return;
+      throw new Error("Enter a full .eth subname like music.artist.eth.");
     }
 
+    const label = parts[0] || "";
+    if (!normalizeLabel(label) || label.includes(".")) {
+      throw new Error("Enter a single subname label like music in music.artist.eth.");
+    }
+
+    const current = await resolveEnsEffectiveOwner(publicClient, fullName);
+    const parentName = parts.slice(1).join(".");
+    const parent = await resolveEnsEffectiveOwner(publicClient, parentName);
+
+    return {
+      fullName,
+      label,
+      parentName,
+      parentNode: namehash(parentName),
+      current,
+      parent
+    };
+  }
+
+  async function checkEthSubnameRegistrationAvailability(cancelled = false): Promise<void> {
     try {
-      const current = await resolveEnsEffectiveOwner(publicClient, fullName);
+      const { fullName, parentName, current, parent } = await resolveEthSubnameCreationContext();
       if (cancelled) return;
+
       if (String(current.owner).toLowerCase() !== ZERO_ADDRESS.toLowerCase()) {
         setCheckedIdentityReady(false);
         setLookupNote(`${fullName} is already registered in ENS. Use Link existing ENS subname instead.`);
         return;
       }
 
-      const parentName = parts.slice(1).join(".");
-      const parent = await resolveEnsEffectiveOwner(publicClient, parentName);
-      if (cancelled) return;
       const parentOwner = String(parent.owner).toLowerCase();
       if (parentOwner === ZERO_ADDRESS.toLowerCase()) {
         setCheckedIdentityReady(false);
@@ -690,16 +716,106 @@ export default function ProfileLandingClient({
         setLookupNote(`${parentName} exists, but the connected wallet does not control that parent name.`);
         return;
       }
+      if (parent.wrapped) {
+        setCheckedIdentityReady(false);
+        setLookupNote(`${parentName} is wrapped via ENS NameWrapper. NFTFactory does not create wrapped ENS subnames yet.`);
+        return;
+      }
 
       setCheckedIdentityReady(true);
-      setLookupNote(
-        `${fullName} can be created under ${parentName}, but external ENS subname creation is not fully wired here yet.`
-      );
-    } catch {
+      setLookupNote(`${fullName} can be created under ${parentName} from this wallet.`);
+    } catch (err) {
       if (!cancelled) {
         setCheckedIdentityReady(false);
-        setLookupNote("ENS registry lookup is unavailable right now.");
+        setLookupNote(err instanceof Error ? err.message : "ENS registry lookup is unavailable right now.");
       }
+    }
+  }
+
+  async function createEthSubname(): Promise<void> {
+    if (!publicClient || !walletClient?.account) {
+      setSetupState({ status: "error", message: "Connect wallet first." });
+      return;
+    }
+    if (wrongNetwork) {
+      setSetupState({ status: "error", message: `Select ${appChain.name} in the wallet menu first.` });
+      return;
+    }
+
+    try {
+      const { fullName, label, parentName, parentNode, current, parent } = await resolveEthSubnameCreationContext();
+      const currentOwner = String(current.owner).toLowerCase();
+      const parentOwner = String(parent.owner).toLowerCase();
+
+      if (currentOwner !== ZERO_ADDRESS.toLowerCase()) {
+        setSetupState({ status: "error", message: `${fullName} is already registered in ENS.` });
+        return;
+      }
+      if (parentOwner === ZERO_ADDRESS.toLowerCase()) {
+        setSetupState({ status: "error", message: `${parentName} is not registered yet.` });
+        return;
+      }
+      if (parentOwner !== walletClient.account.address.toLowerCase()) {
+        setSetupState({ status: "error", message: `The connected wallet does not control ${parentName}.` });
+        return;
+      }
+      if (parent.wrapped) {
+        setSetupState({
+          status: "error",
+          message: `${parentName} is wrapped via ENS NameWrapper. Wrapped ENS subname creation is not enabled here yet.`
+        });
+        return;
+      }
+
+      setSetupState({ status: "pending", message: `Creating ${fullName} in ENS...` });
+      setCheckedIdentityReady(false);
+      setPostLinkProfile(null);
+      setPostLinkMintCta(false);
+
+      const txHash = await walletClient.sendTransaction({
+        account: walletClient.account,
+        to: ENS_REGISTRY_ADDRESS,
+        data: encodeFunctionData({
+          abi: ENS_REGISTRY_WRITE_ABI,
+          functionName: "setSubnodeOwner",
+          args: [parentNode, keccak256(stringToBytes(label)), walletClient.account.address]
+        })
+      });
+      await publicClient.waitForTransactionReceipt({ hash: txHash });
+
+      let nextProfile: ApiProfileRecord | null = null;
+      let linkWarning = "";
+      try {
+        const response = await linkProfileIdentity({
+          name: fullName,
+          source: "external-subname",
+          ownerAddress: walletClient.account.address,
+          collectionAddress: selectedCollection || undefined,
+          routeSlug: derivedRouteSlug || undefined
+        });
+        nextProfile = response.profile;
+        globalThis.localStorage.setItem(
+          createPrimaryProfileKey(walletClient.account.address),
+          JSON.stringify(response.profile)
+        );
+        setProfiles(dedupeProfiles([...profiles, response.profile]));
+        setPostLinkProfile(response.profile);
+      } catch (err) {
+        linkWarning = err instanceof Error ? err.message : "NFTFactory could not link the new subname yet.";
+      }
+
+      setSetupState({
+        status: "success",
+        hash: txHash,
+        message: linkWarning
+          ? `${fullName} was created in ENS, but NFTFactory could not attach it yet: ${linkWarning}`
+          : `${nextProfile?.fullName || fullName} created and linked.`
+      });
+    } catch (err) {
+      setSetupState({
+        status: "error",
+        message: err instanceof Error ? err.message : "Failed to create ENS subname"
+      });
     }
   }
 
@@ -1116,8 +1232,8 @@ export default function ProfileLandingClient({
         <p className="hint">Network: {appChain.name}</p>
         {wrongNetwork ? (
           <p className="hint">
-            Use the header wallet button to select {appChain.name} before registering a .eth name or creating an
-            nftfactory subname.
+            Use the header wallet button to select {appChain.name} before registering a .eth name or creating an ENS
+            subname.
           </p>
         ) : null}
       </div>
@@ -1189,10 +1305,10 @@ export default function ProfileLandingClient({
             <span className="detailLabel">{checkedIdentityReady ? "Next action" : "Name check"}</span>
             <button
               type="button"
-              className={checkedIdentityReady && identityMode !== "register-eth-subname" ? "profileActionReady" : undefined}
+              className={checkedIdentityReady ? "profileActionReady" : undefined}
               onClick={() =>
                 void (
-                  checkedIdentityReady && identityMode !== "register-eth-subname"
+                  checkedIdentityReady
                     ? runIdentityAction()
                     : checkIdentityAvailability()
                 )
@@ -1205,13 +1321,13 @@ export default function ProfileLandingClient({
                   : identityMode === "nftfactory-subname"
                     ? "Create now"
                     : identityMode === "register-eth-subname"
-                      ? "Check parent ownership"
+                      ? "Create now"
                       : "Link now"
                 : identityMode === "register-eth"
                   ? "Check availability"
-                  : identityMode === "nftfactory-subname"
-                    ? "Check label"
-                    : identityMode === "register-eth-subname"
+                : identityMode === "nftfactory-subname"
+                  ? "Check label"
+                  : identityMode === "register-eth-subname"
                       ? "Check parent ownership"
                       : "Check in ENS"}
             </button>
