@@ -290,7 +290,13 @@ function createLocalProfileRecord(args: {
   };
 }
 
-export default function ProfileLandingClient({ initialLabel = "" }: { initialLabel?: string }) {
+export default function ProfileLandingClient({
+  initialLabel = "",
+  initialCollectionAddress = ""
+}: {
+  initialLabel?: string;
+  initialCollectionAddress?: string;
+}) {
   const config = useMemo(() => getContractsConfig(), []);
   const appChain = useMemo(() => getAppChain(config.chainId), [config.chainId]);
   const { address, isConnected } = useAccount();
@@ -351,7 +357,17 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
         if (collectionResult.status === "fulfilled") {
           const nextCollections = collectionResult.value.collections || [];
           setCollections(nextCollections);
-          setSelectedCollection((current) => current || nextCollections[0]?.contractAddress || "");
+          setSelectedCollection((current) => {
+            if (current) return current;
+            const requestedCollection = initialCollectionAddress.trim().toLowerCase();
+            if (
+              requestedCollection &&
+              nextCollections.some((item) => item.contractAddress.toLowerCase() === requestedCollection)
+            ) {
+              return requestedCollection;
+            }
+            return nextCollections[0]?.contractAddress || "";
+          });
         } else {
           setCollections([]);
           setSelectedCollection("");
@@ -367,7 +383,7 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
     return () => {
       cancelled = true;
     };
-  }, [address, isConnected]);
+  }, [address, initialCollectionAddress, isConnected]);
 
   useEffect(() => {
     if (!address) {
@@ -388,6 +404,13 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
       );
       setVerifiedCollections(nextCollections);
       setSelectedCollection((current) => {
+        const requestedCollection = initialCollectionAddress.trim().toLowerCase();
+        if (
+          requestedCollection &&
+          nextCollections.some((item) => item.contractAddress.toLowerCase() === requestedCollection)
+        ) {
+          return requestedCollection;
+        }
         if (current && nextCollections.some((item) => item.contractAddress.toLowerCase() === current.toLowerCase())) {
           return current;
         }
@@ -398,7 +421,7 @@ export default function ProfileLandingClient({ initialLabel = "" }: { initialLab
     return () => {
       cancelled = true;
     };
-  }, [address, collections, publicClient]);
+  }, [address, collections, initialCollectionAddress, publicClient]);
 
   useEffect(() => {
     if (!slug || !normalizedFullName) {

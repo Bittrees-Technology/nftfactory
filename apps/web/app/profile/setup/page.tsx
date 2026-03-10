@@ -8,10 +8,11 @@ function normalizeLabel(value: string): string {
 export default async function ProfileSetupPage({
   searchParams
 }: {
-  searchParams?: Promise<{ label?: string }>;
+  searchParams?: Promise<{ label?: string; collection?: string }>;
 }) {
   const params = searchParams ? await searchParams : undefined;
   const initialLabel = normalizeLabel(params?.label || "");
+  const initialCollectionAddress = String(params?.collection || "").trim();
 
-  return <ProfileLandingClient initialLabel={initialLabel} />;
+  return <ProfileLandingClient initialLabel={initialLabel} initialCollectionAddress={initialCollectionAddress} />;
 }

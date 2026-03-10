@@ -1145,6 +1145,65 @@ function normalizeRouteSlug(value: string): string | null {
   return valid ? normalized : null;
 }
 
+function resolveProfileLookup(rawInput: string): {
+  slugCandidates: string[];
+  fullNameCandidates: string[];
+  collectionIdentityCandidates: string[];
+} | null {
+  const raw = String(rawInput || "").trim().toLowerCase();
+  if (!raw) return null;
+
+  const pushUnique = (items: string[], value: string | null | undefined) => {
+    const normalized = String(value || "").trim().toLowerCase();
+    if (!normalized) return;
+    if (!items.includes(normalized)) {
+      items.push(normalized);
+    }
+  };
+
+  const slugCandidates: string[] = [];
+  const fullNameCandidates: string[] = [];
+  const collectionIdentityCandidates: string[] = [];
+
+  if (raw.endsWith(".nftfactory.eth")) {
+    const normalized = normalizeProfileInput(raw, "nftfactory-subname");
+    if (!normalized) return null;
+    pushUnique(slugCandidates, normalized.slug);
+    pushUnique(fullNameCandidates, normalized.fullName);
+    pushUnique(collectionIdentityCandidates, normalized.slug);
+    pushUnique(collectionIdentityCandidates, normalized.fullName);
+    return { slugCandidates, fullNameCandidates, collectionIdentityCandidates };
+  }
+
+  if (raw.endsWith(".eth")) {
+    const normalized = normalizeProfileInput(raw, "external-subname");
+    if (!normalized) return null;
+    pushUnique(slugCandidates, normalized.slug);
+    pushUnique(fullNameCandidates, normalized.fullName);
+    pushUnique(collectionIdentityCandidates, normalized.fullName);
+    return { slugCandidates, fullNameCandidates, collectionIdentityCandidates };
+  }
+
+  const normalizedRoute = normalizeRouteSlug(raw);
+  if (!normalizedRoute) return null;
+
+  pushUnique(slugCandidates, normalizedRoute);
+
+  if (normalizedRoute.includes(".")) {
+    const reversedFullName = normalizedRoute.split(".").filter(Boolean).reverse().join(".");
+    pushUnique(fullNameCandidates, reversedFullName);
+    pushUnique(collectionIdentityCandidates, reversedFullName);
+    return { slugCandidates, fullNameCandidates, collectionIdentityCandidates };
+  }
+
+  const normalized = normalizeProfileInput(normalizedRoute, "nftfactory-subname");
+  if (!normalized) return null;
+  pushUnique(fullNameCandidates, normalized.fullName);
+  pushUnique(collectionIdentityCandidates, normalized.slug);
+  pushUnique(collectionIdentityCandidates, normalized.fullName);
+  return { slugCandidates, fullNameCandidates, collectionIdentityCandidates };
+}
+
 function toProfileResponse(record: ProfileRecord): ProfileRecord {
   return {
     ...record,
@@ -5581,11 +5640,36 @@ async function handleRequest(
       return;
     }
     const finalSlug = requestedRouteSlug || normalized.slug;
+    const collectionIdentity =
+      source === "nftfactory-subname"
+        ? normalized.fullName.replace(/\.nftfactory\.eth$/, "")
+        : normalized.fullName;
 
     const collectionAddress = String(payload.collectionAddress || "").trim().toLowerCase();
     if (collectionAddress && !isAddress(collectionAddress)) {
       sendJson(res, 400, { error: "Invalid collectionAddress" });
       return;
+    }
+
+    if (collectionAddress) {
+      const attachedCollection = await deps.prisma.collection.findMany({
+        where: { contractAddress: collectionAddress },
+        select: { contractAddress: true, ownerAddress: true },
+        take: 1
+      });
+      const existingCollection = attachedCollection[0] || null;
+      if (!existingCollection) {
+        sendJson(res, 404, { error: "The selected collection is not indexed yet. Retry after the indexer syncs it." });
+        return;
+      }
+      if (existingCollection && existingCollection.ownerAddress.toLowerCase() !== ownerAddress) {
+        sendJson(res, 403, { error: "The connected owner does not control the selected collection." });
+        return;
+      }
+      await deps.prisma.collection.updateMany({
+        where: { contractAddress: collectionAddress, ownerAddress },
+        data: { ensSubname: collectionIdentity }
+      });
     }
 
     const now = new Date().toISOString();
@@ -5771,24 +5855,23 @@ async function handleRequest(
 
   if (req.method === "GET" && /^\/api\/profile\/[^/]+$/.test(path)) {
     const rawName = String(decodeURIComponent(path.split("/")[3] || "")).trim().toLowerCase();
-    const slug = normalizeProfileInput(rawName, rawName.includes(".") ? "external-subname" : "nftfactory-subname")?.slug || "";
+    const lookup = resolveProfileLookup(rawName);
+    const slug = lookup?.slugCandidates[0] || "";
 
-    if (!rawName || !slug) {
+    if (!rawName || !slug || !lookup) {
       sendJson(res, 400, { error: "Invalid profile name" });
       return;
     }
 
     const linkedProfiles = (await readProfileRecords()).filter(
-      (item) => item.slug === slug || item.fullName.toLowerCase() === rawName
+      (item) =>
+        lookup.slugCandidates.includes(item.slug) ||
+        lookup.fullNameCandidates.includes(item.fullName.toLowerCase())
     );
 
     const collectionsBySubname = await deps.prisma.collection.findMany({
       where: {
-        OR: [
-          { ensSubname: slug },
-          { ensSubname: `${slug}.nftfactory.eth` },
-          { ensSubname: rawName }
-        ]
+        OR: lookup.collectionIdentityCandidates.map((candidate) => ({ ensSubname: candidate }))
       },
       select: { ownerAddress: true, ensSubname: true, contractAddress: true }
     });

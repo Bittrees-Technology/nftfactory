@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { Readable } from "node:stream";
@@ -2564,6 +2564,212 @@ describe("indexer consistency hardening", () => {
     expect(hiddenResponse.body).toMatchObject({
       listingIds: [9, 12],
       listingRecordIds: ["12", "v2:9"]
+    });
+  });
+
+  it("resolves ENS route slugs through linked profiles and collection identities", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "nftfactory-indexer-profile-"));
+    vi.stubEnv("INDEXER_PROFILE_FILE", path.join(tempDir, "profiles.json"));
+    await writeFile(
+      path.join(tempDir, "profiles.json"),
+      JSON.stringify([
+        {
+          slug: "eth.artist",
+          fullName: "artist.eth",
+          ownerAddress: "0x1111111111111111111111111111111111111111",
+          source: "ens",
+          routeSlug: "eth.artist",
+          linkedAt: "2026-03-10T12:00:00.000Z",
+          collectionAddress: "0x2222222222222222222222222222222222222222"
+        }
+      ]),
+      "utf8"
+    );
+
+    const prisma = {
+      report: {
+        findMany: vi.fn(async () => []),
+        create: vi.fn(),
+        findUnique: vi.fn(),
+        update: vi.fn(),
+        count: vi.fn(async () => 0)
+      },
+      moderationAction: {
+        findMany: vi.fn(async () => []),
+        create: vi.fn()
+      },
+      listing: {
+        findMany: vi.fn(async () => []),
+        findUnique: vi.fn(async () => null),
+        upsert: vi.fn(),
+        updateMany: vi.fn(async () => ({ count: 0 })),
+        count: vi.fn(async () => 0)
+      },
+      collection: {
+        findMany: vi.fn(async ({ where }: any) => {
+          if (where?.OR?.some((item: any) => item.ensSubname === "artist.eth")) {
+            return [
+              {
+                ownerAddress: "0x1111111111111111111111111111111111111111",
+                ensSubname: "artist.eth",
+                contractAddress: "0x2222222222222222222222222222222222222222"
+              }
+            ];
+          }
+          return [];
+        }),
+        updateMany: vi.fn(async () => ({ count: 0 })),
+        upsert: vi.fn(async () => ({ id: "col_1" })),
+        count: vi.fn(async () => 0)
+      },
+      token: {
+        upsert: vi.fn(),
+        findMany: vi.fn(async () => []),
+        count: vi.fn(async () => 0)
+      },
+      $queryRawUnsafe: createSchemaQueryMock()
+    } as unknown as PrismaClient;
+
+    const createRequestHandler = await loadCreateRequestHandler();
+    const handler = createRequestHandler(
+      {
+        prisma,
+        getClientIpImpl: () => "127.0.0.1",
+        isRateLimitedImpl: () => false
+      },
+      {
+        chainId: 11155111,
+        rpcUrl: "http://127.0.0.1:8545",
+        adminToken: "",
+        adminAllowlist: new Set(),
+        trustProxy: false,
+        marketplaceAddress: null,
+        marketplaceV2Address: null,
+        registryAddress: null,
+        moderatorRegistryAddress: null
+      }
+    );
+
+    const response = await runHandler(handler, createReq({ method: "GET", url: "/api/profile/eth.artist" }));
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({
+      name: "eth.artist",
+      sellers: ["0x1111111111111111111111111111111111111111"]
+    });
+    expect(response.body.profiles).toHaveLength(1);
+    expect(response.body.profiles[0]).toMatchObject({
+      slug: "eth.artist",
+      fullName: "artist.eth",
+      source: "ens"
+    });
+    expect(response.body.collections).toEqual([
+      {
+        ensSubname: "artist.eth",
+        contractAddress: "0x2222222222222222222222222222222222222222",
+        ownerAddress: "0x1111111111111111111111111111111111111111"
+      }
+    ]);
+  });
+
+  it("persists collection ENS identity when linking a profile to an indexed collection", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "nftfactory-indexer-link-"));
+    vi.stubEnv("INDEXER_PROFILE_FILE", path.join(tempDir, "profiles.json"));
+
+    const collectionFindMany = vi.fn(async () => [
+      {
+        contractAddress: "0x2222222222222222222222222222222222222222",
+        ownerAddress: "0x1111111111111111111111111111111111111111"
+      }
+    ]);
+    const collectionUpdateMany = vi.fn(async () => ({ count: 1 }));
+
+    const prisma = {
+      report: {
+        findMany: vi.fn(async () => []),
+        create: vi.fn(),
+        findUnique: vi.fn(),
+        update: vi.fn(),
+        count: vi.fn(async () => 0)
+      },
+      moderationAction: {
+        findMany: vi.fn(async () => []),
+        create: vi.fn()
+      },
+      listing: {
+        findMany: vi.fn(async () => []),
+        findUnique: vi.fn(async () => null),
+        upsert: vi.fn(),
+        updateMany: vi.fn(async () => ({ count: 0 })),
+        count: vi.fn(async () => 0)
+      },
+      collection: {
+        findMany: collectionFindMany,
+        updateMany: collectionUpdateMany,
+        upsert: vi.fn(async () => ({ id: "col_1" })),
+        count: vi.fn(async () => 0)
+      },
+      token: {
+        upsert: vi.fn(),
+        findMany: vi.fn(async () => []),
+        count: vi.fn(async () => 0)
+      },
+      $queryRawUnsafe: createSchemaQueryMock()
+    } as unknown as PrismaClient;
+
+    const createRequestHandler = await loadCreateRequestHandler();
+    const handler = createRequestHandler(
+      {
+        prisma,
+        getClientIpImpl: () => "127.0.0.1",
+        isRateLimitedImpl: () => false
+      },
+      {
+        chainId: 11155111,
+        rpcUrl: "http://127.0.0.1:8545",
+        adminToken: "",
+        adminAllowlist: new Set(),
+        trustProxy: false,
+        marketplaceAddress: null,
+        marketplaceV2Address: null,
+        registryAddress: null,
+        moderatorRegistryAddress: null
+      }
+    );
+
+    const response = await runHandler(
+      handler,
+      createReq({
+        method: "POST",
+        url: "/api/profiles/link",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: "artist.eth",
+          source: "ens",
+          ownerAddress: "0x1111111111111111111111111111111111111111",
+          routeSlug: "eth.artist",
+          collectionAddress: "0x2222222222222222222222222222222222222222"
+        })
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(collectionFindMany).toHaveBeenCalledWith({
+      where: { contractAddress: "0x2222222222222222222222222222222222222222" },
+      select: { contractAddress: true, ownerAddress: true },
+      take: 1
+    });
+    expect(collectionUpdateMany).toHaveBeenCalledWith({
+      where: {
+        contractAddress: "0x2222222222222222222222222222222222222222",
+        ownerAddress: "0x1111111111111111111111111111111111111111"
+      },
+      data: { ensSubname: "artist.eth" }
+    });
+    expect(response.body.profile).toMatchObject({
+      slug: "eth.artist",
+      fullName: "artist.eth",
+      collectionAddress: "0x2222222222222222222222222222222222222222"
     });
   });
 });

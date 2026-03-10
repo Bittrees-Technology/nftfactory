@@ -1,8 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useAccount, useChainId, usePublicClient, useSwitchChain, useWalletClient } from "wagmi";
 import type { Address, Hex } from "viem";
+import { namehash } from "viem/ens";
 import {
   encodeCreatorPublish1155,
   encodeCreatorPublish721,
@@ -24,7 +26,13 @@ import {
 } from "../../lib/creatorCollection";
 import { getContractsConfig } from "../../lib/contracts";
 import { anvil, getAppChain, getExplorerBaseUrl } from "../../lib/chains";
-import { fetchCollectionTokens, fetchCollectionsByOwner, fetchProfileResolution, syncMintedToken } from "../../lib/indexerApi";
+import {
+  fetchCollectionTokens,
+  fetchCollectionsByOwner,
+  fetchProfileResolution,
+  linkProfileIdentity,
+  syncMintedToken
+} from "../../lib/indexerApi";
 import { normalizeBackendFetchError, parseJsonResponse } from "../../lib/networkErrors";
 import {
   getMintAmountLabel,
@@ -63,6 +71,30 @@ type ManageRoyaltySplitDraft = {
 
 const SUBNAME_FEE_ETH = "0.001";
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+const ENS_REGISTRY_ADDRESS = "0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e" as Address;
+const ENS_NAME_WRAPPER_ADDRESS = /^0x[a-fA-F0-9]{40}$/.test(process.env.NEXT_PUBLIC_ENS_NAME_WRAPPER_ADDRESS || "")
+  ? (process.env.NEXT_PUBLIC_ENS_NAME_WRAPPER_ADDRESS as Address)
+  : null;
+
+const ENS_REGISTRY_ABI = [
+  {
+    type: "function",
+    name: "owner",
+    stateMutability: "view",
+    inputs: [{ name: "node", type: "bytes32" }],
+    outputs: [{ name: "", type: "address" }]
+  }
+] as const;
+
+const ENS_NAME_WRAPPER_ABI = [
+  {
+    type: "function",
+    name: "ownerOf",
+    stateMutability: "view",
+    inputs: [{ name: "id", type: "uint256" }],
+    outputs: [{ name: "", type: "address" }]
+  }
+] as const;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -89,6 +121,62 @@ function isValidSubnameLabel(label: string): boolean {
 function isValidEnsReference(value: string): boolean {
   if (!value) return false;
   return /^(?:[a-z0-9-]+\.)+[a-z]{2,}$/i.test(value.trim());
+}
+
+function normalizeCollectionIdentityName(value: string, mode: "ens" | "subname" | "nftfactory"): string {
+  const raw = String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\.+/g, ".")
+    .replace(/^\./, "")
+    .replace(/\.$/, "");
+  if (!raw) return "";
+  if (mode === "nftfactory") {
+    return `${normalizeSubname(raw)}.nftfactory.eth`;
+  }
+  return raw;
+}
+
+function deriveEnsRouteFromName(fullName: string): string {
+  const normalized = normalizeCollectionIdentityName(fullName, "subname");
+  if (!normalized) return "";
+  const parts = normalized.split(".").filter(Boolean);
+  if (parts.length === 0) return "";
+  if (!parts.every((part) => Boolean(part.trim()))) return "";
+  return parts.reverse().join(".");
+}
+
+async function resolveEnsEffectiveOwner(
+  publicClient: NonNullable<ReturnType<typeof usePublicClient>>,
+  fullName: string
+): Promise<string> {
+  const node = namehash(fullName);
+  const registryOwner = String(
+    await publicClient.readContract({
+      address: ENS_REGISTRY_ADDRESS,
+      abi: ENS_REGISTRY_ABI,
+      functionName: "owner",
+      args: [node]
+    })
+  ).toLowerCase();
+
+  if (registryOwner === ZERO_ADDRESS.toLowerCase()) {
+    return registryOwner;
+  }
+
+  if (ENS_NAME_WRAPPER_ADDRESS && registryOwner === ENS_NAME_WRAPPER_ADDRESS.toLowerCase()) {
+    const wrappedOwner = String(
+      await publicClient.readContract({
+        address: ENS_NAME_WRAPPER_ADDRESS,
+        abi: ENS_NAME_WRAPPER_ABI,
+        functionName: "ownerOf",
+        args: [BigInt(node)]
+      })
+    ).toLowerCase();
+    return wrappedOwner;
+  }
+
+  return registryOwner;
 }
 
 function isAddress(value: string): value is `0x${string}` {
@@ -1150,6 +1238,14 @@ export default function MintClient({
   async function onRegisterSubname(): Promise<void> {
     if (!account) { setSubnameTx({ status: "error", message: "Connect wallet first." }); return; }
     if (wrongNetwork) { setSubnameTx({ status: "error", message: `Select ${appChain.name} in the wallet menu first.` }); return; }
+    if (!isAddress(manageAddress)) { setSubnameTx({ status: "error", message: "Select or enter a valid collection first." }); return; }
+    if (!selectedManageCollection) {
+      setSubnameTx({
+        status: "error",
+        message: "This collection is not indexed yet. Pick it from your indexed collections before attaching an ENS identity."
+      });
+      return;
+    }
     const label = normalizeSubname(registerSubnameLabel);
     if (!label) { setSubnameTx({ status: "error", message: "Enter a subname label." }); return; }
     if (!isValidSubnameLabel(label)) {
@@ -1164,26 +1260,49 @@ export default function MintClient({
         toHexWei(SUBNAME_FEE_ETH) as `0x${string}`
       );
       await waitForReceipt(txHash);
-      if (isAddress(manageAddress)) {
+      let linkWarning = "";
+      try {
+        await linkProfileIdentity({
+          name: label,
+          source: "nftfactory-subname",
+          ownerAddress: account,
+          collectionAddress: manageAddress,
+          routeSlug: label
+        });
         mergeKnownCollections([{
           contractAddress: manageAddress,
           ensSubname: label,
           ownerAddress: account
         }]);
+      } catch (err) {
+        linkWarning = err instanceof Error ? err.message : "The collection link did not persist.";
       }
-      setSubnameTx({ status: "success", hash: txHash, message: `${label}.nftfactory.eth registered.` });
+      setSubnameTx({
+        status: "success",
+        hash: txHash,
+        message: linkWarning
+          ? `${label}.nftfactory.eth registered on-chain, but the collection attachment still needs to be saved: ${linkWarning}`
+          : `${label}.nftfactory.eth registered and attached to this collection.`
+      });
     } catch (err) {
       setSubnameTx({ status: "error", message: err instanceof Error ? err.message : "Registration failed" });
     }
   }
 
-  function saveCollectionIdentity(): void {
+  async function saveCollectionIdentity(): Promise<void> {
     if (!account) {
       setSubnameTx({ status: "error", message: "Connect wallet first." });
       return;
     }
     if (!isAddress(manageAddress)) {
       setSubnameTx({ status: "error", message: "Select or enter a valid collection first." });
+      return;
+    }
+    if (!selectedManageCollection) {
+      setSubnameTx({
+        status: "error",
+        message: "This collection is not indexed yet. Open it from your indexed collections before attaching an ENS identity."
+      });
       return;
     }
     const raw = registerSubnameLabel.trim().toLowerCase();
@@ -1204,15 +1323,51 @@ export default function MintClient({
       });
       return;
     }
-    mergeKnownCollections([{
-      contractAddress: manageAddress,
-      ensSubname: raw,
-      ownerAddress: account
-    }]);
-    setSubnameTx({
-      status: "success",
-      message: `${raw} saved as the display identity for this collection.`
-    });
+    if (!publicClient) {
+      setSubnameTx({ status: "error", message: "Public client unavailable. Reconnect wallet and try again." });
+      return;
+    }
+    const fullName = normalizeCollectionIdentityName(raw, identityMode);
+    const routeSlug = deriveEnsRouteFromName(fullName);
+    if (!fullName || !routeSlug) {
+      setSubnameTx({ status: "error", message: "Enter a valid ENS name or subname." });
+      return;
+    }
+
+    try {
+      setSubnameTx({ status: "pending", message: `Verifying ${fullName} ownership…` });
+      const ownerAddress = await resolveEnsEffectiveOwner(publicClient, fullName);
+      if (ownerAddress === ZERO_ADDRESS.toLowerCase()) {
+        setSubnameTx({ status: "error", message: `${fullName} is not registered in ENS.` });
+        return;
+      }
+      if (ownerAddress !== account.toLowerCase()) {
+        setSubnameTx({ status: "error", message: "The connected wallet does not own this ENS identity." });
+        return;
+      }
+      const source = identityMode === "ens" ? "ens" : "external-subname";
+      const response = await linkProfileIdentity({
+        name: fullName,
+        source,
+        ownerAddress: account,
+        collectionAddress: manageAddress,
+        routeSlug
+      });
+      mergeKnownCollections([{
+        contractAddress: manageAddress,
+        ensSubname: source === "ens" ? response.profile.fullName : fullName,
+        ownerAddress: account
+      }]);
+      setSubnameTx({
+        status: "success",
+        message: `${response.profile.fullName} verified and attached to this collection.`
+      });
+    } catch (err) {
+      setSubnameTx({
+        status: "error",
+        message: err instanceof Error ? err.message : "Failed to verify and save this collection identity."
+      });
+    }
   }
 
   // ── Mint / publish ────────────────────────────────────────────────────────
@@ -1502,6 +1657,20 @@ export default function MintClient({
   const selectedManageCollection = verifiedKnownCollections.find(
     (item) => item.contractAddress.toLowerCase() === manageAddress.toLowerCase()
   ) || null;
+  const profileSetupHref = useMemo(() => {
+    const params = new URLSearchParams();
+    if (isAddress(manageAddress)) {
+      params.set("collection", manageAddress);
+    }
+    if (identityMode === "nftfactory") {
+      const suggestedLabel = normalizeSubname(registerSubnameLabel);
+      if (suggestedLabel) {
+        params.set("label", suggestedLabel);
+      }
+    }
+    const query = params.toString();
+    return query ? `/profile/setup?${query}` : "/profile/setup";
+  }, [identityMode, manageAddress, registerSubnameLabel]);
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -2270,9 +2439,25 @@ export default function MintClient({
           <div className="card formCard">
             <h3>3. Collection Identity</h3>
             <p className="hint">
-              Manage the human-readable identity shown for this collection. You can attach an existing ENS name, attach an
-              external subname, or register a new <strong>nftfactory.eth</strong> subname here.
+              Manage the human-readable identity shown for this collection. Existing ENS names and ENS subnames are
+              verified against the connected wallet before they attach to this collection. You can also register a new
+              <strong> nftfactory.eth</strong> subname here.
             </p>
+            <div className="row">
+              <Link href={profileSetupHref} className="ctaLink secondaryLink">
+                Open Profile Setup
+              </Link>
+            </div>
+            <p className="hint">
+              Profile Setup handles fresh <strong>.eth</strong> registration. Existing ENS names and existing ENS
+              subnames can be attached here once you already own them.
+            </p>
+            {!selectedManageCollection && isAddress(manageAddress) ? (
+              <p className="hint">
+                This collection is not indexed yet. Identity attachment only persists once the collection shows up in
+                your indexed collections above.
+              </p>
+            ) : null}
             <label>
               Identity mode
               <select value={identityMode} onChange={(e) => setIdentityMode(e.target.value as "ens" | "subname" | "nftfactory")}>
@@ -2299,7 +2484,7 @@ export default function MintClient({
             </p>
             <button
               type="button"
-              onClick={saveCollectionIdentity}
+              onClick={() => { void saveCollectionIdentity(); }}
               disabled={
                 !isConnected ||
                 !isAddress(manageAddress) ||
