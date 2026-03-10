@@ -96,6 +96,74 @@ Important caveat:
 
 - if the public `IPFS_API_URL` is exposed through a reverse proxy, tunnel, or gateway layer outside Kubo, that ingress may impose a lower upload/body-size or timeout limit than Kubo itself
 
+## Planned redundancy
+
+This is intentionally **tabled for later**, not part of the current live deployment.
+
+Recommended staged approach:
+
+1. Keep the current home Pi Kubo node as the primary node
+2. Add one offsite secondary Kubo node on a VPS
+3. Pin the same production CIDs on both nodes
+4. Keep one primary upload endpoint at first
+5. Add automated pin replication and periodic reconciliation
+6. Only adopt IPFS Cluster later if simple replication becomes operationally noisy
+
+Target outcome:
+
+- the same `ipfs://` URIs remain valid
+- the Pi is no longer the only pinned source of production data
+- an outage on the home connection does not immediately remove the primary pinned copy
+
+Planned implementation sequence:
+
+### 1. Define the redundancy target
+
+- Primary node: home Pi
+- Secondary node: offsite VPS
+- Scope: production NFT media and metadata CIDs
+
+### 2. Stand up the secondary node
+
+- install Kubo
+- configure datastore size, auth, firewall, and persistence
+- expose the API only through a protected endpoint
+- optionally expose a separate public gateway endpoint
+
+### 3. Backfill existing CIDs
+
+- export the current production CID inventory
+- pin those CIDs on the secondary node
+- verify both nodes report the same pinned set
+
+### 4. Add ongoing replication
+
+- keep Vercel writing to one stable primary `IPFS_API_URL`
+- after each upload, pin the resulting CIDs on the secondary node
+- add a reconciliation job to catch drift
+
+### 5. Add monitoring
+
+- primary API health
+- secondary API health
+- primary gateway health
+- secondary gateway health
+- disk usage and pin drift
+
+### 6. Add disaster recovery posture
+
+- if the Pi fails, keep serving from the secondary node
+- repoint the upload/API domain or promote the secondary endpoint
+- no NFT metadata migration should be required because the CIDs stay the same
+
+### 7. Re-evaluate later
+
+Move to IPFS Cluster only if:
+
+- more than two nodes are needed
+- coordinated automatic multi-node pinning becomes necessary
+- manual or scripted replication stops being operationally reasonable
+
 ## Recommended sequence
 
 1. Remove internal profile aggregation routes from `apps/web/app/api/`
