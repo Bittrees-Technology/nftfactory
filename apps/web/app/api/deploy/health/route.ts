@@ -135,6 +135,7 @@ async function checkIpfs(): Promise<ServiceCheck> {
 
   try {
     const response = await fetchWithTimeout(versionUrl, {
+      method: "POST",
       headers: buildIpfsAuthHeaders(process.env)
     });
     const text = await response.text();
