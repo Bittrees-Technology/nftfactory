@@ -74,6 +74,28 @@ If the goal is **frontend on IPFS**, the stable target architecture is:
 
 That keeps the browser app static while leaving live data and upload credentials off IPFS.
 
+## Current backend ceiling
+
+Current measured local IPFS backend state on this machine (`2026-03-10`):
+
+- Kubo repo path: `/home/robert/.ipfs`
+- current repo size: about `311 MB`
+- free disk on `/`: about `77 GB`
+- configured Kubo `StorageMax`: `10 GB`
+- configured Kubo `StorageGCWatermark`: `90`
+- API bind: `127.0.0.1:5001`
+- gateway bind: `127.0.0.1:8080`
+
+Practical ceiling today:
+
+- the web app allows up to `15 MB` image uploads and `25 MB` audio uploads per request
+- the current long-term storage ceiling is the Kubo repo config, not disk
+- with `StorageMax = 10 GB`, effective pressure starts around `9 GB` because GC watermark is `90%`
+
+Important caveat:
+
+- if the public `IPFS_API_URL` is exposed through a reverse proxy, tunnel, or gateway layer outside Kubo, that ingress may impose a lower upload/body-size or timeout limit than Kubo itself
+
 ## Recommended sequence
 
 1. Remove internal profile aggregation routes from `apps/web/app/api/`

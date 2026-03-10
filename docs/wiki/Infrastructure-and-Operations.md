@@ -39,14 +39,9 @@ Active user-facing routes:
 
 - `/`
 - `/mint`
-- `/list`
-- `/discover`
 - `/profile`
 - `/profile/setup`
 - `/profile/[name]`
-- `/mod`
-- `/admin`
-- `/wiki`
 
 ## Workspace scripts
 
@@ -137,6 +132,38 @@ npm --workspace apps/web run dev -- --hostname 0.0.0.0 --port 3000
 The current local `.env.local` in this repo uses a LAN URL for `NEXT_PUBLIC_INDEXER_API_URL`.
 
 Use your machine's actual reachable host and port there. Do not copy another machine's private LAN IP literally.
+
+## IPFS storage ceiling
+
+Current measured local state on this machine (`2026-03-10`):
+
+- Kubo repo path: `/home/robert/.ipfs`
+- current repo size: about `311 MB`
+- current free disk on `/`: about `77 GB`
+- configured Kubo storage ceiling: `10 GB`
+- configured Kubo garbage-collection watermark: `90%`
+- Kubo API bind: `127.0.0.1:5001`
+- Kubo gateway bind: `127.0.0.1:8080`
+- Kubo swarm bind: `0.0.0.0:4001` and `:::4001`
+
+Practical meaning:
+
+- The current limiting factor is **Kubo `StorageMax`**, not raw disk.
+- With `StorageMax = 10 GB` and `StorageGCWatermark = 90`, the repo will start garbage-collection pressure around roughly `9 GB` of stored content.
+- Because the web app writes metadata and media to IPFS and then references them by `ipfs://` URI, long-term availability still depends on that content remaining pinned and the Kubo repo staying healthy.
+
+Application upload limits are lower than the repo ceiling:
+
+- image upload max: `15 MB`
+- audio upload max: `25 MB`
+
+Those limits are enforced in the web route handler at `apps/web/app/api/ipfs/metadata/route.ts`.
+
+Operational note:
+
+- No local `caddy` or `nginx` process was detected during the check.
+- If the public `IPFS_API_URL` is fronted by another reverse proxy or tunnel outside this machine, that ingress can still impose a lower request-size or timeout ceiling than Kubo itself.
+- If you want a higher effective ceiling, raise `StorageMax`, verify pin retention/GC policy, and check the public ingress limits in front of the Kubo API.
 
 ## Process management
 
