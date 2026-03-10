@@ -1,0 +1,6 @@
+{
+  "framework": "nextjs",
+  "installCommand": "npm install",
+  "buildCommand": "ALLOW_CONCURRENT_WEB=1 npm run build:web",
+  "outputDirectory": "apps/web/.next-build"
+}
