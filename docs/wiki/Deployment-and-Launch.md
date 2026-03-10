@@ -89,7 +89,7 @@ Before deployment or release validation:
 - [ ] `REGISTRY_ADDRESS` and `MARKETPLACE_ADDRESS` are set in the indexer env
 - [ ] `MODERATOR_REGISTRY_ADDRESS` is set if using on-chain moderator reads
 - [ ] `NEXT_PUBLIC_INDEXER_API_URL` points to a reachable host
-- [ ] IPFS upload credentials are configured
+- [ ] IPFS upload service is configured (`IPFS_API_URL`, plus auth if required)
 
 ## Operational launch gates
 

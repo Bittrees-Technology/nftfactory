@@ -9,7 +9,7 @@ Today the app still depends on:
 - App Router API routes under `apps/web/app/api/`
 - dynamic profile routes at `/profile/[name]`
 - force-dynamic rendering
-- a server-side Pinata upload route for mint metadata
+- a server-side IPFS upload route for mint metadata
 
 That means the current deployment model is still:
 
@@ -47,7 +47,7 @@ The current app does none of those yet.
 
 ## 3. Server-side IPFS upload
 
-Mint currently uploads media and metadata through `/api/ipfs/metadata`, which uses Pinata credentials on the server.
+Mint currently uploads media and metadata through `/api/ipfs/metadata`, which uses a server-side IPFS API endpoint.
 
 That is correct for a server-hosted deployment, but not for a pure IPFS-hosted frontend.
 
@@ -81,7 +81,7 @@ That keeps the browser app static while leaving live data and upload credentials
    - direct browser reads to public indexers, or
    - a separate public aggregation service
 3. Replace `/profile/[name]` with an IPFS-safe route model
-4. Remove the server-side Pinata upload dependency from mint
+4. Remove the server-side IPFS upload dependency from mint
 5. Add `output: "export"` to `next.config.ts`
 6. Generate and pin the static artifact
 

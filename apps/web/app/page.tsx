@@ -36,7 +36,7 @@ export default function HomePage() {
         <Link href="/mint?view=mint&collection=custom" className="card actionCard">
           <h3>Immutable Metadata</h3>
           <p>
-            Upload to IPFS via Pinata. For creator collections, lock each token&apos;s metadata on mint —
+            Upload to IPFS through your configured storage node. For creator collections, lock each token&apos;s metadata on mint —
             permanently frozen and verifiable. Collectors can trust what they own.
           </p>
           <p className="actionHint">Takes you to custom minting with metadata controls.</p>

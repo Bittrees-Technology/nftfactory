@@ -52,7 +52,7 @@ if rg -n '/api/ipfs/metadata' "$WEB_DIR" >/dev/null 2>&1; then
   echo "Detected IPFS upload dependency:"
   rg -n '/api/ipfs/metadata' "$WEB_DIR" | sed "s#^$ROOT_DIR/##" | sed 's/^/  - /'
   echo
-  print_blocker "Mint flow depends on a server-side Pinata upload route. IPFS-hosted frontends cannot keep upload credentials private."
+  print_blocker "Mint flow depends on a server-side IPFS upload route. IPFS-hosted frontends cannot keep upload credentials private."
   echo
 fi
 

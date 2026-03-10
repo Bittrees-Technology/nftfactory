@@ -7,7 +7,7 @@ if [ -z "${files// }" ]; then
   exit 0
 fi
 
-pattern='(-----BEGIN [A-Z ]*PRIVATE KEY-----|\bAKIA[0-9A-Z]{16}\b|\bASIA[0-9A-Z]{16}\b|\bghp_[A-Za-z0-9]{36}\b|\bgithub_pat_[A-Za-z0-9_]{80,}\b|\bxox[baprs]-[A-Za-z0-9-]{10,}\b|\bAIza[0-9A-Za-z_-]{35}\b|\bsk_live_[0-9A-Za-z]{20,}\b|\bsk_test_[0-9A-Za-z]{20,}\b|\b(PINATA_JWT|PRIVATE_KEY|ETHERSCAN_API_KEY|ALCHEMY_API_KEY|INFURA_API_KEY|INDEXER_ADMIN_TOKEN)\s*=\s*[^[:space:]]+)'
+pattern='(-----BEGIN [A-Z ]*PRIVATE KEY-----|\bAKIA[0-9A-Z]{16}\b|\bASIA[0-9A-Z]{16}\b|\bghp_[A-Za-z0-9]{36}\b|\bgithub_pat_[A-Za-z0-9_]{80,}\b|\bxox[baprs]-[A-Za-z0-9-]{10,}\b|\bAIza[0-9A-Za-z_-]{35}\b|\bsk_live_[0-9A-Za-z]{20,}\b|\bsk_test_[0-9A-Za-z]{20,}\b|\b(IPFS_API_BEARER_TOKEN|IPFS_API_BASIC_AUTH_PASSWORD|PRIVATE_KEY|ETHERSCAN_API_KEY|ALCHEMY_API_KEY|INFURA_API_KEY|INDEXER_ADMIN_TOKEN)\s*=\s*[^[:space:]]+)'
 
 # Skip generated/vendor dirs to reduce noise.
 exclude='(^|/)(node_modules|packages/contracts/lib|dist|out|coverage|\.next|broadcast)/'

@@ -1,12 +1,8 @@
 import { NextResponse } from "next/server";
+import { buildIpfsAddUrl, buildIpfsAuthHeaders, parseIpfsAddResponse } from "../../../../lib/ipfsUpload";
 
-const PINATA_FILE_ENDPOINT = "https://api.pinata.cloud/pinning/pinFileToIPFS";
 const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
 const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
-
-type PinataResponse = {
-  IpfsHash: string;
-};
 
 function requireEnv(name: string): string {
   const value = process.env[name];
@@ -16,34 +12,28 @@ function requireEnv(name: string): string {
   return value;
 }
 
-async function pinFile(file: File, fileName: string, jwt: string): Promise<string> {
+async function pinFile(file: File, fileName: string, apiUrl: string, authHeaders: HeadersInit): Promise<string> {
   const form = new FormData();
   form.append("file", file, fileName);
-  form.append("pinataMetadata", JSON.stringify({ name: fileName }));
 
-  const response = await fetch(PINATA_FILE_ENDPOINT, {
+  const response = await fetch(apiUrl, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${jwt}`
-    },
+    headers: authHeaders,
     body: form
   });
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`Pinata upload failed: ${text}`);
+    throw new Error(`IPFS upload failed: ${text}`);
   }
 
-  const payload = (await response.json()) as PinataResponse;
-  if (!payload.IpfsHash) {
-    throw new Error("Pinata response missing IpfsHash");
-  }
-  return payload.IpfsHash;
+  return parseIpfsAddResponse(await response.text());
 }
 
 export async function POST(request: Request) {
   try {
-    const jwt = requireEnv("PINATA_JWT");
+    const apiUrl = buildIpfsAddUrl(requireEnv("IPFS_API_URL"));
+    const authHeaders = buildIpfsAuthHeaders(process.env);
     const gateway = process.env.NEXT_PUBLIC_IPFS_GATEWAY || "https://gateway.pinata.cloud/ipfs";
 
     const formData = await request.formData();
@@ -87,12 +77,12 @@ export async function POST(request: Request) {
     let audioUri: string | null = null;
 
     if (image instanceof File) {
-      imageHash = await pinFile(image, image.name || "asset.png", jwt);
+      imageHash = await pinFile(image, image.name || "asset.png", apiUrl, authHeaders);
       imageUri = `ipfs://${imageHash}`;
     }
 
     if (audio instanceof File) {
-      audioHash = await pinFile(audio, audio.name || "audio.mp3", jwt);
+      audioHash = await pinFile(audio, audio.name || "audio.mp3", apiUrl, authHeaders);
       audioUri = `ipfs://${audioHash}`;
     }
 
@@ -123,7 +113,7 @@ export async function POST(request: Request) {
     const metadataFile = new File([JSON.stringify(metadata, null, 2)], "metadata.json", {
       type: "application/json"
     });
-    const metadataHash = await pinFile(metadataFile, "metadata.json", jwt);
+    const metadataHash = await pinFile(metadataFile, "metadata.json", apiUrl, authHeaders);
     const metadataUri = `ipfs://${metadataHash}`;
 
     return NextResponse.json({

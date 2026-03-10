@@ -18,7 +18,7 @@ else
   RANGE="HEAD~10..HEAD"
 fi
 
-pattern='(-----BEGIN [A-Z ]*PRIVATE KEY-----|\bAKIA[0-9A-Z]{16}\b|\bASIA[0-9A-Z]{16}\b|\bghp_[A-Za-z0-9]{36}\b|\bgithub_pat_[A-Za-z0-9_]{80,}\b|\bxox[baprs]-[A-Za-z0-9-]{10,}\b|\bAIza[0-9A-Za-z_-]{35}\b|\bsk_live_[0-9A-Za-z]{20,}\b|\bsk_test_[0-9A-Za-z]{20,}\b|\b(PINATA_JWT|PRIVATE_KEY|ETHERSCAN_API_KEY|ALCHEMY_API_KEY|INFURA_API_KEY|INDEXER_ADMIN_TOKEN)\s*=\s*[^[:space:]]+)'
+pattern='(-----BEGIN [A-Z ]*PRIVATE KEY-----|\bAKIA[0-9A-Z]{16}\b|\bASIA[0-9A-Z]{16}\b|\bghp_[A-Za-z0-9]{36}\b|\bgithub_pat_[A-Za-z0-9_]{80,}\b|\bxox[baprs]-[A-Za-z0-9-]{10,}\b|\bAIza[0-9A-Za-z_-]{35}\b|\bsk_live_[0-9A-Za-z]{20,}\b|\bsk_test_[0-9A-Za-z]{20,}\b|\b(IPFS_API_BEARER_TOKEN|IPFS_API_BASIC_AUTH_PASSWORD|PRIVATE_KEY|ETHERSCAN_API_KEY|ALCHEMY_API_KEY|INFURA_API_KEY|INDEXER_ADMIN_TOKEN)\s*=\s*[^[:space:]]+)'
 
 if git diff "$RANGE" \
   | rg --pcre2 -n "$pattern" >/tmp/nftfactory-secret-hits.txt; then
@@ -108,8 +108,18 @@ for key in "${required_indexer_env[@]}"; do
   fi
 done
 
-if [[ -z "${PINATA_JWT:-}" ]]; then
-  echo "Missing env: PINATA_JWT (required for /api/ipfs/metadata upload path)"
+if [[ -z "${IPFS_API_URL:-}" ]]; then
+  echo "Missing env: IPFS_API_URL (required for /api/ipfs/metadata upload path)"
+  missing=1
+fi
+
+if [[ -n "${IPFS_API_BASIC_AUTH_USERNAME:-}" && -z "${IPFS_API_BASIC_AUTH_PASSWORD:-}" ]]; then
+  echo "Missing env: IPFS_API_BASIC_AUTH_PASSWORD (required when IPFS_API_BASIC_AUTH_USERNAME is set)"
+  missing=1
+fi
+
+if [[ -z "${IPFS_API_BASIC_AUTH_USERNAME:-}" && -n "${IPFS_API_BASIC_AUTH_PASSWORD:-}" ]]; then
+  echo "Missing env: IPFS_API_BASIC_AUTH_USERNAME (required when IPFS_API_BASIC_AUTH_PASSWORD is set)"
   missing=1
 fi
 
