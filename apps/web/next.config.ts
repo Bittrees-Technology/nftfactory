@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import path from "node:path";
+import { resolveBasicAuthConfig } from "./lib/basicAuth";
 
 const primaryChainId = process.env.NEXT_PUBLIC_PRIMARY_CHAIN_ID || process.env.NEXT_PUBLIC_CHAIN_ID || "1";
 
@@ -19,6 +20,11 @@ if (process.env.NODE_ENV === "production") {
   ).map((name) => `${name}_${primaryChainId}`);
   if (missing.length > 0) {
     throw new Error(`Missing required env vars for production build:\n  ${missing.join("\n  ")}`);
+  }
+
+  const basicAuth = resolveBasicAuthConfig(process.env);
+  if (basicAuth.misconfigured) {
+    throw new Error("SITE_BASIC_AUTH_ENABLED requires SITE_BASIC_AUTH_PASSWORD to be set.");
   }
 }
 
