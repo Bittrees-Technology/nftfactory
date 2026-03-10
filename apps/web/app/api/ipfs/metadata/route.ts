@@ -41,7 +41,7 @@ async function pinFile(file: File, fileName: string, apiUrl: string, authHeaders
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`IPFS upload failed: ${text}`);
+    throw new Error(`IPFS upload failed (HTTP ${response.status}): ${text}`);
   }
 
   return parseIpfsAddResponse(await response.text());
