@@ -2,6 +2,7 @@ import {
   getLegacyChainPublicEnv,
   getScopedChainPublicEnv
 } from "./publicEnv";
+import { isPrivateOrLocalUrl } from "./ipfsUpload";
 
 export type IndexerRequestOptions = {
   chainId?: number;
@@ -14,7 +15,14 @@ export function getIndexerBaseUrl(options?: IndexerRequestOptions): string {
     const scoped = getScopedChainPublicEnv("NEXT_PUBLIC_INDEXER_API_URL", options.chainId);
     if (scoped) return scoped;
   }
-  return getLegacyChainPublicEnv("NEXT_PUBLIC_INDEXER_API_URL") || "http://127.0.0.1:8787";
+  const legacy = getLegacyChainPublicEnv("NEXT_PUBLIC_INDEXER_API_URL");
+  if (legacy) {
+    return legacy;
+  }
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("NEXT_PUBLIC_INDEXER_API_URL is not configured for this deployment.");
+  }
+  return "http://127.0.0.1:8787";
 }
 
 const INDEXER_REQUEST_TIMEOUT_MS = 12_000;
@@ -44,8 +52,16 @@ function withTimeout(
 async function fetchJson<T>(path: string, init?: RequestInit, timeoutMs?: number, options?: IndexerRequestOptions): Promise<T> {
   const effectiveTimeoutMs = timeoutMs ?? INDEXER_REQUEST_TIMEOUT_MS;
   const { init: requestInit, cleanup } = withTimeout(init, effectiveTimeoutMs);
+  const baseUrl = getIndexerBaseUrl(options);
+
+  if (process.env.NODE_ENV === "production" && isPrivateOrLocalUrl(baseUrl)) {
+    throw new Error(
+      `Indexer API ${baseUrl} is not reachable from this deployment. Set NEXT_PUBLIC_INDEXER_API_URL to a public HTTP(S) endpoint.`
+    );
+  }
+
   try {
-    const response = await fetch(`${getIndexerBaseUrl(options)}${path}`, {
+    const response = await fetch(`${baseUrl}${path}`, {
       ...requestInit,
       headers: {
         "Content-Type": "application/json",

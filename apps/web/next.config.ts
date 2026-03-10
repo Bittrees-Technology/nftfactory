@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 import path from "node:path";
 import { resolveBasicAuthConfig } from "./lib/basicAuth";
+import { buildIpfsReachabilityError, isPrivateOrLocalUrl } from "./lib/ipfsUpload";
 
 const primaryChainId = process.env.NEXT_PUBLIC_PRIMARY_CHAIN_ID || process.env.NEXT_PUBLIC_CHAIN_ID || "1";
 
@@ -14,6 +15,18 @@ const REQUIRED_PUBLIC_ENV = [
   "NEXT_PUBLIC_FACTORY_ADDRESS"
 ];
 
+function parseEnabledChainIds(): number[] {
+  const raw = (process.env.NEXT_PUBLIC_ENABLED_CHAIN_IDS || "").trim();
+  if (!raw) {
+    return [];
+  }
+
+  return raw
+    .split(",")
+    .map((value) => Number.parseInt(value.trim(), 10))
+    .filter(Number.isFinite);
+}
+
 if (process.env.NODE_ENV === "production") {
   const missing = REQUIRED_PUBLIC_ENV.filter(
     (name) => !process.env[`${name}_${primaryChainId}`] && !process.env[name]
@@ -25,6 +38,34 @@ if (process.env.NODE_ENV === "production") {
   const basicAuth = resolveBasicAuthConfig(process.env);
   if (basicAuth.misconfigured) {
     throw new Error("SITE_BASIC_AUTH_ENABLED requires SITE_BASIC_AUTH_PASSWORD to be set.");
+  }
+
+  if (process.env.VERCEL && process.env.IPFS_API_URL && isPrivateOrLocalUrl(process.env.IPFS_API_URL)) {
+    throw new Error(buildIpfsReachabilityError(process.env.IPFS_API_URL));
+  }
+
+  if (process.env.VERCEL) {
+    const chainIds = Array.from(new Set([Number.parseInt(primaryChainId, 10), ...parseEnabledChainIds()])).filter(Number.isFinite);
+    const badIndexerEnv: string[] = [];
+
+    for (const chainId of chainIds) {
+      const scopedName = `NEXT_PUBLIC_INDEXER_API_URL_${chainId}`;
+      const scopedValue = process.env[scopedName];
+      if (scopedValue && isPrivateOrLocalUrl(scopedValue)) {
+        badIndexerEnv.push(`${scopedName}=${scopedValue}`);
+      }
+    }
+
+    const legacyIndexerUrl = process.env.NEXT_PUBLIC_INDEXER_API_URL;
+    if (legacyIndexerUrl && isPrivateOrLocalUrl(legacyIndexerUrl)) {
+      badIndexerEnv.push(`NEXT_PUBLIC_INDEXER_API_URL=${legacyIndexerUrl}`);
+    }
+
+    if (badIndexerEnv.length > 0) {
+      throw new Error(
+        `Indexer API URL must be publicly reachable from Vercel. Invalid values:\n  ${badIndexerEnv.join("\n  ")}`
+      );
+    }
   }
 }
 

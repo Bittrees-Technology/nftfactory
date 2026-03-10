@@ -1,5 +1,64 @@
 type EnvLike = Record<string, string | undefined>;
 
+function isPrivateOrLocalHostname(hostname: string): boolean {
+  const normalized = hostname.trim().toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+
+  if (normalized === "localhost" || normalized === "0.0.0.0" || normalized === "::1" || normalized === "[::1]") {
+    return true;
+  }
+
+  if (/^127\.\d+\.\d+\.\d+$/.test(normalized)) {
+    return true;
+  }
+
+  if (/^10\.\d+\.\d+\.\d+$/.test(normalized)) {
+    return true;
+  }
+
+  if (/^192\.168\.\d+\.\d+$/.test(normalized)) {
+    return true;
+  }
+
+  const octets = normalized.match(/^172\.(\d+)\.\d+\.\d+$/);
+  if (octets) {
+    const secondOctet = Number.parseInt(octets[1] || "", 10);
+    if (secondOctet >= 16 && secondOctet <= 31) {
+      return true;
+    }
+  }
+
+  if (normalized.endsWith(".local")) {
+    return true;
+  }
+
+  return false;
+}
+
+export function isPrivateOrLocalUrl(urlLike: string): boolean {
+  const normalized = urlLike.trim();
+  if (!normalized) {
+    return false;
+  }
+
+  try {
+    return isPrivateOrLocalHostname(new URL(normalized).hostname);
+  } catch {
+    return false;
+  }
+}
+
+export function buildIpfsReachabilityError(urlLike: string): string {
+  try {
+    const url = new URL(urlLike);
+    return `IPFS upload backend ${url.host} is not reachable from this deployment. Set IPFS_API_URL to a public HTTP(S) endpoint reachable from the hosting platform.`;
+  } catch {
+    return "IPFS upload backend is not reachable from this deployment. Set IPFS_API_URL to a public HTTP(S) endpoint reachable from the hosting platform.";
+  }
+}
+
 export function buildIpfsAddUrl(baseUrl: string): string {
   const normalized = baseUrl.trim();
   if (!normalized) {

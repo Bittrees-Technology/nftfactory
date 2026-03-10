@@ -1,5 +1,11 @@
 import { NextResponse } from "next/server";
-import { buildIpfsAddUrl, buildIpfsAuthHeaders, parseIpfsAddResponse } from "../../../../lib/ipfsUpload";
+import {
+  buildIpfsAddUrl,
+  buildIpfsAuthHeaders,
+  buildIpfsReachabilityError,
+  isPrivateOrLocalUrl,
+  parseIpfsAddResponse
+} from "../../../../lib/ipfsUpload";
 
 const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
 const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
@@ -16,11 +22,22 @@ async function pinFile(file: File, fileName: string, apiUrl: string, authHeaders
   const form = new FormData();
   form.append("file", file, fileName);
 
-  const response = await fetch(apiUrl, {
-    method: "POST",
-    headers: authHeaders,
-    body: form
-  });
+  let response: Response;
+  try {
+    response = await fetch(apiUrl, {
+      method: "POST",
+      headers: authHeaders,
+      body: form
+    });
+  } catch (error) {
+    throw new Error(
+      error instanceof Error && isPrivateOrLocalUrl(apiUrl)
+        ? buildIpfsReachabilityError(apiUrl)
+        : error instanceof Error
+          ? `IPFS upload request failed: ${error.message}`
+          : "IPFS upload request failed."
+    );
+  }
 
   if (!response.ok) {
     const text = await response.text();

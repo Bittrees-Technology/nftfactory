@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { buildIpfsAddUrl, buildIpfsAuthHeaders, parseIpfsAddResponse } from "./ipfsUpload";
+import {
+  buildIpfsAddUrl,
+  buildIpfsAuthHeaders,
+  buildIpfsReachabilityError,
+  isPrivateOrLocalUrl,
+  parseIpfsAddResponse
+} from "./ipfsUpload";
 
 describe("ipfsUpload", () => {
   it("builds a Kubo add URL from a base host", () => {
@@ -48,5 +54,18 @@ describe("ipfsUpload", () => {
         '{"Name":"part-1","Hash":"bafyOld","Size":"1"}\n{"Name":"file","Hash":"bafyFinal","Size":"42"}\n'
       )
     ).toBe("bafyFinal");
+  });
+
+  it("treats localhost and private network backends as non-public", () => {
+    expect(isPrivateOrLocalUrl("http://127.0.0.1:5001")).toBe(true);
+    expect(isPrivateOrLocalUrl("http://192.168.1.115:5001")).toBe(true);
+    expect(isPrivateOrLocalUrl("http://10.0.0.5:5001")).toBe(true);
+    expect(isPrivateOrLocalUrl("http://172.20.10.2:5001")).toBe(true);
+    expect(isPrivateOrLocalUrl("https://ipfs.example.com/api/v0")).toBe(false);
+  });
+
+  it("builds a clear reachability error", () => {
+    expect(buildIpfsReachabilityError("http://192.168.1.115:5001")).toContain("192.168.1.115:5001");
+    expect(buildIpfsReachabilityError("http://192.168.1.115:5001")).toContain("public HTTP(S) endpoint");
   });
 });
