@@ -52,6 +52,32 @@ const ENS_REGISTRY_WRITE_ABI = [
     outputs: []
   }
 ] as const;
+const ENS_NAME_WRAPPER_WRITE_ABI = [
+  {
+    type: "function",
+    name: "setSubnodeOwner",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "parentNode", type: "bytes32" },
+      { name: "label", type: "string" },
+      { name: "owner", type: "address" },
+      { name: "fuses", type: "uint32" },
+      { name: "expiry", type: "uint64" }
+    ],
+    outputs: []
+  },
+  {
+    type: "function",
+    name: "getData",
+    stateMutability: "view",
+    inputs: [{ name: "id", type: "uint256" }],
+    outputs: [
+      { name: "owner", type: "address" },
+      { name: "fuses", type: "uint32" },
+      { name: "expiry", type: "uint64" }
+    ]
+  }
+] as const;
 const ENS_NAME_WRAPPER_ABI = [
   {
     type: "function",
@@ -248,6 +274,20 @@ async function resolveEnsEffectiveOwner(
   }
 
   return { owner: registryOwner, wrapped: false };
+}
+
+async function readWrappedNameExpiry(
+  publicClient: NonNullable<ReturnType<typeof usePublicClient>>,
+  node: Hex
+): Promise<bigint | null> {
+  if (!ENS_NAME_WRAPPER_ADDRESS) return null;
+  const [, , expiry] = await publicClient.readContract({
+    address: ENS_NAME_WRAPPER_ADDRESS,
+    abi: ENS_NAME_WRAPPER_WRITE_ABI,
+    functionName: "getData",
+    args: [BigInt(node)]
+  });
+  return BigInt(expiry);
 }
 
 function isAddress(value: string): value is `0x${string}` {
@@ -662,6 +702,7 @@ export default function ProfileLandingClient({
     label: string;
     parentName: string;
     parentNode: Hex;
+    parentExpiry: bigint | null;
     current: { owner: string; wrapped: boolean };
     parent: { owner: string; wrapped: boolean };
   }> {
@@ -683,12 +724,15 @@ export default function ProfileLandingClient({
     const current = await resolveEnsEffectiveOwner(publicClient, fullName);
     const parentName = parts.slice(1).join(".");
     const parent = await resolveEnsEffectiveOwner(publicClient, parentName);
+    const parentNode = namehash(parentName);
+    const parentExpiry = parent.wrapped ? await readWrappedNameExpiry(publicClient, parentNode) : null;
 
     return {
       fullName,
       label,
       parentName,
-      parentNode: namehash(parentName),
+      parentNode,
+      parentExpiry,
       current,
       parent
     };
@@ -696,7 +740,7 @@ export default function ProfileLandingClient({
 
   async function checkEthSubnameRegistrationAvailability(cancelled = false): Promise<void> {
     try {
-      const { fullName, parentName, current, parent } = await resolveEthSubnameCreationContext();
+      const { fullName, parentName, current, parent, parentExpiry } = await resolveEthSubnameCreationContext();
       if (cancelled) return;
 
       if (String(current.owner).toLowerCase() !== ZERO_ADDRESS.toLowerCase()) {
@@ -716,14 +760,23 @@ export default function ProfileLandingClient({
         setLookupNote(`${parentName} exists, but the connected wallet does not control that parent name.`);
         return;
       }
-      if (parent.wrapped) {
+      if (parent.wrapped && !ENS_NAME_WRAPPER_ADDRESS) {
         setCheckedIdentityReady(false);
-        setLookupNote(`${parentName} is wrapped via ENS NameWrapper. NFTFactory does not create wrapped ENS subnames yet.`);
+        setLookupNote(`${parentName} is wrapped via ENS NameWrapper, but no wrapper contract is configured here.`);
+        return;
+      }
+      if (parent.wrapped && (!parentExpiry || parentExpiry <= 0n)) {
+        setCheckedIdentityReady(false);
+        setLookupNote(`${parentName} is wrapped, but its wrapper expiry could not be read.`);
         return;
       }
 
       setCheckedIdentityReady(true);
-      setLookupNote(`${fullName} can be created under ${parentName} from this wallet.`);
+      setLookupNote(
+        parent.wrapped
+          ? `${fullName} can be created under wrapped parent ${parentName} from this wallet.`
+          : `${fullName} can be created under ${parentName} from this wallet.`
+      );
     } catch (err) {
       if (!cancelled) {
         setCheckedIdentityReady(false);
@@ -743,7 +796,7 @@ export default function ProfileLandingClient({
     }
 
     try {
-      const { fullName, label, parentName, parentNode, current, parent } = await resolveEthSubnameCreationContext();
+      const { fullName, label, parentName, parentNode, parentExpiry, current, parent } = await resolveEthSubnameCreationContext();
       const currentOwner = String(current.owner).toLowerCase();
       const parentOwner = String(parent.owner).toLowerCase();
 
@@ -759,10 +812,17 @@ export default function ProfileLandingClient({
         setSetupState({ status: "error", message: `The connected wallet does not control ${parentName}.` });
         return;
       }
-      if (parent.wrapped) {
+      if (parent.wrapped && !ENS_NAME_WRAPPER_ADDRESS) {
         setSetupState({
           status: "error",
-          message: `${parentName} is wrapped via ENS NameWrapper. Wrapped ENS subname creation is not enabled here yet.`
+          message: `${parentName} is wrapped via ENS NameWrapper, but no wrapper contract is configured here.`
+        });
+        return;
+      }
+      if (parent.wrapped && (!parentExpiry || parentExpiry <= 0n)) {
+        setSetupState({
+          status: "error",
+          message: `${parentName} is wrapped, but its wrapper expiry could not be read.`
         });
         return;
       }
@@ -772,15 +832,27 @@ export default function ProfileLandingClient({
       setPostLinkProfile(null);
       setPostLinkMintCta(false);
 
-      const txHash = await walletClient.sendTransaction({
-        account: walletClient.account,
-        to: ENS_REGISTRY_ADDRESS,
-        data: encodeFunctionData({
-          abi: ENS_REGISTRY_WRITE_ABI,
-          functionName: "setSubnodeOwner",
-          args: [parentNode, keccak256(stringToBytes(label)), walletClient.account.address]
-        })
-      });
+      const txHash = await walletClient.sendTransaction(
+        parent.wrapped
+          ? {
+              account: walletClient.account,
+              to: ENS_NAME_WRAPPER_ADDRESS!,
+              data: encodeFunctionData({
+                abi: ENS_NAME_WRAPPER_WRITE_ABI,
+                functionName: "setSubnodeOwner",
+                args: [parentNode, label, walletClient.account.address, 0, BigInt(parentExpiry!)]
+              })
+            }
+          : {
+              account: walletClient.account,
+              to: ENS_REGISTRY_ADDRESS,
+              data: encodeFunctionData({
+                abi: ENS_REGISTRY_WRITE_ABI,
+                functionName: "setSubnodeOwner",
+                args: [parentNode, keccak256(stringToBytes(label)), walletClient.account.address]
+              })
+            }
+      );
       await publicClient.waitForTransactionReceipt({ hash: txHash });
 
       let nextProfile: ApiProfileRecord | null = null;
