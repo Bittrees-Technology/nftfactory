@@ -51,6 +51,7 @@ import {
   linkProfileIdentity,
   transferProfileOwnership,
   type ApiActiveListingItem,
+  type ApiProfileRecord,
   type ApiOfferSummary,
   type ApiProfileResolution
 } from "../../lib/indexerApi";
@@ -118,6 +119,19 @@ function buildMintCollectionHref(pageMode: "view" | "manage", profileName: strin
     params.set("address", contractAddress.trim());
   }
   return `/mint?${params.toString()}`;
+}
+
+function normalizeCollectionIdentity(value: string | null | undefined): string {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  return raw.includes(".") ? raw.toLowerCase() : `${raw.toLowerCase()}.nftfactory.eth`;
+}
+
+function getProfileSourceLabel(source: ApiProfileRecord["source"] | "collection-record-only"): string {
+  if (source === "ens") return "ENS";
+  if (source === "external-subname") return "ENS Subname";
+  if (source === "nftfactory-subname") return "NFTFactory Subname";
+  return "Collection Record Only";
 }
 
 export default function ProfileClient({ name }: { name: string }) {
@@ -516,6 +530,44 @@ export default function ProfileClient({ name }: { name: string }) {
     }
     return collectionSummaries[0] || null;
   }, [collectionSummaries, primaryProfile]);
+
+  const collectionIdentityVerifications = useMemo(() => {
+    return collectionSummaries.map((collection) => {
+      const collectionKey = collection.contractAddress.toLowerCase();
+      const attachedProfiles = linkedProfiles.filter(
+        (profile) => profile.collectionAddress?.toLowerCase() === collectionKey
+      );
+      const primaryAttachedProfile = attachedProfiles[0] || null;
+      const normalizedCollectionIdentity = normalizeCollectionIdentity(collection.ensSubname);
+      const normalizedAttachedIdentity = normalizeCollectionIdentity(primaryAttachedProfile?.fullName || null);
+      const hasExplicitAttachment = Boolean(primaryAttachedProfile);
+      const isAligned =
+        Boolean(normalizedCollectionIdentity) &&
+        Boolean(normalizedAttachedIdentity) &&
+        normalizedCollectionIdentity === normalizedAttachedIdentity;
+
+      let status = "Unlinked";
+      if (hasExplicitAttachment && isAligned) {
+        status = "Aligned";
+      } else if (hasExplicitAttachment && normalizedCollectionIdentity && !isAligned) {
+        status = "Mismatch";
+      } else if (hasExplicitAttachment) {
+        status = "Profile Attached";
+      } else if (normalizedCollectionIdentity) {
+        status = "Collection Only";
+      }
+
+      return {
+        ...collection,
+        attachedProfiles,
+        primaryAttachedProfile,
+        normalizedCollectionIdentity,
+        normalizedAttachedIdentity,
+        status,
+        sourceLabel: getProfileSourceLabel(primaryAttachedProfile?.source || "collection-record-only")
+      };
+    });
+  }, [collectionSummaries, linkedProfiles]);
 
   const stats = useMemo(() => {
     if (creatorListings.length === 0) {
@@ -1125,6 +1177,76 @@ export default function ProfileClient({ name }: { name: string }) {
                   )}
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+
+        <div className="card formCard profileWalletCard">
+          <SectionCardHeader
+            title="Collection Identity Verification"
+            description="Debug view for ENS/profile attachment state. This shows what the collection row currently stores, which linked profile is explicitly attached to it, and whether those identities align."
+            descriptionClassName="sectionLead"
+            actions={
+              <Link href={`/profile/setup?label=${encodeURIComponent(name)}`} className="ctaLink secondaryLink">
+                Identity setup
+              </Link>
+            }
+          />
+          {collectionIdentityVerifications.length === 0 ? (
+            <SectionStatePanel
+              message="No indexed creator collections are available to verify yet."
+              actions={
+                <Link href={buildMintCollectionHref("manage", mintProfileParam)} className="ctaLink secondaryLink">
+                  Open collection tools
+                </Link>
+              }
+            />
+          ) : (
+            <div className="listTable">
+              {collectionIdentityVerifications.map((collection) => {
+                const contractExplorer = toExplorerAddress(collection.contractAddress, collection.chainId || config.chainId);
+                const attachedProfile = collection.primaryAttachedProfile;
+                return (
+                  <div key={`verify:${collection.chainId || 0}:${collection.contractAddress}`} className="listRow profileDirectoryRow">
+                    <span>
+                      <strong>Status</strong> {collection.status}
+                    </span>
+                    <span>
+                      <strong>Source</strong> {collection.sourceLabel}
+                    </span>
+                    <span>
+                      <strong>Collection Identity</strong>{" "}
+                      {collection.normalizedCollectionIdentity || "Not stored"}
+                    </span>
+                    <span>
+                      <strong>Attached Profile</strong>{" "}
+                      {attachedProfile?.fullName || "No explicit profile attachment"}
+                    </span>
+                    <span>
+                      <strong>Chain</strong> {getAppChain(collection.chainId || config.chainId).name}
+                    </span>
+                    {contractExplorer ? (
+                      <a href={contractExplorer} target="_blank" rel="noreferrer" className="mono">
+                        {truncateAddress(collection.contractAddress)}
+                      </a>
+                    ) : (
+                      <span className="mono">{truncateAddress(collection.contractAddress)}</span>
+                    )}
+                    {attachedProfile ? (
+                      <span>
+                        <strong>Profile Route</strong>{" "}
+                        <Link href={`/profile/${encodeURIComponent(attachedProfile.slug)}`} className="mono">
+                          /profile/{attachedProfile.slug}
+                        </Link>
+                      </span>
+                    ) : (
+                      <span>
+                        <strong>Profile Route</strong> Not attached
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
