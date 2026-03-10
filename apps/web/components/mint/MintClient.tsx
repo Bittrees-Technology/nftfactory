@@ -1,0 +1,2524 @@
+"use client";
+
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useAccount, useChainId, usePublicClient, useSwitchChain, useWalletClient } from "wagmi";
+import type { Address, Hex } from "viem";
+import {
+  encodeCreatorPublish1155,
+  encodeCreatorPublish721,
+  encodePublish1155,
+  encodePublish721,
+  encodeRegisterSubname,
+  toHexWei,
+  truncateHash
+} from "../../lib/abi";
+import {
+  encodeDeployCollection,
+  encodeFinalizeUpgrades,
+  encodeSetCollectionRoyaltySplits,
+  encodeSetDefaultRoyalty,
+  encodeTransferOwnership,
+  extractDeployedCollectionAddress,
+  type DeployCollectionArgs,
+  type RoyaltySplitArgs
+} from "../../lib/creatorCollection";
+import { getContractsConfig } from "../../lib/contracts";
+import { anvil, getAppChain, getExplorerBaseUrl } from "../../lib/chains";
+import { fetchCollectionTokens, fetchCollectionsByOwner, fetchProfileResolution, syncMintedToken } from "../../lib/indexerApi";
+import {
+  getMintAmountLabel,
+  getMintDisplayDescription,
+  getMintDisplayTitle,
+  getMintStatusLabel
+} from "../../lib/nftPresentation";
+import { verifyOwnedCollectionsOnChain } from "../../lib/onchainCollections";
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+type TxState = {
+  status: "idle" | "pending" | "success" | "error";
+  hash?: string;
+  message?: string;
+};
+
+type UploadReceipt = {
+  imageUri?: string | null;
+  imageGatewayUrl?: string | null;
+  audioUri?: string | null;
+  audioGatewayUrl?: string | null;
+  metadataUri?: string | null;
+  metadataGatewayUrl?: string | null;
+};
+
+type Standard = "ERC721" | "ERC1155";
+/** "shared" = shared public contracts; "custom" = a CreatorCollection deployed by the factory */
+type MintMode = "shared" | "custom";
+/** Which top-level action the user is performing */
+type PageMode = "mint" | "view" | "manage";
+type ManageRoyaltySplitDraft = {
+  account: string;
+  bps: string;
+};
+
+const SUBNAME_FEE_ETH = "0.001";
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function toExplorerTx(chainId: number, hash: string): string | null {
+  const baseUrl = getExplorerBaseUrl(chainId);
+  return baseUrl ? `${baseUrl}/tx/${hash}` : null;
+}
+
+function toExplorerAddress(chainId: number, address: string): string | null {
+  const baseUrl = getExplorerBaseUrl(chainId);
+  return baseUrl ? `${baseUrl}/address/${address}` : null;
+}
+
+function normalizeSubname(label: string): string {
+  return label.trim().toLowerCase().replace(/\.nftfactory\.eth$/, "");
+}
+
+function isValidSubnameLabel(label: string): boolean {
+  if (!label || label.length > 63) return false;
+  if (label.startsWith("-") || label.endsWith("-")) return false;
+  return /^[a-z0-9-]+$/.test(label);
+}
+
+function isValidEnsReference(value: string): boolean {
+  if (!value) return false;
+  return /^(?:[a-z0-9-]+\.)+[a-z]{2,}$/i.test(value.trim());
+}
+
+function isAddress(value: string): value is `0x${string}` {
+  return /^0x[a-fA-F0-9]{40}$/.test(value);
+}
+
+function storageKey(ownerAddress: string): string {
+  return `nftfactory:known-collections:${ownerAddress.toLowerCase()}`;
+}
+
+function metadataDraftKey(ownerAddress: string): string {
+  return `nftfactory:mint-draft:${ownerAddress.toLowerCase()}`;
+}
+
+function clearMetadataDraft(ownerAddress: string): void {
+  if (typeof window === "undefined" || !ownerAddress) return;
+  window.localStorage.removeItem(metadataDraftKey(ownerAddress));
+}
+
+function shortenAddress(value: string): string {
+  return `${value.slice(0, 8)}…${value.slice(-6)}`;
+}
+
+function defaultRoyaltySplits(account: string): ManageRoyaltySplitDraft[] {
+  return [{ account, bps: "10000" }];
+}
+
+function formatCollectionIdentity(value: string | null): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  return trimmed.includes(".") ? trimmed : `${trimmed}.nftfactory.eth`;
+}
+
+function formatBpsAsPercent(value: string | number): string {
+  const parsed = typeof value === "number" ? value : Number.parseInt(value || "0", 10);
+  if (!Number.isFinite(parsed)) return "0%";
+  return `${(parsed / 100).toLocaleString(undefined, {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2
+  })}%`;
+}
+
+function getSwitchErrorCode(error: unknown): number | string | null {
+  if (!error || typeof error !== "object") return null;
+  const candidate = error as {
+    code?: number | string;
+    cause?: unknown;
+  };
+  if (typeof candidate.code === "number" || typeof candidate.code === "string") {
+    return candidate.code;
+  }
+  if (candidate.cause) {
+    return getSwitchErrorCode(candidate.cause);
+  }
+  return null;
+}
+
+function getSwitchErrorMessage({
+  error,
+  walletName,
+  chainName
+}: {
+  error: unknown;
+  walletName: string;
+  chainName: string;
+}): string {
+  const code = getSwitchErrorCode(error);
+  const normalizedMessage =
+    error instanceof Error ? error.message.toLowerCase() : typeof error === "string" ? error.toLowerCase() : "";
+
+  if (code === 4001 || normalizedMessage.includes("user rejected")) {
+    return `${walletName} rejected the network switch to ${chainName}.`;
+  }
+
+  if (code === 4902 || normalizedMessage.includes("unrecognized chain")) {
+    return `${chainName} is not available in ${walletName}. Add the network in your wallet first, then try again.`;
+  }
+
+  if (normalizedMessage.includes("does not support") || normalizedMessage.includes("unsupported")) {
+    return `${walletName} does not support switching to ${chainName} from this page.`;
+  }
+
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+
+  return `Failed to switch ${walletName} to ${chainName}.`;
+}
+
+type MintClientProps = {
+  initialPageMode?: PageMode;
+  initialMintMode?: MintMode;
+  initialProfileLabel?: string;
+  initialCollectionAddress?: string;
+};
+
+type KnownCollection = {
+  contractAddress: string;
+  ensSubname: string | null;
+  ownerAddress: string;
+};
+
+type LocalMintFeedItem = {
+  id: string;
+  tokenId: string;
+  creatorAddress: string;
+  ownerAddress: string;
+  mintTxHash?: string | null;
+  draftName?: string | null;
+  draftDescription?: string | null;
+  mintedAmountRaw?: string | null;
+  metadataCid: string;
+  metadataUrl: string | null;
+  mediaCid: string | null;
+  mediaUrl: string | null;
+  immutable: boolean;
+  mintedAt: string;
+  collection: {
+    chainId: number;
+    contractAddress: string;
+    ownerAddress: string;
+    ensSubname: string | null;
+    standard: string;
+    isFactoryCreated: boolean;
+    isUpgradeable: boolean;
+    finalizedAt: string | null;
+    createdAt: string;
+    updatedAt: string;
+  };
+  activeListing: null;
+};
+
+const namedContractAbi = [
+  {
+    type: "function",
+    name: "name",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "string" }]
+  },
+  {
+    type: "function",
+    name: "symbol",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "string" }]
+  }
+] as const;
+
+const LOCAL_MINT_FEED_LIMIT = 50;
+const ERC721_TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
+
+function localMintFeedKey(chainId: number): string {
+  return `nftfactory:local-mint-feed:v1:${chainId}`;
+}
+
+function toGatewayUrl(value: string | null | undefined, gateway: string): string | null {
+  if (!value) return null;
+  if (value.startsWith("ipfs://")) {
+    return `${gateway.replace(/\/$/, "")}/${value.replace("ipfs://", "")}`;
+  }
+  return value;
+}
+
+function readLocalMintFeed(chainId: number): LocalMintFeedItem[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(localMintFeedKey(chainId));
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as LocalMintFeedItem[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeLocalMintFeedItem(chainId: number, nextItem: LocalMintFeedItem): void {
+  if (typeof window === "undefined") return;
+  const current = readLocalMintFeed(chainId);
+  const merged = [nextItem, ...current.filter((item) => {
+    const sameContract = item.collection.contractAddress.toLowerCase() === nextItem.collection.contractAddress.toLowerCase();
+    const sameToken = item.tokenId === nextItem.tokenId;
+    return !(sameContract && sameToken);
+  })].slice(0, LOCAL_MINT_FEED_LIMIT);
+  window.localStorage.setItem(localMintFeedKey(chainId), JSON.stringify(merged));
+}
+
+function extractMintedTokenId(
+  receipt: { logs: Array<{ address: string; topics: readonly (string | undefined)[] }> },
+  contractAddress: string,
+  standard: Standard,
+  fallbackTokenId?: string
+): string {
+  if (standard === "ERC1155" && fallbackTokenId) return fallbackTokenId;
+  const normalizedContract = contractAddress.toLowerCase();
+  const match = receipt.logs.find(
+    (log) =>
+      log.address.toLowerCase() === normalizedContract &&
+      log.topics[0]?.toLowerCase() === ERC721_TRANSFER_TOPIC &&
+      log.topics[3]
+  );
+  if (match?.topics[3]) {
+    try {
+      return BigInt(match.topics[3]).toString();
+    } catch {
+      return fallbackTokenId || "0";
+    }
+  }
+  return fallbackTokenId || "0";
+}
+
+const interfaceProbeAbi = [
+  {
+    type: "function",
+    name: "supportsInterface",
+    stateMutability: "view",
+    inputs: [{ name: "interfaceId", type: "bytes4" }],
+    outputs: [{ name: "", type: "bool" }]
+  }
+] as const;
+
+const factoryImplementationAbi = [
+  {
+    type: "function",
+    name: "implementation721",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }]
+  },
+  {
+    type: "function",
+    name: "implementation1155",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }]
+  }
+] as const;
+
+const royaltyInfoAbi = [
+  {
+    type: "function",
+    name: "royaltyInfo",
+    stateMutability: "view",
+    inputs: [
+      { name: "tokenId", type: "uint256" },
+      { name: "salePrice", type: "uint256" }
+    ],
+    outputs: [
+      { name: "receiver", type: "address" },
+      { name: "royaltyAmount", type: "uint256" }
+    ]
+  }
+] as const;
+
+const royaltySplitRegistryReadAbi = [
+  {
+    type: "function",
+    name: "getCollectionSplits",
+    stateMutability: "view",
+    inputs: [{ name: "collection", type: "address" }],
+    outputs: [
+      {
+        name: "",
+        type: "tuple[]",
+        components: [
+          { name: "account", type: "address" },
+          { name: "bps", type: "uint96" }
+        ]
+      }
+    ]
+  }
+] as const;
+
+// ── Component ─────────────────────────────────────────────────────────────────
+
+export default function MintClient({
+  initialPageMode = "mint",
+  initialMintMode = "shared",
+  initialProfileLabel = "",
+  initialCollectionAddress = ""
+}: MintClientProps) {
+  const config = useMemo(() => getContractsConfig(), []);
+  const appChain = useMemo(() => getAppChain(config.chainId), [config.chainId]);
+  const { address, isConnected, connector } = useAccount();
+  const chainId = useChainId();
+  const publicClient = usePublicClient();
+  const { data: walletClient } = useWalletClient();
+  const {
+    chains: walletChains,
+    switchChain,
+    switchChainAsync,
+    isPending: isSwitchingChain
+  } = useSwitchChain();
+
+  // ── Top-level page mode ───────────────────────────────────────────────────
+  const [pageMode, setPageMode] = useState<PageMode>(initialPageMode);
+
+  // ── Mint form state ───────────────────────────────────────────────────────
+  const [standard, setStandard] = useState<Standard>("ERC721");
+  const [mintMode, setMintMode] = useState<MintMode>(initialMintMode);
+
+  // Custom collection address (either entered manually or filled after factory deploy)
+  const [customCollectionAddress, setCustomCollectionAddress] = useState(initialCollectionAddress);
+  const [collectionSelector, setCollectionSelector] = useState<"saved" | "manual">(
+    initialCollectionAddress ? "manual" : "saved"
+  );
+  const [knownCollections, setKnownCollections] = useState<KnownCollection[]>([]);
+  const [verifiedKnownCollections, setVerifiedKnownCollections] = useState<KnownCollection[]>([]);
+  // Whether to show the inline "deploy new collection" sub-form
+  const [showDeployForm, setShowDeployForm] = useState(false);
+  const [selectedCollectionName, setSelectedCollectionName] = useState("");
+  const [selectedCollectionSymbol, setSelectedCollectionSymbol] = useState("");
+
+  // Deploy-new-collection form fields
+  const [deployName, setDeployName] = useState("");
+  const [deploySymbol, setDeploySymbol] = useState("");
+  const [deploySubname, setDeploySubname] = useState(initialProfileLabel);
+  const [deployRoyaltyReceiver, setDeployRoyaltyReceiver] = useState("");
+  const [deployRoyaltyBps, setDeployRoyaltyBps] = useState("500");
+  const [deployTx, setDeployTx] = useState<TxState>({ status: "idle" });
+  const [networkSwitchMessage, setNetworkSwitchMessage] = useState("");
+  const [requestedWalletNetworkId, setRequestedWalletNetworkId] = useState<string | null>(null);
+
+  // Token metadata
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [includeExternalUrl, setIncludeExternalUrl] = useState(false);
+  const [externalUrl, setExternalUrl] = useState("");
+  const [useCustomMetadataUri, setUseCustomMetadataUri] = useState(false);
+  const [metadataUri, setMetadataUri] = useState("");
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [includeAudio, setIncludeAudio] = useState(false);
+  const [audioFile, setAudioFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState("");
+  const [imageUri, setImageUri] = useState("");
+  const [audioUri, setAudioUri] = useState("");
+
+  // Mint-specific settings
+  const [copies, setCopies] = useState("1");
+  const [custom1155TokenId, setCustom1155TokenId] = useState("1");
+  const [lockMetadata, setLockMetadata] = useState(true);
+
+  // Collection identity management
+  const [registerSubnameLabel, setRegisterSubnameLabel] = useState(initialProfileLabel);
+  const [identityMode, setIdentityMode] = useState<"ens" | "subname" | "nftfactory">("nftfactory");
+
+  // Transaction state
+  const [uploadTx, setUploadTx] = useState<TxState>({ status: "idle" });
+  const [mintTx, setMintTx] = useState<TxState>({ status: "idle" });
+  const [subnameTx, setSubnameTx] = useState<TxState>({ status: "idle" });
+  const [uploadReceipt, setUploadReceipt] = useState<UploadReceipt>({});
+
+  // ── Collection management state ───────────────────────────────────────────
+  const [manageAddress, setManageAddress] = useState(initialCollectionAddress);
+  const [manageSelector, setManageSelector] = useState<"saved" | "manual">(
+    initialCollectionAddress ? "manual" : "saved"
+  );
+  const [manageCollectionStandard, setManageCollectionStandard] = useState<Standard | "">("");
+  const [manageImplementationAddress, setManageImplementationAddress] = useState("");
+  const [viewCollectionTokens, setViewCollectionTokens] = useState<Awaited<ReturnType<typeof fetchCollectionTokens>>["tokens"]>([]);
+  const [viewCollectionCount, setViewCollectionCount] = useState(0);
+  const [viewCollectionLoading, setViewCollectionLoading] = useState(false);
+  const [viewCollectionError, setViewCollectionError] = useState("");
+  const [manageRoyaltyReceiver, setManageRoyaltyReceiver] = useState("");
+  const [manageRoyaltyBps, setManageRoyaltyBps] = useState("0");
+  const [manageRoyaltySplits, setManageRoyaltySplits] = useState<ManageRoyaltySplitDraft[]>(defaultRoyaltySplits(""));
+  const [royaltyTx, setRoyaltyTx] = useState<TxState>({ status: "idle" });
+  const [royaltySplitTx, setRoyaltySplitTx] = useState<TxState>({ status: "idle" });
+  const [transferTarget, setTransferTarget] = useState("");
+  const [transferTx, setTransferTx] = useState<TxState>({ status: "idle" });
+  const [finalizeTx, setFinalizeTx] = useState<TxState>({ status: "idle" });
+  const [finalizeConfirmed, setFinalizeConfirmed] = useState(false);
+
+  const wrongNetwork = isConnected && chainId !== config.chainId;
+  const account = address ?? "";
+  const normalizedWalletChains = useMemo(
+    () =>
+      (walletChains || []).filter(
+        (chain): chain is (typeof walletChains)[number] & { id: number } => Boolean(chain && typeof chain.id === "number")
+      ),
+    [walletChains]
+  );
+  const selectableWalletChains = useMemo(
+    () => normalizedWalletChains.filter((chain) => chain.id !== anvil.id),
+    [normalizedWalletChains]
+  );
+  const selectedWalletNetworkId = useMemo(() => {
+    if (
+      requestedWalletNetworkId &&
+      selectableWalletChains.some((chain) => chain.id === Number(requestedWalletNetworkId))
+    ) {
+      return requestedWalletNetworkId;
+    }
+    if (!selectableWalletChains.length) return String(config.chainId);
+    if (isConnected && selectableWalletChains.some((chain) => chain.id === chainId)) {
+      return String(chainId);
+    }
+    if (selectableWalletChains.some((chain) => chain.id === config.chainId)) {
+      return String(config.chainId);
+    }
+    return String(selectableWalletChains[0]?.id ?? config.chainId);
+  }, [chainId, config.chainId, isConnected, requestedWalletNetworkId, selectableWalletChains]);
+  const manageRoyaltySplitTotal = useMemo(
+    () =>
+      manageRoyaltySplits.reduce((total, split) => {
+        const nextBps = Number.parseInt(split.bps || "0", 10);
+        return total + (Number.isInteger(nextBps) ? nextBps : 0);
+      }, 0),
+    [manageRoyaltySplits]
+  );
+
+  useEffect(() => {
+    if (!isConnected) {
+      setRequestedWalletNetworkId(null);
+      return;
+    }
+    if (requestedWalletNetworkId && chainId === Number(requestedWalletNetworkId)) {
+      setRequestedWalletNetworkId(null);
+      setNetworkSwitchMessage("");
+    }
+  }, [chainId, isConnected, requestedWalletNetworkId]);
+
+  async function onSelectWalletNetwork(nextChainId: number): Promise<void> {
+    const targetChain = selectableWalletChains.find((chain) => chain.id === nextChainId);
+    const walletName = connector?.name || "Your wallet";
+
+    if (!isConnected) {
+      setRequestedWalletNetworkId(null);
+      setNetworkSwitchMessage("Connect your wallet first.");
+      return;
+    }
+    if (!switchChainAsync && !switchChain) {
+      setRequestedWalletNetworkId(null);
+      setNetworkSwitchMessage(`${walletName} does not support in-app network switching.`);
+      return;
+    }
+    if (!targetChain) {
+      setRequestedWalletNetworkId(null);
+      setNetworkSwitchMessage("Select a supported network.");
+      return;
+    }
+    if (chainId === nextChainId) {
+      setRequestedWalletNetworkId(null);
+      setNetworkSwitchMessage("");
+      return;
+    }
+
+    try {
+      setRequestedWalletNetworkId(String(nextChainId));
+      setNetworkSwitchMessage("");
+      if (switchChainAsync) {
+        await switchChainAsync({ chainId: nextChainId });
+      } else {
+        switchChain?.({ chainId: nextChainId });
+      }
+    } catch (err) {
+      setRequestedWalletNetworkId(null);
+      setNetworkSwitchMessage(
+        getSwitchErrorMessage({
+          error: err,
+          walletName,
+          chainName: targetChain.name
+        })
+      );
+    }
+  }
+
+  function resetMetadataInputs(): void {
+    setName("");
+    setDescription("");
+    setIncludeExternalUrl(false);
+    setExternalUrl("");
+    setUseCustomMetadataUri(false);
+    setMetadataUri("");
+    setImageFile(null);
+    setIncludeAudio(false);
+    setAudioFile(null);
+    setImageUri("");
+    setAudioUri("");
+  }
+
+  function mergeKnownCollections(nextItems: KnownCollection[]): void {
+    setKnownCollections((prev) => {
+      const merged = new Map<string, KnownCollection>();
+      for (const item of [...prev, ...nextItems]) {
+        const normalizedOwner = item.ownerAddress.toLowerCase();
+        const normalizedContract = item.contractAddress.toLowerCase();
+        if (!isAddress(normalizedContract) || !isAddress(normalizedOwner)) continue;
+        const key = normalizedContract;
+        const existing = merged.get(key);
+        merged.set(key, {
+          contractAddress: item.contractAddress,
+          ensSubname: item.ensSubname || existing?.ensSubname || null,
+          ownerAddress: item.ownerAddress
+        });
+      }
+      const values = [...merged.values()];
+      if (typeof window !== "undefined" && account) {
+        window.localStorage.setItem(storageKey(account), JSON.stringify(values));
+      }
+      return values;
+    });
+  }
+
+  // Image preview
+  useEffect(() => {
+    if (!imageFile) { setPreviewUrl(""); return; }
+    const url = URL.createObjectURL(imageFile);
+    setPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [imageFile]);
+
+  useEffect(() => {
+    if (!account || typeof window === "undefined") {
+      setKnownCollections([]);
+      setVerifiedKnownCollections([]);
+      return;
+    }
+    const raw = window.localStorage.getItem(storageKey(account));
+    if (!raw) {
+      setKnownCollections([]);
+      return;
+    }
+    try {
+      const parsed = JSON.parse(raw) as KnownCollection[];
+      const filtered = parsed.filter((item) => isAddress(item.contractAddress) && item.ownerAddress.toLowerCase() === account.toLowerCase());
+      setKnownCollections(filtered);
+    } catch {
+      setKnownCollections([]);
+    }
+  }, [account]);
+
+  useEffect(() => {
+    setNetworkSwitchMessage("");
+  }, [chainId, isConnected]);
+
+  useEffect(() => {
+    if (!account) {
+      setVerifiedKnownCollections([]);
+      return;
+    }
+    if (knownCollections.length === 0 || !publicClient) {
+      setVerifiedKnownCollections([]);
+      return;
+    }
+
+    let cancelled = false;
+    void verifyOwnedCollectionsOnChain(publicClient, account, knownCollections).then((verified) => {
+      if (cancelled) return;
+      setVerifiedKnownCollections(
+        verified.map((item) => ({
+          contractAddress: item.contractAddress,
+          ensSubname: item.ensSubname,
+          ownerAddress: item.ownerAddress
+        }))
+      );
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [account, knownCollections, publicClient]);
+
+  useEffect(() => {
+    if (!account) return;
+    let cancelled = false;
+    void fetchCollectionsByOwner(account)
+      .then((result) => {
+        if (cancelled) return;
+        const owned = result.collections
+          .filter((item) => item.ownerAddress.toLowerCase() === account.toLowerCase())
+          .map((item) => ({
+            contractAddress: item.contractAddress,
+            ensSubname: item.ensSubname,
+            ownerAddress: item.ownerAddress
+          }));
+        if (owned.length > 0) {
+          mergeKnownCollections(owned);
+        }
+      })
+      .catch(() => {
+        // Keep the local cache fallback when the indexer is unavailable.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [account]);
+
+  useEffect(() => {
+    if (!account) return;
+    const labels = [
+      normalizeSubname(deploySubname),
+      normalizeSubname(registerSubnameLabel)
+    ].filter(Boolean);
+    const uniqueLabels = [...new Set(labels)];
+    if (uniqueLabels.length === 0) return;
+    let cancelled = false;
+    void Promise.all(uniqueLabels.map((label) => fetchProfileResolution(label).catch(() => null)))
+      .then((results) => {
+        if (cancelled) return;
+        const owned = results
+          .flatMap((result) => result?.collections || [])
+          .filter((item) => item.ownerAddress.toLowerCase() === account.toLowerCase())
+          .map((item) => ({
+            contractAddress: item.contractAddress,
+            ensSubname: item.ensSubname,
+            ownerAddress: item.ownerAddress
+          }));
+        if (owned.length > 0) mergeKnownCollections(owned);
+      });
+    return () => { cancelled = true; };
+  }, [account, deploySubname, registerSubnameLabel]);
+
+  useEffect(() => {
+    if (!includeAudio && audioFile) {
+      setAudioFile(null);
+      setAudioUri("");
+    }
+  }, [audioFile, includeAudio]);
+
+  useEffect(() => {
+    if (!includeExternalUrl && externalUrl) {
+      setExternalUrl("");
+    }
+  }, [externalUrl, includeExternalUrl]);
+
+  useEffect(() => {
+    if (!useCustomMetadataUri && metadataUri && uploadReceipt.metadataUri === metadataUri) {
+      setMetadataUri("");
+    }
+  }, [metadataUri, uploadReceipt.metadataUri, useCustomMetadataUri]);
+
+  useEffect(() => {
+    if (!account || typeof window === "undefined") {
+      return;
+    }
+    const raw = window.localStorage.getItem(metadataDraftKey(account));
+    if (!raw) {
+      return;
+    }
+    try {
+      const parsed = JSON.parse(raw) as {
+        name?: string;
+        description?: string;
+        includeExternalUrl?: boolean;
+        externalUrl?: string;
+        useCustomMetadataUri?: boolean;
+        metadataUri?: string;
+        includeAudio?: boolean;
+      };
+      if (parsed.name) setName(parsed.name);
+      if (parsed.description) setDescription(parsed.description);
+      if (typeof parsed.includeExternalUrl === "boolean") setIncludeExternalUrl(parsed.includeExternalUrl);
+      if (parsed.externalUrl) setExternalUrl(parsed.externalUrl);
+      if (typeof parsed.useCustomMetadataUri === "boolean") setUseCustomMetadataUri(parsed.useCustomMetadataUri);
+      if (parsed.metadataUri) setMetadataUri(parsed.metadataUri);
+      if (typeof parsed.includeAudio === "boolean") setIncludeAudio(parsed.includeAudio);
+    } catch {
+      // Ignore malformed local drafts.
+    }
+  }, [account]);
+
+  useEffect(() => {
+    if (!account || typeof window === "undefined") {
+      return;
+    }
+    window.localStorage.setItem(
+      metadataDraftKey(account),
+      JSON.stringify({
+        name,
+        description,
+        includeExternalUrl,
+        externalUrl,
+        useCustomMetadataUri,
+        metadataUri: useCustomMetadataUri ? metadataUri : "",
+        includeAudio
+      })
+    );
+  }, [
+    account,
+    description,
+    externalUrl,
+    includeAudio,
+    includeExternalUrl,
+    metadataUri,
+    name,
+    useCustomMetadataUri
+  ]);
+
+  useEffect(() => {
+    if (mintMode !== "custom") return;
+    if (verifiedKnownCollections.length === 0) {
+      setCollectionSelector("manual");
+      return;
+    }
+    if (collectionSelector === "saved" && !customCollectionAddress) {
+      setCustomCollectionAddress(verifiedKnownCollections[0].contractAddress);
+    }
+  }, [collectionSelector, customCollectionAddress, mintMode, verifiedKnownCollections]);
+
+  useEffect(() => {
+    if (!manageAddress && isAddress(customCollectionAddress)) {
+      setManageAddress(customCollectionAddress);
+    }
+  }, [customCollectionAddress, manageAddress]);
+
+  useEffect(() => {
+    if (mintMode !== "custom" || !isAddress(customCollectionAddress) || !publicClient) {
+      setSelectedCollectionName("");
+      setSelectedCollectionSymbol("");
+      return;
+    }
+
+    let cancelled = false;
+
+    void Promise.all([
+      publicClient.readContract({
+        address: customCollectionAddress as Address,
+        abi: namedContractAbi,
+        functionName: "name"
+      }).catch(() => ""),
+      publicClient.readContract({
+        address: customCollectionAddress as Address,
+        abi: namedContractAbi,
+        functionName: "symbol"
+      }).catch(() => "")
+    ]).then(([nextName, nextSymbol]) => {
+      if (cancelled) return;
+      setSelectedCollectionName(typeof nextName === "string" ? nextName : "");
+      setSelectedCollectionSymbol(typeof nextSymbol === "string" ? nextSymbol : "");
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [customCollectionAddress, mintMode, publicClient]);
+
+  useEffect(() => {
+    if (verifiedKnownCollections.length === 0) {
+      setManageSelector("manual");
+      return;
+    }
+    if (manageSelector === "saved" && !manageAddress) {
+      setManageAddress(verifiedKnownCollections[0].contractAddress);
+    }
+  }, [manageAddress, manageSelector, verifiedKnownCollections]);
+
+  useEffect(() => {
+    if (!isAddress(manageAddress) || !publicClient) {
+      setManageCollectionStandard("");
+      setManageImplementationAddress("");
+      return;
+    }
+    const client = publicClient;
+
+    let cancelled = false;
+
+    async function loadVerificationState(): Promise<void> {
+      const [is721, is1155] = await Promise.all([
+        client.readContract({
+          address: manageAddress as Address,
+          abi: interfaceProbeAbi,
+          functionName: "supportsInterface",
+          args: ["0x80ac58cd"]
+        }).catch(() => false),
+        client.readContract({
+          address: manageAddress as Address,
+          abi: interfaceProbeAbi,
+          functionName: "supportsInterface",
+          args: ["0xd9b67a26"]
+        }).catch(() => false)
+      ]);
+
+      if (cancelled) return;
+
+      const nextStandard: Standard | "" = is721 ? "ERC721" : is1155 ? "ERC1155" : "";
+      setManageCollectionStandard(nextStandard);
+
+      if (!nextStandard) {
+        setManageImplementationAddress("");
+        return;
+      }
+
+      const implementation = await client.readContract({
+        address: config.factory,
+        abi: factoryImplementationAbi,
+        functionName: nextStandard === "ERC721" ? "implementation721" : "implementation1155"
+      }).catch(() => null);
+
+      if (cancelled) return;
+      setManageImplementationAddress(typeof implementation === "string" ? implementation : "");
+    }
+
+    void loadVerificationState();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [config.factory, manageAddress, publicClient]);
+
+  useEffect(() => {
+    if (!isAddress(manageAddress) || !publicClient) {
+      setManageRoyaltyReceiver(account);
+      setManageRoyaltyBps("0");
+      setManageRoyaltySplits(defaultRoyaltySplits(account));
+      return;
+    }
+
+    const client = publicClient;
+    let cancelled = false;
+
+    async function loadRoyaltyManagementState(): Promise<void> {
+      const royaltyResult = await client.readContract({
+        address: manageAddress as Address,
+        abi: royaltyInfoAbi,
+        functionName: "royaltyInfo",
+        args: [0n, 10_000n]
+      }).catch(() => null);
+
+      if (cancelled) return;
+
+      if (royaltyResult) {
+        const [receiver, royaltyAmount] = royaltyResult;
+        const nextReceiver =
+          typeof receiver === "string" && receiver.toLowerCase() !== ZERO_ADDRESS
+            ? receiver
+            : account;
+        setManageRoyaltyReceiver(nextReceiver);
+        setManageRoyaltyBps(royaltyAmount.toString());
+      } else {
+        setManageRoyaltyReceiver(account);
+        setManageRoyaltyBps("0");
+      }
+
+      if (!config.royaltySplitRegistry) {
+        setManageRoyaltySplits(defaultRoyaltySplits(account));
+        return;
+      }
+
+      const splitRows = await client.readContract({
+        address: config.royaltySplitRegistry,
+        abi: royaltySplitRegistryReadAbi,
+        functionName: "getCollectionSplits",
+        args: [manageAddress as Address]
+      }).catch(() => null);
+
+      if (cancelled) return;
+
+      if (splitRows && splitRows.length > 0) {
+        setManageRoyaltySplits(
+          splitRows.map((split) => ({
+            account: split.account,
+            bps: split.bps.toString()
+          }))
+        );
+      } else {
+        setManageRoyaltySplits(defaultRoyaltySplits(account));
+      }
+    }
+
+    void loadRoyaltyManagementState();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [account, config.royaltySplitRegistry, manageAddress, publicClient]);
+
+  useEffect(() => {
+    setRoyaltyTx({ status: "idle" });
+    setRoyaltySplitTx({ status: "idle" });
+  }, [manageAddress]);
+
+  useEffect(() => {
+    if (pageMode !== "view") return;
+    if (!isAddress(manageAddress)) {
+      setViewCollectionTokens([]);
+      setViewCollectionCount(0);
+      setViewCollectionError("");
+      setViewCollectionLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setViewCollectionLoading(true);
+    setViewCollectionError("");
+
+    void fetchCollectionTokens(manageAddress)
+      .then((result) => {
+        if (cancelled) return;
+        setViewCollectionTokens(result.tokens);
+        setViewCollectionCount(result.count);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        setViewCollectionTokens([]);
+        setViewCollectionCount(0);
+        setViewCollectionError(error instanceof Error ? error.message : "Could not load collection tokens.");
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setViewCollectionLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [manageAddress, pageMode]);
+
+  // ── Utilities ─────────────────────────────────────────────────────────────
+
+  async function sendTransaction(
+    to: `0x${string}`,
+    data: `0x${string}`,
+    valueHex?: `0x${string}`
+  ): Promise<`0x${string}`> {
+    if (!walletClient?.account) throw new Error("Connect your wallet first.");
+    const hash = await walletClient.sendTransaction({
+      account: walletClient.account,
+      to: to as Address,
+      data: data as Hex,
+      value: valueHex ? BigInt(valueHex) : undefined
+    });
+    return hash as `0x${string}`;
+  }
+
+  async function waitForReceipt(hash: `0x${string}`) {
+    if (!publicClient) throw new Error("Public client unavailable — reconnect wallet.");
+    return publicClient.waitForTransactionReceipt({ hash: hash as Hex });
+  }
+
+  // ── Upload metadata to IPFS ───────────────────────────────────────────────
+
+  async function uploadMetadata(): Promise<string> {
+    if (useCustomMetadataUri) {
+      const customUri = metadataUri.trim();
+      if (!customUri) {
+        setUploadTx({ status: "error", message: "Enter a custom metadata URI first." });
+        throw new Error("Enter a custom metadata URI first.");
+      }
+      if (!customUri.startsWith("ipfs://")) {
+        setUploadTx({ status: "error", message: "Custom metadata URI must start with ipfs://." });
+        throw new Error("Custom metadata URI must start with ipfs://.");
+      }
+      setUploadReceipt({
+        metadataUri: customUri
+      });
+      setUploadTx({ status: "success", message: "Using custom metadata URI." });
+      return customUri;
+    }
+    if (!name.trim()) { setUploadTx({ status: "error", message: "Token name is required." }); throw new Error("Token name is required."); }
+    try {
+      setUploadTx({ status: "pending", message: "Uploading media and metadata to IPFS…" });
+      setUploadReceipt({});
+      const form = new FormData();
+      if (imageFile) form.append("image", imageFile);
+      if (audioFile) form.append("audio", audioFile);
+      form.append("name", name.trim());
+      form.append("description", description.trim());
+      if (includeExternalUrl) {
+        form.append("external_url", externalUrl.trim());
+      }
+      const res = await fetch("/api/ipfs/metadata", { method: "POST", body: form });
+      const payload = await res.json() as UploadReceipt & { error?: string };
+      if (!res.ok || !payload.metadataUri) throw new Error(payload.error || "Upload failed");
+      setImageUri(payload.imageUri || "");
+      setAudioUri(payload.audioUri || "");
+      setMetadataUri(payload.metadataUri);
+      setUploadReceipt(payload);
+      setUploadTx({ status: "success", message: "Uploaded to IPFS. Continuing to mint…" });
+      return payload.metadataUri;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Upload failed";
+      setUploadTx({ status: "error", message });
+      throw err instanceof Error ? err : new Error(message);
+    }
+  }
+
+  // ── Deploy new CreatorCollection via factory ──────────────────────────────
+
+  async function onDeployCollection(): Promise<void> {
+    if (!account) { setDeployTx({ status: "error", message: "Connect wallet first." }); return; }
+    if (wrongNetwork) { setDeployTx({ status: "error", message: `Select ${appChain.name} in the wallet menu first.` }); return; }
+    if (!deployName.trim()) { setDeployTx({ status: "error", message: "Collection name is required." }); return; }
+    if (!deploySymbol.trim()) { setDeployTx({ status: "error", message: "Symbol is required." }); return; }
+
+    const royaltyReceiver = deployRoyaltyReceiver.trim() || account;
+    if (!isAddress(royaltyReceiver)) {
+      setDeployTx({ status: "error", message: "Royalty receiver must be a valid address." });
+      return;
+    }
+    const bps = Number.parseInt(deployRoyaltyBps, 10);
+    if (!Number.isInteger(bps) || bps < 0 || bps > 10_000) {
+      setDeployTx({ status: "error", message: "Royalty must be 0–10 000 basis points." });
+      return;
+    }
+
+    const ensSubname = deploySubname.trim() ? normalizeSubname(deploySubname.trim()) : "";
+    if (ensSubname && !isValidSubnameLabel(ensSubname)) {
+      setDeployTx({ status: "error", message: "ENS subname must be lowercase letters, numbers, or hyphens." });
+      return;
+    }
+
+    const args: DeployCollectionArgs = {
+      standard,
+      creator: account as `0x${string}`,
+      tokenName: deployName.trim(),
+      tokenSymbol: deploySymbol.trim().toUpperCase(),
+      ensSubname,
+      defaultRoyaltyReceiver: royaltyReceiver as `0x${string}`,
+      defaultRoyaltyBps: BigInt(bps)
+    };
+
+    try {
+      setDeployTx({ status: "pending", message: "Deploying collection contract via factory…" });
+      const calldata = encodeDeployCollection(args);
+      const txHash = await sendTransaction(config.factory, calldata);
+      const receipt = await waitForReceipt(txHash);
+
+      const deployed = extractDeployedCollectionAddress(receipt, config.factory);
+      if (deployed) {
+        setCustomCollectionAddress(deployed);
+        setManageAddress(deployed);
+        setCollectionSelector("saved");
+        mergeKnownCollections([{
+          contractAddress: deployed,
+          ensSubname: ensSubname || null,
+          ownerAddress: account
+        }]);
+        setDeployTx({
+          status: "success",
+          hash: txHash,
+          message: `Collection deployed at ${deployed}. Address auto-filled above.`
+        });
+        setShowDeployForm(false);
+      } else {
+        setDeployTx({
+          status: "success",
+          hash: txHash,
+          message: "Deployed! Check the transaction on Etherscan to find your collection address and paste it above."
+        });
+      }
+    } catch (err) {
+      setDeployTx({ status: "error", message: err instanceof Error ? err.message : "Deploy failed" });
+    }
+  }
+
+  // ── Register ENS subname ──────────────────────────────────────────────────
+
+  async function onRegisterSubname(): Promise<void> {
+    if (!account) { setSubnameTx({ status: "error", message: "Connect wallet first." }); return; }
+    if (wrongNetwork) { setSubnameTx({ status: "error", message: `Select ${appChain.name} in the wallet menu first.` }); return; }
+    const label = normalizeSubname(registerSubnameLabel);
+    if (!label) { setSubnameTx({ status: "error", message: "Enter a subname label." }); return; }
+    if (!isValidSubnameLabel(label)) {
+      setSubnameTx({ status: "error", message: "Label must be lowercase a–z / 0–9 / hyphens, 1–63 chars, not starting or ending with '-'." });
+      return;
+    }
+    try {
+      setSubnameTx({ status: "pending", message: "Registering subname…" });
+      const txHash = await sendTransaction(
+        config.subnameRegistrar,
+        encodeRegisterSubname(label) as `0x${string}`,
+        toHexWei(SUBNAME_FEE_ETH) as `0x${string}`
+      );
+      await waitForReceipt(txHash);
+      if (isAddress(manageAddress)) {
+        mergeKnownCollections([{
+          contractAddress: manageAddress,
+          ensSubname: label,
+          ownerAddress: account
+        }]);
+      }
+      setSubnameTx({ status: "success", hash: txHash, message: `${label}.nftfactory.eth registered.` });
+    } catch (err) {
+      setSubnameTx({ status: "error", message: err instanceof Error ? err.message : "Registration failed" });
+    }
+  }
+
+  function saveCollectionIdentity(): void {
+    if (!account) {
+      setSubnameTx({ status: "error", message: "Connect wallet first." });
+      return;
+    }
+    if (!isAddress(manageAddress)) {
+      setSubnameTx({ status: "error", message: "Select or enter a valid collection first." });
+      return;
+    }
+    const raw = registerSubnameLabel.trim().toLowerCase();
+    if (!raw) {
+      setSubnameTx({ status: "error", message: "Enter a collection identity first." });
+      return;
+    }
+    if (identityMode === "nftfactory") {
+      void onRegisterSubname();
+      return;
+    }
+    if (!isValidEnsReference(raw)) {
+      setSubnameTx({
+        status: "error",
+        message: identityMode === "ens"
+          ? "Enter a full ENS name such as artist.eth."
+          : "Enter a full subname such as studio.example.eth."
+      });
+      return;
+    }
+    mergeKnownCollections([{
+      contractAddress: manageAddress,
+      ensSubname: raw,
+      ownerAddress: account
+    }]);
+    setSubnameTx({
+      status: "success",
+      message: `${raw} saved as the display identity for this collection.`
+    });
+  }
+
+  // ── Mint / publish ────────────────────────────────────────────────────────
+
+  async function onPublish(e: FormEvent): Promise<void> {
+    e.preventDefault();
+    setMintTx({ status: "idle" });
+    if (!account) { setMintTx({ status: "error", message: "Connect wallet first." }); return; }
+    if (wrongNetwork) { setMintTx({ status: "error", message: `Select ${appChain.name} in the wallet menu first.` }); return; }
+
+    const amount = Number.parseInt(copies || "1", 10);
+    if (standard === "ERC1155" && (!Number.isInteger(amount) || amount <= 0)) {
+      setMintTx({ status: "error", message: "Number of copies must be a positive integer." });
+      return;
+    }
+
+    try {
+      let effectiveMetadataUri = metadataUri.trim();
+      if (!useCustomMetadataUri) {
+        setMintTx({ status: "pending", message: "Publishing metadata to IPFS, then preparing mint…" });
+        effectiveMetadataUri = await uploadMetadata();
+      }
+      if (!effectiveMetadataUri) {
+        setMintTx({ status: "error", message: "Provide a metadata URI or choose an image to auto-upload." });
+        return;
+      }
+
+      setMintTx({ status: "pending", message: "Submitting mint transaction…" });
+
+      let targetNft: `0x${string}`;
+      let mintData: `0x${string}`;
+
+      if (mintMode === "shared") {
+        if (standard === "ERC721") {
+          targetNft = config.shared721;
+          mintData = encodePublish721("", effectiveMetadataUri) as `0x${string}`;
+        } else {
+          targetNft = config.shared1155;
+          mintData = encodePublish1155("", BigInt(amount), effectiveMetadataUri) as `0x${string}`;
+        }
+      } else {
+        if (!isAddress(customCollectionAddress)) {
+          throw new Error("Enter or deploy a valid collection contract address first.");
+        }
+        targetNft = customCollectionAddress as `0x${string}`;
+        if (standard === "ERC721") {
+          mintData = encodeCreatorPublish721(account as `0x${string}`, effectiveMetadataUri, lockMetadata) as `0x${string}`;
+        } else {
+          const tokenId = Number.parseInt(custom1155TokenId || "0", 10);
+          if (!Number.isInteger(tokenId) || tokenId <= 0) throw new Error("Token ID must be a positive integer.");
+          mintData = encodeCreatorPublish1155(
+            account as `0x${string}`,
+            BigInt(tokenId),
+            BigInt(amount),
+            effectiveMetadataUri,
+            lockMetadata
+          ) as `0x${string}`;
+        }
+      }
+
+      const txHash = await sendTransaction(targetNft, mintData);
+      const receipt = await waitForReceipt(txHash);
+      const fallbackTokenId =
+        standard === "ERC1155"
+          ? mintMode === "custom"
+            ? custom1155TokenId || "0"
+            : "0"
+          : undefined;
+      const mintedTokenId = extractMintedTokenId(receipt, targetNft, standard, fallbackTokenId);
+      const gateway = (process.env.NEXT_PUBLIC_IPFS_GATEWAY || "https://gateway.pinata.cloud/ipfs").replace(/\/$/, "");
+      writeLocalMintFeedItem(config.chainId, {
+        id: `local:${targetNft.toLowerCase()}:${mintedTokenId}:${Date.now()}`,
+        tokenId: mintedTokenId,
+        creatorAddress: account.toLowerCase(),
+        ownerAddress: account.toLowerCase(),
+        mintTxHash: txHash,
+        draftName: name.trim() || null,
+        draftDescription: description.trim() || null,
+        mintedAmountRaw: standard === "ERC1155" ? String(amount) : "1",
+        metadataCid: effectiveMetadataUri,
+        metadataUrl: toGatewayUrl(effectiveMetadataUri, gateway),
+        mediaCid: uploadReceipt.imageUri || uploadReceipt.audioUri || null,
+        mediaUrl: toGatewayUrl(uploadReceipt.imageUri || uploadReceipt.audioUri || null, gateway),
+        immutable: standard === "ERC721" ? mintMode === "shared" ? true : lockMetadata : lockMetadata,
+        mintedAt: new Date().toISOString(),
+        collection: {
+          chainId: config.chainId,
+          contractAddress: targetNft.toLowerCase(),
+          ownerAddress: account.toLowerCase(),
+          ensSubname: mintMode === "custom" ? selectedKnownCollection?.ensSubname ?? null : null,
+          standard,
+          isFactoryCreated: mintMode === "shared",
+          isUpgradeable: mintMode === "custom",
+          finalizedAt: null,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        },
+        activeListing: null
+      });
+      try {
+        await syncMintedToken({
+          chainId: config.chainId,
+          contractAddress: targetNft.toLowerCase(),
+          collectionOwnerAddress: account.toLowerCase(),
+          tokenId: mintedTokenId,
+          creatorAddress: account.toLowerCase(),
+          ownerAddress: account.toLowerCase(),
+          standard,
+          isFactoryCreated: mintMode === "shared",
+          isUpgradeable: mintMode === "custom",
+          ensSubname: mintMode === "custom" ? selectedKnownCollection?.ensSubname ?? null : null,
+          finalizedAt: null,
+          mintTxHash: txHash,
+          draftName: name.trim() || null,
+          draftDescription: description.trim() || null,
+          mintedAmountRaw: standard === "ERC1155" ? String(amount) : "1",
+          metadataCid: effectiveMetadataUri,
+          mediaCid: uploadReceipt.imageUri || uploadReceipt.audioUri || null,
+          immutable: standard === "ERC721" ? (mintMode === "shared" ? true : lockMetadata) : lockMetadata,
+          mintedAt: new Date().toISOString()
+        });
+      } catch {
+        // Keep the mint flow successful even if indexer sync is temporarily unavailable.
+      }
+      setMintTx({ status: "success", hash: txHash, message: "Minted successfully." });
+      clearMetadataDraft(account);
+      resetMetadataInputs();
+    } catch (err) {
+      setMintTx({ status: "error", message: err instanceof Error ? err.message : "Publish failed" });
+    }
+  }
+
+  // ── Collection management actions ─────────────────────────────────────────
+
+  function updateRoyaltySplitRow(index: number, field: keyof ManageRoyaltySplitDraft, value: string): void {
+    setManageRoyaltySplits((prev) =>
+      prev.map((split, currentIndex) =>
+        currentIndex === index ? { ...split, [field]: value } : split
+      )
+    );
+  }
+
+  function addRoyaltySplitRow(): void {
+    setManageRoyaltySplits((prev) => [...prev, { account: "", bps: "" }]);
+  }
+
+  function removeRoyaltySplitRow(index: number): void {
+    setManageRoyaltySplits((prev) => prev.filter((_, currentIndex) => currentIndex !== index));
+  }
+
+  function clearRoyaltySplitRows(): void {
+    setManageRoyaltySplits([]);
+  }
+
+  async function onSaveDefaultRoyalty(): Promise<void> {
+    if (!account) { setRoyaltyTx({ status: "error", message: "Connect wallet first." }); return; }
+    if (wrongNetwork) { setRoyaltyTx({ status: "error", message: `Select ${appChain.name} in the wallet menu first.` }); return; }
+    if (!isAddress(manageAddress)) { setRoyaltyTx({ status: "error", message: "Enter a valid collection address." }); return; }
+
+    const receiver = manageRoyaltyReceiver.trim() || account;
+    if (!isAddress(receiver)) {
+      setRoyaltyTx({ status: "error", message: "Royalty receiver must be a valid address." });
+      return;
+    }
+
+    const bps = Number.parseInt(manageRoyaltyBps, 10);
+    if (!Number.isInteger(bps) || bps < 0 || bps > 10_000) {
+      setRoyaltyTx({ status: "error", message: "Royalty must be 0–10 000 basis points." });
+      return;
+    }
+
+    try {
+      setRoyaltyTx({ status: "pending", message: "Updating default royalty…" });
+      const txHash = await sendTransaction(
+        manageAddress as `0x${string}`,
+        encodeSetDefaultRoyalty(receiver as `0x${string}`, BigInt(bps))
+      );
+      await waitForReceipt(txHash);
+      setRoyaltyTx({
+        status: "success",
+        hash: txHash,
+        message: bps === 0
+          ? "Default royalty updated to 0 bps."
+          : `Default royalty updated to ${bps} bps for ${receiver}.`
+      });
+    } catch (err) {
+      setRoyaltyTx({ status: "error", message: err instanceof Error ? err.message : "Royalty update failed" });
+    }
+  }
+
+  async function onSaveCollectionRoyaltySplits(): Promise<void> {
+    if (!account) { setRoyaltySplitTx({ status: "error", message: "Connect wallet first." }); return; }
+    if (wrongNetwork) { setRoyaltySplitTx({ status: "error", message: `Select ${appChain.name} in the wallet menu first.` }); return; }
+    if (!isAddress(manageAddress)) { setRoyaltySplitTx({ status: "error", message: "Enter a valid collection address." }); return; }
+    if (!config.royaltySplitRegistry) {
+      setRoyaltySplitTx({ status: "error", message: "Royalty split registry is not configured for this environment." });
+      return;
+    }
+
+    const normalizedSplits: RoyaltySplitArgs[] = [];
+    for (const split of manageRoyaltySplits) {
+      const accountValue = split.account.trim();
+      const bpsValue = Number.parseInt(split.bps, 10);
+      if (!isAddress(accountValue)) {
+        setRoyaltySplitTx({ status: "error", message: "Each split recipient must be a valid address." });
+        return;
+      }
+      if (!Number.isInteger(bpsValue) || bpsValue <= 0 || bpsValue > 10_000) {
+        setRoyaltySplitTx({ status: "error", message: "Each split basis-points value must be between 1 and 10 000." });
+        return;
+      }
+      normalizedSplits.push({
+        account: accountValue as `0x${string}`,
+        bps: BigInt(bpsValue)
+      });
+    }
+
+    if (normalizedSplits.length > 0) {
+      const total = normalizedSplits.reduce((sum, split) => sum + Number(split.bps), 0);
+      if (total !== 10_000) {
+        setRoyaltySplitTx({ status: "error", message: "Royalty split basis points must add up to exactly 10 000." });
+        return;
+      }
+    }
+
+    try {
+      setRoyaltySplitTx({
+        status: "pending",
+        message: normalizedSplits.length === 0 ? "Clearing collection royalty splits…" : "Saving collection royalty splits…"
+      });
+      const txHash = await sendTransaction(
+        config.royaltySplitRegistry,
+        encodeSetCollectionRoyaltySplits(manageAddress as `0x${string}`, normalizedSplits)
+      );
+      await waitForReceipt(txHash);
+      setRoyaltySplitTx({
+        status: "success",
+        hash: txHash,
+        message: normalizedSplits.length === 0
+          ? "Collection royalty splits cleared."
+          : `Saved ${normalizedSplits.length} royalty split${normalizedSplits.length === 1 ? "" : "s"}.`
+      });
+    } catch (err) {
+      setRoyaltySplitTx({ status: "error", message: err instanceof Error ? err.message : "Royalty split update failed" });
+    }
+  }
+
+  async function onTransferOwnership(): Promise<void> {
+    if (!account) { setTransferTx({ status: "error", message: "Connect wallet first." }); return; }
+    if (wrongNetwork) { setTransferTx({ status: "error", message: `Select ${appChain.name} in the wallet menu first.` }); return; }
+    if (!isAddress(manageAddress)) { setTransferTx({ status: "error", message: "Enter a valid collection address." }); return; }
+    if (!isAddress(transferTarget)) { setTransferTx({ status: "error", message: "Enter a valid new owner address." }); return; }
+    try {
+      setTransferTx({ status: "pending", message: "Transferring ownership…" });
+      const txHash = await sendTransaction(
+        manageAddress as `0x${string}`,
+        encodeTransferOwnership(transferTarget as `0x${string}`)
+      );
+      await waitForReceipt(txHash);
+      setTransferTx({ status: "success", hash: txHash, message: `Ownership transferred to ${transferTarget}.` });
+    } catch (err) {
+      setTransferTx({ status: "error", message: err instanceof Error ? err.message : "Transfer failed" });
+    }
+  }
+
+  async function onFinalizeUpgrades(): Promise<void> {
+    if (!account) { setFinalizeTx({ status: "error", message: "Connect wallet first." }); return; }
+    if (wrongNetwork) { setFinalizeTx({ status: "error", message: `Select ${appChain.name} in the wallet menu first.` }); return; }
+    if (!isAddress(manageAddress)) { setFinalizeTx({ status: "error", message: "Enter a valid collection address." }); return; }
+    if (!finalizeConfirmed) { setFinalizeTx({ status: "error", message: "Tick the confirmation box first." }); return; }
+    try {
+      setFinalizeTx({ status: "pending", message: "Finalizing upgrades — this cannot be undone…" });
+      const txHash = await sendTransaction(
+        manageAddress as `0x${string}`,
+        encodeFinalizeUpgrades()
+      );
+      await waitForReceipt(txHash);
+      setFinalizeTx({ status: "success", hash: txHash, message: "Upgrades finalized. This collection can never be upgraded again." });
+    } catch (err) {
+      setFinalizeTx({ status: "error", message: err instanceof Error ? err.message : "Finalize failed" });
+    }
+  }
+
+  const selectedKnownCollection = verifiedKnownCollections.find(
+    (item) => item.contractAddress.toLowerCase() === customCollectionAddress.toLowerCase()
+  ) || null;
+  const selectedManageCollection = verifiedKnownCollections.find(
+    (item) => item.contractAddress.toLowerCase() === manageAddress.toLowerCase()
+  ) || null;
+
+  // ── Render ────────────────────────────────────────────────────────────────
+
+  return (
+    <section className="wizard mintWorkspace">
+      <div className="card formCard">
+        <h3>
+          {pageMode === "manage"
+            ? "Manage Collection"
+            : pageMode === "view"
+              ? "View Collection"
+              : "Mint NFT"}
+        </h3>
+        <p className="hint">
+          {pageMode === "manage"
+            ? "Manage an existing creator collection."
+            : pageMode === "view"
+              ? "Inspect a creator collection and its indexed tokens."
+              : "Mint into the shared contract or your own collection."}
+        </p>
+        <div className="row">
+          <button type="button" className={pageMode === "mint" ? "presetButton presetActive" : "presetButton"} onClick={() => setPageMode("mint")}>
+            Mint and publish
+          </button>
+          <button type="button" className={pageMode === "view" ? "presetButton presetActive" : "presetButton"} onClick={() => setPageMode("view")}>
+            View collection
+          </button>
+          <button type="button" className={pageMode === "manage" ? "presetButton presetActive" : "presetButton"} onClick={() => setPageMode("manage")}>
+            Manage collection
+          </button>
+        </div>
+      </div>
+
+      {/* ════════════════════════════════════════════════════════════════════ */}
+      {/* MINT FLOW                                                           */}
+      {/* ════════════════════════════════════════════════════════════════════ */}
+
+      {pageMode === "mint" && (
+        <form className="wizard" onSubmit={onPublish}>
+          <div className="card actionCardStatic">
+            <h3>Mint and publish</h3>
+            <p>
+              Mint into the shared contract or one of your creator collections. This is the fastest path to creating a new ERC-721 or ERC-1155.
+            </p>
+          </div>
+
+          {/* Step 1: Wallet */}
+          <div className="card formCard">
+            <h3>1. Wallet</h3>
+            <div className="stack">
+              <label className="row" style={{ alignItems: "center" }}>
+                <span>Network</span>
+                <select
+                  value={selectedWalletNetworkId}
+                  onChange={(e) => void onSelectWalletNetwork(Number(e.target.value))}
+                  disabled={!isConnected || isSwitchingChain}
+                >
+                  {selectableWalletChains.map((chain) => (
+                    <option key={chain.id} value={chain.id}>
+                      {chain.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <p className="mono">Account: {account || "Not connected"}</p>
+            </div>
+            {isSwitchingChain ? (
+              <p className="hint">Switching wallet network…</p>
+            ) : null}
+            {networkSwitchMessage ? <p className="error">{networkSwitchMessage}</p> : null}
+          </div>
+
+          {/* Step 2: Collection selection */}
+          <div className="card formCard">
+            <h3>2. Collection Target</h3>
+            <p className="hint">
+              Pick the shared contract for the fastest path, or use your own collection for more control.
+            </p>
+
+            <label>
+              Token type
+              <select value={standard} onChange={(e) => setStandard(e.target.value as Standard)}>
+                <option value="ERC721">
+                  ERC-721 — Unique / one-of-one (each token is distinct)
+                </option>
+                <option value="ERC1155">
+                  ERC-1155 — Multi-edition (multiple copies of the same token)
+                </option>
+              </select>
+            </label>
+
+            <label>
+              Collection type
+              <select
+                value={mintMode}
+                onChange={(e) => {
+                  setMintMode(e.target.value as MintMode);
+                  setShowDeployForm(false);
+                }}
+              >
+                <option value="shared">
+                  Shared collection — mint instantly, no setup required
+                </option>
+                <option value="custom">
+                  My collection — your own contract, full control
+                </option>
+              </select>
+            </label>
+
+            {mintMode === "shared" && (
+              <div>
+                <p className="hint">
+                  <strong>Shared collection:</strong> your token mints into the common NFTFactory contract.
+                </p>
+                <p className="mono">
+                  {standard === "ERC721" ? config.shared721 : config.shared1155}
+                </p>
+                <p className="hint">
+                  Shared mint publishes immediately. Switch to your own collection if you want a dedicated contract.
+                </p>
+              </div>
+            )}
+
+            {mintMode === "custom" && (
+              <>
+                <p className="hint">
+                  <strong>Your collection:</strong> a contract you own and mint into directly.
+                </p>
+                <p className="hint">
+                  This sets the collection contract. The NFT name is set in the next step.
+                </p>
+                <div className="selectionCard">
+                  <label>
+                    Collection source
+                    <select
+                      value={collectionSelector}
+                      onChange={(e) => setCollectionSelector(e.target.value as "saved" | "manual")}
+                    >
+                      {verifiedKnownCollections.length > 0 ? <option value="saved">Select one of my on-chain collections</option> : null}
+                      <option value="manual">Enter collection address manually</option>
+                    </select>
+                  </label>
+                  {collectionSelector === "saved" && verifiedKnownCollections.length > 0 ? (
+                    <label>
+                      Creator collection
+                      <select
+                        value={customCollectionAddress}
+                        onChange={(e) => setCustomCollectionAddress(e.target.value)}
+                      >
+                        {verifiedKnownCollections.map((item) => (
+                          <option key={item.contractAddress} value={item.contractAddress}>
+                            {formatCollectionIdentity(item.ensSubname) || shortenAddress(item.contractAddress)} - {shortenAddress(item.contractAddress)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : (
+                    <label>
+                      Collection contract address
+                      <input
+                        value={customCollectionAddress}
+                        onChange={(e) => setCustomCollectionAddress(e.target.value)}
+                      />
+                    </label>
+                  )}
+                  {verifiedKnownCollections.length === 0 ? (
+                    <p className="hint">
+                      On-chain collections appear here after the app confirms ownership from your wallet. Indexed and cached data only provide candidate addresses.
+                    </p>
+                  ) : null}
+                </div>
+                {isAddress(customCollectionAddress) && (
+                  <div className="hint">
+                    <p className="hint">
+                      Using collection contract:
+                      {" "}
+                      <strong>{selectedCollectionName || formatCollectionIdentity(selectedKnownCollection?.ensSubname ?? null) || "Selected collection"}</strong>
+                      {selectedCollectionSymbol ? ` (${selectedCollectionSymbol})` : ""}
+                    </p>
+                    <p className="hint mono">
+                      {formatCollectionIdentity(selectedKnownCollection?.ensSubname ?? null) ? `${formatCollectionIdentity(selectedKnownCollection?.ensSubname ?? null)} ` : ""}
+                    {toExplorerAddress(config.chainId, customCollectionAddress) ? (
+                      <a href={toExplorerAddress(config.chainId, customCollectionAddress)!} target="_blank" rel="noreferrer">
+                        {customCollectionAddress.slice(0, 10)}…{customCollectionAddress.slice(-8)}
+                      </a>
+                    ) : (
+                      <span>{customCollectionAddress.slice(0, 10)}…{customCollectionAddress.slice(-8)}</span>
+                    )}
+                    </p>
+                  </div>
+                )}
+
+                {/* ERC-1155 custom: token ID */}
+                {standard === "ERC1155" && (
+                  <label>
+                    Token ID (you choose for custom ERC-1155)
+                    <input
+                      value={custom1155TokenId}
+                      onChange={(e) => setCustom1155TokenId(e.target.value)}
+                      inputMode="numeric"
+                    />
+                  </label>
+                )}
+
+                {/* Metadata lock toggle */}
+                <label className="row" style={{ alignItems: "center", gap: "0.5rem", cursor: "pointer" }}>
+                  <input
+                    type="checkbox"
+                    checked={lockMetadata}
+                    onChange={(e) => setLockMetadata(e.target.checked)}
+                  />
+                  <span>
+                    Lock metadata on mint
+                    <span className="hint" style={{ display: "block" }}>
+                      When locked, the token URI can never be changed — permanent provenance.
+                      Uncheck to keep metadata updatable after minting.
+                    </span>
+                  </span>
+                </label>
+
+                {/* Deploy new collection */}
+                <details open={showDeployForm} onToggle={(e) => setShowDeployForm((e.target as HTMLDetailsElement).open)}>
+                  <summary style={{ cursor: "pointer", fontWeight: 600, marginTop: "0.5rem" }}>
+                    {customCollectionAddress ? "Create another collection" : "Create collection"}
+                  </summary>
+                  <div className="formCard inset" style={{ marginTop: "0.75rem" }}>
+                    <p className="hint">
+                      Create a new creator collection, then mint into it in this same flow. This step sets the
+                      collection contract identity and ownership. NFT title and description are set in step 3.
+                    </p>
+                    <label>
+                      Collection name
+                      <input value={deployName} onChange={(e) => setDeployName(e.target.value)} />
+                    </label>
+                    <label>
+                      Collection symbol
+                      <input value={deploySymbol} onChange={(e) => setDeploySymbol(e.target.value)} />
+                    </label>
+                    <label>
+                      Collection label (optional)
+                      <input
+                        value={deploySubname}
+                        onChange={(e) => setDeploySubname(e.target.value)}
+                      />
+                      <span className="hint">
+                        Optional nftfactory label, for example <code>studio</code> becomes <code>studio.nftfactory.eth</code>.
+                      </span>
+                    </label>
+                    <label>
+                      Royalty receiver
+                      <input
+                        value={deployRoyaltyReceiver}
+                        onChange={(e) => setDeployRoyaltyReceiver(e.target.value)}
+                      />
+                    </label>
+                    <label>
+                      Royalty (basis points)
+                      <input
+                        value={deployRoyaltyBps}
+                        onChange={(e) => setDeployRoyaltyBps(e.target.value)}
+                        inputMode="numeric"
+                      />
+                      <span className="hint">500 = 5%</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={onDeployCollection}
+                      disabled={!isConnected || wrongNetwork || deployTx.status === "pending"}
+                    >
+                      {deployTx.status === "pending" ? "Deploying…" : `Deploy ${standard} Collection`}
+                    </button>
+                    <TxStatus state={deployTx} />
+                  </div>
+                </details>
+              </>
+            )}
+          </div>
+
+          {/* Step 3: Asset + metadata */}
+          <div className="card formCard">
+            <h3>3. Asset and Metadata</h3>
+            <p className="hint">
+              This step sets the NFT metadata that will be uploaded and minted.
+            </p>
+            <label>
+              Name (required)
+              <input value={name} onChange={(e) => setName(e.target.value)} />
+            </label>
+            <label>
+              Description (optional)
+              <input value={description} onChange={(e) => setDescription(e.target.value)} />
+            </label>
+            {standard === "ERC1155" && (
+              <label>
+                Number of copies
+                <input value={copies} onChange={(e) => setCopies(e.target.value)} inputMode="numeric" />
+              </label>
+            )}
+            <div className="selectionCard">
+              <span className="detailLabel">Media Inputs</span>
+              <label>
+                Upload image
+                <input type="file" accept="image/*" onChange={(e) => setImageFile(e.target.files?.[0] ?? null)} />
+              </label>
+              <label className="inlineCheck">
+                <input
+                  type="checkbox"
+                  checked={includeAudio}
+                  onChange={(e) => setIncludeAudio(e.target.checked)}
+                />
+                <span>Include audio file</span>
+              </label>
+              {includeAudio ? (
+                <label>
+                  Upload audio
+                  <input type="file" accept="audio/*" onChange={(e) => setAudioFile(e.target.files?.[0] ?? null)} />
+                </label>
+              ) : null}
+              {audioFile ? (
+                <p className="hint mono">Audio: {audioFile.name}</p>
+              ) : null}
+            </div>
+            {previewUrl && (
+              <div className="previewWrap">
+                <img src={previewUrl} alt={name || "NFT preview"} className="previewImage" />
+              </div>
+            )}
+            <div className="selectionCard">
+              <span className="detailLabel">Metadata Options</span>
+              <label className="inlineCheck">
+                <input
+                  type="checkbox"
+                  checked={includeExternalUrl}
+                  onChange={(e) => setIncludeExternalUrl(e.target.checked)}
+                />
+                <span>Include external URL</span>
+              </label>
+              {includeExternalUrl ? (
+                <label>
+                  External URL
+                  <input value={externalUrl} onChange={(e) => setExternalUrl(e.target.value)} />
+                </label>
+              ) : null}
+              <label className="inlineCheck">
+                <input
+                  type="checkbox"
+                  checked={useCustomMetadataUri}
+                  onChange={(e) => setUseCustomMetadataUri(e.target.checked)}
+                />
+                <span>Use custom IPFS metadata URI</span>
+              </label>
+              {useCustomMetadataUri ? (
+                <label>
+                  Custom metadata URI
+                  <input
+                    value={metadataUri}
+                    onChange={(e) => setMetadataUri(e.target.value)}
+                  />
+                </label>
+              ) : (
+                <p className="hint">
+                  Leave this off to generate metadata automatically from the fields and uploaded media above.
+                </p>
+              )}
+            </div>
+            <TxStatus state={uploadTx} />
+          </div>
+
+          {/* Step 4: Mint settings */}
+          <div className="card formCard">
+            <h3>4. Mint Preview</h3>
+            {mintMode === "custom" ? (
+              <p className="hint">
+                Custom collections use the collection identity you already set.
+              </p>
+            ) : null}
+
+            {(previewUrl || name || audioFile || metadataUri || uploadReceipt.metadataUri) ? (
+              <div className="nftPreviewCard">
+                {previewUrl && <img src={previewUrl} alt={name || "NFT preview"} className="nftPreviewThumb" />}
+                <div className="nftPreviewMeta">
+                  <p className="nftPreviewName">{name || "Untitled NFT"}</p>
+                  {description && <p className="nftPreviewDesc">{description}</p>}
+                  <div className="compactList">
+                    <p className="hint"><strong>Collection:</strong> {mintMode === "shared" ? "Shared contract" : "Creator collection"}</p>
+                    {mintMode === "custom" ? (
+                      <p className="hint">
+                        <strong>Collection contract name:</strong>
+                        {" "}
+                        {selectedCollectionName || deployName.trim() || "Not yet resolved"}
+                        {selectedCollectionSymbol ? ` (${selectedCollectionSymbol})` : ""}
+                      </p>
+                    ) : null}
+                    {mintMode === "custom" && isAddress(customCollectionAddress) ? (
+                      <p className="hint mono"><strong>Collection contract:</strong> {customCollectionAddress}</p>
+                    ) : null}
+                    <p className="hint"><strong>Token type:</strong> {standard === "ERC721" ? "ERC-721 unique mint" : `ERC-1155 with ${copies || "1"} edition${copies === "1" ? "" : "s"}`}</p>
+                    <p className="hint"><strong>NFT title:</strong> {name || "Untitled NFT"}</p>
+                    <p className="hint"><strong>Metadata:</strong> {useCustomMetadataUri ? "Custom IPFS metadata" : "Generated from form inputs"}</p>
+                    <p className="hint"><strong>Media:</strong> {imageFile ? "Image attached" : "No image"}{audioFile ? " + audio attached" : ""}</p>
+                    {includeExternalUrl && externalUrl ? <p className="hint"><strong>External link:</strong> included</p> : null}
+                  </div>
+                  {(metadataUri || uploadReceipt.metadataUri) ? (
+                    <p className="mono nftPreviewUri">
+                      {(uploadReceipt.metadataUri || metadataUri)!.length > 48
+                        ? `${(uploadReceipt.metadataUri || metadataUri)!.slice(0, 48)}…`
+                        : (uploadReceipt.metadataUri || metadataUri)!}
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+            ) : (
+              <p className="hint">Fill in asset details above to build the publish preview.</p>
+            )}
+          </div>
+
+          {/* Step 5: Publish */}
+          <div className="card formCard">
+            <h3>5. Mint and Publish</h3>
+            <p className="hint">
+              This is the final blockchain transaction for the flow above. Make sure your metadata URI
+              and collection choice are correct before you submit. If you selected an image above, this
+              button will upload media and metadata to IPFS and then mint in one sequence.
+            </p>
+            <button
+              type="submit"
+              disabled={!isConnected || wrongNetwork || mintTx.status === "pending" || uploadTx.status === "pending"}
+            >
+              {mintTx.status === "pending" || uploadTx.status === "pending"
+                ? "Publishing…"
+                : useCustomMetadataUri
+                  ? "Mint With Custom Metadata"
+                  : (imageFile || audioFile)
+                    ? "Upload and Mint"
+                    : "Mint Now"}
+            </button>
+            <TxStatus state={mintTx} />
+            {(uploadReceipt.metadataUri || mintTx.hash) ? (
+              <div className="selectionCard">
+                <span className="detailLabel">Publish Receipts</span>
+                <div className="compactList">
+                  {mintTx.hash && toExplorerTx(getContractsConfig().chainId, mintTx.hash) ? (
+                    <a href={toExplorerTx(getContractsConfig().chainId, mintTx.hash)!} target="_blank" rel="noreferrer">
+                      View transaction on explorer ↗
+                    </a>
+                  ) : null}
+                  {uploadReceipt.metadataGatewayUrl ? (
+                    <a href={uploadReceipt.metadataGatewayUrl} target="_blank" rel="noreferrer">
+                      View metadata JSON ↗
+                    </a>
+                  ) : uploadReceipt.metadataUri ? (
+                    <p className="mono hint">Metadata: {uploadReceipt.metadataUri}</p>
+                  ) : null}
+                  {uploadReceipt.imageGatewayUrl ? (
+                    <a href={uploadReceipt.imageGatewayUrl} target="_blank" rel="noreferrer">
+                      View image asset ↗
+                    </a>
+                  ) : null}
+                  {uploadReceipt.audioGatewayUrl ? (
+                    <a href={uploadReceipt.audioGatewayUrl} target="_blank" rel="noreferrer">
+                      View audio asset ↗
+                    </a>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </form>
+      )}
+
+      {/* ════════════════════════════════════════════════════════════════════ */}
+      {/* VIEW COLLECTION                                                     */}
+      {/* ════════════════════════════════════════════════════════════════════ */}
+
+      {pageMode === "view" && (
+        <div className="wizard">
+
+          <div className="card formCard">
+            <h3>View Collection</h3>
+            <p className="hint">Inspect a creator collection, its royalty policy, and its indexed tokens without opening the management controls.</p>
+          </div>
+
+          <div className="card formCard">
+            <h3>1. Choose Collection</h3>
+            <p className="hint">
+              This view is read-only. Use it to inspect an existing <strong>CreatorCollection</strong> contract and its indexed inventory.
+            </p>
+            {verifiedKnownCollections.length > 0 ? (
+              <label>
+                Collection source
+                <select
+                  value={manageSelector}
+                  onChange={(e) => setManageSelector(e.target.value as "saved" | "manual")}
+                >
+                  <option value="saved">Choose from my on-chain collections</option>
+                  <option value="manual">Enter an address manually</option>
+                </select>
+              </label>
+            ) : null}
+            {verifiedKnownCollections.length > 0 && manageSelector === "saved" ? (
+              <label>
+                Your collection
+                <select
+                  value={manageAddress}
+                  onChange={(e) => setManageAddress(e.target.value)}
+                >
+                  <option value="">Select an on-chain collection</option>
+                  {verifiedKnownCollections.map((item) => (
+                    <option key={`view-${item.contractAddress}`} value={item.contractAddress}>
+                      {formatCollectionIdentity(item.ensSubname) || shortenAddress(item.contractAddress)} - {shortenAddress(item.contractAddress)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : (
+              <label>
+                {verifiedKnownCollections.length > 0 ? "Collection contract address" : "Your collection contract address"}
+                <input
+                  value={manageAddress}
+                  onChange={(e) => setManageAddress(e.target.value)}
+                />
+              </label>
+            )}
+          </div>
+
+          <div className="card formCard">
+            <h3>2. Collection Overview</h3>
+            {!isAddress(manageAddress) ? (
+              <p className="hint">Select or enter a valid collection address to load details.</p>
+            ) : (
+              <div className="stack">
+                <div className="gridMini">
+                  <p>
+                    <strong>Identity</strong><br />
+                    {formatCollectionIdentity(selectedManageCollection?.ensSubname ?? null) || "No ENS identity saved"}
+                  </p>
+                  <p>
+                    <strong>Standard</strong><br />
+                    {manageCollectionStandard || "Unknown"}
+                  </p>
+                  <p>
+                    <strong>Default royalty</strong><br />
+                    {manageRoyaltyBps} bps
+                  </p>
+                  <p>
+                    <strong>Split policy</strong><br />
+                    {manageRoyaltySplits.length === 0 ? "No splits stored" : `${manageRoyaltySplits.length} split row${manageRoyaltySplits.length === 1 ? "" : "s"}`}
+                  </p>
+                </div>
+                <div className="gridMini">
+                  <p className="mono">
+                    <strong>Collection</strong><br />
+                    {toExplorerAddress(config.chainId, manageAddress) ? (
+                      <a href={toExplorerAddress(config.chainId, manageAddress)!} target="_blank" rel="noreferrer">
+                        {manageAddress}
+                      </a>
+                    ) : (
+                      manageAddress
+                    )}
+                  </p>
+                  <p className="mono">
+                    <strong>Owner</strong><br />
+                    {selectedManageCollection?.ownerAddress || account || "Unknown"}
+                  </p>
+                  <p className="mono">
+                    <strong>Royalty receiver</strong><br />
+                    {manageRoyaltyReceiver || "Not set"}
+                  </p>
+                  <p className="mono">
+                    <strong>Implementation</strong><br />
+                    {manageImplementationAddress || "Not resolved"}
+                  </p>
+                </div>
+                {manageRoyaltySplits.length > 0 ? (
+                  <div className="selectionCard">
+                    <p><strong>Collection split policy</strong></p>
+                    {manageRoyaltySplits.map((split, index) => (
+                      <p key={`view-split-${index}`} className="mono">
+                        {split.account || "Unset recipient"} · {formatBpsAsPercent(split.bps)}
+                      </p>
+                    ))}
+                    <p className="hint">Total: {formatBpsAsPercent(manageRoyaltySplitTotal)}</p>
+                  </div>
+                ) : null}
+              </div>
+            )}
+          </div>
+
+          <div className="card formCard">
+            <h3>3. Indexed Tokens</h3>
+            {!isAddress(manageAddress) ? (
+              <p className="hint">Choose a collection above to view tokens.</p>
+            ) : viewCollectionLoading ? (
+              <p className="hint">Loading indexed tokens…</p>
+            ) : viewCollectionError ? (
+              <p className="error">{viewCollectionError}</p>
+            ) : viewCollectionCount === 0 ? (
+              <p className="hint">No indexed tokens found for this collection yet.</p>
+            ) : (
+              <div className="stack">
+                <p className="hint">Showing {viewCollectionTokens.length} indexed token{viewCollectionTokens.length === 1 ? "" : "s"} for this collection.</p>
+                {viewCollectionTokens.map((token) => {
+                  const collectionIdentity = formatCollectionIdentity(token.collection.ensSubname);
+                  const title = getMintDisplayTitle({
+                    draftName: token.draftName,
+                    collectionIdentity,
+                    tokenId: token.tokenId
+                  });
+                  const description = getMintDisplayDescription({
+                    draftDescription: token.draftDescription,
+                    collectionIdentity,
+                    tokenId: token.tokenId
+                  });
+                  const metadataLink = token.metadataUrl || token.metadataCid;
+                  const mediaLink = token.mediaUrl || token.mediaCid;
+
+                  return (
+                    <div key={`${token.collection.contractAddress.toLowerCase()}:${token.tokenId}`} className="selectionCard">
+                      <p><strong>{title}</strong></p>
+                      <p className="hint">{description}</p>
+                      <div className="gridMini">
+                        <p><strong>Token ID</strong><br /><span className="mono">{token.tokenId}</span></p>
+                        <p><strong>Amount</strong><br />{getMintAmountLabel(token.collection.standard, token.mintedAmountRaw)}</p>
+                        <p><strong>Status</strong><br />{getMintStatusLabel(token.activeListing)}</p>
+                        <p><strong>Minted</strong><br />{new Date(token.mintedAt).toLocaleString()}</p>
+                      </div>
+                      {(metadataLink || mediaLink) ? (
+                        <div className="row">
+                          {metadataLink ? (
+                            <a href={metadataLink} target="_blank" rel="noreferrer" className="ctaLink secondaryLink">
+                              Metadata
+                            </a>
+                          ) : null}
+                          {mediaLink ? (
+                            <a href={mediaLink} target="_blank" rel="noreferrer" className="ctaLink secondaryLink">
+                              Media
+                            </a>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ════════════════════════════════════════════════════════════════════ */}
+      {/* MANAGE COLLECTION                                                   */}
+      {/* ════════════════════════════════════════════════════════════════════ */}
+
+      {pageMode === "manage" && (
+        <div className="wizard">
+
+          <div className="card formCard">
+            <h3>Manage Collection</h3>
+            <p className="hint">Choose a collection, verify it, then update identity or contract settings.</p>
+          </div>
+
+          <div className="card formCard">
+            <h3>Wallet</h3>
+            {wrongNetwork ? (
+              <p className="hint">Select {appChain.name} in the header wallet menu to continue.</p>
+            ) : null}
+            <div className="gridMini">
+              <p className="mono">Account: {account || "Not connected"}</p>
+              <p className="mono">Network: {appChain.name}</p>
+            </div>
+          </div>
+
+          <div className="card formCard">
+            <h3>1. Choose Collection</h3>
+            <p className="hint">
+              These actions apply to <strong>CreatorCollection</strong> contracts (the ones deployed via
+              the factory). You must be the current <code>owner</code> of the contract to call them.
+            </p>
+            {verifiedKnownCollections.length > 0 ? (
+              <label>
+                Collection source
+                <select
+                  value={manageSelector}
+                  onChange={(e) => setManageSelector(e.target.value as "saved" | "manual")}
+                >
+                  <option value="saved">Choose from my on-chain collections</option>
+                  <option value="manual">Enter an address manually</option>
+                </select>
+              </label>
+            ) : null}
+            {verifiedKnownCollections.length > 0 && manageSelector === "saved" ? (
+              <label>
+                Your collection
+                <select
+                  value={manageAddress}
+                  onChange={(e) => setManageAddress(e.target.value)}
+                >
+                  <option value="">Select an on-chain collection</option>
+                  {verifiedKnownCollections.map((item) => (
+                    <option key={`manage-${item.contractAddress}`} value={item.contractAddress}>
+                      {formatCollectionIdentity(item.ensSubname) || shortenAddress(item.contractAddress)} - {shortenAddress(item.contractAddress)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : (
+              <label>
+                {verifiedKnownCollections.length > 0 ? "Collection contract address" : "Your collection contract address"}
+                <input
+                  value={manageAddress}
+                  onChange={(e) => setManageAddress(e.target.value)}
+                />
+              </label>
+            )}
+            {isAddress(manageAddress) && (
+              <p className="hint mono">
+                {formatCollectionIdentity(selectedManageCollection?.ensSubname ?? null) ? `${formatCollectionIdentity(selectedManageCollection?.ensSubname ?? null)} ` : ""}
+                {toExplorerAddress(config.chainId, manageAddress) ? (
+                  <a href={toExplorerAddress(config.chainId, manageAddress)!} target="_blank" rel="noreferrer">
+                    View on explorer ↗
+                  </a>
+                ) : (
+                  <span>Local chain address loaded</span>
+                )}
+              </p>
+            )}
+          </div>
+
+          <div className="card formCard">
+            <h3>2. Verification</h3>
+            <p className="hint">
+              Creator collections are deployed as upgradeable proxy contracts. Explorers often show the proxy address
+              first, so use the links below to inspect both the collection proxy and the current factory implementation.
+            </p>
+            <div className="selectionCard">
+              <p><strong>Collection proxy</strong></p>
+              {isAddress(manageAddress) && toExplorerAddress(config.chainId, manageAddress) ? (
+                <p className="hint mono">
+                  <a href={toExplorerAddress(config.chainId, manageAddress)!} target="_blank" rel="noreferrer">
+                    {manageAddress}
+                  </a>
+                </p>
+              ) : (
+                <p className="hint">Select a collection above to inspect it on the explorer.</p>
+              )}
+              <p className="hint">
+                Detected standard: <strong>{manageCollectionStandard || "Unknown"}</strong>
+              </p>
+              {manageImplementationAddress && toExplorerAddress(config.chainId, manageImplementationAddress) ? (
+                <>
+                  <p><strong>Current factory implementation</strong></p>
+                  <p className="hint mono">
+                    <a href={toExplorerAddress(config.chainId, manageImplementationAddress)!} target="_blank" rel="noreferrer">
+                      {manageImplementationAddress}
+                    </a>
+                  </p>
+                </>
+              ) : (
+                <p className="hint">
+                  The implementation link appears once the app confirms the selected collection standard on-chain.
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="card formCard">
+            <h3>3. Collection Identity</h3>
+            <p className="hint">
+              Manage the human-readable identity shown for this collection. You can attach an existing ENS name, attach an
+              external subname, or register a new <strong>nftfactory.eth</strong> subname here.
+            </p>
+            <label>
+              Identity mode
+              <select value={identityMode} onChange={(e) => setIdentityMode(e.target.value as "ens" | "subname" | "nftfactory")}>
+                <option value="ens">Use an existing ENS name</option>
+                <option value="subname">Use an existing subname</option>
+                <option value="nftfactory">Register under nftfactory.eth</option>
+              </select>
+            </label>
+            <label>
+              {identityMode === "ens"
+                ? "ENS name"
+                : identityMode === "subname"
+                  ? "Subname"
+                  : "nftfactory label"}
+              <input
+                value={registerSubnameLabel}
+                onChange={(e) => setRegisterSubnameLabel(e.target.value)}
+              />
+            </label>
+            <p className="hint">
+              {identityMode === "nftfactory"
+                ? `This registers ${normalizeSubname(registerSubnameLabel) || "your-label"}.nftfactory.eth on-chain for ${SUBNAME_FEE_ETH} ETH and saves it to this collection.`
+                : "External ENS names and external subnames are created in your ENS flow, then saved here as this collection's display identity."}
+            </p>
+            <button
+              type="button"
+              onClick={saveCollectionIdentity}
+              disabled={
+                !isConnected ||
+                !isAddress(manageAddress) ||
+                (identityMode === "nftfactory" && wrongNetwork) ||
+                subnameTx.status === "pending"
+              }
+            >
+              {subnameTx.status === "pending"
+                ? "Saving…"
+                : identityMode === "nftfactory"
+                  ? `Register Under nftfactory.eth (${SUBNAME_FEE_ETH} ETH)`
+                  : "Save Collection Identity"}
+            </button>
+            <TxStatus state={subnameTx} />
+          </div>
+
+          <div className="card formCard">
+            <h3>4. Royalties and Splits</h3>
+            <p className="hint">
+              Set the collection-wide default royalty returned by the collection contract, then optionally define a collaborator split policy for that royalty.
+            </p>
+            <p><strong>Default royalty</strong></p>
+            <label>
+              Default royalty receiver
+              <input
+                value={manageRoyaltyReceiver}
+                onChange={(e) => setManageRoyaltyReceiver(e.target.value)}
+                placeholder={account || "0x..."}
+              />
+            </label>
+            <label>
+              Default royalty (basis points)
+              <input
+                inputMode="numeric"
+                value={manageRoyaltyBps}
+                onChange={(e) => setManageRoyaltyBps(e.target.value)}
+                placeholder="500"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={onSaveDefaultRoyalty}
+              disabled={!isConnected || wrongNetwork || !isAddress(manageAddress) || royaltyTx.status === "pending"}
+            >
+              {royaltyTx.status === "pending" ? "Saving royalty…" : "Save Default Royalty"}
+            </button>
+            <TxStatus state={royaltyTx} />
+
+            <div className="selectionCard" style={{ marginTop: "1rem" }}>
+              <p><strong>Collection split policy</strong></p>
+              <p className="hint">
+                Optional collaborator royalty weights stored in the protocol royalty split registry.
+                This does <strong>not</strong> replace the collection&apos;s default royalty receiver or basis
+                points; keep both aligned if your downstream royalty settlement reads the split registry.
+              </p>
+              {config.royaltySplitRegistry ? (
+                <>
+                  <p className="hint mono">
+                    Split registry:{" "}
+                    {toExplorerAddress(config.chainId, config.royaltySplitRegistry) ? (
+                      <a href={toExplorerAddress(config.chainId, config.royaltySplitRegistry)!} target="_blank" rel="noreferrer">
+                        {config.royaltySplitRegistry}
+                      </a>
+                    ) : (
+                      config.royaltySplitRegistry
+                    )}
+                  </p>
+                  {manageRoyaltySplits.length === 0 ? (
+                    <p className="hint">No split rows configured. Add split rows below to define collaborator payouts, or save now to clear the split policy.</p>
+                  ) : null}
+                  {manageRoyaltySplits.map((split, index) => (
+                    <div key={`royalty-split-${index}`} className="gridMini">
+                      <label>
+                        Recipient {index + 1}
+                        <input
+                          value={split.account}
+                          onChange={(e) => updateRoyaltySplitRow(index, "account", e.target.value)}
+                          placeholder="0x..."
+                        />
+                      </label>
+                      <label>
+                        Bps
+                        <input
+                          inputMode="numeric"
+                          value={split.bps}
+                          onChange={(e) => updateRoyaltySplitRow(index, "bps", e.target.value)}
+                          placeholder="5000"
+                        />
+                        <span className="hint">{formatBpsAsPercent(split.bps)}</span>
+                      </label>
+                      <p className="hint" style={{ alignSelf: "end", margin: 0 }}>
+                        Split: <strong>{formatBpsAsPercent(split.bps)}</strong>
+                      </p>
+                      <button
+                        type="button"
+                        className="secondary"
+                        onClick={() => removeRoyaltySplitRow(index)}
+                        disabled={royaltySplitTx.status === "pending"}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                  <p className={`hint${manageRoyaltySplitTotal === 10_000 || manageRoyaltySplits.length === 0 ? "" : " error"}`}>
+                    Split total: {formatBpsAsPercent(manageRoyaltySplitTotal)} ({manageRoyaltySplitTotal.toLocaleString()} / 10,000 bps)
+                  </p>
+                  <div className="row">
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={addRoyaltySplitRow}
+                      disabled={royaltySplitTx.status === "pending"}
+                    >
+                      Add split row
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={clearRoyaltySplitRows}
+                      disabled={royaltySplitTx.status === "pending" || manageRoyaltySplits.length === 0}
+                    >
+                      Clear all
+                    </button>
+                    <button
+                      type="button"
+                      onClick={onSaveCollectionRoyaltySplits}
+                      disabled={!isConnected || wrongNetwork || !isAddress(manageAddress) || royaltySplitTx.status === "pending"}
+                    >
+                      {royaltySplitTx.status === "pending" ? "Saving split policy…" : "Save Split Policy"}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <p className="hint">
+                  Royalty split registry is not configured for this environment. Add
+                  <code> NEXT_PUBLIC_ROYALTY_SPLIT_REGISTRY_ADDRESS</code> to enable collaborator split storage here.
+                </p>
+              )}
+              <TxStatus state={royaltySplitTx} />
+            </div>
+          </div>
+
+          {/* Transfer ownership */}
+          <div className="card formCard">
+            <h3>5. Transfer Ownership</h3>
+            <p className="hint">
+              Passes full control of this collection to a new address. The new owner can mint tokens,
+              update metadata (if not locked), set royalties, and finalize upgrades. This action
+              <strong> can be reversed</strong> by the new owner calling transfer ownership again.
+            </p>
+            <label>
+              New owner address
+              <input
+                value={transferTarget}
+                onChange={(e) => setTransferTarget(e.target.value)}
+              />
+            </label>
+            <button
+              type="button"
+              onClick={onTransferOwnership}
+              disabled={!isConnected || wrongNetwork || !isAddress(manageAddress) || !isAddress(transferTarget) || transferTx.status === "pending"}
+            >
+              {transferTx.status === "pending" ? "Transferring…" : "Transfer Ownership"}
+            </button>
+            <TxStatus state={transferTx} />
+          </div>
+
+          {/* Finalize upgrades */}
+          <div className="card formCard">
+            <h3>6. Finalize Upgrades ⚠️</h3>
+            <p className="hint">
+              Permanently disables the UUPS upgrade path for this collection contract. Once finalized,
+              the logic contract can <strong>never</strong> be replaced — the contract is frozen exactly
+              as it is. This is useful for provability and collector trust, but{" "}
+              <strong>cannot be undone</strong>.
+            </p>
+            <p className="hint">
+              Who can call this: <strong>the collection owner only</strong>.<br />
+              Who it affects: all future mints and interactions with this collection.
+            </p>
+            <label className="row" style={{ alignItems: "center", gap: "0.5rem", cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                checked={finalizeConfirmed}
+                onChange={(e) => setFinalizeConfirmed(e.target.checked)}
+              />
+              <span>I understand this is permanent and cannot be reversed.</span>
+            </label>
+            <button
+              type="button"
+              onClick={onFinalizeUpgrades}
+              disabled={
+                !isConnected ||
+                wrongNetwork ||
+                !isAddress(manageAddress) ||
+                !finalizeConfirmed ||
+                finalizeTx.status === "pending"
+              }
+              style={{ background: finalizeConfirmed ? "#c00" : undefined }}
+            >
+              {finalizeTx.status === "pending" ? "Finalizing…" : "Permanently Finalize Upgrades"}
+            </button>
+            <TxStatus state={finalizeTx} />
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+// ── Shared status display ─────────────────────────────────────────────────────
+
+function TxStatus({ state }: { state: TxState }) {
+  if (state.status === "idle") return null;
+  if (state.status === "pending") return <p className="hint">{state.message}</p>;
+  if (state.status === "error") return <p className="error">{state.message}</p>;
+  if (state.status === "success" && state.hash) {
+    return (
+      <p className="success">
+        {state.message || "Success"}{" "}
+        {toExplorerTx(getContractsConfig().chainId, state.hash) ? (
+          <a href={toExplorerTx(getContractsConfig().chainId, state.hash)!} target="_blank" rel="noreferrer">
+            {truncateHash(state.hash)}
+          </a>
+        ) : (
+          <span className="mono">{truncateHash(state.hash)}</span>
+        )}
+      </p>
+    );
+  }
+  return <p className="success">{state.message}</p>;
+}

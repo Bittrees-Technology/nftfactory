@@ -18,6 +18,18 @@ contract NftFactoryRegistryTest is Test {
         registry = new NftFactoryRegistry(admin, treasury);
     }
 
+    function testConstructorRevertsForZeroTreasury() external {
+        vm.prank(admin);
+        vm.expectRevert(NftFactoryRegistry.InvalidTreasury.selector);
+        new NftFactoryRegistry(admin, address(0));
+    }
+
+    function testSetTreasuryRevertsForZeroAddress() external {
+        vm.prank(admin);
+        vm.expectRevert(NftFactoryRegistry.InvalidTreasury.selector);
+        registry.setTreasury(address(0));
+    }
+
     function testAuthorizedFactoryCanRegisterCreator() external {
         vm.prank(admin);
         registry.setFactoryAuthorization(factory, true);

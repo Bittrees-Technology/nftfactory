@@ -3,7 +3,8 @@ import { getListingPresentation, type ListingViewModel } from "./listingPresenta
 
 function listing(overrides: Partial<ListingViewModel> = {}): ListingViewModel {
   return {
-    key: "v2:11",
+    key: "1:v2:11",
+    chainId: 1,
     id: 11,
     seller: "0x0000000000000000000000000000000000000001",
     nft: "0x0000000000000000000000000000000000000002",
@@ -48,7 +49,7 @@ describe("listingPresentation", () => {
     );
     expect(presentation.title).toBe("NFTFactory mint #7");
     expect(presentation.description).toBe("Collection untitled · token #7");
-    expect(presentation.marketLabel).toBe("Marketplace V1");
+    expect(presentation.marketLabel).toBe("Legacy Marketplace V1");
     expect(presentation.amountLabel).toBe("1 of 1");
   });
 });

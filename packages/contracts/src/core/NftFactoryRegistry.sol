@@ -17,6 +17,7 @@ contract NftFactoryRegistry is Owned {
 
     mapping(address => bool) public blocked;
     mapping(address => bool) public authorizedFactory;
+    mapping(address => bool) public allowedPaymentToken;
     mapping(address => CreatorRecord[]) public creators;
     mapping(address => mapping(address => bool)) public creatorContractRegistered;
     mapping(address => address) public contractCreator;
@@ -25,6 +26,7 @@ contract NftFactoryRegistry is Owned {
     event ProtocolFeeUpdated(uint256 feeBps);
     event BlockedUpdated(address indexed account, bool blockedStatus);
     event FactoryAuthorizationUpdated(address indexed factory, bool authorized);
+    event PaymentTokenUpdated(address indexed token, bool allowed);
     event CreatorRegistered(
         address indexed creator,
         address indexed contractAddress,
@@ -40,12 +42,16 @@ contract NftFactoryRegistry is Owned {
     error InvalidCreator();
     error InvalidCreatorContract();
     error InvalidStandard();
+    error InvalidPaymentToken();
+    error InvalidTreasury();
 
     constructor(address initialOwner, address initialTreasury) Owned(initialOwner) {
+        if (initialTreasury == address(0)) revert InvalidTreasury();
         treasury = initialTreasury;
     }
 
     function setTreasury(address newTreasury) external onlyOwner {
+        if (newTreasury == address(0)) revert InvalidTreasury();
         treasury = newTreasury;
         emit TreasuryUpdated(newTreasury);
     }
@@ -64,6 +70,12 @@ contract NftFactoryRegistry is Owned {
     function setFactoryAuthorization(address factory, bool status) external onlyOwner {
         authorizedFactory[factory] = status;
         emit FactoryAuthorizationUpdated(factory, status);
+    }
+
+    function setPaymentTokenAllowed(address token, bool allowed) external onlyOwner {
+        if (token == address(0)) revert InvalidPaymentToken();
+        allowedPaymentToken[token] = allowed;
+        emit PaymentTokenUpdated(token, allowed);
     }
 
     function registerCreatorContract(

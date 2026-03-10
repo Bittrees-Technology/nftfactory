@@ -4,10 +4,20 @@ pragma solidity ^0.8.24;
 import {Test} from "forge-std/Test.sol";
 import {RoyaltySplitRegistry} from "../src/core/RoyaltySplitRegistry.sol";
 
+contract MockOwnedCollection {
+    address public owner;
+
+    constructor(address initialOwner) {
+        owner = initialOwner;
+    }
+}
+
 contract RoyaltySplitRegistryTest is Test {
     RoyaltySplitRegistry internal splitter;
+    MockOwnedCollection internal ownedCollection;
 
     address internal admin = address(0xA11CE);
+    address internal collectionOwner = address(0xC011EC71);
     address internal collection = address(0xC0DE);
     address internal recipientA = address(0xAAA1);
     address internal recipientB = address(0xBBB2);
@@ -15,6 +25,7 @@ contract RoyaltySplitRegistryTest is Test {
     function setUp() external {
         vm.prank(admin);
         splitter = new RoyaltySplitRegistry(admin);
+        ownedCollection = new MockOwnedCollection(collectionOwner);
     }
 
     function testSetCollectionSplits() external {
@@ -44,6 +55,35 @@ contract RoyaltySplitRegistryTest is Test {
         assertEq(stored.length, 1);
         assertEq(stored[0].account, recipientA);
         assertEq(stored[0].bps, 10_000);
+    }
+
+    function testCollectionOwnerCanSetCollectionSplits() external {
+        RoyaltySplitRegistry.Split[] memory splits = new RoyaltySplitRegistry.Split[](2);
+        splits[0] = RoyaltySplitRegistry.Split({account: recipientA, bps: 7000});
+        splits[1] = RoyaltySplitRegistry.Split({account: recipientB, bps: 3000});
+
+        vm.prank(collectionOwner);
+        splitter.setCollectionSplits(address(ownedCollection), splits);
+
+        RoyaltySplitRegistry.Split[] memory stored = splitter.getCollectionSplits(address(ownedCollection));
+        assertEq(stored.length, 2);
+        assertEq(stored[0].account, recipientA);
+        assertEq(stored[1].account, recipientB);
+    }
+
+    function testCollectionOwnerCanClearSplits() external {
+        RoyaltySplitRegistry.Split[] memory splits = new RoyaltySplitRegistry.Split[](1);
+        splits[0] = RoyaltySplitRegistry.Split({account: recipientA, bps: 10_000});
+
+        vm.prank(collectionOwner);
+        splitter.setCollectionSplits(address(ownedCollection), splits);
+
+        RoyaltySplitRegistry.Split[] memory emptySplits = new RoyaltySplitRegistry.Split[](0);
+        vm.prank(collectionOwner);
+        splitter.setCollectionSplits(address(ownedCollection), emptySplits);
+
+        RoyaltySplitRegistry.Split[] memory stored = splitter.getCollectionSplits(address(ownedCollection));
+        assertEq(stored.length, 0);
     }
 
     function testSplitsMustSumTo10000() external {
@@ -80,14 +120,14 @@ contract RoyaltySplitRegistryTest is Test {
         assertEq(stored.length, 1);
     }
 
-    function testNonOwnerCannotSetSplits() external {
+    function testUnauthorizedAddressCannotSetSplits() external {
         RoyaltySplitRegistry.Split[] memory splits = new RoyaltySplitRegistry.Split[](1);
         splits[0] = RoyaltySplitRegistry.Split({account: recipientA, bps: 10_000});
 
-        vm.expectRevert();
-        splitter.setCollectionSplits(collection, splits);
+        vm.expectRevert(RoyaltySplitRegistry.UnauthorizedCollectionManager.selector);
+        splitter.setCollectionSplits(address(ownedCollection), splits);
 
-        vm.expectRevert();
-        splitter.setTokenSplits(collection, 1, splits);
+        vm.expectRevert(RoyaltySplitRegistry.UnauthorizedCollectionManager.selector);
+        splitter.setTokenSplits(address(ownedCollection), 1, splits);
     }
 }

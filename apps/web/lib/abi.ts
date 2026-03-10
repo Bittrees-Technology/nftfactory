@@ -105,6 +105,20 @@ export function encodeSetApprovalForAll(operator: `0x${string}`, approved: boole
   return `0x${selector}${encodeAddress(operator)}${encodeBool(approved)}`;
 }
 
+export function encodeSetPaymentTokenAllowed(token: `0x${string}`, allowed: boolean): string {
+  const selector = "28336098";
+  return `0x${selector}${encodeAddress(token)}${encodeBool(allowed)}`;
+}
+
+export function encodeSetModerator(account: `0x${string}`, label: string, active: boolean): string {
+  const selector = "01ec709d";
+  const labelBody = encodeStringData(label);
+  const head1 = encodeAddress(account);
+  const head2 = wordFromBytes(96);
+  const head3 = encodeBool(active);
+  return `0x${selector}${head1}${head2}${head3}${labelBody}`;
+}
+
 export function encodeErc20Approve(spender: `0x${string}`, amount: bigint): string {
   const selector = "095ea7b3";
   return `0x${selector}${encodeAddress(spender)}${encodeUint256(amount)}`;

@@ -16,10 +16,19 @@ import {MarketplaceV2} from "../src/core/MarketplaceV2.sol";
 import {ModeratorRegistry} from "../src/core/ModeratorRegistry.sol";
 
 contract DeployScript is Script {
+    function _readOptionalPaymentTokenAllowlist() internal returns (address[] memory) {
+        try vm.envAddress("PAYMENT_TOKEN_ALLOWLIST", ",") returns (address[] memory tokens) {
+            return tokens;
+        } catch {
+            return new address[](0);
+        }
+    }
+
     function run() external {
         uint256 pk = vm.envUint("PRIVATE_KEY");
         address deployer = vm.addr(pk);
         address treasury = vm.envAddress("TREASURY_SAFE");
+        address[] memory paymentTokens = _readOptionalPaymentTokenAllowlist();
 
         vm.startBroadcast(pk);
 
@@ -40,6 +49,9 @@ contract DeployScript is Script {
 
         factory.setImplementations(address(impl721), address(impl1155));
         registry.setFactoryAuthorization(address(factory), true);
+        for (uint256 i = 0; i < paymentTokens.length; i++) {
+            registry.setPaymentTokenAllowed(paymentTokens[i], true);
+        }
 
         registrar.setAuthorizedMinter(address(shared721), true);
         registrar.setAuthorizedMinter(address(shared1155), true);
@@ -57,5 +69,6 @@ contract DeployScript is Script {
         console2.log("CreatorFactory", address(factory));
         console2.log("Marketplace", address(marketplace));
         console2.log("MarketplaceV2", address(marketplaceV2));
+        console2.log("Allowed payment tokens", paymentTokens.length);
     }
 }

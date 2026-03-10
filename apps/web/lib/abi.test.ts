@@ -5,6 +5,8 @@ import {
   hexToBigInt,
   truncateHash,
   encodeSetApprovalForAll,
+  encodeSetPaymentTokenAllowed,
+  encodeSetModerator,
   encodeErc20Approve,
   encodeCancelListing,
   encodeBuyListing,
@@ -120,6 +122,30 @@ describe("encodeErc20Approve", () => {
   it("has correct length (selector + 2 words)", () => {
     const result = encodeErc20Approve("0x0000000000000000000000000000000000000001", 42n);
     expect(result.length).toBe(2 + 8 + 64 + 64);
+  });
+});
+
+describe("encodeSetPaymentTokenAllowed", () => {
+  it("starts with correct selector", () => {
+    const result = encodeSetPaymentTokenAllowed("0x0000000000000000000000000000000000000001", true);
+    expect(result.startsWith("0x28336098")).toBe(true);
+  });
+
+  it("has correct length (selector + 2 words)", () => {
+    const result = encodeSetPaymentTokenAllowed("0x0000000000000000000000000000000000000001", false);
+    expect(result.length).toBe(2 + 8 + 64 + 64);
+  });
+});
+
+describe("encodeSetModerator", () => {
+  it("starts with correct selector", () => {
+    const result = encodeSetModerator("0x0000000000000000000000000000000000000001", "Core Mod", true);
+    expect(result.startsWith("0x01ec709d")).toBe(true);
+  });
+
+  it("encodes dynamic string payloads", () => {
+    const result = encodeSetModerator("0x0000000000000000000000000000000000000001", "Core Mod", false);
+    expect(result.length).toBeGreaterThan(2 + 8 + 64 + 64 + 64);
   });
 });
 

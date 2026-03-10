@@ -1,5 +1,5 @@
 import { createPublicClient, formatEther, http } from "viem";
-import type { Address } from "viem";
+import type { Address, PublicClient } from "viem";
 import { getAppChain, getExplorerBaseUrl } from "./chains";
 
 export type MarketplaceListing = {
@@ -17,6 +17,7 @@ export type MarketplaceListing = {
 
 export type MarketplaceOffer = {
   id: number;
+  chainId: number;
   buyer: Address;
   nft: Address;
   tokenId: bigint;
@@ -52,6 +53,23 @@ const erc1155BalanceOfAbi = [
       { name: "id", type: "uint256" }
     ],
     outputs: [{ name: "", type: "uint256" }]
+  }
+] as const;
+
+const paymentTokenRegistryAbi = [
+  {
+    type: "function",
+    name: "owner",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }]
+  },
+  {
+    type: "function",
+    name: "allowedPaymentToken",
+    stateMutability: "view",
+    inputs: [{ name: "token", type: "address" }],
+    outputs: [{ name: "", type: "bool" }]
   }
 ] as const;
 
@@ -133,6 +151,33 @@ export function formatMarketplacePrice(paymentToken: Address, price: bigint): st
     return `${formatEther(price)} ETH`;
   }
   return `${price.toString()} raw ERC20 units`;
+}
+
+export async function readPaymentTokenAllowed(
+  publicClient: PublicClient,
+  registry: Address,
+  paymentToken: Address
+): Promise<boolean> {
+  if (paymentToken.toLowerCase() === ZERO_ADDRESS.toLowerCase()) {
+    return true;
+  }
+
+  return Boolean(
+    await publicClient.readContract({
+      address: registry,
+      abi: paymentTokenRegistryAbi,
+      functionName: "allowedPaymentToken",
+      args: [paymentToken]
+    })
+  );
+}
+
+export async function readRegistryOwner(publicClient: PublicClient, registry: Address): Promise<Address> {
+  return (await publicClient.readContract({
+    address: registry,
+    abi: paymentTokenRegistryAbi,
+    functionName: "owner"
+  })) as Address;
 }
 
 export async function fetchActiveListingsBatch(params: {
@@ -260,6 +305,7 @@ export async function fetchActiveOffersBatch(params: {
 
       rows.push({
         id,
+        chainId,
         buyer: offer[0],
         nft: offer[1],
         tokenId: offer[2],

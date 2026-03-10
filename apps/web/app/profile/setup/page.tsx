@@ -1,4 +1,5 @@
-import ProfileLandingClient from "../ProfileLandingClient";
+export const dynamic = "force-dynamic";
+import ProfileLandingClient from "../../../components/profile/ProfileLandingClient";
 
 function normalizeLabel(value: string): string {
   return value.trim().toLowerCase().replace(/\.nftfactory\.eth$/, "");

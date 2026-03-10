@@ -118,3 +118,4 @@ Before deployment or release validation:
 - [Contracts](./Contracts.md)
 - [Testing and Validation](./Testing-and-Validation.md)
 - [Operations and Governance](./Operations-and-Governance.md)
+- [IPFS Deployment](./IPFS-Deployment.md)

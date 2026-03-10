@@ -111,6 +111,20 @@ const collectionManagementAbi = [
   },
   {
     /**
+     * Updates the collection-wide EIP-2981 default royalty receiver and fee.
+     * Only the current collection owner can call this.
+     */
+    name: "setDefaultRoyalty",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "receiver", type: "address" },
+      { name: "feeNumerator", type: "uint96" }
+    ],
+    outputs: []
+  },
+  {
+    /**
      * Transfers ownership of the collection contract to a new address.
      * The new owner gains full control: minting, metadata updates, royalty settings,
      * and the ability to finalize upgrades.
@@ -123,6 +137,31 @@ const collectionManagementAbi = [
     outputs: []
   }
 ] as const;
+
+const royaltySplitRegistryAbi = [
+  {
+    name: "setCollectionSplits",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "collection", type: "address" },
+      {
+        name: "splits",
+        type: "tuple[]",
+        components: [
+          { name: "account", type: "address" },
+          { name: "bps", type: "uint96" }
+        ]
+      }
+    ],
+    outputs: []
+  }
+] as const;
+
+export type RoyaltySplitArgs = {
+  account: `0x${string}`;
+  bps: bigint;
+};
 
 /**
  * Encodes a call to CreatorCollection{721,1155}.finalizeUpgrades().
@@ -138,6 +177,20 @@ export function encodeFinalizeUpgrades(): `0x${string}` {
 }
 
 /**
+ * Encodes a call to CreatorCollection{721,1155}.setDefaultRoyalty(address,uint96).
+ */
+export function encodeSetDefaultRoyalty(
+  receiver: `0x${string}`,
+  feeNumerator: bigint
+): `0x${string}` {
+  return encodeFunctionData({
+    abi: collectionManagementAbi,
+    functionName: "setDefaultRoyalty",
+    args: [receiver, feeNumerator]
+  });
+}
+
+/**
  * Encodes a call to OwnableUpgradeable.transferOwnership(address).
  *
  * Passes control of the collection to `newOwner`. The new owner can mint,
@@ -149,5 +202,19 @@ export function encodeTransferOwnership(newOwner: `0x${string}`): `0x${string}` 
     abi: collectionManagementAbi,
     functionName: "transferOwnership",
     args: [newOwner]
+  });
+}
+
+/**
+ * Encodes a call to RoyaltySplitRegistry.setCollectionSplits(address,Split[]).
+ */
+export function encodeSetCollectionRoyaltySplits(
+  collection: `0x${string}`,
+  splits: RoyaltySplitArgs[]
+): `0x${string}` {
+  return encodeFunctionData({
+    abi: royaltySplitRegistryAbi,
+    functionName: "setCollectionSplits",
+    args: [collection, splits]
   });
 }

@@ -1,13 +1,14 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { getAppChain } from "../lib/chains";
 import { toExplorerAddress, truncateAddress } from "../lib/marketplace";
 import { useNftMetadataPreview } from "../lib/nftMetadata";
 import { getListingPresentation, type ListingViewModel } from "../lib/listingPresentation";
 
 type Props = {
   item: ListingViewModel;
-  chainId: number;
+  chainId?: number;
   ipfsGateway: string;
   actions?: ReactNode;
   className?: string;
@@ -28,6 +29,7 @@ export default function ListingSummaryRow({
     gateway: ipfsGateway
   });
   const presentation = getListingPresentation(item, preview);
+  const effectiveChainId = chainId || item.chainId;
 
   return (
     <article className={className}>
@@ -53,21 +55,24 @@ export default function ListingSummaryRow({
       <span>
         <strong>Ends</strong> {presentation.expiresAtLabel}
       </span>
+      <span>
+        <strong>Chain</strong> {getAppChain(effectiveChainId).name}
+      </span>
       {presentation.collectionIdentity ? (
         <span>
           <strong>Collection</strong> {presentation.collectionIdentity}
         </span>
       ) : null}
-      {toExplorerAddress(item.nft, chainId) ? (
-        <a href={toExplorerAddress(item.nft, chainId)!} target="_blank" rel="noreferrer" className="mono">
+      {toExplorerAddress(item.nft, effectiveChainId) ? (
+        <a href={toExplorerAddress(item.nft, effectiveChainId)!} target="_blank" rel="noreferrer" className="mono">
           Contract {truncateAddress(item.nft)}
         </a>
       ) : (
         <span className="mono">Contract {truncateAddress(item.nft)}</span>
       )}
       {showSeller
-        ? toExplorerAddress(item.seller, chainId) ? (
-            <a href={toExplorerAddress(item.seller, chainId)!} target="_blank" rel="noreferrer" className="mono">
+        ? toExplorerAddress(item.seller, effectiveChainId) ? (
+            <a href={toExplorerAddress(item.seller, effectiveChainId)!} target="_blank" rel="noreferrer" className="mono">
               Seller {truncateAddress(item.seller)}
             </a>
           ) : (

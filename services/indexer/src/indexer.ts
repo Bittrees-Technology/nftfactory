@@ -124,6 +124,10 @@ type PaymentTokenRecord = {
   notes: string | null;
 };
 
+type PaymentTokenApiRecord = PaymentTokenRecord & {
+  onchainAllowed: boolean | null;
+};
+
 type PaymentTokenReviewPayload = {
   tokenAddress: string;
   status?: "pending" | "approved" | "flagged";
@@ -146,10 +150,12 @@ type SyncMintedTokenPayload = {
   draftName?: string | null;
   draftDescription?: string | null;
   mintedAmountRaw?: string | null;
+  heldAmountRaw?: string | null;
   metadataCid: string;
   mediaCid?: string | null;
   immutable?: boolean;
   mintedAt?: string;
+  skipHoldingSync?: boolean;
 };
 
 const CHAIN_ID = Number.parseInt(process.env.CHAIN_ID || "11155111", 10);
@@ -166,12 +172,20 @@ const PROFILE_FILE = process.env.INDEXER_PROFILE_FILE || path.join(process.cwd()
 const PAYMENT_TOKEN_FILE = process.env.INDEXER_PAYMENT_TOKEN_FILE || path.join(process.cwd(), "data", "payment-tokens.json");
 const TOKEN_PRESENTATION_FILE =
   process.env.INDEXER_TOKEN_PRESENTATION_FILE || path.join(process.cwd(), "data", "token-presentation.json");
+const MARKETPLACE_V2_SYNC_STATE_FILE =
+  process.env.INDEXER_MARKETPLACE_V2_SYNC_STATE_FILE || path.join(process.cwd(), "data", "marketplace-v2-sync-state.json");
 const ADMIN_ALLOWLIST = new Set(
   (process.env.INDEXER_ADMIN_ALLOWLIST || "")
     .split(",")
     .map((value) => value.trim().toLowerCase())
     .filter(Boolean)
 );
+
+type MarketplaceV2SyncStateRecord = {
+  listingsLastBlock: string | null;
+  offersLastBlock: string | null;
+  updatedAt: string | null;
+};
 
 function createFallbackPrisma(): PrismaClient {
   log.warn("Prisma client is unavailable in this worktree. Running indexer in degraded in-memory mode.");
@@ -334,6 +348,13 @@ const registryReadAbi = [
         ]
       }
     ]
+  },
+  {
+    type: "function",
+    name: "allowedPaymentToken",
+    stateMutability: "view",
+    inputs: [{ name: "token", type: "address" }],
+    outputs: [{ name: "", type: "bool" }]
   }
 ] as const;
 
@@ -495,6 +516,22 @@ const marketplaceV2ReadAbi = [
   }
 ] as const;
 
+const marketplaceListedEvent = {
+  type: "event",
+  name: "Listed",
+  inputs: [
+    { indexed: true, name: "listingId", type: "uint256" },
+    { indexed: true, name: "seller", type: "address" },
+    { indexed: true, name: "nft", type: "address" },
+    { indexed: false, name: "tokenId", type: "uint256" },
+    { indexed: false, name: "amount", type: "uint256" },
+    { indexed: false, name: "standard", type: "string" },
+    { indexed: false, name: "paymentToken", type: "address" },
+    { indexed: false, name: "price", type: "uint256" },
+    { indexed: false, name: "expiresAt", type: "uint256" }
+  ]
+} as const;
+
 const marketplaceSaleEvent = {
   type: "event",
   name: "Sale",
@@ -555,10 +592,12 @@ const MARKETPLACE_V2_SYNC_TTL_MS = 30_000;
 let lastListingSyncAt = 0;
 let lastListingSyncCount = 0;
 let listingSyncPromise: Promise<void> | null = null;
-let lastMarketplaceV2SyncAt = 0;
+let lastMarketplaceV2ListingSyncAt = 0;
+let lastMarketplaceV2OfferSyncAt = 0;
 let lastMarketplaceV2ListingSyncCount = 0;
 let lastOfferSyncCount = 0;
-let marketplaceV2SyncPromise: Promise<void> | null = null;
+let marketplaceV2ListingSyncPromise: Promise<void> | null = null;
+let marketplaceV2OfferSyncPromise: Promise<void> | null = null;
 type ListingSnapshot = {
   listingId: string;
   amountRaw: string;
@@ -656,6 +695,48 @@ async function writePaymentTokenRecords(records: PaymentTokenRecord[]): Promise<
   await writeFile(PAYMENT_TOKEN_FILE, JSON.stringify(records, null, 2), "utf8");
 }
 
+async function hydratePaymentTokenRecords(
+  records: PaymentTokenRecord[],
+  config: RequestHandlerConfig
+): Promise<PaymentTokenApiRecord[]> {
+  if (records.length === 0) return [];
+  if (!config.registryAddress) {
+    return records.map((record) => ({ ...record, onchainAllowed: null }));
+  }
+
+  try {
+    const client = createPublicClient({
+      transport: http(config.rpcUrl)
+    });
+
+    const allowlistEntries = await Promise.all(
+      records.map(async (record) => {
+        try {
+          const allowed = (await client.readContract({
+            address: config.registryAddress as `0x${string}`,
+            abi: registryReadAbi,
+            functionName: "allowedPaymentToken",
+            args: [record.tokenAddress as `0x${string}`]
+          })) as boolean;
+          return [record.tokenAddress, allowed] as const;
+        } catch (err) {
+          log.warn({ err, tokenAddress: record.tokenAddress }, "Failed to read payment token allowlist state");
+          return [record.tokenAddress, null] as const;
+        }
+      })
+    );
+
+    const allowlistByToken = new Map<string, boolean | null>(allowlistEntries);
+    return records.map((record) => ({
+      ...record,
+      onchainAllowed: allowlistByToken.get(record.tokenAddress) ?? null
+    }));
+  } catch (err) {
+    log.warn({ err, registryAddress: config.registryAddress }, "Failed to hydrate payment token allowlist state");
+    return records.map((record) => ({ ...record, onchainAllowed: null }));
+  }
+}
+
 function tokenPresentationKey(contractAddress: string, tokenId: string): string {
   return `${contractAddress.toLowerCase()}:${tokenId}`;
 }
@@ -694,6 +775,72 @@ async function readTokenPresentationRecords(): Promise<TokenPresentationRecord[]
 async function writeTokenPresentationRecords(records: TokenPresentationRecord[]): Promise<void> {
   await mkdir(path.dirname(TOKEN_PRESENTATION_FILE), { recursive: true });
   await writeFile(TOKEN_PRESENTATION_FILE, JSON.stringify(records, null, 2), "utf8");
+}
+
+let marketplaceV2SyncStateCache: MarketplaceV2SyncStateRecord | null = null;
+let marketplaceV2SyncStateReadPromise: Promise<MarketplaceV2SyncStateRecord> | null = null;
+let marketplaceV2SyncStateWritePromise: Promise<MarketplaceV2SyncStateRecord> = Promise.resolve({
+  listingsLastBlock: null,
+  offersLastBlock: null,
+  updatedAt: null
+});
+
+async function readMarketplaceV2SyncState(): Promise<MarketplaceV2SyncStateRecord> {
+  if (marketplaceV2SyncStateCache) return marketplaceV2SyncStateCache;
+  if (marketplaceV2SyncStateReadPromise) return marketplaceV2SyncStateReadPromise;
+
+  marketplaceV2SyncStateReadPromise = (async () => {
+    try {
+      const raw = await readFile(MARKETPLACE_V2_SYNC_STATE_FILE, "utf8");
+      const parsed = JSON.parse(raw) as Partial<MarketplaceV2SyncStateRecord>;
+      marketplaceV2SyncStateCache = {
+        listingsLastBlock: typeof parsed.listingsLastBlock === "string" ? parsed.listingsLastBlock : null,
+        offersLastBlock: typeof parsed.offersLastBlock === "string" ? parsed.offersLastBlock : null,
+        updatedAt: typeof parsed.updatedAt === "string" ? parsed.updatedAt : null
+      };
+    } catch {
+      marketplaceV2SyncStateCache = {
+        listingsLastBlock: null,
+        offersLastBlock: null,
+        updatedAt: null
+      };
+    } finally {
+      marketplaceV2SyncStateReadPromise = null;
+    }
+
+    return marketplaceV2SyncStateCache;
+  })();
+
+  return marketplaceV2SyncStateReadPromise;
+}
+
+async function writeMarketplaceV2SyncState(
+  patch: Partial<Pick<MarketplaceV2SyncStateRecord, "listingsLastBlock" | "offersLastBlock">>
+): Promise<MarketplaceV2SyncStateRecord> {
+  marketplaceV2SyncStateWritePromise = marketplaceV2SyncStateWritePromise.then(async () => {
+    const current = await readMarketplaceV2SyncState();
+    const next: MarketplaceV2SyncStateRecord = {
+      listingsLastBlock: patch.listingsLastBlock ?? current.listingsLastBlock ?? null,
+      offersLastBlock: patch.offersLastBlock ?? current.offersLastBlock ?? null,
+      updatedAt: new Date().toISOString()
+    };
+    await mkdir(path.dirname(MARKETPLACE_V2_SYNC_STATE_FILE), { recursive: true });
+    await writeFile(MARKETPLACE_V2_SYNC_STATE_FILE, JSON.stringify(next, null, 2), "utf8");
+    marketplaceV2SyncStateCache = next;
+    return next;
+  });
+
+  return marketplaceV2SyncStateWritePromise;
+}
+
+function parseSyncStateBlock(value: string | null | undefined): bigint | null {
+  const normalized = String(value || "").trim();
+  if (!/^[0-9]+$/.test(normalized)) return null;
+  try {
+    return BigInt(normalized);
+  } catch {
+    return null;
+  }
 }
 
 async function readTokenPresentationIndex(): Promise<Map<string, TokenPresentationRecord>> {
@@ -803,6 +950,19 @@ function tokenListingSelect(enabled: boolean): Record<string, true> {
   };
 }
 
+function tokenHoldingSelect(enabled: boolean): Record<string, unknown> {
+  return enabled
+    ? {
+        holdings: {
+          select: {
+            ownerAddress: true,
+            quantityRaw: true
+          }
+        }
+      }
+    : {};
+}
+
 function normalizePublicListingId(value: string | null | undefined): string {
   const raw = String(value || "").trim();
   if (!raw) return "";
@@ -818,9 +978,16 @@ function getMarketplaceAddressForVersion(
     : config.marketplaceAddress || null;
 }
 
-function pickPrimaryActiveListing(rows: any[] | null | undefined): any | null {
+function pickPrimaryActiveListing(
+  rows: any[] | null | undefined,
+  config?: Pick<RequestHandlerConfig, "marketplaceV2Address">
+): any | null {
   if (!Array.isArray(rows) || rows.length === 0) return null;
-  return [...rows].sort((a, b) => {
+  const filteredRows = config?.marketplaceV2Address
+    ? rows.filter((row) => String(row?.marketplaceVersion || "v1").toLowerCase() === "v2")
+    : rows;
+  if (filteredRows.length === 0) return null;
+  return [...filteredRows].sort((a, b) => {
     const aVersion = String(a?.marketplaceVersion || "v1").toLowerCase();
     const bVersion = String(b?.marketplaceVersion || "v1").toLowerCase();
     if (aVersion !== bVersion) {
@@ -880,6 +1047,66 @@ function toBigIntOrZero(value: unknown): bigint {
   } catch {
     return 0n;
   }
+}
+
+function getTokenCurrentOwnerEntries(item: any): Array<{ ownerAddress: string; quantity: bigint }> {
+  const standard = String(item?.collection?.standard || "").trim().toUpperCase();
+  if (standard !== "ERC1155" || !Array.isArray(item?.holdings)) {
+    return [];
+  }
+
+  const deduped = new Map<string, bigint>();
+  for (const entry of item.holdings as Array<{ ownerAddress?: string | null; quantityRaw?: string | null }>) {
+    const ownerAddress = String(entry?.ownerAddress || "").trim().toLowerCase();
+    const quantityRaw = sanitizeMintedAmountRaw(entry?.quantityRaw);
+    if (!isAddress(ownerAddress) || !quantityRaw) continue;
+    deduped.set(ownerAddress, BigInt(quantityRaw));
+  }
+
+  return Array.from(deduped.entries()).map(([ownerAddress, quantity]) => ({ ownerAddress, quantity }));
+}
+
+function resolveTokenOwnerState(item: any): {
+  ownerAddress: string;
+  currentOwnerAddress: string | null;
+  currentOwnerAddresses: string[];
+} {
+  const fallbackOwnerAddress = String(item?.ownerAddress || "").trim().toLowerCase();
+  const currentOwnerEntries = getTokenCurrentOwnerEntries(item);
+
+  if (currentOwnerEntries.length === 0) {
+    return {
+      ownerAddress: fallbackOwnerAddress,
+      currentOwnerAddress: isAddress(fallbackOwnerAddress) ? fallbackOwnerAddress : null,
+      currentOwnerAddresses: isAddress(fallbackOwnerAddress) ? [fallbackOwnerAddress] : []
+    };
+  }
+
+  let primaryOwner = currentOwnerEntries[0];
+  for (const entry of currentOwnerEntries.slice(1)) {
+    if (entry.quantity > primaryOwner.quantity) {
+      primaryOwner = entry;
+      continue;
+    }
+    if (entry.quantity === primaryOwner.quantity) {
+      if (entry.ownerAddress === fallbackOwnerAddress && primaryOwner.ownerAddress !== fallbackOwnerAddress) {
+        primaryOwner = entry;
+        continue;
+      }
+      if (
+        primaryOwner.ownerAddress !== fallbackOwnerAddress &&
+        entry.ownerAddress.localeCompare(primaryOwner.ownerAddress) < 0
+      ) {
+        primaryOwner = entry;
+      }
+    }
+  }
+
+  return {
+    ownerAddress: primaryOwner.ownerAddress,
+    currentOwnerAddress: primaryOwner.ownerAddress,
+    currentOwnerAddresses: currentOwnerEntries.map((entry) => entry.ownerAddress)
+  };
 }
 
 function normalizeProfileInput(name: string, source: ProfileLinkSource): { slug: string; fullName: string } | null {
@@ -1065,10 +1292,33 @@ function buildGatewayUrl(cidLike: string | null | undefined): string | null {
   return value;
 }
 
-function getPublicActiveListingWhere(includeListingV2 = true): Record<string, unknown> {
+function getPreferredPublicMarketplaceVersion(
+  includeListingV2: boolean,
+  config?: Pick<RequestHandlerConfig, "marketplaceV2Address">
+): "v1" | "v2" | null {
+  if (!includeListingV2) return null;
+  return config?.marketplaceV2Address ? "v2" : "v1";
+}
+
+function getPublicActiveListingWhere(
+  includeListingV2 = true,
+  config?: Pick<RequestHandlerConfig, "marketplaceV2Address">
+): Record<string, unknown> {
+  const preferredVersion = getPreferredPublicMarketplaceVersion(includeListingV2, config);
   return {
     active: true,
-    ...(includeListingV2 ? { marketplaceVersion: "v1" } : {})
+    ...(preferredVersion ? { marketplaceVersion: preferredVersion } : {})
+  };
+}
+
+function getPublicTokenListingsWhere(
+  includeListingV2: boolean,
+  config: Pick<RequestHandlerConfig, "marketplaceV2Address">,
+  sellerAddress?: string
+): Record<string, unknown> {
+  return {
+    ...getPublicActiveListingWhere(includeListingV2, config),
+    ...(sellerAddress ? { sellerAddress } : {})
   };
 }
 
@@ -1096,6 +1346,15 @@ function resolveListingRecordId(input: {
   return String(input.marketplaceVersion || "v1").toLowerCase() === "v2"
     ? getListingRecordId("v2", normalizedId)
     : normalizedId;
+}
+
+function normalizeMarketplaceVersion(
+  listingRecordId: string | null | undefined,
+  marketplaceVersion: string | null | undefined
+): "v1" | "v2" {
+  return String(marketplaceVersion || (String(listingRecordId || "").startsWith("v2:") ? "v2" : "v1")).toLowerCase() === "v2"
+    ? "v2"
+    : "v1";
 }
 
 type OfferApiShape = {
@@ -1129,21 +1388,11 @@ function tokenMarketKey(collectionAddress: string | null | undefined, tokenId: s
 }
 
 function toOfferApiShape(item: any): OfferApiShape {
-  const holdingOwners = Array.isArray(item.token?.holdings)
-    ? (item.token.holdings as Array<{ ownerAddress: string | null; quantityRaw?: string | null }>)
-        .map((entry) => {
-          const ownerAddress = String(entry.ownerAddress || "").trim().toLowerCase();
-          return isAddress(ownerAddress) && sanitizeMintedAmountRaw(entry.quantityRaw) ? ownerAddress : null;
-        })
-        .filter((entry: string | null): entry is string => Boolean(entry))
-    : [];
-  const currentOwnerAddresses =
-    holdingOwners.length > 0
-      ? holdingOwners
-      : (() => {
-          const ownerAddress = String(item.token?.ownerAddress || "").trim().toLowerCase();
-          return isAddress(ownerAddress) ? [ownerAddress] : [];
-        })();
+  const ownerState = resolveTokenOwnerState({
+    ownerAddress: item.token?.ownerAddress,
+    holdings: item.token?.holdings,
+    collection: item.token?.collection
+  });
   return {
     id: item.id,
     offerId: item.offerId,
@@ -1152,8 +1401,8 @@ function toOfferApiShape(item: any): OfferApiShape {
     collectionAddress: item.collectionAddress,
     tokenId: item.tokenId,
     standard: String(item.standard || item.token?.collection?.standard || "").trim() || "UNKNOWN",
-    currentOwnerAddress: currentOwnerAddresses[0] || null,
-    currentOwnerAddresses,
+    currentOwnerAddress: ownerState.currentOwnerAddress,
+    currentOwnerAddresses: ownerState.currentOwnerAddresses,
     buyerAddress: item.buyerAddress,
     paymentToken: item.paymentToken,
     quantityRaw: item.quantityRaw,
@@ -1294,11 +1543,14 @@ function toTokenApiShape(
   config: RequestHandlerConfig,
   presentationIndex?: Map<string, TokenPresentationRecord>
 ) {
+  const ownerState = resolveTokenOwnerState(item);
   return withTokenPresentation({
     id: item.id,
     tokenId: item.tokenId,
     creatorAddress: item.creatorAddress,
-    ownerAddress: item.ownerAddress,
+    ownerAddress: ownerState.ownerAddress,
+    currentOwnerAddress: ownerState.currentOwnerAddress,
+    currentOwnerAddresses: ownerState.currentOwnerAddresses,
     mintTxHash: item.mintTxHash || null,
     draftName: item.draftName || null,
     draftDescription: item.draftDescription || null,
@@ -1311,7 +1563,7 @@ function toTokenApiShape(
     mintedAt: item.mintedAt,
     bestOffer: null,
     offerCount: 0,
-    activeListing: toActiveListingApiShape(pickPrimaryActiveListing(item.listings), config)
+    activeListing: toActiveListingApiShape(pickPrimaryActiveListing(item.listings, config), config)
   }, item.collection?.contractAddress, presentationIndex);
 }
 
@@ -1357,13 +1609,14 @@ function getOwnerScopedActiveListings(item: any, ownerAddress: string): any[] {
 
 function getOwnerScopedListingAvailability(
   item: any,
-  ownerAddress: string
+  ownerAddress: string,
+  config: RequestHandlerConfig
 ): { activeListing: any | null; reservedAmountRaw: string | null; availableAmountRaw: string | null } {
   const standard = String(item?.collection?.standard || "").trim().toUpperCase();
   const heldAmountRaw = resolveOwnedTokenHeldAmountRaw(item, ownerAddress);
   const heldAmount = heldAmountRaw ? BigInt(heldAmountRaw) : null;
   const ownerListings = getOwnerScopedActiveListings(item, ownerAddress);
-  const activeListing = pickPrimaryActiveListing(ownerListings);
+  const activeListing = pickPrimaryActiveListing(ownerListings, config);
 
   if (standard === "ERC721") {
     const reservedAmountRaw = activeListing ? "1" : "0";
@@ -1417,12 +1670,15 @@ function toOwnerHoldingApiShape(
   presentationIndex?: Map<string, TokenPresentationRecord>
 ) {
   const normalizedOwner = String(ownerAddress || "").trim().toLowerCase();
-  const { activeListing, reservedAmountRaw, availableAmountRaw } = getOwnerScopedListingAvailability(item, normalizedOwner);
+  const ownerState = resolveTokenOwnerState(item);
+  const { activeListing, reservedAmountRaw, availableAmountRaw } = getOwnerScopedListingAvailability(item, normalizedOwner, config);
   return withTokenPresentation({
     id: item.id,
     tokenId: item.tokenId,
     creatorAddress: item.creatorAddress,
     ownerAddress: normalizedOwner,
+    currentOwnerAddress: ownerState.currentOwnerAddress,
+    currentOwnerAddresses: ownerState.currentOwnerAddresses,
     heldAmountRaw: resolveOwnedTokenHeldAmountRaw(item, normalizedOwner),
     reservedAmountRaw,
     availableAmountRaw,
@@ -1463,6 +1719,7 @@ function toListingApiShape(
 ) {
   const token = item.token || null;
   const collection = token?.collection || null;
+  const tokenOwnerState = token ? resolveTokenOwnerState({ ...token, collection }) : null;
   const snapshot = listingSnapshotCache.get(String(item.listingId || ""));
   const listingRecordId = String(item.listingId || "");
   const listingId = normalizePublicListingId(listingRecordId);
@@ -1495,7 +1752,9 @@ function toListingApiShape(
           id: token.id,
           tokenId: item.tokenId,
           creatorAddress: token.creatorAddress,
-          ownerAddress: token.ownerAddress,
+          ownerAddress: tokenOwnerState?.ownerAddress || token.ownerAddress,
+          currentOwnerAddress: tokenOwnerState?.currentOwnerAddress || null,
+          currentOwnerAddresses: tokenOwnerState?.currentOwnerAddresses || [],
           mintTxHash: token.mintTxHash || null,
           draftName: token.draftName || null,
           draftDescription: token.draftDescription || null,
@@ -1508,7 +1767,7 @@ function toListingApiShape(
           mintedAt: token.mintedAt,
           bestOffer: null,
           offerCount: 0,
-          activeListing: toActiveListingApiShape(pickPrimaryActiveListing(token.listings), config),
+          activeListing: toActiveListingApiShape(pickPrimaryActiveListing(token.listings, config), config),
           collection: collection
             ? {
                 chainId: collection.chainId,
@@ -1526,6 +1785,89 @@ function toListingApiShape(
         }, collection?.contractAddress, presentationIndex)
       : null
   };
+}
+
+async function readListingApiShapesByRecordId(
+  listingRecordIds: Array<string | null | undefined>,
+  deps: IndexerDeps,
+  config: RequestHandlerConfig
+): Promise<Map<string, ReturnType<typeof toListingApiShape>>> {
+  const normalizedRecordIds = Array.from(
+    new Set(
+      listingRecordIds
+        .map((value) => String(value || "").trim())
+        .filter(Boolean)
+    )
+  );
+  if (normalizedRecordIds.length === 0) {
+    return new Map();
+  }
+
+  const [includeMintTxHash, includeTokenPresentation, includeListingV2, includeTokenHoldings] = await Promise.all([
+    hasMintTxHashColumn(deps),
+    hasTokenPresentationColumns(deps),
+    hasListingV2Columns(deps),
+    hasTokenHoldingTable(deps)
+  ]);
+  const presentationIndex = await readTokenPresentationIndex();
+
+  const rows = await deps.prisma.listing.findMany({
+    where: {
+      listingId: {
+        in: normalizedRecordIds
+      }
+    },
+    select: {
+      listingId: true,
+      sellerAddress: true,
+      collectionAddress: true,
+      tokenId: true,
+      ...listingV2Select(includeListingV2),
+      paymentToken: true,
+      priceRaw: true,
+      active: true,
+      createdAt: true,
+      updatedAt: true,
+      token: {
+        select: {
+          id: true,
+          creatorAddress: true,
+          ownerAddress: true,
+          ...tokenHoldingSelect(includeTokenHoldings),
+          metadataCid: true,
+          mediaCid: true,
+          immutable: true,
+          mintedAt: true,
+          ...(includeMintTxHash ? { mintTxHash: true } : {}),
+          ...tokenPresentationSelect(includeTokenPresentation),
+          collection: {
+            select: {
+              chainId: true,
+              contractAddress: true,
+              ownerAddress: true,
+              ensSubname: true,
+              standard: true,
+              isFactoryCreated: true,
+              isUpgradeable: true,
+              finalizedAt: true,
+              createdAt: true,
+              updatedAt: true
+            }
+          },
+          listings: {
+            where: getPublicTokenListingsWhere(includeListingV2, config),
+            take: includeListingV2 ? 5 : 1,
+            orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+            select: tokenListingSelect(includeListingV2)
+          }
+        }
+      }
+    }
+  });
+
+  return new Map(
+    rows.map((item: any) => [String(item.listingId || "").trim(), toListingApiShape(item, config, presentationIndex)])
+  );
 }
 
 const schemaAvailabilityCache = new Map<string, boolean>();
@@ -1626,6 +1968,22 @@ async function hasTokenHoldingTable(deps: IndexerDeps): Promise<boolean> {
   return hasSchemaTable(deps, "TokenHolding");
 }
 
+async function hasModerationReportListingColumns(deps: IndexerDeps): Promise<boolean> {
+  const [listingRecordId, marketplaceVersion] = await Promise.all([
+    hasSchemaColumn(deps, "Report", "listingRecordId"),
+    hasSchemaColumn(deps, "Report", "marketplaceVersion")
+  ]);
+  return listingRecordId && marketplaceVersion;
+}
+
+async function hasModerationActionListingColumns(deps: IndexerDeps): Promise<boolean> {
+  const [listingRecordId, marketplaceVersion] = await Promise.all([
+    hasSchemaColumn(deps, "ModerationAction", "listingRecordId"),
+    hasSchemaColumn(deps, "ModerationAction", "marketplaceVersion")
+  ]);
+  return listingRecordId && marketplaceVersion;
+}
+
 async function syncIndexedTokenHolding(
   deps: IndexerDeps,
   tokenRefId: string,
@@ -1710,49 +2068,31 @@ async function syncIndexedTokenHolding(
   }
 }
 
-async function clearIndexedCollectionHoldingsForOwner(
+async function replaceIndexedTokenHoldings(
   deps: IndexerDeps,
-  contractAddress: string,
-  ownerAddress: string,
-  retainedTokenIds: Set<string>
+  tokenRefId: string,
+  standard: string,
+  holdings: Array<{ ownerAddress: string; quantityRaw: string }>
 ): Promise<void> {
   if (!(await hasTokenHoldingTable(deps))) return;
 
   const tokenHoldingDelegate = (deps.prisma as any).tokenHolding;
-  const tokenDelegate = (deps.prisma.token as any);
-  if (!tokenHoldingDelegate || typeof tokenHoldingDelegate.deleteMany !== "function" || !tokenDelegate || typeof tokenDelegate.findMany !== "function") {
+  if (!tokenHoldingDelegate || typeof tokenHoldingDelegate.deleteMany !== "function") {
     return;
   }
 
   try {
-    const collectionTokens = await tokenDelegate.findMany({
-      where: {
-        collection: {
-          is: {
-            contractAddress
-          }
-        }
-      },
-      select: {
-        id: true,
-        tokenId: true
-      }
-    });
-
-    const staleTokenRefIds = (collectionTokens as Array<{ id: string; tokenId: string }>)
-      .filter((item) => !retainedTokenIds.has(item.tokenId))
-      .map((item) => item.id);
-
-    if (staleTokenRefIds.length === 0) return;
-
     await tokenHoldingDelegate.deleteMany({
       where: {
-        ownerAddress,
-        tokenId: { in: staleTokenRefIds }
+        tokenId: tokenRefId
       }
     });
   } catch {
-    // Ignore pruning failures. The next owner sync can correct stale holding rows.
+    return;
+  }
+
+  for (const holding of holdings) {
+    await syncIndexedTokenHolding(deps, tokenRefId, holding.ownerAddress, holding.quantityRaw, standard);
   }
 }
 
@@ -1779,18 +2119,17 @@ async function applyAcceptedOfferOwnership(
   const quantityRaw = sanitizeMintedAmountRaw(params.quantityRaw);
   if (!isAddress(buyerAddress) || !isAddress(sellerAddress)) return;
 
-  try {
-    await tokenDelegate.update({
-      where: { id: tokenRefId },
-      data: {
-        ownerAddress: buyerAddress
-      }
-    });
-  } catch {
-    // Ignore ownership mirror failures if the token row is not writable in this runtime.
-  }
-
   if (standard === "ERC721") {
+    try {
+      await tokenDelegate.update({
+        where: { id: tokenRefId },
+        data: {
+          ownerAddress: buyerAddress
+        }
+      });
+    } catch {
+      // Ignore ownership mirror failures if the token row is not writable in this runtime.
+    }
     await syncIndexedTokenHolding(deps, tokenRefId, buyerAddress, "1", "ERC721");
     return;
   }
@@ -1832,6 +2171,46 @@ async function applyAcceptedOfferOwnership(
 
     const nextBuyerQuantity = (buyerHolding?.quantityRaw ? BigInt(String(buyerHolding.quantityRaw)) : 0n) + transferAmount;
     await syncIndexedTokenHolding(deps, tokenRefId, buyerAddress, nextBuyerQuantity.toString(), "ERC1155");
+
+    let primaryOwnerAddress = nextSellerQuantity > 0n ? sellerAddress : buyerAddress;
+    if (typeof tokenHoldingDelegate.findMany === "function") {
+      const holdings = (await tokenHoldingDelegate.findMany({
+        where: {
+          tokenId: tokenRefId
+        },
+        select: {
+          ownerAddress: true,
+          quantityRaw: true
+        }
+      })) as Array<{ ownerAddress?: string | null; quantityRaw?: string | null }>;
+
+      for (const holding of holdings) {
+        const ownerAddress = String(holding.ownerAddress || "").trim().toLowerCase();
+        const normalizedQuantity = sanitizeMintedAmountRaw(holding.quantityRaw);
+        if (!isAddress(ownerAddress) || !normalizedQuantity) continue;
+        const quantity = BigInt(normalizedQuantity);
+        const primaryQuantity = sanitizeMintedAmountRaw(
+          holdings.find((entry) => String(entry.ownerAddress || "").trim().toLowerCase() === primaryOwnerAddress)?.quantityRaw
+        );
+        const currentPrimaryQuantity = primaryQuantity ? BigInt(primaryQuantity) : 0n;
+
+        if (
+          quantity > currentPrimaryQuantity ||
+          (quantity === currentPrimaryQuantity &&
+            primaryOwnerAddress !== sellerAddress &&
+            ownerAddress === sellerAddress)
+        ) {
+          primaryOwnerAddress = ownerAddress;
+        }
+      }
+    }
+
+    await tokenDelegate.update({
+      where: { id: tokenRefId },
+      data: {
+        ownerAddress: primaryOwnerAddress
+      }
+    });
   } catch {
     // Ignore settlement-holding failures. A later owner backfill can correct them.
   }
@@ -2142,10 +2521,32 @@ async function syncMarketplaceListingsIfStale(
   await listingSyncPromise;
 }
 
-async function syncMarketplaceV2Listings(
+async function expireMarketplaceV2Listings(
   deps: IndexerDeps,
   config: RequestHandlerConfig,
-  client: ReturnType<typeof createPublicClient>
+  currentUnix: bigint
+): Promise<void> {
+  const listingDelegate = (deps.prisma as any).listing;
+  if (!listingDelegate || typeof listingDelegate.updateMany !== "function") return;
+  await listingDelegate.updateMany({
+    where: {
+      chainId: config.chainId,
+      marketplaceVersion: "v2",
+      active: true,
+      expiresAtRaw: { lte: currentUnix.toString() }
+    },
+    data: {
+      active: false,
+      lastSyncedAt: new Date()
+    }
+  });
+}
+
+async function fullSyncMarketplaceV2Listings(
+  deps: IndexerDeps,
+  config: RequestHandlerConfig,
+  client: ReturnType<typeof createPublicClient>,
+  currentBlock?: bigint
 ): Promise<number> {
   if (!config.marketplaceV2Address) return 0;
   if (!(await hasListingV2Columns(deps))) return 0;
@@ -2251,13 +2652,216 @@ async function syncMarketplaceV2Listings(
     }
   });
 
+  await writeMarketplaceV2SyncState({
+    listingsLastBlock: String(currentBlock ?? (await client.getBlockNumber()))
+  });
+
   return activeListingIds.size;
 }
 
-async function syncMarketplaceV2Offers(
+async function syncMarketplaceV2Listings(
   deps: IndexerDeps,
   config: RequestHandlerConfig,
-  client: ReturnType<typeof createPublicClient>
+  client: ReturnType<typeof createPublicClient>,
+  force = false
+): Promise<number> {
+  if (!config.marketplaceV2Address) return 0;
+  if (!(await hasListingV2Columns(deps))) return 0;
+
+  const currentBlock = await client.getBlockNumber();
+  const syncState = await readMarketplaceV2SyncState();
+  const lastSyncedBlock = parseSyncStateBlock(syncState.listingsLastBlock);
+  if (force || lastSyncedBlock === null) {
+    return fullSyncMarketplaceV2Listings(deps, config, client, currentBlock);
+  }
+
+  const fromBlock = lastSyncedBlock + 1n;
+  const currentUnix = BigInt(Math.floor(Date.now() / 1000));
+  if (fromBlock > currentBlock) {
+    await expireMarketplaceV2Listings(deps, config, currentUnix);
+    await writeMarketplaceV2SyncState({ listingsLastBlock: String(currentBlock) });
+    return 0;
+  }
+
+  const [listedLogs, cancelledLogs, saleLogs] = await Promise.all([
+    getLogsChunked(client, {
+      address: config.marketplaceV2Address as `0x${string}`,
+      event: marketplaceListedEvent,
+      fromBlock,
+      toBlock: currentBlock
+    }),
+    getLogsChunked(client, {
+      address: config.marketplaceV2Address as `0x${string}`,
+      event: marketplaceCancelledEvent,
+      fromBlock,
+      toBlock: currentBlock
+    }),
+    getLogsChunked(client, {
+      address: config.marketplaceV2Address as `0x${string}`,
+      event: marketplaceSaleEvent,
+      fromBlock,
+      toBlock: currentBlock
+    })
+  ]);
+
+  const affectedListingIds = new Set<number>();
+  const listedById = new Map<string, { txHash: string }>();
+  const cancelledById = new Map<string, { txHash: string }>();
+  const soldById = new Map<string, { buyerAddress: string; txHash: string }>();
+
+  for (const logEntry of listedLogs) {
+    const listingId = Number(logEntry.args.listingId);
+    if (!Number.isFinite(listingId)) continue;
+    affectedListingIds.add(listingId);
+    listedById.set(String(listingId), { txHash: logEntry.transactionHash });
+  }
+  for (const logEntry of cancelledLogs) {
+    const listingId = Number(logEntry.args.listingId);
+    if (!Number.isFinite(listingId)) continue;
+    affectedListingIds.add(listingId);
+    cancelledById.set(String(listingId), { txHash: logEntry.transactionHash });
+  }
+  for (const logEntry of saleLogs) {
+    const listingId = Number(logEntry.args.listingId);
+    const buyerAddress = String(logEntry.args.buyer || "").toLowerCase();
+    if (!Number.isFinite(listingId) || !isAddress(buyerAddress)) continue;
+    affectedListingIds.add(listingId);
+    soldById.set(String(listingId), { buyerAddress, txHash: logEntry.transactionHash });
+  }
+
+  if (affectedListingIds.size === 0) {
+    await expireMarketplaceV2Listings(deps, config, currentUnix);
+    await writeMarketplaceV2SyncState({ listingsLastBlock: String(currentBlock) });
+    return 0;
+  }
+
+  const listingIds = Array.from(affectedListingIds.values()).sort((a, b) => a - b);
+  for (let offset = 0; offset < listingIds.length; offset += LISTING_SYNC_BATCH_SIZE) {
+    const batchIds = listingIds.slice(offset, offset + LISTING_SYNC_BATCH_SIZE);
+    const rows = (await Promise.all(
+      batchIds.map((id) =>
+        client.readContract({
+          address: config.marketplaceV2Address as `0x${string}`,
+          abi: marketplaceReadAbi,
+          functionName: "listings",
+          args: [BigInt(id)]
+        })
+      )
+    )) as readonly (readonly [`0x${string}`, `0x${string}`, bigint, bigint, string, `0x${string}`, bigint, bigint, boolean])[];
+
+    await Promise.all(
+      rows.map(async (row, index) => {
+        const numericListingId = batchIds[index];
+        const listingId = getListingRecordId("v2", numericListingId);
+        const logKey = String(numericListingId);
+        const syncedAt = new Date();
+        const amountRaw = row[3].toString();
+        const standard = String(row[4] || "UNKNOWN").trim().toUpperCase() || "UNKNOWN";
+        const expiresAtRaw = row[7].toString();
+        const isActive = row[8] && row[7] > currentUnix;
+        const collectionAddress = row[1].toLowerCase();
+        const tokenId = row[2].toString();
+        const tokenRefId = await findTokenRefIdForAsset(collectionAddress, tokenId, deps);
+        const cancelled = cancelledById.get(logKey);
+        const sold = soldById.get(logKey);
+        const listed = listedById.get(logKey);
+
+        await deps.prisma.listing.upsert({
+          where: { listingId },
+          update: {
+            chainId: config.chainId,
+            marketplaceVersion: "v2",
+            collectionAddress,
+            tokenId,
+            sellerAddress: row[0].toLowerCase(),
+            amountRaw,
+            standard,
+            paymentToken: row[5].toLowerCase(),
+            priceRaw: row[6].toString(),
+            expiresAtRaw,
+            active: isActive,
+            tokenRefId,
+            lastSyncedAt: syncedAt,
+            ...(sold
+              ? {
+                  buyerAddress: sold.buyerAddress,
+                  soldAt: syncedAt,
+                  cancelledAt: null,
+                  txHash: sold.txHash
+                }
+              : cancelled
+                ? {
+                    buyerAddress: null,
+                    soldAt: null,
+                    cancelledAt: syncedAt,
+                    txHash: cancelled.txHash
+                  }
+                : listed
+                  ? {
+                      buyerAddress: null,
+                      soldAt: null,
+                      cancelledAt: null,
+                      txHash: listed.txHash
+                    }
+                  : {})
+          },
+          create: {
+            listingId,
+            chainId: config.chainId,
+            marketplaceVersion: "v2",
+            collectionAddress,
+            tokenId,
+            sellerAddress: row[0].toLowerCase(),
+            amountRaw,
+            standard,
+            paymentToken: row[5].toLowerCase(),
+            priceRaw: row[6].toString(),
+            expiresAtRaw,
+            active: isActive,
+            tokenRefId,
+            lastSyncedAt: syncedAt,
+            buyerAddress: sold?.buyerAddress || null,
+            soldAt: sold ? syncedAt : null,
+            cancelledAt: cancelled ? syncedAt : null,
+            txHash: sold?.txHash || cancelled?.txHash || listed?.txHash || null
+          }
+        });
+      })
+    );
+  }
+
+  await expireMarketplaceV2Listings(deps, config, currentUnix);
+  await writeMarketplaceV2SyncState({ listingsLastBlock: String(currentBlock) });
+  return listingIds.length;
+}
+
+async function expireMarketplaceV2Offers(
+  deps: IndexerDeps,
+  config: RequestHandlerConfig,
+  currentUnix: bigint
+): Promise<void> {
+  const offerDelegate = (deps.prisma as any).offer;
+  if (!offerDelegate || typeof offerDelegate.updateMany !== "function") return;
+  await offerDelegate.updateMany({
+    where: {
+      chainId: config.chainId,
+      marketplaceVersion: "v2",
+      active: true,
+      expiresAtRaw: { lte: currentUnix.toString() }
+    },
+    data: {
+      active: false,
+      status: "expired",
+      lastSyncedAt: new Date()
+    }
+  });
+}
+
+async function fullSyncMarketplaceV2Offers(
+  deps: IndexerDeps,
+  config: RequestHandlerConfig,
+  client: ReturnType<typeof createPublicClient>,
+  currentBlock?: bigint
 ): Promise<number> {
   if (!config.marketplaceV2Address) return 0;
   if (!(await hasOfferTable(deps))) return 0;
@@ -2408,7 +3012,199 @@ async function syncMarketplaceV2Offers(
     );
   }
 
+  await writeMarketplaceV2SyncState({
+    offersLastBlock: String(currentBlock ?? (await client.getBlockNumber()))
+  });
+
   return Number(nextOfferId);
+}
+
+async function syncMarketplaceV2Offers(
+  deps: IndexerDeps,
+  config: RequestHandlerConfig,
+  client: ReturnType<typeof createPublicClient>,
+  force = false
+): Promise<number> {
+  if (!config.marketplaceV2Address) return 0;
+  if (!(await hasOfferTable(deps))) return 0;
+
+  const offerDelegate = (deps.prisma as any).offer;
+  if (!offerDelegate || typeof offerDelegate.upsert !== "function") return 0;
+
+  const currentBlock = await client.getBlockNumber();
+  const syncState = await readMarketplaceV2SyncState();
+  const lastSyncedBlock = parseSyncStateBlock(syncState.offersLastBlock);
+  if (force || lastSyncedBlock === null) {
+    return fullSyncMarketplaceV2Offers(deps, config, client, currentBlock);
+  }
+
+  const fromBlock = lastSyncedBlock + 1n;
+  const currentUnix = BigInt(Math.floor(Date.now() / 1000));
+  if (fromBlock > currentBlock) {
+    await expireMarketplaceV2Offers(deps, config, currentUnix);
+    await writeMarketplaceV2SyncState({ offersLastBlock: String(currentBlock) });
+    return 0;
+  }
+
+  const [createdLogs, cancelledLogs, acceptedLogs] = await Promise.all([
+    getLogsChunked(client, {
+      address: config.marketplaceV2Address as `0x${string}`,
+      event: marketplaceOfferCreatedEvent,
+      fromBlock,
+      toBlock: currentBlock
+    }),
+    getLogsChunked(client, {
+      address: config.marketplaceV2Address as `0x${string}`,
+      event: marketplaceOfferCancelledEvent,
+      fromBlock,
+      toBlock: currentBlock
+    }),
+    getLogsChunked(client, {
+      address: config.marketplaceV2Address as `0x${string}`,
+      event: marketplaceOfferAcceptedEvent,
+      fromBlock,
+      toBlock: currentBlock
+    })
+  ]);
+
+  const affectedOfferIds = new Set<number>();
+  const cancelledByOfferId = new Map<string, { txHash: string }>();
+  const acceptedByOfferId = new Map<string, { sellerAddress: string; buyerAddress: string; quantityRaw: string; txHash: string }>();
+
+  for (const logEntry of createdLogs) {
+    const offerId = Number(logEntry.args.offerId);
+    if (!Number.isFinite(offerId)) continue;
+    affectedOfferIds.add(offerId);
+  }
+  for (const logEntry of cancelledLogs) {
+    const offerId = Number(logEntry.args.offerId);
+    if (!Number.isFinite(offerId)) continue;
+    affectedOfferIds.add(offerId);
+    cancelledByOfferId.set(String(offerId), { txHash: logEntry.transactionHash });
+  }
+  for (const logEntry of acceptedLogs) {
+    const offerId = Number(logEntry.args.offerId);
+    const sellerAddress = String(logEntry.args.seller || "").toLowerCase();
+    const buyerAddress = String(logEntry.args.buyer || "").toLowerCase();
+    const quantityRaw = logEntry.args.quantity?.toString() || "";
+    if (!Number.isFinite(offerId) || !isAddress(sellerAddress) || !isAddress(buyerAddress) || !sanitizeMintedAmountRaw(quantityRaw)) {
+      continue;
+    }
+    affectedOfferIds.add(offerId);
+    acceptedByOfferId.set(String(offerId), {
+      sellerAddress,
+      buyerAddress,
+      quantityRaw,
+      txHash: logEntry.transactionHash
+    });
+  }
+
+  if (affectedOfferIds.size === 0) {
+    await expireMarketplaceV2Offers(deps, config, currentUnix);
+    await writeMarketplaceV2SyncState({ offersLastBlock: String(currentBlock) });
+    return 0;
+  }
+
+  const offerIds = Array.from(affectedOfferIds.values()).sort((a, b) => a - b);
+  for (let offset = 0; offset < offerIds.length; offset += LISTING_SYNC_BATCH_SIZE) {
+    const batchIds = offerIds.slice(offset, offset + LISTING_SYNC_BATCH_SIZE);
+    const rows = (await Promise.all(
+      batchIds.map((id) =>
+        client.readContract({
+          address: config.marketplaceV2Address as `0x${string}`,
+          abi: marketplaceV2ReadAbi,
+          functionName: "offers",
+          args: [BigInt(id)]
+        })
+      )
+    )) as readonly (readonly [`0x${string}`, `0x${string}`, bigint, bigint, string, `0x${string}`, bigint, bigint, boolean])[];
+
+    await Promise.all(
+      rows.map(async (row, index) => {
+        const offerId = String(batchIds[index]);
+        const syncedAt = new Date();
+        const collectionAddress = row[1].toLowerCase();
+        const tokenId = row[2].toString();
+        const accepted = acceptedByOfferId.get(offerId);
+        const cancelled = cancelledByOfferId.get(offerId);
+        const expiresAtRaw = row[7].toString();
+        const expired = row[7] <= currentUnix;
+        const active = Boolean(row[8]) && !expired && !accepted && !cancelled;
+        const status = accepted
+          ? "accepted"
+          : cancelled
+            ? "cancelled"
+            : expired
+              ? "expired"
+              : active
+                ? "active"
+                : "inactive";
+        const tokenRefId = await findTokenRefIdForAsset(collectionAddress, tokenId, deps);
+        const previousOffer = typeof offerDelegate.findUnique === "function"
+          ? await offerDelegate.findUnique({
+              where: { offerId },
+              select: { acceptedTxHash: true }
+            })
+          : null;
+
+        await offerDelegate.upsert({
+          where: { offerId },
+          update: {
+            chainId: config.chainId,
+            marketplaceVersion: "v2",
+            collectionAddress,
+            tokenId,
+            buyerAddress: row[0].toLowerCase(),
+            paymentToken: row[5].toLowerCase(),
+            quantityRaw: row[3].toString(),
+            priceRaw: row[6].toString(),
+            expiresAtRaw,
+            status,
+            active,
+            acceptedByAddress: accepted?.sellerAddress || null,
+            acceptedSellerAddress: accepted?.sellerAddress || null,
+            acceptedTxHash: accepted?.txHash || null,
+            cancelledTxHash: cancelled?.txHash || null,
+            tokenRefId,
+            lastSyncedAt: syncedAt
+          },
+          create: {
+            offerId,
+            chainId: config.chainId,
+            marketplaceVersion: "v2",
+            collectionAddress,
+            tokenId,
+            buyerAddress: row[0].toLowerCase(),
+            paymentToken: row[5].toLowerCase(),
+            quantityRaw: row[3].toString(),
+            priceRaw: row[6].toString(),
+            expiresAtRaw,
+            status,
+            active,
+            acceptedByAddress: accepted?.sellerAddress || null,
+            acceptedSellerAddress: accepted?.sellerAddress || null,
+            acceptedTxHash: accepted?.txHash || null,
+            cancelledTxHash: cancelled?.txHash || null,
+            tokenRefId,
+            lastSyncedAt: syncedAt
+          }
+        });
+
+        if (accepted?.txHash && accepted.txHash !== previousOffer?.acceptedTxHash) {
+          await applyAcceptedOfferOwnership(deps, tokenRefId, {
+            buyerAddress: accepted.buyerAddress,
+            sellerAddress: accepted.sellerAddress,
+            quantityRaw: accepted.quantityRaw,
+            standard: String(row[4] || "UNKNOWN")
+          });
+        }
+      })
+    );
+  }
+
+  await expireMarketplaceV2Offers(deps, config, currentUnix);
+  await writeMarketplaceV2SyncState({ offersLastBlock: String(currentBlock) });
+  return offerIds.length;
 }
 
 async function syncMarketplaceV2IfStale(
@@ -2424,37 +3220,94 @@ async function syncMarketplaceV2IfStale(
   const shouldSyncOffers = options?.includeOffers !== false;
   if (!shouldSyncListings && !shouldSyncOffers) return;
 
+  let client: ReturnType<typeof createPublicClient> | null = null;
+  const getClient = () => {
+    if (client) return client;
+    client = createPublicClient({
+      transport: http(config.rpcUrl)
+    });
+    return client;
+  };
+
+  await Promise.all([
+    shouldSyncListings ? syncMarketplaceV2ListingsIfStale(deps, config, getClient(), options?.force) : Promise.resolve(),
+    shouldSyncOffers ? syncMarketplaceV2OffersIfStale(deps, config, getClient(), options?.force) : Promise.resolve()
+  ]);
+}
+
+async function syncMarketplaceV2ListingsIfStale(
+  deps: IndexerDeps,
+  config: RequestHandlerConfig,
+  client: ReturnType<typeof createPublicClient>,
+  force = false
+): Promise<void> {
   const now = Date.now();
-  if (marketplaceV2SyncPromise) {
-    await marketplaceV2SyncPromise;
+  if (marketplaceV2ListingSyncPromise) {
+    await marketplaceV2ListingSyncPromise;
     return;
   }
-  if (!options?.force && now - lastMarketplaceV2SyncAt < MARKETPLACE_V2_SYNC_TTL_MS) {
+  if (!force && now - lastMarketplaceV2ListingSyncAt < MARKETPLACE_V2_SYNC_TTL_MS) {
     return;
   }
 
-  marketplaceV2SyncPromise = (async () => {
+  marketplaceV2ListingSyncPromise = (async () => {
     try {
-      const client = createPublicClient({
-        transport: http(config.rpcUrl)
-      });
-
-      if (shouldSyncListings) {
-        lastMarketplaceV2ListingSyncCount = await syncMarketplaceV2Listings(deps, config, client);
-      }
-      if (shouldSyncOffers) {
-        lastOfferSyncCount = await syncMarketplaceV2Offers(deps, config, client);
-      }
-
-      lastMarketplaceV2SyncAt = Date.now();
+      lastMarketplaceV2ListingSyncCount = await syncMarketplaceV2Listings(deps, config, client, force);
+      lastMarketplaceV2ListingSyncAt = Date.now();
     } catch (err) {
-      log.warn({ err }, "marketplace_v2_sync_failed");
+      log.warn({ err }, "marketplace_v2_listing_sync_failed");
     } finally {
-      marketplaceV2SyncPromise = null;
+      marketplaceV2ListingSyncPromise = null;
     }
   })();
 
-  await marketplaceV2SyncPromise;
+  await marketplaceV2ListingSyncPromise;
+}
+
+async function syncMarketplaceV2OffersIfStale(
+  deps: IndexerDeps,
+  config: RequestHandlerConfig,
+  client: ReturnType<typeof createPublicClient>,
+  force = false
+): Promise<void> {
+  const now = Date.now();
+  if (marketplaceV2OfferSyncPromise) {
+    await marketplaceV2OfferSyncPromise;
+    return;
+  }
+  if (!force && now - lastMarketplaceV2OfferSyncAt < MARKETPLACE_V2_SYNC_TTL_MS) {
+    return;
+  }
+
+  marketplaceV2OfferSyncPromise = (async () => {
+    try {
+      lastOfferSyncCount = await syncMarketplaceV2Offers(deps, config, client, force);
+      lastMarketplaceV2OfferSyncAt = Date.now();
+    } catch (err) {
+      log.warn({ err }, "marketplace_v2_offer_sync_failed");
+    } finally {
+      marketplaceV2OfferSyncPromise = null;
+    }
+  })();
+
+  await marketplaceV2OfferSyncPromise;
+}
+
+async function syncPreferredMarketplaceIfStale(
+  deps: IndexerDeps,
+  config: RequestHandlerConfig,
+  options?: { includeOffers?: boolean; force?: boolean }
+): Promise<void> {
+  if (config.marketplaceV2Address) {
+    await syncMarketplaceV2IfStale(deps, config, {
+      includeListings: true,
+      includeOffers: options?.includeOffers ?? false,
+      force: options?.force
+    });
+    return;
+  }
+
+  await syncMarketplaceListingsIfStale(deps, config, { force: options?.force });
 }
 
 async function readJsonBody<T>(req: IncomingMessage): Promise<T> {
@@ -2553,6 +3406,7 @@ async function ensureTokenForListing(
       sellerAddress,
       paymentToken: "0x0000000000000000000000000000000000000000",
       priceRaw: "0",
+      active: false,
       tokenRefId: token.id,
       ...(includeListingV2
         ? {
@@ -2587,6 +3441,7 @@ async function upsertMintedToken(
   const draftName = toNormalizedOptionalText(payload.draftName);
   const draftDescription = toNormalizedOptionalText(payload.draftDescription);
   const mintedAmountRaw = toNormalizedOptionalText(payload.mintedAmountRaw);
+  const heldAmountRaw = toNormalizedOptionalText(payload.heldAmountRaw);
   const mintedAt = payload.mintedAt?.trim() ? new Date(payload.mintedAt) : new Date();
   const finalizedAt =
     payload.finalizedAt && payload.finalizedAt.trim()
@@ -2675,7 +3530,7 @@ async function upsertMintedToken(
     include: {
       collection: true,
       listings: {
-        where: { active: true },
+        where: getPublicTokenListingsWhere(includeListingV2, config),
         orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
         take: includeListingV2 ? 5 : 1,
         select: tokenListingSelect(includeListingV2)
@@ -2683,13 +3538,19 @@ async function upsertMintedToken(
     }
   });
 
-  await syncIndexedTokenHolding(
-    deps,
-    token.id,
-    ownerAddress,
-    standard === "ERC1155" ? mintedAmountRaw || "1" : "1",
-    standard
-  );
+  if (!payload.skipHoldingSync) {
+    const syncedHeldAmountRaw =
+      standard === "ERC1155"
+        ? (heldAmountRaw ?? mintedAmountRaw ?? "1")
+        : "1";
+    await syncIndexedTokenHolding(
+      deps,
+      token.id,
+      ownerAddress,
+      syncedHeldAmountRaw,
+      standard
+    );
+  }
 
   return token;
 }
@@ -2754,11 +3615,11 @@ async function backfillCollectionTokens(
   config: RequestHandlerConfig
 ): Promise<{ scanned: number; upserted: number; standard: string; ownerAddress: string | null }> {
   const contractAddress = String(payload.contractAddress || "").trim().toLowerCase();
-  const requestedOwner = payload.ownerAddress?.trim().toLowerCase() || null;
+  const requestedCollectionOwner = payload.ownerAddress?.trim().toLowerCase() || null;
   if (!isAddress(contractAddress)) {
     throw new BadRequestError("Invalid contractAddress");
   }
-  if (requestedOwner && !isAddress(requestedOwner)) {
+  if (requestedCollectionOwner && !isAddress(requestedCollectionOwner)) {
     throw new BadRequestError("Invalid ownerAddress");
   }
 
@@ -2819,7 +3680,7 @@ async function backfillCollectionTokens(
     throw new BadRequestError("Could not determine collection standard");
   }
 
-  const effectiveOwnerAddress = requestedOwner || chainOwnerAddress || existingCollection?.ownerAddress || null;
+  const effectiveOwnerAddress = requestedCollectionOwner || chainOwnerAddress || existingCollection?.ownerAddress || null;
   const effectiveIsUpgradeable = payload.isUpgradeable ?? existingCollection?.isUpgradeable ?? true;
   const scanFromBlock = payload.fromBlock != null ? BigInt(payload.fromBlock) : 0n;
   let scanned = 0;
@@ -2852,7 +3713,6 @@ async function backfillCollectionTokens(
         currentOwner = currentOwner || null;
       }
       if (!currentOwner) continue;
-      if (requestedOwner && currentOwner !== requestedOwner) continue;
 
       let metadataCid = "";
       try {
@@ -2873,9 +3733,9 @@ async function backfillCollectionTokens(
         {
           chainId: config.chainId,
           contractAddress,
-          collectionOwnerAddress: chainOwnerAddress || currentOwner,
+          collectionOwnerAddress: effectiveOwnerAddress || chainOwnerAddress || currentOwner,
           tokenId,
-          creatorAddress: chainOwnerAddress || currentOwner,
+          creatorAddress: effectiveOwnerAddress || chainOwnerAddress || currentOwner,
           ownerAddress: currentOwner,
           standard,
           isFactoryCreated: payload.isFactoryCreated ?? existingCollection?.isFactoryCreated ?? false,
@@ -2893,8 +3753,8 @@ async function backfillCollectionTokens(
       upserted += 1;
     }
   } else {
-    const targetOwner = effectiveOwnerAddress;
-    if (!targetOwner) {
+    const collectionOwnerAddress = effectiveOwnerAddress;
+    if (!collectionOwnerAddress) {
       throw new BadRequestError("ownerAddress is required to backfill ERC1155 collections");
     }
 
@@ -2911,45 +3771,71 @@ async function backfillCollectionTokens(
 
     const tokenIds = new Set<string>();
     const mintTxByTokenId = new Map<string, string>();
+    const totalMintedByTokenId = new Map<string, bigint>();
+    const balancesByTokenId = new Map<string, Map<string, bigint>>();
+
+    const applyBalanceDelta = (tokenId: string, holderAddress: string, delta: bigint): void => {
+      const normalizedHolder = String(holderAddress || "").toLowerCase();
+      if (!isAddress(normalizedHolder) || delta === 0n) return;
+      const nextTokenBalances = balancesByTokenId.get(tokenId) || new Map<string, bigint>();
+      const nextBalance = (nextTokenBalances.get(normalizedHolder) || 0n) + delta;
+      if (nextBalance <= 0n) {
+        nextTokenBalances.delete(normalizedHolder);
+      } else {
+        nextTokenBalances.set(normalizedHolder, nextBalance);
+      }
+      balancesByTokenId.set(tokenId, nextTokenBalances);
+    };
+
     for (const log of singleLogs) {
-      if (String(log.args.from || "").toLowerCase() !== ZERO_ADDRESS) continue;
       const tokenId = log.args.id?.toString();
       if (!tokenId) continue;
+      const fromAddress = String(log.args.from || "").toLowerCase();
+      const toAddress = String(log.args.to || "").toLowerCase();
+      const value = BigInt(log.args.value || 0n);
       tokenIds.add(tokenId);
-      if (!mintTxByTokenId.has(tokenId)) {
-        mintTxByTokenId.set(tokenId, log.transactionHash);
+
+      if (fromAddress === ZERO_ADDRESS) {
+        totalMintedByTokenId.set(tokenId, (totalMintedByTokenId.get(tokenId) || 0n) + value);
+        if (!mintTxByTokenId.has(tokenId)) {
+          mintTxByTokenId.set(tokenId, log.transactionHash);
+        }
+      }
+
+      if (fromAddress !== ZERO_ADDRESS) {
+        applyBalanceDelta(tokenId, fromAddress, -value);
+      }
+      if (toAddress !== ZERO_ADDRESS) {
+        applyBalanceDelta(tokenId, toAddress, value);
       }
     }
     for (const log of batchLogs) {
-      if (String(log.args.from || "").toLowerCase() !== ZERO_ADDRESS) continue;
-      for (const id of log.args.ids || []) {
-        const tokenId = id.toString();
+      const fromAddress = String(log.args.from || "").toLowerCase();
+      const toAddress = String(log.args.to || "").toLowerCase();
+      const ids = Array.isArray(log.args.ids) ? log.args.ids : [];
+      const values = Array.isArray(log.args.values) ? log.args.values : [];
+      for (let index = 0; index < ids.length; index += 1) {
+        const tokenId = ids[index]?.toString();
+        if (!tokenId) continue;
+        const value = BigInt(values[index] || 0n);
         tokenIds.add(tokenId);
-        if (!mintTxByTokenId.has(tokenId)) {
-          mintTxByTokenId.set(tokenId, log.transactionHash);
+        if (fromAddress === ZERO_ADDRESS) {
+          totalMintedByTokenId.set(tokenId, (totalMintedByTokenId.get(tokenId) || 0n) + value);
+          if (!mintTxByTokenId.has(tokenId)) {
+            mintTxByTokenId.set(tokenId, log.transactionHash);
+          }
+        }
+        if (fromAddress !== ZERO_ADDRESS) {
+          applyBalanceDelta(tokenId, fromAddress, -value);
+        }
+        if (toAddress !== ZERO_ADDRESS) {
+          applyBalanceDelta(tokenId, toAddress, value);
         }
       }
     }
 
     scanned = tokenIds.size;
-    const positiveTokenIds = new Set<string>();
     for (const tokenId of tokenIds) {
-      let balance = 0n;
-      try {
-        balance = BigInt(
-          await client.readContract({
-            address: contractAddress as `0x${string}`,
-            abi: erc1155ReadAbi,
-            functionName: "balanceOf",
-            args: [targetOwner as `0x${string}`, BigInt(tokenId)]
-          })
-        );
-      } catch {
-        balance = 0n;
-      }
-      if (balance <= 0n) continue;
-      positiveTokenIds.add(tokenId);
-
       let metadataCid = "";
       try {
         metadataCid = String(
@@ -2965,32 +3851,56 @@ async function backfillCollectionTokens(
       }
       if (!metadataCid) continue;
 
-      await upsertMintedToken(
+      const positiveHolders = [...(balancesByTokenId.get(tokenId) || new Map<string, bigint>()).entries()]
+        .filter(([, quantity]) => quantity > 0n)
+        .sort((left, right) => {
+          if (left[1] === right[1]) return left[0].localeCompare(right[0]);
+          return left[1] > right[1] ? -1 : 1;
+        })
+        .map(([ownerAddress, quantity]) => ({
+          ownerAddress,
+          quantity
+        }));
+      const primaryOwnerAddress = positiveHolders[0]?.ownerAddress || collectionOwnerAddress;
+      const totalMintedRaw = (totalMintedByTokenId.get(tokenId) || positiveHolders.reduce((sum, item) => sum + item.quantity, 0n)).toString();
+
+      const token = await upsertMintedToken(
         {
           chainId: config.chainId,
           contractAddress,
-          collectionOwnerAddress: chainOwnerAddress || targetOwner,
+          collectionOwnerAddress,
           tokenId,
-          creatorAddress: chainOwnerAddress || targetOwner,
-          ownerAddress: targetOwner,
+          creatorAddress: collectionOwnerAddress,
+          ownerAddress: primaryOwnerAddress,
           standard,
           isFactoryCreated: payload.isFactoryCreated ?? existingCollection?.isFactoryCreated ?? false,
           isUpgradeable: effectiveIsUpgradeable,
           ensSubname: payload.ensSubname ?? existingCollection?.ensSubname ?? null,
           finalizedAt: existingCollection?.finalizedAt?.toISOString() || null,
           mintTxHash: mintTxByTokenId.get(tokenId) || null,
-          mintedAmountRaw: balance.toString(),
+          mintedAmountRaw: totalMintedRaw,
+          heldAmountRaw: null,
           metadataCid,
           mediaCid: null,
-          immutable: true
+          immutable: true,
+          skipHoldingSync: true
         },
         deps,
         config
       );
+
+      await replaceIndexedTokenHoldings(
+        deps,
+        token.id,
+        standard,
+        positiveHolders.map((item) => ({
+          ownerAddress: item.ownerAddress,
+          quantityRaw: item.quantity.toString()
+        }))
+      );
+
       upserted += 1;
     }
-
-    await clearIndexedCollectionHoldingsForOwner(deps, contractAddress, targetOwner, positiveTokenIds);
   }
 
   return {
@@ -3072,16 +3982,37 @@ async function backfillRegistryCollections(
 }
 
 async function listHiddenListings(deps: IndexerDeps): Promise<{ listingIds: number[]; listingRecordIds: string[] }> {
-  const actions = await deps.prisma.moderationAction.findMany({
+  const includeListingRefs = await hasModerationActionListingColumns(deps);
+  const actions = await (deps.prisma as any).moderationAction.findMany({
     orderBy: { createdAt: "desc" },
     select: {
       tokenId: true,
-      action: true
+      action: true,
+      ...(includeListingRefs
+        ? {
+            listingRecordId: true
+          }
+        : {})
     }
   });
 
+  const hiddenByListing = new Map<string, boolean>();
   const hiddenByToken = new Map<string, boolean>();
   for (const action of actions) {
+    const listingRecordId = includeListingRefs ? toNormalizedOptionalText(action.listingRecordId) : null;
+    if (listingRecordId) {
+      if (hiddenByListing.has(listingRecordId)) continue;
+      const normalizedAction = action.action.toLowerCase();
+      if (normalizedAction === "hide") {
+        hiddenByListing.set(listingRecordId, true);
+        continue;
+      }
+      if (normalizedAction === "restore") {
+        hiddenByListing.set(listingRecordId, false);
+      }
+      continue;
+    }
+
     if (hiddenByToken.has(action.tokenId)) continue;
     const normalizedAction = action.action.toLowerCase();
     if (normalizedAction === "hide") {
@@ -3097,10 +4028,19 @@ async function listHiddenListings(deps: IndexerDeps): Promise<{ listingIds: numb
     .filter(([, hidden]) => hidden)
     .map(([tokenId]) => tokenId);
 
+  const explicitListingRecordIds = Array.from(hiddenByListing.entries())
+    .filter(([, hidden]) => hidden)
+    .map(([listingRecordId]) => listingRecordId);
+
   if (hiddenTokenIds.length === 0) {
+    const listingRecordIds = explicitListingRecordIds.slice().sort((a, b) => a.localeCompare(b));
+    const listingIds = listingRecordIds
+      .map((listingId) => parseListingId(listingId))
+      .filter((id): id is number => Number.isInteger(id) && (id as number) >= 0)
+      .sort((a: number, b: number) => a - b);
     return {
-      listingIds: [],
-      listingRecordIds: []
+      listingIds,
+      listingRecordIds
     };
   }
 
@@ -3113,10 +4053,12 @@ async function listHiddenListings(deps: IndexerDeps): Promise<{ listingIds: numb
     select: { listingId: true }
   });
 
-  const listingRecordIds = listings
+  const legacyListingRecordIds = listings
     .map((item: { listingId: string }) => String(item.listingId || "").trim())
     .filter(Boolean)
     .sort((a: string, b: string) => a.localeCompare(b));
+  const listingRecordIds = Array.from(new Set([...explicitListingRecordIds, ...legacyListingRecordIds]))
+    .sort((a, b) => a.localeCompare(b));
   const listingIds = listingRecordIds
     .map((listingId) => parseListingId(listingId))
     .filter((id): id is number => Number.isInteger(id) && (id as number) >= 0)
@@ -3159,6 +4101,10 @@ async function handleRequest(
     sendJson(res, 200, {
       ok: true,
       service: "indexer-api",
+      contracts: {
+        registryAddress: config.registryAddress,
+        moderatorRegistryAddress: config.moderatorRegistryAddress
+      },
       schema: {
         mintTxHashColumnAvailable,
         tokenPresentationColumnsAvailable,
@@ -3172,8 +4118,17 @@ async function handleRequest(
         lastListingSyncAt: lastListingSyncAt > 0 ? new Date(lastListingSyncAt).toISOString() : null,
         lastListingSyncCount,
         v2Configured: Boolean(config.marketplaceV2Address),
-        v2SyncInProgress: Boolean(marketplaceV2SyncPromise),
-        lastMarketplaceV2SyncAt: lastMarketplaceV2SyncAt > 0 ? new Date(lastMarketplaceV2SyncAt).toISOString() : null,
+        v2SyncInProgress: Boolean(marketplaceV2ListingSyncPromise || marketplaceV2OfferSyncPromise),
+        v2ListingSyncInProgress: Boolean(marketplaceV2ListingSyncPromise),
+        v2OfferSyncInProgress: Boolean(marketplaceV2OfferSyncPromise),
+        lastMarketplaceV2SyncAt:
+          Math.max(lastMarketplaceV2ListingSyncAt, lastMarketplaceV2OfferSyncAt) > 0
+            ? new Date(Math.max(lastMarketplaceV2ListingSyncAt, lastMarketplaceV2OfferSyncAt)).toISOString()
+            : null,
+        lastMarketplaceV2ListingSyncAt:
+          lastMarketplaceV2ListingSyncAt > 0 ? new Date(lastMarketplaceV2ListingSyncAt).toISOString() : null,
+        lastMarketplaceV2OfferSyncAt:
+          lastMarketplaceV2OfferSyncAt > 0 ? new Date(lastMarketplaceV2OfferSyncAt).toISOString() : null,
         lastMarketplaceV2ListingSyncCount,
         lastOfferSyncCount
       }
@@ -3187,14 +4142,17 @@ async function handleRequest(
       sendJson(res, 400, { error: "Invalid status query. Expected 'open' or 'resolved'" });
       return;
     }
-    const includeListingV2 = await hasListingV2Columns(deps);
-    const reports = await deps.prisma.report.findMany({
+    const [includeListingV2, includeReportListingRefs] = await Promise.all([
+      hasListingV2Columns(deps),
+      hasModerationReportListingColumns(deps)
+    ]);
+    const reports = await (deps.prisma as any).report.findMany({
       where: status ? { status } : undefined,
       include: {
         token: {
           include: {
             listings: {
-              where: { active: true },
+              where: getPublicTokenListingsWhere(includeListingV2, config),
               take: includeListingV2 ? 5 : 1,
               orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
               select: tokenListingSelect(includeListingV2)
@@ -3204,20 +4162,31 @@ async function handleRequest(
       },
       orderBy: { createdAt: "desc" }
     });
+    const listingSnapshotsByRecordId = await readListingApiShapesByRecordId(
+      reports.map((report: any) => (includeReportListingRefs ? toNormalizedOptionalText(report.listingRecordId) : null)),
+      deps,
+      config
+    );
 
     sendJson(
       res,
       200,
       reports.map((report: any) => {
-        const activeListing = pickPrimaryActiveListing(report.token.listings);
-        const listingRecordId = String(activeListing?.listingId || "").trim() || null;
+        const activeListing = pickPrimaryActiveListing(report.token.listings, config);
+        const storedListingRecordId = includeReportListingRefs ? toNormalizedOptionalText(report.listingRecordId) : null;
+        const listingRecordId = storedListingRecordId || String(activeListing?.listingId || "").trim() || null;
+        const marketplaceVersion = listingRecordId
+          ? storedListingRecordId
+            ? normalizeMarketplaceVersion(listingRecordId, report.marketplaceVersion)
+            : normalizeMarketplaceVersion(listingRecordId, activeListing?.marketplaceVersion)
+          : null;
+        const listing = storedListingRecordId ? listingSnapshotsByRecordId.get(storedListingRecordId) || null : null;
         return {
           id: report.id,
           listingId: parseListingId(listingRecordId || undefined),
           listingRecordId,
-          marketplaceVersion: listingRecordId
-            ? String(activeListing?.marketplaceVersion || (listingRecordId.startsWith("v2:") ? "v2" : "v1")).toLowerCase()
-            : null,
+          marketplaceVersion,
+          listing,
           reason: report.reason,
           reporterAddress: report.reporterAddress,
           status: report.status,
@@ -3247,9 +4216,16 @@ async function handleRequest(
     }
 
     const { tokenRefId } = await ensureTokenForListing(payload, deps, config);
-    const report = await deps.prisma.report.create({
+    const includeReportListingRefs = await hasModerationReportListingColumns(deps);
+    const report = await (deps.prisma as any).report.create({
       data: {
         tokenId: tokenRefId,
+        ...(includeReportListingRefs
+          ? {
+              listingRecordId,
+              marketplaceVersion: normalizeMarketplaceVersion(listingRecordId, payload.marketplaceVersion)
+            }
+          : {}),
         reporterAddress: payload.reporterAddress.toLowerCase(),
         reason: payload.reason.trim().toLowerCase(),
         evidence: payload.evidence?.trim() || null,
@@ -3306,7 +4282,11 @@ async function handleRequest(
       return;
     }
 
-    const report = await deps.prisma.report.findUnique({
+    const [includeReportListingRefs, includeActionListingRefs] = await Promise.all([
+      hasModerationReportListingColumns(deps),
+      hasModerationActionListingColumns(deps)
+    ]);
+    const report = await (deps.prisma as any).report.findUnique({
       where: { id: reportId }
     });
     if (!report) {
@@ -3314,14 +4294,23 @@ async function handleRequest(
       return;
     }
 
-    await deps.prisma.report.update({
+    await (deps.prisma as any).report.update({
       where: { id: reportId },
       data: { status: "resolved" }
     });
 
-    await deps.prisma.moderationAction.create({
+    const listingRecordId = includeReportListingRefs ? toNormalizedOptionalText(report.listingRecordId) : null;
+    await (deps.prisma as any).moderationAction.create({
       data: {
         tokenId: report.tokenId,
+        ...(includeActionListingRefs
+          ? {
+              listingRecordId,
+              marketplaceVersion: listingRecordId
+                ? normalizeMarketplaceVersion(listingRecordId, report.marketplaceVersion)
+                : null
+            }
+          : {}),
         reportId: report.id,
         action: payload.action.toLowerCase(),
         actor: payload.actor.trim().toLowerCase(),
@@ -3334,15 +4323,18 @@ async function handleRequest(
   }
 
   if (req.method === "GET" && path === "/api/moderation/actions") {
-    const includeListingV2 = await hasListingV2Columns(deps);
-    const actions = await deps.prisma.moderationAction.findMany({
+    const [includeListingV2, includeActionListingRefs] = await Promise.all([
+      hasListingV2Columns(deps),
+      hasModerationActionListingColumns(deps)
+    ]);
+    const actions = await (deps.prisma as any).moderationAction.findMany({
       orderBy: { createdAt: "desc" },
       take: 200,
       include: {
         token: {
           include: {
             listings: {
-              where: { active: true },
+              where: getPublicTokenListingsWhere(includeListingV2, config),
               take: includeListingV2 ? 5 : 1,
               orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
               select: tokenListingSelect(includeListingV2)
@@ -3351,13 +4343,25 @@ async function handleRequest(
         }
       }
     });
+    const listingSnapshotsByRecordId = await readListingApiShapesByRecordId(
+      actions.map((action: any) => (includeActionListingRefs ? toNormalizedOptionalText(action.listingRecordId) : null)),
+      deps,
+      config
+    );
 
     sendJson(
       res,
       200,
       actions.map((action: any) => {
-        const activeListing = pickPrimaryActiveListing(action.token.listings);
-        const listingRecordId = String(activeListing?.listingId || "").trim() || null;
+        const activeListing = pickPrimaryActiveListing(action.token.listings, config);
+        const storedListingRecordId = includeActionListingRefs ? toNormalizedOptionalText(action.listingRecordId) : null;
+        const listingRecordId = storedListingRecordId || String(activeListing?.listingId || "").trim() || null;
+        const marketplaceVersion = listingRecordId
+          ? storedListingRecordId
+            ? normalizeMarketplaceVersion(listingRecordId, action.marketplaceVersion)
+            : normalizeMarketplaceVersion(listingRecordId, activeListing?.marketplaceVersion)
+          : null;
+        const listing = storedListingRecordId ? listingSnapshotsByRecordId.get(storedListingRecordId) || null : null;
         return {
           id: action.id,
           action: action.action,
@@ -3366,9 +4370,8 @@ async function handleRequest(
           reportId: action.reportId,
           listingId: parseListingId(listingRecordId || undefined),
           listingRecordId,
-          marketplaceVersion: listingRecordId
-            ? String(activeListing?.marketplaceVersion || (listingRecordId.startsWith("v2:") ? "v2" : "v1")).toLowerCase()
-            : null,
+          marketplaceVersion,
+          listing,
           createdAt: action.createdAt.toISOString()
         };
       })
@@ -3397,9 +4400,13 @@ async function handleRequest(
       sendJson(res, 401, { error: auth.error });
       return;
     }
+    const includeActionListingRefs = await hasModerationActionListingColumns(deps);
     const listing = await deps.prisma.listing.findUnique({
       where: { listingId },
-      select: { tokenRefId: true }
+      select: {
+        tokenRefId: true,
+        listingId: true
+      }
     });
 
     if (!listing?.tokenRefId) {
@@ -3407,9 +4414,15 @@ async function handleRequest(
       return;
     }
 
-    await deps.prisma.moderationAction.create({
+    await (deps.prisma as any).moderationAction.create({
       data: {
         tokenId: listing.tokenRefId,
+        ...(includeActionListingRefs
+          ? {
+              listingRecordId: listing.listingId,
+              marketplaceVersion: normalizeMarketplaceVersion(listing.listingId, null)
+            }
+          : {}),
         action: payload.hidden ? "hide" : "restore",
         actor: payload.actor?.trim().toLowerCase() || "admin",
         notes: payload.notes?.trim() || null
@@ -3478,7 +4491,7 @@ async function handleRequest(
     });
     next.sort((a, b) => b.lastSeenAt.localeCompare(a.lastSeenAt));
     await writePaymentTokenRecords(next);
-    sendJson(res, 200, { ok: true, tokens: next });
+    sendJson(res, 200, { ok: true, tokens: await hydratePaymentTokenRecords(next, config) });
     return;
   }
 
@@ -3537,7 +4550,7 @@ async function handleRequest(
       return;
     }
     const tokens = await readPaymentTokenRecords();
-    sendJson(res, 200, { tokens });
+    sendJson(res, 200, { tokens: await hydratePaymentTokenRecords(tokens, config) });
     return;
   }
 
@@ -3573,7 +4586,7 @@ async function handleRequest(
       })
       .sort((a, b) => b.lastSeenAt.localeCompare(a.lastSeenAt));
     await writePaymentTokenRecords(next);
-    sendJson(res, 200, { ok: true, tokens: next });
+    sendJson(res, 200, { ok: true, tokens: await hydratePaymentTokenRecords(next, config) });
     return;
   }
 
@@ -3833,8 +4846,17 @@ async function handleRequest(
     sendJson(res, 200, {
       ok: true,
       configured: true,
-      syncInProgress: Boolean(marketplaceV2SyncPromise),
-      lastMarketplaceV2SyncAt: lastMarketplaceV2SyncAt > 0 ? new Date(lastMarketplaceV2SyncAt).toISOString() : null,
+      syncInProgress: Boolean(marketplaceV2ListingSyncPromise || marketplaceV2OfferSyncPromise),
+      listingSyncInProgress: Boolean(marketplaceV2ListingSyncPromise),
+      offerSyncInProgress: Boolean(marketplaceV2OfferSyncPromise),
+      lastMarketplaceV2SyncAt:
+        Math.max(lastMarketplaceV2ListingSyncAt, lastMarketplaceV2OfferSyncAt) > 0
+          ? new Date(Math.max(lastMarketplaceV2ListingSyncAt, lastMarketplaceV2OfferSyncAt)).toISOString()
+          : null,
+      lastMarketplaceV2ListingSyncAt:
+        lastMarketplaceV2ListingSyncAt > 0 ? new Date(lastMarketplaceV2ListingSyncAt).toISOString() : null,
+      lastMarketplaceV2OfferSyncAt:
+        lastMarketplaceV2OfferSyncAt > 0 ? new Date(lastMarketplaceV2OfferSyncAt).toISOString() : null,
       lastMarketplaceV2ListingSyncCount,
       lastOfferSyncCount
     });
@@ -3920,10 +4942,7 @@ async function handleRequest(
   }
 
   if (req.method === "GET" && /^\/api\/users\/[^/]+\/holdings$/.test(path)) {
-    await Promise.all([
-      syncMarketplaceListingsIfStale(deps, config),
-      syncMarketplaceV2IfStale(deps, config, { includeListings: true, includeOffers: true })
-    ]);
+    await syncPreferredMarketplaceIfStale(deps, config, { includeOffers: true });
     const address = String(decodeURIComponent(path.split("/")[3] || "")).trim().toLowerCase();
     if (!address || !isAddress(address)) {
       sendJson(res, 400, { error: "Valid user address is required" });
@@ -4002,10 +5021,10 @@ async function handleRequest(
           }
         },
         listings: {
-          where: { active: true, sellerAddress: address },
+          where: getPublicTokenListingsWhere(includeListingV2, config, address),
           orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
-          take: includeListingV2 ? 50 : 1,
-          select: tokenListingSelect(includeListingV2)
+            take: includeListingV2 ? 50 : 1,
+            select: tokenListingSelect(includeListingV2)
         }
       }
     });
@@ -4061,10 +5080,7 @@ async function handleRequest(
       sendJson(res, 400, { error: "Valid owner address is required" });
       return;
     }
-    await Promise.all([
-      syncMarketplaceListingsIfStale(deps, config),
-      syncMarketplaceV2IfStale(deps, config, { includeListings: true, includeOffers: true })
-    ]);
+    await syncPreferredMarketplaceIfStale(deps, config, { includeOffers: true });
     const [includeMintTxHash, includeTokenPresentation, includeListingV2, includeTokenHoldings, ownedTokenWhere] = await Promise.all([
       hasMintTxHashColumn(deps),
       hasTokenPresentationColumns(deps),
@@ -4111,7 +5127,7 @@ async function handleRequest(
       }),
       deps.prisma.token.count({ where: ownedTokenWhere }),
       deps.prisma.token.count({ where: { creatorAddress: owner } }),
-      deps.prisma.listing.count({ where: { sellerAddress: owner, ...getPublicActiveListingWhere(includeListingV2) } }),
+      deps.prisma.listing.count({ where: { sellerAddress: owner, ...getPublicActiveListingWhere(includeListingV2, config) } }),
       countOffers(deps, { buyerAddress: owner, active: true }),
       countOffers(deps, {
         active: true,
@@ -4163,7 +5179,7 @@ async function handleRequest(
             }
           : {}),
         listings: {
-          where: { active: true, sellerAddress: owner },
+          where: getPublicTokenListingsWhere(includeListingV2, config, owner),
           orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
             take: includeListingV2 ? 50 : 1,
             select: tokenListingSelect(includeListingV2)
@@ -4198,6 +5214,7 @@ async function handleRequest(
             tokenId: true,
             creatorAddress: true,
             ownerAddress: true,
+            ...tokenHoldingSelect(includeTokenHoldings),
             ...(includeMintTxHash ? { mintTxHash: true } : {}),
             ...tokenPresentationSelect(includeTokenPresentation),
             metadataCid: true,
@@ -4205,8 +5222,13 @@ async function handleRequest(
             immutable: true,
             mintedAt: true,
             collectionId: true,
+            collection: {
+              select: {
+                standard: true
+              }
+            },
             listings: {
-              where: { active: true },
+              where: getPublicTokenListingsWhere(includeListingV2, config),
               orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
               take: includeListingV2 ? 5 : 1,
               select: tokenListingSelect(includeListingV2)
@@ -4332,6 +5354,8 @@ async function handleRequest(
                   tokenId,
                   creatorAddress: owner,
                   ownerAddress: owner,
+                  currentOwnerAddress: owner,
+                  currentOwnerAddresses: [owner],
                   mintTxHash: log.transactionHash,
                   draftName: null,
                   draftDescription: null,
@@ -4422,6 +5446,8 @@ async function handleRequest(
                   tokenId,
                   creatorAddress: owner,
                   ownerAddress: owner,
+                  currentOwnerAddress: owner,
+                  currentOwnerAddresses: [owner],
                   mintTxHash: mintTxByTokenId.get(tokenId) || null,
                   draftName: null,
                   draftDescription: null,
@@ -4808,23 +5834,27 @@ async function handleRequest(
   }
 
   if (req.method === "GET" && path === "/api/listings") {
-    await syncMarketplaceListingsIfStale(deps, config);
-
     const cursor = Math.max(0, Number.parseInt(String(url.searchParams.get("cursor") || "0"), 10) || 0);
     const limit = Math.min(100, Math.max(1, Number.parseInt(String(url.searchParams.get("limit") || "50"), 10) || 50));
     const seller = String(url.searchParams.get("seller") || "").trim().toLowerCase();
     const includeAllMarkets = String(url.searchParams.get("includeAllMarkets") || "").trim().toLowerCase() === "true";
-    const [includeMintTxHash, includeTokenPresentation, includeListingV2] = await Promise.all([
+    const [includeMintTxHash, includeTokenPresentation, includeListingV2, includeTokenHoldings] = await Promise.all([
       hasMintTxHashColumn(deps),
       hasTokenPresentationColumns(deps),
-      hasListingV2Columns(deps)
+      hasListingV2Columns(deps),
+      hasTokenHoldingTable(deps)
     ]);
     if (includeAllMarkets) {
-      await syncMarketplaceV2IfStale(deps, config, { includeListings: true, includeOffers: false });
+      await Promise.all([
+        syncMarketplaceListingsIfStale(deps, config),
+        syncMarketplaceV2IfStale(deps, config, { includeListings: true, includeOffers: false })
+      ]);
+    } else {
+      await syncPreferredMarketplaceIfStale(deps, config);
     }
     const presentationIndex = await readTokenPresentationIndex();
 
-    const where: Record<string, unknown> = includeAllMarkets ? { active: true } : getPublicActiveListingWhere(includeListingV2);
+    const where: Record<string, unknown> = includeAllMarkets ? { active: true } : getPublicActiveListingWhere(includeListingV2, config);
     if (seller && isAddress(seller)) {
       where.sellerAddress = seller;
     }
@@ -4853,6 +5883,7 @@ async function handleRequest(
             id: true,
             creatorAddress: true,
             ownerAddress: true,
+            ...tokenHoldingSelect(includeTokenHoldings),
             metadataCid: true,
             mediaCid: true,
             immutable: true,
@@ -4900,14 +5931,12 @@ async function handleRequest(
     const cursorRaw = Number.parseInt(String(url.searchParams.get("cursor") || "0"), 10);
     const limit = Number.isInteger(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 100) : 50;
     const cursor = Number.isInteger(cursorRaw) && cursorRaw >= 0 ? cursorRaw : 0;
-    await Promise.all([
-      syncMarketplaceListingsIfStale(deps, config),
-      syncMarketplaceV2IfStale(deps, config, { includeListings: true, includeOffers: true })
-    ]);
-    const [includeMintTxHash, includeTokenPresentation, includeListingV2] = await Promise.all([
+    await syncPreferredMarketplaceIfStale(deps, config, { includeOffers: true });
+    const [includeMintTxHash, includeTokenPresentation, includeListingV2, includeTokenHoldings] = await Promise.all([
       hasMintTxHashColumn(deps),
       hasTokenPresentationColumns(deps),
-      hasListingV2Columns(deps)
+      hasListingV2Columns(deps),
+      hasTokenHoldingTable(deps)
     ]);
     const presentationIndex = await readTokenPresentationIndex();
 
@@ -4920,6 +5949,7 @@ async function handleRequest(
         tokenId: true,
         creatorAddress: true,
         ownerAddress: true,
+        ...tokenHoldingSelect(includeTokenHoldings),
         ...(includeMintTxHash ? { mintTxHash: true } : {}),
         ...tokenPresentationSelect(includeTokenPresentation),
         metadataCid: true,
@@ -4941,7 +5971,7 @@ async function handleRequest(
           }
         },
         listings: {
-          where: { active: true },
+          where: getPublicTokenListingsWhere(includeListingV2, config),
           orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
           take: includeListingV2 ? 5 : 1,
           select: tokenListingSelect(includeListingV2)
@@ -4950,11 +5980,15 @@ async function handleRequest(
     });
 
     const responseItems = items.map((item: any) =>
-      withTokenPresentation({
+      (() => {
+        const ownerState = resolveTokenOwnerState(item);
+        return withTokenPresentation({
         id: item.id,
         tokenId: item.tokenId,
         creatorAddress: item.creatorAddress,
-        ownerAddress: item.ownerAddress,
+        ownerAddress: ownerState.ownerAddress,
+        currentOwnerAddress: ownerState.currentOwnerAddress,
+        currentOwnerAddresses: ownerState.currentOwnerAddresses,
         mintTxHash: includeMintTxHash ? item.mintTxHash || null : null,
         draftName: item.draftName || null,
         draftDescription: item.draftDescription || null,
@@ -4977,8 +6011,9 @@ async function handleRequest(
           createdAt: item.collection.createdAt,
           updatedAt: item.collection.updatedAt
         },
-        activeListing: toActiveListingApiShape(pickPrimaryActiveListing(item.listings), config)
-      }, item.collection.contractAddress, presentationIndex)
+        activeListing: toActiveListingApiShape(pickPrimaryActiveListing(item.listings, config), config)
+      }, item.collection.contractAddress, presentationIndex);
+      })()
     );
 
     await attachOfferSummaries(responseItems, deps);
@@ -4994,13 +6029,13 @@ async function handleRequest(
   }
 
   if (req.method === "GET" && path === "/api/overview") {
-    await syncMarketplaceListingsIfStale(deps, config);
+    await syncPreferredMarketplaceIfStale(deps, config);
     const includeListingV2 = await hasListingV2Columns(deps);
     const [collectionCount, tokenCount, activeListingCount, openReportCount, hiddenListingRefs, profiles, paymentTokens, moderators] =
       await Promise.all([
         deps.prisma.collection.count(),
         deps.prisma.token.count(),
-        deps.prisma.listing.count({ where: getPublicActiveListingWhere(includeListingV2) }),
+        deps.prisma.listing.count({ where: getPublicActiveListingWhere(includeListingV2, config) }),
         deps.prisma.report.count({ where: { status: "open" } }),
         listHiddenListings(deps),
         readProfileRecords(),
@@ -5061,7 +6096,7 @@ async function handleRequest(
     const activeListings = contractAddresses.length
       ? await deps.prisma.listing.findMany({
           where: {
-            ...getPublicActiveListingWhere(includeListingV2),
+            ...getPublicActiveListingWhere(includeListingV2, config),
             collectionAddress: { in: contractAddresses }
           },
           select: { collectionAddress: true }
@@ -5100,10 +6135,11 @@ async function handleRequest(
       return;
     }
     await syncMarketplaceV2IfStale(deps, config, { includeListings: true, includeOffers: true });
-    const [includeMintTxHash, includeTokenPresentation, includeListingV2] = await Promise.all([
+    const [includeMintTxHash, includeTokenPresentation, includeListingV2, includeTokenHoldings] = await Promise.all([
       hasMintTxHashColumn(deps),
       hasTokenPresentationColumns(deps),
-      hasListingV2Columns(deps)
+      hasListingV2Columns(deps),
+      hasTokenHoldingTable(deps)
     ]);
     const presentationIndex = await readTokenPresentationIndex();
 
@@ -5119,6 +6155,7 @@ async function handleRequest(
         tokenId: true,
         creatorAddress: true,
         ownerAddress: true,
+        ...tokenHoldingSelect(includeTokenHoldings),
         ...(includeMintTxHash ? { mintTxHash: true } : {}),
         ...tokenPresentationSelect(includeTokenPresentation),
         metadataCid: true,
@@ -5140,7 +6177,7 @@ async function handleRequest(
           }
         },
         listings: {
-          where: { active: true },
+          where: getPublicTokenListingsWhere(includeListingV2, config),
           orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
           take: includeListingV2 ? 5 : 1,
           select: tokenListingSelect(includeListingV2)

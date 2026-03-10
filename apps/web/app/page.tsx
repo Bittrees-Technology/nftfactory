@@ -42,13 +42,13 @@ export default function HomePage() {
           <p className="actionHint">Takes you to custom minting with metadata controls.</p>
         </Link>
 
-        <Link href="/discover" className="card actionCard">
-          <h3>Marketplace</h3>
+        <Link href="/mint?view=view" className="card actionCard">
+          <h3>View Collection</h3>
           <p>
-            List tokens from shared or custom collections at a fixed price in ETH or ERC-20.
-            Filter by collection type, standard, price, or search by ENS creator name.
+            Inspect an existing shared or creator collection, review contract details, royalty defaults,
+            split policy, and indexed tokens from one workspace.
           </p>
-          <p className="actionHint">Opens the read-only marketplace browser.</p>
+          <p className="actionHint">Opens the collection overview tab directly.</p>
         </Link>
 
         <Link href="/mint?view=manage" className="card actionCard">

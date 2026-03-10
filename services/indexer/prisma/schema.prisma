@@ -146,6 +146,8 @@ model TokenTag {
 model Report {
   id                 String   @id @default(cuid())
   tokenId            String
+  listingRecordId    String?
+  marketplaceVersion String?
   reporterAddress    String
   reason             String
   evidence           String?
@@ -156,11 +158,14 @@ model Report {
   token              Token @relation(fields: [tokenId], references: [id], onDelete: Cascade)
 
   @@index([tokenId, status])
+  @@index([listingRecordId, status])
 }
 
 model ModerationAction {
   id                 String   @id @default(cuid())
   tokenId            String
+  listingRecordId    String?
+  marketplaceVersion String?
   reportId           String?
   action             String
   actor              String
@@ -168,4 +173,6 @@ model ModerationAction {
   createdAt          DateTime @default(now())
 
   token              Token @relation(fields: [tokenId], references: [id], onDelete: Cascade)
+
+  @@index([listingRecordId, createdAt])
 }

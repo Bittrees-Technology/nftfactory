@@ -189,6 +189,20 @@ nav {
   transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
 }
 
+.actionCardButton {
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  border: 1px solid #e6d7c4;
+}
+
+.actionCardStatic {
+  display: grid;
+  gap: 10px;
+  background: linear-gradient(135deg, #fff2d6 0%, #ffe9d8 100%);
+}
+
 .actionCard:hover {
   transform: translateY(-1px);
   box-shadow: 0 10px 24px rgba(111, 63, 24, 0.08);
@@ -210,6 +224,40 @@ nav {
 .wizard {
   display: grid;
   gap: 16px;
+}
+
+.mintWorkspace {
+  gap: 14px;
+}
+
+.mintWorkspace .card {
+  padding: 14px;
+}
+
+.mintWorkspace .formCard {
+  gap: 8px;
+}
+
+.mintWorkspace .gridMini {
+  gap: 8px;
+}
+
+.mintWorkspace .selectionCard {
+  gap: 6px;
+  padding: 10px;
+}
+
+.mintWorkspace .compactList {
+  gap: 4px;
+}
+
+.mintWorkspace .nftPreviewMeta {
+  padding: 8px 10px;
+  gap: 3px;
+}
+
+.mintWorkspace .actionCardStatic {
+  gap: 8px;
 }
 
 .row {
@@ -705,10 +753,48 @@ nav {
   grid-template-columns: minmax(260px, 0.9fr) minmax(320px, 1.3fr);
 }
 
+.profileHeroShell {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(300px, 1fr) minmax(360px, 1.2fr);
+  align-items: stretch;
+}
+
+.profileStoryShell {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1.35fr) minmax(260px, 0.85fr);
+}
+
 .profileIdentityCard,
 .profileFeatureCard {
   display: grid;
   gap: 12px;
+}
+
+.profileIdentityHeroCard {
+  background:
+    radial-gradient(circle at top left, rgba(255, 240, 208, 0.95), transparent 42%),
+    linear-gradient(180deg, #fff7ea 0%, #fff1e0 100%);
+}
+
+.profileFeatureSpotlightCard {
+  background:
+    radial-gradient(circle at top right, rgba(255, 214, 199, 0.85), transparent 34%),
+    linear-gradient(180deg, #fff9f1 0%, #fff3e9 100%);
+}
+
+.profileStoryCard {
+  background: linear-gradient(180deg, #fffaf4 0%, #fff4e6 100%);
+}
+
+.profileLinksCard,
+.profilePinnedCollectionCard,
+.profileDirectoryCard,
+.profileStorefrontCard,
+.profileWalletCard,
+.profileStudioCard {
+  background: linear-gradient(180deg, #fffaf4 0%, #fff6ec 100%);
 }
 
 .profileBannerShell {
@@ -776,6 +862,12 @@ nav {
   gap: 8px;
 }
 
+.profileHeroActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .profileChip {
   display: inline-flex;
   align-items: center;
@@ -812,6 +904,61 @@ nav {
   display: grid;
   gap: 10px;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.profileMetricsGrid {
+  gap: 12px;
+}
+
+.profileMetricCard {
+  gap: 8px;
+  padding: 14px 16px;
+  background: linear-gradient(180deg, #fff9f2 0%, #fff3e6 100%);
+}
+
+.profileMetricCard h3 {
+  margin: 0;
+  font-size: 0.78rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: #8a4a20;
+}
+
+.profileMetricValue {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: #2a201b;
+}
+
+.profilePrimaryGrid,
+.profileMarketGrid,
+.profileStudioGrid {
+  display: grid;
+  gap: 16px;
+  align-items: start;
+}
+
+.profilePrimaryGrid {
+  grid-template-columns: minmax(280px, 0.95fr) minmax(0, 1.35fr);
+}
+
+.profileMarketGrid {
+  grid-template-columns: minmax(0, 1.25fr) minmax(300px, 0.95fr);
+}
+
+.profileStudioGrid {
+  grid-template-columns: minmax(260px, 0.9fr) minmax(0, 1.35fr);
+}
+
+.profilePrimaryColumn,
+.profileMarketSecondary {
+  display: grid;
+  gap: 16px;
+}
+
+.profileDirectoryRow {
+  align-items: start;
 }
 
 .detailGrid {
@@ -1203,7 +1350,12 @@ button:disabled {
     align-self: flex-end;
   }
 
-  .profileShell {
+  .profileShell,
+  .profileHeroShell,
+  .profileStoryShell,
+  .profilePrimaryGrid,
+  .profileMarketGrid,
+  .profileStudioGrid {
     grid-template-columns: 1fr;
   }
 

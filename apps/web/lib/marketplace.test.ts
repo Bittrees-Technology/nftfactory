@@ -1,5 +1,13 @@
-import { describe, expect, it } from "vitest";
-import { formatListingPrice, formatOfferPrice, ZERO_ADDRESS, type MarketplaceListing, type MarketplaceOffer } from "./marketplace";
+import { describe, expect, it, vi } from "vitest";
+import {
+  formatListingPrice,
+  formatOfferPrice,
+  readPaymentTokenAllowed,
+  readRegistryOwner,
+  ZERO_ADDRESS,
+  type MarketplaceListing,
+  type MarketplaceOffer
+} from "./marketplace";
 
 function listing(overrides: Partial<MarketplaceListing>): MarketplaceListing {
   return {
@@ -52,5 +60,52 @@ describe("formatListingPrice", () => {
 describe("formatOfferPrice", () => {
   it("formats ETH offers with ether units", () => {
     expect(formatOfferPrice(offer({ paymentToken: ZERO_ADDRESS, price: 2n * 10n ** 18n }))).toBe("2 ETH");
+  });
+});
+
+describe("readPaymentTokenAllowed", () => {
+  it("treats ETH as implicitly allowed without a registry read", async () => {
+    const readContract = vi.fn();
+    const publicClient = { readContract } as any;
+
+    await expect(
+      readPaymentTokenAllowed(
+        publicClient,
+        "0x0000000000000000000000000000000000000001",
+        ZERO_ADDRESS
+      )
+    ).resolves.toBe(true);
+    expect(readContract).not.toHaveBeenCalled();
+  });
+
+  it("reads the registry allowlist for ERC20 tokens", async () => {
+    const readContract = vi.fn(async () => true);
+    const publicClient = { readContract } as any;
+    const registry = "0x0000000000000000000000000000000000000001";
+    const token = "0x0000000000000000000000000000000000000003";
+
+    await expect(readPaymentTokenAllowed(publicClient, registry, token)).resolves.toBe(true);
+    expect(readContract).toHaveBeenCalledWith({
+      address: registry,
+      abi: expect.any(Array),
+      functionName: "allowedPaymentToken",
+      args: [token]
+    });
+  });
+});
+
+describe("readRegistryOwner", () => {
+  it("reads the registry owner", async () => {
+    const owner = "0x0000000000000000000000000000000000000009";
+    const readContract = vi.fn(async () => owner);
+    const publicClient = { readContract } as any;
+    const registry = "0x0000000000000000000000000000000000000001";
+
+    await expect(readRegistryOwner(publicClient, registry)).resolves.toBe(owner);
+    expect(readContract).toHaveBeenCalledWith({
+      address: registry,
+      abi: expect.any(Array),
+      functionName: "owner"
+    });
   });
 });

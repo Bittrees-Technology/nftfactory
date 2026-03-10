@@ -1,4 +1,5 @@
 export type Erc1155HoldingLike = {
+  chainId?: number | null;
   standard: string;
   contractAddress: string;
   tokenId: string;
@@ -9,6 +10,7 @@ export type Erc1155HoldingLike = {
 };
 
 export type ActiveListingReservationLike = {
+  chainId?: number | null;
   key?: string | null;
   active?: boolean;
   standard: string;
@@ -68,11 +70,13 @@ function getExcludedListingAmount(
   const tokenId = normalizeTokenId(item.tokenId);
   if (tokenId === null) return 0n;
   const normalizedContract = item.contractAddress.toLowerCase();
+  const normalizedChainId = item.chainId || 0;
 
   for (const listing of listings) {
     if (listing.key !== excludeListingKey) continue;
     if (listing.active === false) continue;
     if (listing.standard.toUpperCase() !== "ERC1155") continue;
+    if ((listing.chainId || 0) !== normalizedChainId) continue;
     if (listing.nft.toLowerCase() !== normalizedContract) continue;
     if (normalizeTokenId(listing.tokenId) !== tokenId) continue;
 
@@ -121,6 +125,7 @@ export function getErc1155ListingAvailability(
   }
 
   const normalizedContract = item.contractAddress.toLowerCase();
+  const normalizedChainId = item.chainId || 0;
   const excludedKey = options?.excludeListingKey || null;
   let reservedAmount = 0n;
 
@@ -128,6 +133,7 @@ export function getErc1155ListingAvailability(
     if (listing.active === false) continue;
     if (listing.standard.toUpperCase() !== "ERC1155") continue;
     if (excludedKey && listing.key === excludedKey) continue;
+    if ((listing.chainId || 0) !== normalizedChainId) continue;
     if (listing.nft.toLowerCase() !== normalizedContract) continue;
     if (normalizeTokenId(listing.tokenId) !== tokenId) continue;
 

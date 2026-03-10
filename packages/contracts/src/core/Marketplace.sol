@@ -53,6 +53,8 @@ contract Marketplace is Owned {
     error InvalidDuration();
     error Expired();
     error NotApproved();
+    error PaymentTokenNotAllowed();
+    error PaymentTransferMismatch();
     error Reentrancy();
 
     uint256 private _entered;
@@ -81,10 +83,11 @@ contract Marketplace is Owned {
         address paymentToken,
         uint256 price,
         uint256 durationDays
-    ) external {
+    ) external nonReentrant {
         if (registry.blocked(msg.sender) || registry.blocked(nft) || blockedCollection[nft]) revert Sanctioned();
         if (price == 0) revert InvalidPrice();
         if (durationDays == 0 || durationDays > MAX_LISTING_DURATION_DAYS) revert InvalidDuration();
+        _assertPaymentTokenAllowed(paymentToken);
 
         bytes32 key = _standardKey(standard);
         if (key == keccak256("ERC721")) {
@@ -116,7 +119,7 @@ contract Marketplace is Owned {
         nextListingId++;
     }
 
-    function cancelListing(uint256 listingId) external {
+    function cancelListing(uint256 listingId) external nonReentrant {
         Listing storage listing = listings[listingId];
         if (listing.seller != msg.sender) revert NotSeller();
         if (!listing.active) revert NotActive();
@@ -132,6 +135,7 @@ contract Marketplace is Owned {
             registry.blocked(msg.sender) || registry.blocked(listing.seller) || registry.blocked(listing.nft)
                 || blockedCollection[listing.nft]
         ) revert Sanctioned();
+        _assertPaymentTokenAllowed(listing.paymentToken);
 
         bytes32 key = _standardKey(listing.standard);
         if (key == keccak256("ERC721")) {
@@ -157,11 +161,9 @@ contract Marketplace is Owned {
         } else {
             if (msg.value != 0) revert PaymentMismatch();
             if (protocolFee > 0) {
-                bool feeOk = IERC20(listing.paymentToken).transferFrom(msg.sender, feeTreasury, protocolFee);
-                require(feeOk, "ERC20_FEE_TRANSFER_FAILED");
+                _safeTransferFromERC20(listing.paymentToken, msg.sender, feeTreasury, protocolFee);
             }
-            bool ok = IERC20(listing.paymentToken).transferFrom(msg.sender, listing.seller, sellerProceeds);
-            require(ok, "ERC20_TRANSFER_FAILED");
+            _safeTransferFromERC20(listing.paymentToken, msg.sender, listing.seller, sellerProceeds);
         }
 
         if (key == keccak256("ERC721")) {
@@ -182,5 +184,20 @@ contract Marketplace is Owned {
         uint256 feeBps = registry.protocolFeeBps();
         if (feeBps == 0) return 0;
         return (price * feeBps) / 10_000;
+    }
+
+    function _assertPaymentTokenAllowed(address paymentToken) internal view {
+        if (paymentToken == address(0)) return;
+        if (!registry.allowedPaymentToken(paymentToken)) revert PaymentTokenNotAllowed();
+    }
+
+    function _safeTransferFromERC20(address token, address from, address to, uint256 amount) internal {
+        if (amount == 0) return;
+        uint256 balanceBefore = IERC20(token).balanceOf(to);
+        (bool ok, bytes memory data) =
+            token.call(abi.encodeWithSelector(IERC20.transferFrom.selector, from, to, amount));
+        require(ok && (data.length == 0 || abi.decode(data, (bool))), "ERC20_TRANSFER_FAILED");
+        uint256 balanceAfter = IERC20(token).balanceOf(to);
+        if (balanceAfter < balanceBefore || balanceAfter - balanceBefore != amount) revert PaymentTransferMismatch();
     }
 }

@@ -9,6 +9,7 @@ import {
 
 export type ListingViewModel = {
   key: string;
+  chainId: number;
   id: number;
   seller: Address;
   nft: Address;
@@ -32,12 +33,15 @@ export type ListingViewModel = {
 };
 
 export function toListingViewModel(item: ApiActiveListingItem): ListingViewModel {
-  const marketplaceVersion = item.marketplaceVersion || "v1";
+  const marketplaceVersion = item.marketplaceVersion || "v2";
+  const chainId = item.chainId || item.token?.collection?.chainId || 0;
+  const listingRef = item.listingRecordId || `${marketplaceVersion}:${item.listingId}`;
   return {
-    key: item.listingRecordId || `${marketplaceVersion}:${item.listingId}`,
+    key: chainId > 0 ? `${chainId}:${listingRef}` : listingRef,
+    chainId,
     id: item.id,
     marketplaceVersion,
-    marketplaceLabel: marketplaceVersion.toLowerCase() === "v2" ? "Marketplace V2" : "Marketplace V1",
+    marketplaceLabel: marketplaceVersion.toLowerCase() === "v2" ? "Marketplace V2" : "Legacy Marketplace V1",
     marketplaceAddress: (item.marketplaceAddress || null) as Address | null,
     seller: item.sellerAddress as Address,
     nft: item.collectionAddress as Address,
@@ -71,7 +75,7 @@ function formatListingExpiresAtLabel(expiresAt: bigint): string {
 function getMarketplaceLabel(input: Pick<ListingViewModel, "marketplaceLabel" | "marketplaceVersion">): string {
   const explicit = String(input.marketplaceLabel || "").trim();
   if (explicit) return explicit;
-  return String(input.marketplaceVersion || "v1").toLowerCase() === "v2" ? "Marketplace V2" : "Marketplace V1";
+  return String(input.marketplaceVersion || "v2").toLowerCase() === "v2" ? "Marketplace V2" : "Legacy Marketplace V1";
 }
 
 export function getListingPresentation(

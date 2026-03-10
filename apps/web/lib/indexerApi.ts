@@ -1,5 +1,20 @@
-function getBaseUrl(): string {
-  return process.env.NEXT_PUBLIC_INDEXER_API_URL || "http://127.0.0.1:8787";
+import {
+  getLegacyChainPublicEnv,
+  getScopedChainPublicEnv
+} from "./publicEnv";
+
+export type IndexerRequestOptions = {
+  chainId?: number;
+  baseUrl?: string;
+};
+
+export function getIndexerBaseUrl(options?: IndexerRequestOptions): string {
+  if (options?.baseUrl) return options.baseUrl;
+  if (options?.chainId) {
+    const scoped = getScopedChainPublicEnv("NEXT_PUBLIC_INDEXER_API_URL", options.chainId);
+    if (scoped) return scoped;
+  }
+  return getLegacyChainPublicEnv("NEXT_PUBLIC_INDEXER_API_URL") || "http://127.0.0.1:8787";
 }
 
 const INDEXER_REQUEST_TIMEOUT_MS = 12_000;
@@ -26,11 +41,11 @@ function withTimeout(
   };
 }
 
-async function fetchJson<T>(path: string, init?: RequestInit, timeoutMs?: number): Promise<T> {
+async function fetchJson<T>(path: string, init?: RequestInit, timeoutMs?: number, options?: IndexerRequestOptions): Promise<T> {
   const effectiveTimeoutMs = timeoutMs ?? INDEXER_REQUEST_TIMEOUT_MS;
   const { init: requestInit, cleanup } = withTimeout(init, effectiveTimeoutMs);
   try {
-    const response = await fetch(`${getBaseUrl()}${path}`, {
+    const response = await fetch(`${getIndexerBaseUrl(options)}${path}`, {
       ...requestInit,
       headers: {
         "Content-Type": "application/json",
@@ -86,6 +101,7 @@ export type ApiModerationReport = {
   listingId: number | null;
   listingRecordId?: string | null;
   marketplaceVersion?: string | null;
+  listing?: ApiActiveListingItem | null;
   reason: string;
   reporterAddress: string;
   status: string;
@@ -103,6 +119,7 @@ export type ApiModerationAction = {
   listingId: number | null;
   listingRecordId?: string | null;
   marketplaceVersion?: string | null;
+  listing?: ApiActiveListingItem | null;
   createdAt: string;
 };
 
@@ -133,6 +150,7 @@ export type ApiPaymentTokenRecord = {
   useCount: number;
   status: "pending" | "approved" | "flagged";
   notes: string | null;
+  onchainAllowed?: boolean | null;
 };
 
 export type ApiProfileResolution = {
@@ -140,6 +158,7 @@ export type ApiProfileResolution = {
   sellers: string[];
   profiles?: ApiProfileRecord[];
   collections: Array<{
+    chainId?: number;
     ensSubname: string | null;
     contractAddress: string;
     ownerAddress: string;
@@ -235,6 +254,8 @@ export type ApiMintFeedItem = {
   tokenId: string;
   creatorAddress: string;
   ownerAddress: string;
+  currentOwnerAddress?: string | null;
+  currentOwnerAddresses?: string[];
   heldAmountRaw?: string | null;
   reservedAmountRaw?: string | null;
   availableAmountRaw?: string | null;
@@ -286,6 +307,7 @@ export type ApiOwnerHoldingsResponse = {
 
 export type ApiActiveListingItem = {
   id: number;
+  chainId?: number;
   listingId: string;
   listingRecordId?: string;
   marketplaceVersion: string;
@@ -336,6 +358,10 @@ export type ApiIndexerOverview = {
 export type ApiIndexerHealth = {
   ok: boolean;
   service: string;
+  contracts?: {
+    registryAddress?: string | null;
+    moderatorRegistryAddress?: string | null;
+  };
   schema?: {
     mintTxHashColumnAvailable?: boolean;
     tokenPresentationColumnsAvailable?: boolean;
@@ -351,6 +377,10 @@ export type ApiIndexerHealth = {
     v2Configured?: boolean;
     v2SyncInProgress?: boolean;
     lastMarketplaceV2SyncAt?: string | null;
+    v2ListingSyncInProgress?: boolean;
+    v2OfferSyncInProgress?: boolean;
+    lastMarketplaceV2ListingSyncAt?: string | null;
+    lastMarketplaceV2OfferSyncAt?: string | null;
     lastMarketplaceV2ListingSyncCount?: number;
     lastOfferSyncCount?: number;
   };
@@ -452,8 +482,8 @@ export type ApiUserOffersResponse = ApiOffersResponse & {
   ownerAddress: string;
 };
 
-export async function fetchHiddenListings(): Promise<ApiHiddenListings> {
-  const payload = await fetchJson<ApiHiddenListings>("/api/moderation/hidden-listings");
+export async function fetchHiddenListings(options?: IndexerRequestOptions): Promise<ApiHiddenListings> {
+  const payload = await fetchJson<ApiHiddenListings>("/api/moderation/hidden-listings", undefined, undefined, options);
   return {
     listingIds: payload.listingIds || [],
     listingRecordIds: payload.listingRecordIds || []
@@ -598,21 +628,28 @@ export async function reviewTrackedPaymentToken(payload: {
   return response.tokens || [];
 }
 
-export async function fetchProfileResolution(name: string): Promise<ApiProfileResolution> {
-  return fetchJson<ApiProfileResolution>(`/api/profile/${encodeURIComponent(name)}`);
+export async function fetchProfileResolution(name: string, options?: IndexerRequestOptions): Promise<ApiProfileResolution> {
+  return fetchJson<ApiProfileResolution>(`/api/profile/${encodeURIComponent(name)}`, undefined, undefined, options);
 }
 
-export async function fetchCollectionsByOwner(ownerAddress: string): Promise<ApiOwnedCollections> {
-  return fetchJson<ApiOwnedCollections>(`/api/collections?owner=${encodeURIComponent(ownerAddress)}`);
+export async function fetchCollectionsByOwner(ownerAddress: string, options?: IndexerRequestOptions): Promise<ApiOwnedCollections> {
+  return fetchJson<ApiOwnedCollections>(`/api/collections?owner=${encodeURIComponent(ownerAddress)}`, undefined, undefined, options);
 }
 
-export async function fetchProfilesByOwner(ownerAddress: string): Promise<ApiOwnedProfiles> {
-  return fetchJson<ApiOwnedProfiles>(`/api/profiles?owner=${encodeURIComponent(ownerAddress)}`);
+export async function fetchProfilesByOwner(ownerAddress: string, options?: IndexerRequestOptions): Promise<ApiOwnedProfiles> {
+  return fetchJson<ApiOwnedProfiles>(`/api/profiles?owner=${encodeURIComponent(ownerAddress)}`, undefined, undefined, options);
 }
 
-export async function fetchMintFeed(cursor = 0, limit = 50): Promise<ApiMintFeedResponse> {
+export async function fetchMintFeed(
+  cursor = 0,
+  limit = 50,
+  options?: IndexerRequestOptions
+): Promise<ApiMintFeedResponse> {
   return fetchJson<ApiMintFeedResponse>(
-    `/api/feed?cursor=${encodeURIComponent(String(cursor))}&limit=${encodeURIComponent(String(limit))}`
+    `/api/feed?cursor=${encodeURIComponent(String(cursor))}&limit=${encodeURIComponent(String(limit))}`,
+    undefined,
+    undefined,
+    options
   );
 }
 
@@ -620,7 +657,7 @@ export async function fetchActiveListings(
   cursor = 0,
   limit = 50,
   seller?: string,
-  options?: { includeAllMarkets?: boolean }
+  options?: { includeAllMarkets?: boolean } & IndexerRequestOptions
 ): Promise<ApiActiveListingsResponse> {
   const params = new URLSearchParams();
   params.set("cursor", String(cursor));
@@ -631,7 +668,7 @@ export async function fetchActiveListings(
   if (options?.includeAllMarkets) {
     params.set("includeAllMarkets", "true");
   }
-  return fetchJson<ApiActiveListingsResponse>(`/api/listings?${params.toString()}`);
+  return fetchJson<ApiActiveListingsResponse>(`/api/listings?${params.toString()}`, undefined, undefined, options);
 }
 
 export async function fetchOffers(params?: {
@@ -642,6 +679,8 @@ export async function fetchOffers(params?: {
   tokenId?: string;
   status?: string;
   active?: boolean;
+  chainId?: number;
+  baseUrl?: string;
 }): Promise<ApiOffersResponse> {
   const query = new URLSearchParams();
   query.set("cursor", String(params?.cursor ?? 0));
@@ -661,18 +700,37 @@ export async function fetchOffers(params?: {
   if (typeof params?.active === "boolean") {
     query.set("active", String(params.active));
   }
-  return fetchJson<ApiOffersResponse>(`/api/offers?${query.toString()}`);
+  return fetchJson<ApiOffersResponse>(`/api/offers?${query.toString()}`, undefined, undefined, {
+    chainId: params?.chainId,
+    baseUrl: params?.baseUrl
+  });
 }
 
-export async function fetchOffersMade(ownerAddress: string, cursor = 0, limit = 50): Promise<ApiUserOffersResponse> {
+export async function fetchOffersMade(
+  ownerAddress: string,
+  cursor = 0,
+  limit = 50,
+  options?: IndexerRequestOptions
+): Promise<ApiUserOffersResponse> {
   return fetchJson<ApiUserOffersResponse>(
-    `/api/users/${encodeURIComponent(ownerAddress)}/offers-made?cursor=${encodeURIComponent(String(cursor))}&limit=${encodeURIComponent(String(limit))}`
+    `/api/users/${encodeURIComponent(ownerAddress)}/offers-made?cursor=${encodeURIComponent(String(cursor))}&limit=${encodeURIComponent(String(limit))}`,
+    undefined,
+    undefined,
+    options
   );
 }
 
-export async function fetchOffersReceived(ownerAddress: string, cursor = 0, limit = 50): Promise<ApiUserOffersResponse> {
+export async function fetchOffersReceived(
+  ownerAddress: string,
+  cursor = 0,
+  limit = 50,
+  options?: IndexerRequestOptions
+): Promise<ApiUserOffersResponse> {
   return fetchJson<ApiUserOffersResponse>(
-    `/api/users/${encodeURIComponent(ownerAddress)}/offers-received?cursor=${encodeURIComponent(String(cursor))}&limit=${encodeURIComponent(String(limit))}`
+    `/api/users/${encodeURIComponent(ownerAddress)}/offers-received?cursor=${encodeURIComponent(String(cursor))}&limit=${encodeURIComponent(String(limit))}`,
+    undefined,
+    undefined,
+    options
   );
 }
 
@@ -692,7 +750,7 @@ export async function fetchOwnerHoldings(
   ownerAddress: string,
   cursor = 0,
   limit = 50,
-  options?: { standard?: "ERC721" | "ERC1155" | string | null }
+  options?: { standard?: "ERC721" | "ERC1155" | string | null } & IndexerRequestOptions
 ): Promise<ApiOwnerHoldingsResponse> {
   const params = new URLSearchParams({
     cursor: String(cursor),
@@ -702,7 +760,12 @@ export async function fetchOwnerHoldings(
   if (standard === "ERC721" || standard === "ERC1155") {
     params.set("standard", standard);
   }
-  return fetchJson<ApiOwnerHoldingsResponse>(`/api/users/${encodeURIComponent(ownerAddress)}/holdings?${params.toString()}`);
+  return fetchJson<ApiOwnerHoldingsResponse>(
+    `/api/users/${encodeURIComponent(ownerAddress)}/holdings?${params.toString()}`,
+    undefined,
+    undefined,
+    options
+  );
 }
 
 export async function fetchCollectionTokens(contractAddress: string): Promise<ApiCollectionTokens> {

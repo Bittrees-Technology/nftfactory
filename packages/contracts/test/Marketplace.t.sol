@@ -48,26 +48,85 @@ contract Mock1155 {
     }
 }
 
-contract ReentrantERC20 {
-    Marketplace public marketplace;
-    uint256 public targetListing;
-    bool public reenterOnTransferFrom;
+contract MockERC20 {
+    mapping(address => uint256) public balanceOf;
+    mapping(address => mapping(address => uint256)) public allowance;
 
-    constructor(address marketplaceAddress) {
-        marketplace = Marketplace(marketplaceAddress);
+    function mint(address to, uint256 amount) external {
+        balanceOf[to] += amount;
     }
 
-    function setReentry(uint256 listingId, bool enabled) external {
-        targetListing = listingId;
-        reenterOnTransferFrom = enabled;
+    function approve(address spender, uint256 amount) external returns (bool) {
+        allowance[msg.sender][spender] = amount;
+        return true;
+    }
+
+    function transfer(address to, uint256 amount) external returns (bool) {
+        require(balanceOf[msg.sender] >= amount, "INSUFFICIENT_BALANCE");
+        balanceOf[msg.sender] -= amount;
+        balanceOf[to] += amount;
+        return true;
+    }
+
+    function transferFrom(address from, address to, uint256 amount) external returns (bool) {
+        require(balanceOf[from] >= amount, "INSUFFICIENT_BALANCE");
+        require(allowance[from][msg.sender] >= amount, "INSUFFICIENT_ALLOWANCE");
+        allowance[from][msg.sender] -= amount;
+        balanceOf[from] -= amount;
+        balanceOf[to] += amount;
+        return true;
+    }
+}
+
+contract MockBadERC20 {
+    mapping(address => uint256) public balanceOf;
+    mapping(address => mapping(address => uint256)) public allowance;
+
+    function mint(address to, uint256 amount) external {
+        balanceOf[to] += amount;
+    }
+
+    function approve(address spender, uint256 amount) external returns (bool) {
+        allowance[msg.sender][spender] = amount;
+        return true;
+    }
+
+    function transfer(address, uint256) external returns (bool) {
+        return true;
     }
 
     function transferFrom(address, address, uint256) external returns (bool) {
-        if (reenterOnTransferFrom) {
-            reenterOnTransferFrom = false;
-            try marketplace.buy(targetListing) {} catch {}
-        }
         return true;
+    }
+}
+
+contract ReentrantSeller {
+    Marketplace public marketplace;
+    Mock721 public nft;
+    uint256 public targetTokenId;
+    bool public reenterOnReceive;
+
+    constructor(address marketplaceAddress, address nftAddress) {
+        marketplace = Marketplace(marketplaceAddress);
+        nft = Mock721(nftAddress);
+    }
+
+    function prepareListing(uint256 tokenId, uint256 price, uint256 durationDays) external {
+        targetTokenId = tokenId;
+        nft.mint(address(this), tokenId);
+        nft.setApprovalForAll(address(marketplace), true);
+        marketplace.createListing(address(nft), tokenId, 1, "ERC721", address(0), price, durationDays);
+    }
+
+    function armReenter(uint256 tokenId) external {
+        targetTokenId = tokenId;
+        reenterOnReceive = true;
+    }
+
+    receive() external payable {
+        if (!reenterOnReceive) return;
+        reenterOnReceive = false;
+        try marketplace.createListing(address(nft), targetTokenId, 1, "ERC721", address(0), 1 ether, 7) {} catch {}
     }
 }
 
@@ -76,7 +135,9 @@ contract MarketplaceTest is Test {
     Marketplace internal marketplace;
     Mock721 internal nft721;
     Mock1155 internal nft1155;
-    ReentrantERC20 internal reentrantToken;
+    MockERC20 internal erc20;
+    MockBadERC20 internal badErc20;
+    ReentrantSeller internal reentrantSeller;
 
     address internal admin = address(0xA11CE);
     address internal treasury = address(0xBEEF);
@@ -91,7 +152,9 @@ contract MarketplaceTest is Test {
 
         nft721 = new Mock721();
         nft1155 = new Mock1155();
-        reentrantToken = new ReentrantERC20(address(marketplace));
+        erc20 = new MockERC20();
+        badErc20 = new MockBadERC20();
+        reentrantSeller = new ReentrantSeller(address(marketplace), address(nft721));
 
         vm.deal(buyer, 10 ether);
     }
@@ -191,6 +254,15 @@ contract MarketplaceTest is Test {
         vm.stopPrank();
     }
 
+    function testCreateListingRevertsWhenPaymentTokenNotAllowed() external {
+        vm.startPrank(seller);
+        nft721.mint(seller, 1);
+        nft721.setApprovalForAll(address(marketplace), true);
+        vm.expectRevert(Marketplace.PaymentTokenNotAllowed.selector);
+        marketplace.createListing(address(nft721), 1, 1, "ERC721", address(erc20), 100, 7);
+        vm.stopPrank();
+    }
+
     function testBuySplitsProtocolFeeForEthSales() external {
         vm.prank(admin);
         registry.setProtocolFeeBps(500);
@@ -212,25 +284,62 @@ contract MarketplaceTest is Test {
         assertEq(nft721.ownerOf(1), buyer);
     }
 
-    function testNonReentrantBuyBlocksNestedBuy() external {
+    function testBuyTransfersAllowedErc20() external {
+        vm.prank(admin);
+        registry.setPaymentTokenAllowed(address(erc20), true);
+        vm.prank(admin);
+        registry.setProtocolFeeBps(500);
+
         vm.startPrank(seller);
         nft721.mint(seller, 1);
-        nft721.mint(seller, 2);
         nft721.setApprovalForAll(address(marketplace), true);
-        marketplace.createListing(address(nft721), 1, 1, "ERC721", address(reentrantToken), 1, 7);
-        marketplace.createListing(address(nft721), 2, 1, "ERC721", address(reentrantToken), 1, 7);
+        marketplace.createListing(address(nft721), 1, 1, "ERC721", address(erc20), 200, 7);
         vm.stopPrank();
 
-        reentrantToken.setReentry(1, true);
+        erc20.mint(buyer, 200);
+        vm.prank(buyer);
+        erc20.approve(address(marketplace), 200);
 
         vm.prank(buyer);
         marketplace.buy(0);
 
+        assertEq(erc20.balanceOf(treasury), 10);
+        assertEq(erc20.balanceOf(seller), 190);
+        assertEq(erc20.balanceOf(buyer), 0);
         assertEq(nft721.ownerOf(1), buyer);
-        assertEq(nft721.ownerOf(2), seller);
-        (,,,,,,,, bool firstActive) = marketplace.listings(0);
-        (,,,,,,,, bool secondActive) = marketplace.listings(1);
-        assertFalse(firstActive);
-        assertTrue(secondActive);
+    }
+
+    function testBuyRevertsWhenAllowedTokenDoesNotTransferBalance() external {
+        vm.prank(admin);
+        registry.setPaymentTokenAllowed(address(badErc20), true);
+
+        vm.startPrank(seller);
+        nft721.mint(seller, 1);
+        nft721.setApprovalForAll(address(marketplace), true);
+        marketplace.createListing(address(nft721), 1, 1, "ERC721", address(badErc20), 100, 7);
+        vm.stopPrank();
+
+        badErc20.mint(buyer, 100);
+        vm.prank(buyer);
+        badErc20.approve(address(marketplace), 100);
+
+        vm.prank(buyer);
+        vm.expectRevert(Marketplace.PaymentTransferMismatch.selector);
+        marketplace.buy(0);
+
+        assertEq(nft721.ownerOf(1), seller);
+        (,,,,,,,, bool active) = marketplace.listings(0);
+        assertTrue(active);
+    }
+
+    function testNonReentrantBuyBlocksSellerRelistDuringEthPayout() external {
+        reentrantSeller.prepareListing(1, 1 ether, 7);
+        reentrantSeller.armReenter(1);
+
+        vm.prank(buyer);
+        marketplace.buy{value: 1 ether}(0);
+
+        assertEq(nft721.ownerOf(1), buyer);
+        assertEq(marketplace.nextListingId(), 1);
     }
 }

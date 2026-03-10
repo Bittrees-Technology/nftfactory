@@ -70,6 +70,7 @@ function createSchemaQueryMock(options?: {
   listingV2?: boolean;
   offerTable?: boolean;
   tokenHoldingTable?: boolean;
+  moderationListing?: boolean;
 }) {
   return vi.fn(async (query: string) => {
     if (query.includes("table_name = 'Offer'")) {
@@ -93,12 +94,25 @@ function createSchemaQueryMock(options?: {
     if (query.includes("table_name = 'Listing'")) {
       return options?.listingV2 ? [{}] : [];
     }
+    if (query.includes("table_name = 'Report'") && query.includes("column_name = 'listingRecordId'")) {
+      return options?.moderationListing ? [{}] : [];
+    }
+    if (query.includes("table_name = 'Report'") && query.includes("column_name = 'marketplaceVersion'")) {
+      return options?.moderationListing ? [{}] : [];
+    }
+    if (query.includes("table_name = 'ModerationAction'") && query.includes("column_name = 'listingRecordId'")) {
+      return options?.moderationListing ? [{}] : [];
+    }
+    if (query.includes("table_name = 'ModerationAction'") && query.includes("column_name = 'marketplaceVersion'")) {
+      return options?.moderationListing ? [{}] : [];
+    }
     return [];
   });
 }
 
 afterEach(() => {
   vi.unstubAllEnvs();
+  vi.restoreAllMocks();
   readContractMock.mockReset();
   getLogsMock.mockReset();
   getLogsMock.mockResolvedValue([]);
@@ -240,6 +254,96 @@ describe("indexer consistency hardening", () => {
 
     await rm(tempDir, { recursive: true, force: true });
   }, 15000);
+
+  it("hydrates tracked payment tokens with on-chain allowlist state", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "nftfactory-indexer-"));
+    vi.stubEnv("INDEXER_PAYMENT_TOKEN_FILE", path.join(tempDir, "payment-tokens.json"));
+
+    const allowedToken = "0x9999999999999999999999999999999999999999";
+    readContractMock.mockImplementation(async ({ functionName, args }) => {
+      if (functionName === "allowedPaymentToken") {
+        return String(args?.[0] || "").toLowerCase() === allowedToken;
+      }
+      return false;
+    });
+
+    const prisma = {
+      report: {
+        findMany: vi.fn(async () => []),
+        create: vi.fn(),
+        findUnique: vi.fn(),
+        update: vi.fn(),
+        count: vi.fn(async () => 0)
+      },
+      moderationAction: {
+        findMany: vi.fn(async () => []),
+        create: vi.fn()
+      },
+      listing: {
+        findMany: vi.fn(async () => []),
+        findUnique: vi.fn(async () => null),
+        upsert: vi.fn(),
+        updateMany: vi.fn(async () => ({ count: 0 })),
+        count: vi.fn(async () => 0)
+      },
+      collection: {
+        findMany: vi.fn(async () => []),
+        updateMany: vi.fn(async () => ({ count: 0 })),
+        upsert: vi.fn(),
+        count: vi.fn(async () => 0)
+      },
+      token: {
+        upsert: vi.fn(),
+        findMany: vi.fn(async () => []),
+        count: vi.fn(async () => 0)
+      },
+      $queryRawUnsafe: createSchemaQueryMock()
+    } as unknown as PrismaClient;
+
+    const createRequestHandler = await loadCreateRequestHandler();
+    const handler = createRequestHandler(
+      {
+        prisma,
+        getClientIpImpl: () => "127.0.0.1",
+        isRateLimitedImpl: () => false
+      },
+      {
+        chainId: 11155111,
+        rpcUrl: "http://127.0.0.1:8545",
+        adminToken: "",
+        adminAllowlist: new Set(),
+        trustProxy: false,
+        marketplaceAddress: null,
+        marketplaceV2Address: null,
+        registryAddress: "0x1111111111111111111111111111111111111111",
+        moderatorRegistryAddress: null
+      }
+    );
+
+    const logResponse = await runHandler(
+      handler,
+      createReq({
+        method: "POST",
+        url: "/api/payment-tokens/log",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          tokenAddress: allowedToken,
+          sellerAddress: "0x2222222222222222222222222222222222222222"
+        })
+      })
+    );
+
+    expect(logResponse.status).toBe(200);
+    expect(logResponse.body.tokens[0].onchainAllowed).toBe(true);
+
+    const tokensResponse = await runHandler(handler, createReq({ method: "GET", url: "/api/admin/payment-tokens" }));
+    expect(tokensResponse.status).toBe(200);
+    expect(tokensResponse.body.tokens).toHaveLength(1);
+    expect(tokensResponse.body.tokens[0].tokenAddress).toBe(allowedToken);
+    expect(tokensResponse.body.tokens[0].onchainAllowed).toBe(true);
+
+    await rm(tempDir, { recursive: true, force: true });
+  });
 
   it("prefers persisted token presentation columns over stale overlay records", async () => {
     const tempDir = await mkdtemp(path.join(os.tmpdir(), "nftfactory-indexer-"));
@@ -715,6 +819,600 @@ describe("indexer consistency hardening", () => {
         tokenRefId: "tok_v2_1",
         status: "active",
         quantityRaw: "2"
+      })
+    });
+  });
+
+  it("does not let a recent v2 offer sync suppress listing sync", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "nftfactory-indexer-sync-state-"));
+    vi.stubEnv("INDEXER_MARKETPLACE_V2_SYNC_STATE_FILE", path.join(tempDir, "marketplace-v2-sync-state.json"));
+    readContractMock.mockImplementation(async ({ functionName, args }) => {
+      if (functionName === "nextOfferId") return 1n;
+      if (functionName === "offers" && String(args?.[0]) === "0") {
+        return [
+          "0x1111111111111111111111111111111111111111",
+          "0x2222222222222222222222222222222222222222",
+          7n,
+          2n,
+          "ERC1155",
+          "0x0000000000000000000000000000000000000000",
+          4000000000000000n,
+          2000000000n,
+          true
+        ] as const;
+      }
+      if (functionName === "nextListingId") return 1n;
+      if (functionName === "listings" && String(args?.[0]) === "0") {
+        return [
+          "0x3333333333333333333333333333333333333333",
+          "0x2222222222222222222222222222222222222222",
+          7n,
+          2n,
+          "ERC1155",
+          "0x0000000000000000000000000000000000000000",
+          5000000000000000n,
+          2000000000n,
+          true
+        ] as const;
+      }
+      throw new Error(`Unexpected readContract call for ${String(functionName)}`);
+    });
+
+    const listingUpsert = vi.fn(async () => ({}));
+    const offerUpsert = vi.fn(async () => ({}));
+    const prisma = {
+      listing: {
+        upsert: listingUpsert,
+        updateMany: vi.fn(async () => ({ count: 0 })),
+        findMany: vi.fn(async () => []),
+        count: vi.fn(async () => 0)
+      },
+      offer: {
+        upsert: offerUpsert,
+        findMany: vi.fn(async () => []),
+        count: vi.fn(async () => 0)
+      },
+      token: {
+        findFirst: vi.fn(async () => ({ id: "tok_v2_1" }))
+      },
+      $queryRawUnsafe: createSchemaQueryMock({ listingV2: true, offerTable: true })
+    } as unknown as PrismaClient;
+
+    const createRequestHandler = await loadCreateRequestHandler();
+    const handler = createRequestHandler(
+      {
+        prisma,
+        getClientIpImpl: () => "127.0.0.1",
+        isRateLimitedImpl: () => false
+      },
+      {
+        chainId: 11155111,
+        rpcUrl: "http://127.0.0.1:8545",
+        adminToken: "",
+        adminAllowlist: new Set(),
+        trustProxy: false,
+        marketplaceAddress: null,
+        marketplaceV2Address: "0x5555555555555555555555555555555555555555",
+        registryAddress: null,
+        moderatorRegistryAddress: null
+      }
+    );
+
+    const offersResponse = await runHandler(
+      handler,
+      createReq({
+        method: "GET",
+        url: "/api/offers"
+      })
+    );
+    expect(offersResponse.status).toBe(200);
+    expect(offerUpsert).toHaveBeenCalledTimes(1);
+    expect(listingUpsert).not.toHaveBeenCalled();
+
+    const listingsResponse = await runHandler(
+      handler,
+      createReq({
+        method: "GET",
+        url: "/api/listings?includeAllMarkets=true"
+      })
+    );
+    expect(listingsResponse.status).toBe(200);
+    expect(listingUpsert).toHaveBeenCalledTimes(1);
+    expect(offerUpsert).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps ERC1155 primary ownership with the seller after partial offer acceptance", async () => {
+    const sellerAddress = "0x3333333333333333333333333333333333333333";
+    const buyerAddress = "0x1111111111111111111111111111111111111111";
+    const collectionAddress = "0x2222222222222222222222222222222222222222";
+    const tokenUpdate = vi.fn(async () => ({}));
+    const tokenHoldingUpsert = vi.fn(async () => ({}));
+
+    readContractMock.mockImplementation(async ({ functionName, args }) => {
+      if (functionName === "nextOfferId") return 1n;
+      if (functionName === "offers" && String(args?.[0]) === "0") {
+        return [
+          buyerAddress,
+          collectionAddress,
+          7n,
+          2n,
+          "ERC1155",
+          "0x0000000000000000000000000000000000000000",
+          4000000000000000n,
+          2000000000n,
+          true
+        ] as const;
+      }
+      throw new Error(`Unexpected readContract call for ${String(functionName)}`);
+    });
+    getLogsMock.mockImplementation(async ({ event }) => {
+      if (event?.name === "OfferAccepted") {
+        return [
+          {
+            args: {
+              offerId: 0n,
+              seller: sellerAddress,
+              buyer: buyerAddress,
+              quantity: 2n
+            },
+            transactionHash: "0xabc123"
+          }
+        ];
+      }
+      return [];
+    });
+
+    const prisma = {
+      offer: {
+        upsert: vi.fn(async () => ({})),
+        findUnique: vi.fn(async () => ({ acceptedTxHash: null }))
+      },
+      token: {
+        findFirst: vi.fn(async () => ({ id: "tok_v2_1" })),
+        update: tokenUpdate
+      },
+      tokenHolding: {
+        findUnique: vi.fn(async ({ where }) => {
+          const ownerAddress = String(where?.tokenId_ownerAddress?.ownerAddress || "").toLowerCase();
+          if (ownerAddress === sellerAddress) {
+            return { quantityRaw: "5" };
+          }
+          if (ownerAddress === buyerAddress) {
+            return null;
+          }
+          return null;
+        }),
+        upsert: tokenHoldingUpsert,
+        findMany: vi.fn(async () => [
+          { ownerAddress: sellerAddress, quantityRaw: "3" },
+          { ownerAddress: buyerAddress, quantityRaw: "2" }
+        ])
+      },
+      $queryRawUnsafe: createSchemaQueryMock({ offerTable: true, tokenHoldingTable: true })
+    } as unknown as PrismaClient;
+
+    const createRequestHandler = await loadCreateRequestHandler();
+    const handler = createRequestHandler(
+      {
+        prisma,
+        getClientIpImpl: () => "127.0.0.1",
+        isRateLimitedImpl: () => false
+      },
+      {
+        chainId: 11155111,
+        rpcUrl: "http://127.0.0.1:8545",
+        adminToken: "secret",
+        adminAllowlist: new Set(),
+        trustProxy: false,
+        marketplaceAddress: null,
+        marketplaceV2Address: "0x5555555555555555555555555555555555555555",
+        registryAddress: null,
+        moderatorRegistryAddress: null
+      }
+    );
+
+    const response = await runHandler(
+      handler,
+      createReq({
+        method: "POST",
+        url: "/api/admin/offers/sync",
+        headers: { authorization: "Bearer secret" }
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(tokenHoldingUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          tokenId_ownerAddress: {
+            tokenId: "tok_v2_1",
+            ownerAddress: sellerAddress
+          }
+        },
+        update: {
+          quantityRaw: "3"
+        }
+      })
+    );
+    expect(tokenHoldingUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          tokenId_ownerAddress: {
+            tokenId: "tok_v2_1",
+            ownerAddress: buyerAddress
+          }
+        },
+        update: {
+          quantityRaw: "2"
+        }
+      })
+    );
+    expect(tokenUpdate).toHaveBeenLastCalledWith({
+      where: { id: "tok_v2_1" },
+      data: {
+        ownerAddress: sellerAddress
+      }
+    });
+  });
+
+  it("serializes ERC1155 feed and listing owners from indexed holdings", async () => {
+    const sellerAddress = "0x3333333333333333333333333333333333333333";
+    const buyerAddress = "0x1111111111111111111111111111111111111111";
+    const baseToken = {
+      id: "tok_1",
+      tokenId: "7",
+      creatorAddress: sellerAddress,
+      ownerAddress: buyerAddress,
+      draftName: "Edition Seven",
+      draftDescription: "Split ownership",
+      mintedAmountRaw: "5",
+      metadataCid: "ipfs://metadata",
+      mediaCid: null,
+      immutable: true,
+      mintedAt: new Date("2026-03-06T12:00:00.000Z"),
+      holdings: [
+        { ownerAddress: sellerAddress, quantityRaw: "3" },
+        { ownerAddress: buyerAddress, quantityRaw: "2" }
+      ],
+      listings: [],
+      collection: {
+        chainId: 11155111,
+        contractAddress: "0x2222222222222222222222222222222222222222",
+        ownerAddress: sellerAddress,
+        ensSubname: "artist",
+        standard: "ERC1155",
+        isFactoryCreated: true,
+        isUpgradeable: false,
+        finalizedAt: null,
+        createdAt: new Date("2026-03-06T12:00:00.000Z"),
+        updatedAt: new Date("2026-03-06T12:00:00.000Z")
+      }
+    };
+
+    const prisma = {
+      report: {
+        findMany: vi.fn(async () => []),
+        create: vi.fn(),
+        findUnique: vi.fn(),
+        update: vi.fn(),
+        count: vi.fn(async () => 0)
+      },
+      moderationAction: {
+        findMany: vi.fn(async () => []),
+        create: vi.fn()
+      },
+      token: {
+        findMany: vi.fn(async () => [baseToken]),
+        count: vi.fn(async () => 1)
+      },
+      listing: {
+        findMany: vi.fn(async () => [
+          {
+            listingId: "v2:21",
+            sellerAddress,
+            collectionAddress: baseToken.collection.contractAddress,
+            tokenId: "7",
+            marketplaceVersion: "v2",
+            amountRaw: "2",
+            standard: "ERC1155",
+            paymentToken: "0x0000000000000000000000000000000000000000",
+            priceRaw: "10000000000000000",
+            expiresAtRaw: "2000000000",
+            active: true,
+            buyerAddress: null,
+            txHash: null,
+            cancelledAt: null,
+            soldAt: null,
+            lastSyncedAt: new Date("2026-03-06T12:00:00.000Z"),
+            createdAt: new Date("2026-03-06T12:00:00.000Z"),
+            updatedAt: new Date("2026-03-06T12:00:00.000Z"),
+            token: {
+              ...baseToken,
+              listings: []
+            }
+          }
+        ]),
+        count: vi.fn(async () => 1)
+      },
+      $queryRawUnsafe: createSchemaQueryMock({
+        tokenPresentation: true,
+        listingV2: true,
+        tokenHoldingTable: true
+      })
+    } as unknown as PrismaClient;
+
+    const createRequestHandler = await loadCreateRequestHandler();
+    const handler = createRequestHandler(
+      {
+        prisma,
+        getClientIpImpl: () => "127.0.0.1",
+        isRateLimitedImpl: () => false
+      },
+      {
+        chainId: 11155111,
+        rpcUrl: "http://127.0.0.1:8545",
+        adminToken: "",
+        adminAllowlist: new Set(),
+        trustProxy: false,
+        marketplaceAddress: null,
+        marketplaceV2Address: null,
+        registryAddress: null,
+        moderatorRegistryAddress: null
+      }
+    );
+
+    const [feedResponse, listingsResponse] = await Promise.all([
+      runHandler(handler, createReq({ method: "GET", url: "/api/feed?cursor=0&limit=10" })),
+      runHandler(handler, createReq({ method: "GET", url: "/api/listings?includeAllMarkets=true&cursor=0&limit=10" }))
+    ]);
+
+    expect(feedResponse.status).toBe(200);
+    expect(feedResponse.body.items[0]).toMatchObject({
+      ownerAddress: sellerAddress,
+      currentOwnerAddress: sellerAddress,
+      currentOwnerAddresses: [sellerAddress, buyerAddress]
+    });
+
+    expect(listingsResponse.status).toBe(200);
+    expect(listingsResponse.body.items[0].token).toMatchObject({
+      ownerAddress: sellerAddress,
+      currentOwnerAddress: sellerAddress,
+      currentOwnerAddresses: [sellerAddress, buyerAddress]
+    });
+  });
+
+  it("incrementally syncs only changed v2 listings after a checkpoint exists", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "nftfactory-indexer-sync-state-"));
+    vi.stubEnv("INDEXER_MARKETPLACE_V2_SYNC_STATE_FILE", path.join(tempDir, "marketplace-v2-sync-state.json"));
+
+    let phase: 1 | 2 = 1;
+    const nowSpy = vi.spyOn(Date, "now");
+    nowSpy.mockImplementation(() => (phase === 1 ? 1_700_000_000_000 : 1_700_000_060_000));
+    getBlockNumberMock.mockImplementation(async () => (phase === 1 ? 100n : 105n));
+    readContractMock.mockImplementation(async ({ functionName, args }) => {
+      if (functionName === "nextListingId") return 1n;
+      if (phase === 1 && functionName === "listings" && String(args?.[0]) === "0") {
+        return [
+          "0x3333333333333333333333333333333333333333",
+          "0x2222222222222222222222222222222222222222",
+          7n,
+          2n,
+          "ERC1155",
+          "0x0000000000000000000000000000000000000000",
+          5000000000000000n,
+          2000000000n,
+          true
+        ] as const;
+      }
+      if (phase === 2 && functionName === "listings" && String(args?.[0]) === "1") {
+        return [
+          "0x4444444444444444444444444444444444444444",
+          "0x2222222222222222222222222222222222222222",
+          8n,
+          1n,
+          "ERC721",
+          "0x0000000000000000000000000000000000000000",
+          6000000000000000n,
+          2000000100n,
+          true
+        ] as const;
+      }
+      throw new Error(`Unexpected readContract call for ${String(functionName)} with ${String(args?.[0])}`);
+    });
+    getLogsMock.mockImplementation(async ({ event }) => {
+      if (phase === 2 && event?.name === "Listed") {
+        return [
+          {
+            args: { listingId: 1n },
+            transactionHash: "0xlisted"
+          }
+        ];
+      }
+      return [];
+    });
+
+    const listingUpsert = vi.fn(async () => ({}));
+    const prisma = {
+      listing: {
+        upsert: listingUpsert,
+        updateMany: vi.fn(async () => ({ count: 0 })),
+        findMany: vi.fn(async () => []),
+        count: vi.fn(async () => 0)
+      },
+      token: {
+        findFirst: vi.fn(async ({ where }) => ({ id: `tok_${where?.tokenId}` })),
+        findMany: vi.fn(async () => [])
+      },
+      offer: {
+        findMany: vi.fn(async () => []),
+        count: vi.fn(async () => 0)
+      },
+      $queryRawUnsafe: createSchemaQueryMock({ listingV2: true, offerTable: false })
+    } as unknown as PrismaClient;
+
+    const createRequestHandler = await loadCreateRequestHandler();
+    const handler = createRequestHandler(
+      {
+        prisma,
+        getClientIpImpl: () => "127.0.0.1",
+        isRateLimitedImpl: () => false
+      },
+      {
+        chainId: 11155111,
+        rpcUrl: "http://127.0.0.1:8545",
+        adminToken: "secret",
+        adminAllowlist: new Set(),
+        trustProxy: false,
+        marketplaceAddress: null,
+        marketplaceV2Address: "0x5555555555555555555555555555555555555555",
+        registryAddress: null,
+        moderatorRegistryAddress: null
+      }
+    );
+
+    const initialResponse = await runHandler(
+      handler,
+      createReq({
+        method: "POST",
+        url: "/api/admin/marketplace-v2/sync",
+        headers: { authorization: "Bearer secret" }
+      })
+    );
+    expect(initialResponse.status).toBe(200);
+    expect(listingUpsert).toHaveBeenCalledTimes(1);
+
+    phase = 2;
+    const incrementalResponse = await runHandler(
+      handler,
+      createReq({
+        method: "GET",
+        url: "/api/listings?includeAllMarkets=true"
+      })
+    );
+
+    expect(incrementalResponse.status).toBe(200);
+    expect(listingUpsert).toHaveBeenCalledTimes(2);
+    expect((listingUpsert as any).mock.calls[1][0]).toMatchObject({
+      where: { listingId: "v2:1" },
+      update: expect.objectContaining({
+        tokenId: "8",
+        marketplaceVersion: "v2"
+      })
+    });
+  });
+
+  it("incrementally syncs only changed v2 offers after a checkpoint exists", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "nftfactory-indexer-sync-state-"));
+    vi.stubEnv("INDEXER_MARKETPLACE_V2_SYNC_STATE_FILE", path.join(tempDir, "marketplace-v2-sync-state.json"));
+
+    let phase: 1 | 2 = 1;
+    const nowSpy = vi.spyOn(Date, "now");
+    nowSpy.mockImplementation(() => (phase === 1 ? 1_700_000_000_000 : 1_700_000_060_000));
+    getBlockNumberMock.mockImplementation(async () => (phase === 1 ? 100n : 105n));
+    readContractMock.mockImplementation(async ({ functionName, args }) => {
+      if (functionName === "nextOfferId") return 1n;
+      if (phase === 1 && functionName === "offers" && String(args?.[0]) === "0") {
+        return [
+          "0x1111111111111111111111111111111111111111",
+          "0x2222222222222222222222222222222222222222",
+          7n,
+          2n,
+          "ERC1155",
+          "0x0000000000000000000000000000000000000000",
+          4000000000000000n,
+          2000000000n,
+          true
+        ] as const;
+      }
+      if (phase === 2 && functionName === "offers" && String(args?.[0]) === "1") {
+        return [
+          "0x9999999999999999999999999999999999999999",
+          "0x2222222222222222222222222222222222222222",
+          8n,
+          1n,
+          "ERC721",
+          "0x0000000000000000000000000000000000000000",
+          5000000000000000n,
+          2000000100n,
+          true
+        ] as const;
+      }
+      throw new Error(`Unexpected readContract call for ${String(functionName)} with ${String(args?.[0])}`);
+    });
+    getLogsMock.mockImplementation(async ({ event }) => {
+      if (phase === 2 && event?.name === "OfferCreated") {
+        return [
+          {
+            args: { offerId: 1n },
+            transactionHash: "0xoffercreated"
+          }
+        ];
+      }
+      return [];
+    });
+
+    const offerUpsert = vi.fn(async () => ({}));
+    const prisma = {
+      offer: {
+        upsert: offerUpsert,
+        findUnique: vi.fn(async () => ({ acceptedTxHash: null })),
+        findMany: vi.fn(async () => []),
+        count: vi.fn(async () => 0),
+        updateMany: vi.fn(async () => ({ count: 0 }))
+      },
+      token: {
+        findFirst: vi.fn(async ({ where }) => ({ id: `tok_${where?.tokenId}` }))
+      },
+      $queryRawUnsafe: createSchemaQueryMock({ offerTable: true })
+    } as unknown as PrismaClient;
+
+    const createRequestHandler = await loadCreateRequestHandler();
+    const handler = createRequestHandler(
+      {
+        prisma,
+        getClientIpImpl: () => "127.0.0.1",
+        isRateLimitedImpl: () => false
+      },
+      {
+        chainId: 11155111,
+        rpcUrl: "http://127.0.0.1:8545",
+        adminToken: "secret",
+        adminAllowlist: new Set(),
+        trustProxy: false,
+        marketplaceAddress: null,
+        marketplaceV2Address: "0x5555555555555555555555555555555555555555",
+        registryAddress: null,
+        moderatorRegistryAddress: null
+      }
+    );
+
+    const initialResponse = await runHandler(
+      handler,
+      createReq({
+        method: "POST",
+        url: "/api/admin/offers/sync",
+        headers: { authorization: "Bearer secret" }
+      })
+    );
+    expect(initialResponse.status).toBe(200);
+    expect(offerUpsert).toHaveBeenCalledTimes(1);
+
+    phase = 2;
+    const incrementalResponse = await runHandler(
+      handler,
+      createReq({
+        method: "GET",
+        url: "/api/offers"
+      })
+    );
+
+    expect(incrementalResponse.status).toBe(200);
+    expect(offerUpsert).toHaveBeenCalledTimes(2);
+    expect((offerUpsert as any).mock.calls[1][0]).toMatchObject({
+      where: { offerId: "1" },
+      update: expect.objectContaining({
+        tokenId: "8",
+        marketplaceVersion: "v2"
       })
     });
   });
@@ -1200,7 +1898,7 @@ describe("indexer consistency hardening", () => {
         },
         select: expect.objectContaining({
           listings: expect.objectContaining({
-            where: { active: true, sellerAddress: ownerAddress },
+            where: expect.objectContaining({ active: true, sellerAddress: ownerAddress }),
             take: 50
           })
         })
@@ -1417,11 +2115,455 @@ describe("indexer consistency hardening", () => {
       expect.objectContaining({
         select: expect.objectContaining({
           listings: expect.objectContaining({
-            where: { active: true, sellerAddress: ownerAddress },
+            where: expect.objectContaining({ active: true, sellerAddress: ownerAddress }),
             take: 50
           })
         })
       })
     );
+  });
+
+  it("exposes registry addresses through health without admin auth", async () => {
+    const prisma = {
+      report: {
+        findMany: vi.fn(async () => []),
+        create: vi.fn(),
+        findUnique: vi.fn(),
+        update: vi.fn(),
+        count: vi.fn(async () => 0)
+      },
+      moderationAction: {
+        findMany: vi.fn(async () => []),
+        create: vi.fn()
+      },
+      listing: {
+        findMany: vi.fn(async () => []),
+        findUnique: vi.fn(async () => null),
+        upsert: vi.fn(),
+        updateMany: vi.fn(async () => ({ count: 0 })),
+        count: vi.fn(async () => 0)
+      },
+      collection: {
+        findMany: vi.fn(async () => []),
+        updateMany: vi.fn(async () => ({ count: 0 })),
+        upsert: vi.fn(async () => ({ id: "col_1" })),
+        count: vi.fn(async () => 0)
+      },
+      token: {
+        upsert: vi.fn(),
+        findMany: vi.fn(async () => []),
+        count: vi.fn(async () => 0)
+      },
+      $queryRawUnsafe: createSchemaQueryMock()
+    } as unknown as PrismaClient;
+
+    const createRequestHandler = await loadCreateRequestHandler();
+    const handler = createRequestHandler(
+      {
+        prisma,
+        getClientIpImpl: () => "127.0.0.1",
+        isRateLimitedImpl: () => false
+      },
+      {
+        chainId: 11155111,
+        rpcUrl: "http://127.0.0.1:8545",
+        adminToken: "",
+        adminAllowlist: new Set(),
+        trustProxy: false,
+        marketplaceAddress: null,
+        marketplaceV2Address: null,
+        registryAddress: "0x1111111111111111111111111111111111111111",
+        moderatorRegistryAddress: "0x2222222222222222222222222222222222222222"
+      }
+    );
+
+    const healthResponse = await runHandler(handler, createReq({ method: "GET", url: "/health" }));
+
+    expect(healthResponse.status).toBe(200);
+    expect(healthResponse.body.contracts).toMatchObject({
+      registryAddress: "0x1111111111111111111111111111111111111111",
+      moderatorRegistryAddress: "0x2222222222222222222222222222222222222222"
+    });
+  });
+
+  it("stores and reuses listing-scoped moderation refs when moderation columns are available", async () => {
+    const listingFindMany = vi.fn(async () => [
+      {
+        listingId: "v2:9",
+        marketplaceVersion: "v2",
+        sellerAddress: "0x1111111111111111111111111111111111111111",
+        collectionAddress: "0x2222222222222222222222222222222222222222",
+        tokenId: "7",
+        amountRaw: "1",
+        standard: "ERC721",
+        paymentToken: "0x0000000000000000000000000000000000000000",
+        priceRaw: "100",
+        expiresAtRaw: "2000000000",
+        active: false,
+        buyerAddress: "0x5555555555555555555555555555555555555555",
+        txHash: "0xabc",
+        cancelledAt: null,
+        soldAt: new Date("2026-03-06T12:20:00.000Z"),
+        lastSyncedAt: new Date("2026-03-06T12:20:00.000Z"),
+        createdAt: new Date("2026-03-06T12:00:00.000Z"),
+        updatedAt: new Date("2026-03-06T12:20:00.000Z"),
+        token: {
+          id: "tok_1",
+          creatorAddress: "0x1111111111111111111111111111111111111111",
+          ownerAddress: "0x5555555555555555555555555555555555555555",
+          holdings: [],
+          metadataCid: "ipfs://metadata",
+          mediaCid: "ipfs://media",
+          immutable: true,
+          mintedAt: new Date("2026-03-06T12:00:00.000Z"),
+          mintTxHash: "0xmint",
+          draftName: "Moderated Token",
+          draftDescription: "Historical listing snapshot",
+          mintedAmountRaw: "1",
+          collection: {
+            chainId: 11155111,
+            contractAddress: "0x2222222222222222222222222222222222222222",
+            ownerAddress: "0x1111111111111111111111111111111111111111",
+            ensSubname: "artist",
+            standard: "ERC721",
+            isFactoryCreated: true,
+            isUpgradeable: false,
+            finalizedAt: null,
+            createdAt: new Date("2026-03-06T12:00:00.000Z"),
+            updatedAt: new Date("2026-03-06T12:00:00.000Z")
+          },
+          listings: []
+        }
+      }
+    ]);
+    const reportCreate = vi.fn(async () => ({
+      id: "rep_1",
+      status: "open",
+      createdAt: new Date("2026-03-06T12:00:00.000Z")
+    }));
+    const reportFindMany = vi.fn(async () => [
+      {
+        id: "rep_1",
+        tokenId: "tok_1",
+        listingRecordId: "v2:9",
+        marketplaceVersion: "v2",
+        reporterAddress: "0x4444444444444444444444444444444444444444",
+        reason: "spam",
+        evidence: null,
+        status: "open",
+        createdAt: new Date("2026-03-06T12:00:00.000Z"),
+        updatedAt: new Date("2026-03-06T12:05:00.000Z"),
+        token: {
+          listings: [
+            {
+              listingId: "12",
+              marketplaceVersion: "v1",
+              sellerAddress: "0x1111111111111111111111111111111111111111",
+              paymentToken: "0x0000000000000000000000000000000000000000",
+              priceRaw: "100",
+              amountRaw: "1",
+              standard: "ERC721",
+              expiresAtRaw: "2000000000",
+              active: true,
+              createdAt: new Date("2026-03-06T12:00:00.000Z"),
+              updatedAt: new Date("2026-03-06T12:00:00.000Z"),
+              lastSyncedAt: new Date("2026-03-06T12:00:00.000Z")
+            }
+          ]
+        }
+      }
+    ]);
+    const reportFindUnique = vi.fn(async () => ({
+      id: "rep_1",
+      tokenId: "tok_1",
+      listingRecordId: "v2:9",
+      marketplaceVersion: "v2"
+    }));
+    const moderationActionCreate = vi.fn(async () => ({ id: "act_new" }));
+    const moderationActionFindMany = vi.fn(async () => [
+      {
+        id: "act_1",
+        tokenId: "tok_1",
+        listingRecordId: "v2:9",
+        marketplaceVersion: "v2",
+        reportId: "rep_1",
+        action: "hide",
+        actor: "admin",
+        notes: null,
+        createdAt: new Date("2026-03-06T12:10:00.000Z"),
+        token: {
+          listings: [
+            {
+              listingId: "12",
+              marketplaceVersion: "v1",
+              sellerAddress: "0x1111111111111111111111111111111111111111",
+              paymentToken: "0x0000000000000000000000000000000000000000",
+              priceRaw: "100",
+              amountRaw: "1",
+              standard: "ERC721",
+              expiresAtRaw: "2000000000",
+              active: true,
+              createdAt: new Date("2026-03-06T12:00:00.000Z"),
+              updatedAt: new Date("2026-03-06T12:00:00.000Z"),
+              lastSyncedAt: new Date("2026-03-06T12:00:00.000Z")
+            }
+          ]
+        }
+      }
+    ]);
+
+    const prisma = {
+      report: {
+        findMany: reportFindMany,
+        create: reportCreate,
+        findUnique: reportFindUnique,
+        update: vi.fn(async () => ({ id: "rep_1" })),
+        count: vi.fn(async () => 0)
+      },
+      moderationAction: {
+        findMany: moderationActionFindMany,
+        create: moderationActionCreate
+      },
+      listing: {
+        findMany: listingFindMany,
+        findUnique: vi.fn(async () => ({ tokenRefId: "tok_1", listingId: "v2:9" })),
+        upsert: vi.fn(async () => ({ id: "listing_1" })),
+        updateMany: vi.fn(async () => ({ count: 0 })),
+        count: vi.fn(async () => 0)
+      },
+      collection: {
+        findMany: vi.fn(async () => []),
+        updateMany: vi.fn(async () => ({ count: 0 })),
+        upsert: vi.fn(async () => ({ id: "col_1" })),
+        count: vi.fn(async () => 0)
+      },
+      token: {
+        upsert: vi.fn(async () => ({ id: "tok_1" })),
+        findMany: vi.fn(async () => []),
+        count: vi.fn(async () => 0)
+      },
+      $queryRawUnsafe: createSchemaQueryMock({ listingV2: true, moderationListing: true })
+    } as unknown as PrismaClient;
+
+    const createRequestHandler = await loadCreateRequestHandler();
+    const handler = createRequestHandler(
+      {
+        prisma,
+        getClientIpImpl: () => "127.0.0.1",
+        isRateLimitedImpl: () => false
+      },
+      {
+        chainId: 11155111,
+        rpcUrl: "http://127.0.0.1:8545",
+        adminToken: "secret",
+        adminAllowlist: new Set(),
+        trustProxy: false,
+        marketplaceAddress: null,
+        marketplaceV2Address: null,
+        registryAddress: null,
+        moderatorRegistryAddress: null
+      }
+    );
+
+    const createResponse = await runHandler(
+      handler,
+      createReq({
+        method: "POST",
+        url: "/api/moderation/reports",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          listingRecordId: "v2:9",
+          marketplaceVersion: "v2",
+          collectionAddress: "0x2222222222222222222222222222222222222222",
+          tokenId: "7",
+          sellerAddress: "0x1111111111111111111111111111111111111111",
+          standard: "ERC721",
+          reporterAddress: "0x4444444444444444444444444444444444444444",
+          reason: "spam"
+        })
+      })
+    );
+
+    expect(createResponse.status).toBe(201);
+    expect(reportCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          tokenId: "tok_1",
+          listingRecordId: "v2:9",
+          marketplaceVersion: "v2"
+        })
+      })
+    );
+
+    const resolveResponse = await runHandler(
+      handler,
+      createReq({
+        method: "POST",
+        url: "/api/moderation/reports/rep_1/resolve",
+        headers: {
+          "content-type": "application/json",
+          authorization: "Bearer secret"
+        },
+        body: JSON.stringify({
+          action: "hide",
+          actor: "admin"
+        })
+      })
+    );
+
+    expect(resolveResponse.status).toBe(200);
+    expect(moderationActionCreate).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        data: expect.objectContaining({
+          tokenId: "tok_1",
+          listingRecordId: "v2:9",
+          marketplaceVersion: "v2",
+          reportId: "rep_1",
+          action: "hide"
+        })
+      })
+    );
+
+    const [reportsResponse, actionsResponse, hiddenResponse] = await Promise.all([
+      runHandler(handler, createReq({ method: "GET", url: "/api/moderation/reports?status=open" })),
+      runHandler(handler, createReq({ method: "GET", url: "/api/moderation/actions" })),
+      runHandler(handler, createReq({ method: "GET", url: "/api/moderation/hidden-listings" }))
+    ]);
+
+    expect(reportsResponse.status).toBe(200);
+    expect(reportsResponse.body[0]).toMatchObject({
+      listingId: 9,
+      listingRecordId: "v2:9",
+      marketplaceVersion: "v2",
+      listing: {
+        listingRecordId: "v2:9",
+        marketplaceVersion: "v2",
+        active: false,
+        soldAt: "2026-03-06T12:20:00.000Z"
+      }
+    });
+
+    expect(actionsResponse.status).toBe(200);
+    expect(actionsResponse.body[0]).toMatchObject({
+      listingId: 9,
+      listingRecordId: "v2:9",
+      marketplaceVersion: "v2",
+      listing: {
+        listingRecordId: "v2:9",
+        marketplaceVersion: "v2",
+        active: false,
+        soldAt: "2026-03-06T12:20:00.000Z"
+      }
+    });
+
+    expect(hiddenResponse.status).toBe(200);
+    expect(hiddenResponse.body).toMatchObject({
+      listingIds: [9],
+      listingRecordIds: ["v2:9"]
+    });
+
+    const visibilityResponse = await runHandler(
+      handler,
+      createReq({
+        method: "POST",
+        url: "/api/moderation/listings/v2%3A9/visibility",
+        headers: {
+          "content-type": "application/json",
+          authorization: "Bearer secret"
+        },
+        body: JSON.stringify({
+          hidden: true,
+          actor: "admin"
+        })
+      })
+    );
+
+    expect(visibilityResponse.status).toBe(200);
+    expect(moderationActionCreate).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        data: expect.objectContaining({
+          tokenId: "tok_1",
+          listingRecordId: "v2:9",
+          marketplaceVersion: "v2",
+          action: "hide"
+        })
+      })
+    );
+  });
+
+  it("keeps legacy token-scoped moderation rows readable while new listing-scoped rows coexist", async () => {
+    const prisma = {
+      report: {
+        findMany: vi.fn(async () => []),
+        create: vi.fn(),
+        findUnique: vi.fn(),
+        update: vi.fn(),
+        count: vi.fn(async () => 0)
+      },
+      moderationAction: {
+        findMany: vi.fn(async () => [
+          {
+            tokenId: "tok_legacy",
+            action: "hide",
+            listingRecordId: null
+          },
+          {
+            tokenId: "tok_new",
+            action: "hide",
+            listingRecordId: "v2:9"
+          }
+        ]),
+        create: vi.fn()
+      },
+      listing: {
+        findMany: vi.fn(async () => [{ listingId: "12" }]),
+        findUnique: vi.fn(async () => null),
+        upsert: vi.fn(),
+        updateMany: vi.fn(async () => ({ count: 0 })),
+        count: vi.fn(async () => 0)
+      },
+      collection: {
+        findMany: vi.fn(async () => []),
+        updateMany: vi.fn(async () => ({ count: 0 })),
+        upsert: vi.fn(async () => ({ id: "col_1" })),
+        count: vi.fn(async () => 0)
+      },
+      token: {
+        upsert: vi.fn(),
+        findMany: vi.fn(async () => []),
+        count: vi.fn(async () => 0)
+      },
+      $queryRawUnsafe: createSchemaQueryMock({ moderationListing: true })
+    } as unknown as PrismaClient;
+
+    const createRequestHandler = await loadCreateRequestHandler();
+    const handler = createRequestHandler(
+      {
+        prisma,
+        getClientIpImpl: () => "127.0.0.1",
+        isRateLimitedImpl: () => false
+      },
+      {
+        chainId: 11155111,
+        rpcUrl: "http://127.0.0.1:8545",
+        adminToken: "",
+        adminAllowlist: new Set(),
+        trustProxy: false,
+        marketplaceAddress: null,
+        marketplaceV2Address: null,
+        registryAddress: null,
+        moderatorRegistryAddress: null
+      }
+    );
+
+    const hiddenResponse = await runHandler(handler, createReq({ method: "GET", url: "/api/moderation/hidden-listings" }));
+
+    expect(hiddenResponse.status).toBe(200);
+    expect(hiddenResponse.body).toMatchObject({
+      listingIds: [9, 12],
+      listingRecordIds: ["12", "v2:9"]
+    });
   });
 });

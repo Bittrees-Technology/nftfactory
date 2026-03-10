@@ -96,6 +96,8 @@ contract MarketplaceV2 is Owned {
     error NotApproved();
     error ExistingActiveListing();
     error SelfOffer();
+    error PaymentTokenNotAllowed();
+    error PaymentTransferMismatch();
     error Reentrancy();
 
     uint256 private _entered;
@@ -124,9 +126,10 @@ contract MarketplaceV2 is Owned {
         address paymentToken,
         uint256 price,
         uint256 durationDays
-    ) external {
+    ) external nonReentrant {
         if (registry.blocked(msg.sender) || registry.blocked(nft) || blockedCollection[nft]) revert Sanctioned();
         if (price == 0) revert InvalidPrice();
+        _assertPaymentTokenAllowed(paymentToken);
 
         bytes32 standardKey = _standardKey(standard);
         string memory normalizedStandard = _normalizedStandard(standardKey);
@@ -156,7 +159,7 @@ contract MarketplaceV2 is Owned {
         nextListingId = listingId + 1;
     }
 
-    function cancelListing(uint256 listingId) external {
+    function cancelListing(uint256 listingId) external nonReentrant {
         Listing storage listing = listings[listingId];
         if (listing.seller != msg.sender) revert NotSeller();
         if (!listing.active) revert NotActive();
@@ -172,6 +175,7 @@ contract MarketplaceV2 is Owned {
             registry.blocked(msg.sender) || registry.blocked(listing.seller) || registry.blocked(listing.nft)
                 || blockedCollection[listing.nft]
         ) revert Sanctioned();
+        _assertPaymentTokenAllowed(listing.paymentToken);
 
         bytes32 standardKey = _standardKey(listing.standard);
         _assertApproved(listing.seller, listing.nft, standardKey);
@@ -194,6 +198,7 @@ contract MarketplaceV2 is Owned {
     ) external payable nonReentrant {
         if (registry.blocked(msg.sender) || registry.blocked(nft) || blockedCollection[nft]) revert Sanctioned();
         if (price == 0) revert InvalidPrice();
+        _assertPaymentTokenAllowed(paymentToken);
 
         bytes32 standardKey = _standardKey(standard);
         string memory normalizedStandard = _normalizedStandard(standardKey);
@@ -245,6 +250,7 @@ contract MarketplaceV2 is Owned {
             registry.blocked(msg.sender) || registry.blocked(offer.buyer) || registry.blocked(offer.nft)
                 || blockedCollection[offer.nft]
         ) revert Sanctioned();
+        _assertPaymentTokenAllowed(offer.paymentToken);
 
         bytes32 standardKey = _standardKey(offer.standard);
         _assertTransferable(msg.sender, offer.nft, offer.tokenId, offer.quantity, standardKey);
@@ -412,16 +418,27 @@ contract MarketplaceV2 is Owned {
         return (price * feeBps) / 10_000;
     }
 
+    function _assertPaymentTokenAllowed(address paymentToken) internal view {
+        if (paymentToken == address(0)) return;
+        if (!registry.allowedPaymentToken(paymentToken)) revert PaymentTokenNotAllowed();
+    }
+
     function _safeTransferERC20(address token, address to, uint256 amount) internal {
         if (amount == 0) return;
+        uint256 balanceBefore = IERC20(token).balanceOf(to);
         (bool ok, bytes memory data) = token.call(abi.encodeWithSelector(IERC20.transfer.selector, to, amount));
         require(ok && (data.length == 0 || abi.decode(data, (bool))), "ERC20_TRANSFER_FAILED");
+        uint256 balanceAfter = IERC20(token).balanceOf(to);
+        if (balanceAfter < balanceBefore || balanceAfter - balanceBefore != amount) revert PaymentTransferMismatch();
     }
 
     function _safeTransferFromERC20(address token, address from, address to, uint256 amount) internal {
         if (amount == 0) return;
+        uint256 balanceBefore = IERC20(token).balanceOf(to);
         (bool ok, bytes memory data) =
             token.call(abi.encodeWithSelector(IERC20.transferFrom.selector, from, to, amount));
         require(ok && (data.length == 0 || abi.decode(data, (bool))), "ERC20_TRANSFER_FROM_FAILED");
+        uint256 balanceAfter = IERC20(token).balanceOf(to);
+        if (balanceAfter < balanceBefore || balanceAfter - balanceBefore != amount) revert PaymentTransferMismatch();
     }
 }

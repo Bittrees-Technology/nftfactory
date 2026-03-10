@@ -1,8 +1,9 @@
 import type { NextConfig } from "next";
 import path from "node:path";
 
+const primaryChainId = process.env.NEXT_PUBLIC_PRIMARY_CHAIN_ID || process.env.NEXT_PUBLIC_CHAIN_ID || "1";
+
 const REQUIRED_PUBLIC_ENV = [
-  "NEXT_PUBLIC_CHAIN_ID",
   "NEXT_PUBLIC_RPC_URL",
   "NEXT_PUBLIC_REGISTRY_ADDRESS",
   "NEXT_PUBLIC_MARKETPLACE_ADDRESS",
@@ -13,7 +14,9 @@ const REQUIRED_PUBLIC_ENV = [
 ];
 
 if (process.env.NODE_ENV === "production") {
-  const missing = REQUIRED_PUBLIC_ENV.filter((name) => !process.env[name]);
+  const missing = REQUIRED_PUBLIC_ENV.filter(
+    (name) => !process.env[`${name}_${primaryChainId}`] && !process.env[name]
+  ).map((name) => `${name}_${primaryChainId}`);
   if (missing.length > 0) {
     throw new Error(`Missing required env vars for production build:\n  ${missing.join("\n  ")}`);
   }
@@ -21,6 +24,13 @@ if (process.env.NODE_ENV === "production") {
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  // Use separate output dir when building, so concurrent next dev doesn't interfere
+  distDir: process.env.NEXT_DIST_DIR || ".next",
+  // Keep the dev compiler footprint tighter on the Raspberry Pi.
+  onDemandEntries: {
+    maxInactiveAge: 15_000,
+    pagesBufferLength: 1
+  },
   outputFileTracingRoot: path.join(__dirname, "../.."),
   allowedDevOrigins: ["192.168.1.115", "localhost", "127.0.0.1"],
   webpack: (config) => {
