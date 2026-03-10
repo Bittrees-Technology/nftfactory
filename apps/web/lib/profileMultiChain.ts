@@ -2,7 +2,6 @@ import { getAppChain, getEnabledAppChainIds } from "./chains";
 import {
   fetchActiveListings,
   fetchHiddenListings,
-  fetchOffers,
   fetchOffersMade,
   fetchOffersReceived,
   fetchOwnerHoldings,
@@ -194,54 +193,6 @@ export async function fetchHiddenListingRecordIdsAcrossChains(
     listingRecordIds: [...listingRecordIds],
     failures
   };
-}
-
-export async function fetchOffersAcrossChains(
-  params: { limit: number; active?: boolean },
-  chainIds = getEnabledAppChainIds()
-): Promise<{ items: ApiOfferSummary[]; failures: ChainFailure[] }> {
-  const failures: ChainFailure[] = [];
-  const items: ApiOfferSummary[] = [];
-
-  const results = await Promise.allSettled(
-    chainIds.map(async (chainId) => {
-      const payload = await fetchOffers({
-        cursor: 0,
-        limit: params.limit,
-        active: params.active,
-        chainId
-      });
-      return { chainId, payload };
-    })
-  );
-
-  for (let index = 0; index < results.length; index += 1) {
-    const result = results[index];
-    const chainId = chainIds[index];
-    if (result.status === "rejected") {
-      failures.push(toFailure(chainId, result.reason));
-      continue;
-    }
-    for (const item of result.value.payload.items || []) {
-      items.push({
-        ...item,
-        chainId: item.chainId || chainId
-      });
-    }
-  }
-
-  if (items.length === 0 && failures.length > 0) {
-    throw new Error(summarizeChainFailures(failures));
-  }
-
-  items.sort((a, b) => {
-    const aTime = new Date(a.createdAt || a.updatedAt || 0).getTime();
-    const bTime = new Date(b.createdAt || b.updatedAt || 0).getTime();
-    if (aTime !== bTime) return bTime - aTime;
-    return Number.parseInt(b.offerId || b.id, 10) - Number.parseInt(a.offerId || a.id, 10);
-  });
-
-  return { items, failures };
 }
 
 async function fetchUserOffersAcrossChains(

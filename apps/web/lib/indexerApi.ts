@@ -80,65 +80,9 @@ async function fetchJson<T>(path: string, init?: RequestInit, timeoutMs?: number
   }
 }
 
-export type AdminAuth = {
-  adminToken?: string;
-  adminAddress?: string;
-};
-
-function adminHeaders(auth?: AdminAuth): Record<string, string> {
-  const headers: Record<string, string> = {};
-  if (auth?.adminToken?.trim()) {
-    headers.Authorization = `Bearer ${auth.adminToken.trim()}`;
-  }
-  if (auth?.adminAddress?.trim()) {
-    headers["x-admin-address"] = auth.adminAddress.trim();
-  }
-  return headers;
-}
-
-export type ApiModerationReport = {
-  id: string;
-  listingId: number | null;
-  listingRecordId?: string | null;
-  marketplaceVersion?: string | null;
-  listing?: ApiActiveListingItem | null;
-  reason: string;
-  reporterAddress: string;
-  status: string;
-  evidence?: string | null;
-  createdAt: string;
-  updatedAt: string;
-};
-
-export type ApiModerationAction = {
-  id: string;
-  action: string;
-  actor: string;
-  notes?: string | null;
-  reportId?: string | null;
-  listingId: number | null;
-  listingRecordId?: string | null;
-  marketplaceVersion?: string | null;
-  listing?: ApiActiveListingItem | null;
-  createdAt: string;
-};
-
 export type ApiHiddenListings = {
   listingIds: number[];
   listingRecordIds: string[];
-};
-
-export type ApiModerator = {
-  address: string;
-  label: string | null;
-  addedAt: string;
-  updatedAt: string;
-};
-
-export type ApiModeratorsResponse = {
-  moderators: ApiModerator[];
-  source?: "local" | "onchain+local";
-  moderatorRegistryAddress?: string | null;
 };
 
 export type ApiPaymentTokenRecord = {
@@ -340,52 +284,6 @@ export type ApiActiveListingsResponse = {
   items: ApiActiveListingItem[];
 };
 
-export type ApiIndexerOverview = {
-  chainId: number;
-  counts: {
-    collections: number;
-    tokens: number;
-    activeListings: number;
-    openReports: number;
-    hiddenListings: number;
-    linkedProfiles: number;
-    trackedPaymentTokens: number;
-    moderators: number;
-  };
-  generatedAt: string;
-};
-
-export type ApiIndexerHealth = {
-  ok: boolean;
-  service: string;
-  contracts?: {
-    registryAddress?: string | null;
-    moderatorRegistryAddress?: string | null;
-  };
-  schema?: {
-    mintTxHashColumnAvailable?: boolean;
-    tokenPresentationColumnsAvailable?: boolean;
-    listingV2ColumnsAvailable?: boolean;
-    offerTableAvailable?: boolean;
-    tokenHoldingTableAvailable?: boolean;
-  };
-  marketplace?: {
-    configured?: boolean;
-    syncInProgress?: boolean;
-    lastListingSyncAt?: string | null;
-    lastListingSyncCount?: number;
-    v2Configured?: boolean;
-    v2SyncInProgress?: boolean;
-    lastMarketplaceV2SyncAt?: string | null;
-    v2ListingSyncInProgress?: boolean;
-    v2OfferSyncInProgress?: boolean;
-    lastMarketplaceV2ListingSyncAt?: string | null;
-    lastMarketplaceV2OfferSyncAt?: string | null;
-    lastMarketplaceV2ListingSyncCount?: number;
-    lastOfferSyncCount?: number;
-  };
-};
-
 export type ApiOwnerSummary = {
   ownerAddress: string;
   counts: {
@@ -512,85 +410,6 @@ export async function createModerationReport(payload: {
   });
 }
 
-export async function fetchModerationReports(status?: "open" | "resolved"): Promise<ApiModerationReport[]> {
-  const query = status ? `?status=${status}` : "";
-  return fetchJson<ApiModerationReport[]>(`/api/moderation/reports${query}`);
-}
-
-export async function resolveModerationReport(payload: {
-  reportId: string;
-  action: "hide" | "restore" | "dismiss";
-  actor: string;
-  notes?: string;
-  auth?: AdminAuth;
-}): Promise<void> {
-  await fetchJson(`/api/moderation/reports/${payload.reportId}/resolve`, {
-    method: "POST",
-    headers: adminHeaders(payload.auth),
-    body: JSON.stringify({
-      action: payload.action,
-      actor: payload.actor,
-      notes: payload.notes
-    })
-  });
-}
-
-export async function setListingVisibility(payload: {
-  listingId?: number;
-  listingRecordId?: string;
-  hidden: boolean;
-  actor: string;
-  notes?: string;
-  auth?: AdminAuth;
-}): Promise<void> {
-  const listingRef = String(payload.listingRecordId ?? payload.listingId ?? "").trim();
-  if (!listingRef) {
-    throw new Error("A listing reference is required.");
-  }
-  await fetchJson(`/api/moderation/listings/${encodeURIComponent(listingRef)}/visibility`, {
-    method: "POST",
-    headers: adminHeaders(payload.auth),
-    body: JSON.stringify({
-      hidden: payload.hidden,
-      actor: payload.actor,
-      notes: payload.notes
-    })
-  });
-}
-
-export async function fetchModerationActions(): Promise<ApiModerationAction[]> {
-  return fetchJson<ApiModerationAction[]>("/api/moderation/actions");
-}
-
-export async function fetchModerators(auth?: AdminAuth): Promise<ApiModeratorsResponse> {
-  const payload = await fetchJson<ApiModeratorsResponse>("/api/admin/moderators", {
-    headers: adminHeaders(auth)
-  });
-  return {
-    moderators: payload.moderators || [],
-    source: payload.source || "local",
-    moderatorRegistryAddress: payload.moderatorRegistryAddress || null
-  };
-}
-
-export async function updateModerator(payload: {
-  address: string;
-  label?: string;
-  enabled?: boolean;
-  auth?: AdminAuth;
-}): Promise<ApiModerator[]> {
-  const response = await fetchJson<{ moderators: ApiModerator[] }>("/api/admin/moderators", {
-    method: "POST",
-    headers: adminHeaders(payload.auth),
-    body: JSON.stringify({
-      address: payload.address,
-      label: payload.label,
-      enabled: payload.enabled
-    })
-  });
-  return response.moderators || [];
-}
-
 export async function logPaymentTokenUsage(payload: {
   tokenAddress: string;
   sellerAddress: string;
@@ -599,31 +418,6 @@ export async function logPaymentTokenUsage(payload: {
   const response = await fetchJson<{ tokens: ApiPaymentTokenRecord[] }>("/api/payment-tokens/log", {
     method: "POST",
     body: JSON.stringify(payload)
-  });
-  return response.tokens || [];
-}
-
-export async function fetchTrackedPaymentTokens(auth?: AdminAuth): Promise<ApiPaymentTokenRecord[]> {
-  const response = await fetchJson<{ tokens: ApiPaymentTokenRecord[] }>("/api/admin/payment-tokens", {
-    headers: adminHeaders(auth)
-  });
-  return response.tokens || [];
-}
-
-export async function reviewTrackedPaymentToken(payload: {
-  tokenAddress: string;
-  status?: "pending" | "approved" | "flagged";
-  notes?: string;
-  auth?: AdminAuth;
-}): Promise<ApiPaymentTokenRecord[]> {
-  const response = await fetchJson<{ tokens: ApiPaymentTokenRecord[] }>("/api/admin/payment-tokens", {
-    method: "POST",
-    headers: adminHeaders(payload.auth),
-    body: JSON.stringify({
-      tokenAddress: payload.tokenAddress,
-      status: payload.status,
-      notes: payload.notes
-    })
   });
   return response.tokens || [];
 }
@@ -671,41 +465,6 @@ export async function fetchActiveListings(
   return fetchJson<ApiActiveListingsResponse>(`/api/listings?${params.toString()}`, undefined, undefined, options);
 }
 
-export async function fetchOffers(params?: {
-  cursor?: number;
-  limit?: number;
-  buyer?: string;
-  collectionAddress?: string;
-  tokenId?: string;
-  status?: string;
-  active?: boolean;
-  chainId?: number;
-  baseUrl?: string;
-}): Promise<ApiOffersResponse> {
-  const query = new URLSearchParams();
-  query.set("cursor", String(params?.cursor ?? 0));
-  query.set("limit", String(params?.limit ?? 50));
-  if (params?.buyer) {
-    query.set("buyer", params.buyer);
-  }
-  if (params?.collectionAddress) {
-    query.set("collectionAddress", params.collectionAddress);
-  }
-  if (params?.tokenId) {
-    query.set("tokenId", params.tokenId);
-  }
-  if (params?.status) {
-    query.set("status", params.status);
-  }
-  if (typeof params?.active === "boolean") {
-    query.set("active", String(params.active));
-  }
-  return fetchJson<ApiOffersResponse>(`/api/offers?${query.toString()}`, undefined, undefined, {
-    chainId: params?.chainId,
-    baseUrl: params?.baseUrl
-  });
-}
-
 export async function fetchOffersMade(
   ownerAddress: string,
   cursor = 0,
@@ -732,14 +491,6 @@ export async function fetchOffersReceived(
     undefined,
     options
   );
-}
-
-export async function fetchIndexerOverview(): Promise<ApiIndexerOverview> {
-  return fetchJson<ApiIndexerOverview>("/api/overview");
-}
-
-export async function fetchIndexerHealth(): Promise<ApiIndexerHealth> {
-  return fetchJson<ApiIndexerHealth>("/health");
 }
 
 export async function fetchOwnerSummary(ownerAddress: string): Promise<ApiOwnerSummary> {
@@ -828,100 +579,5 @@ export async function transferProfileOwnership(payload: {
   return fetchJson<{ ok: boolean; profile: ApiProfileRecord }>("/api/profiles/transfer", {
     method: "POST",
     body: JSON.stringify(payload)
-  });
-}
-
-export async function backfillCollectionSubname(payload: {
-  subname: string;
-  ownerAddress?: string;
-  contractAddress?: string;
-  auth?: AdminAuth;
-}): Promise<{ ok: boolean; updatedCount: number; subname: string }> {
-  return fetchJson<{ ok: boolean; updatedCount: number; subname: string }>("/api/admin/collections/backfill-subname", {
-    method: "POST",
-    headers: adminHeaders(payload.auth),
-    body: JSON.stringify({
-      subname: payload.subname,
-      ownerAddress: payload.ownerAddress,
-      contractAddress: payload.contractAddress
-    })
-  });
-}
-
-export async function backfillCollectionTokens(payload: {
-  contractAddress: string;
-  ownerAddress?: string;
-  standard?: "ERC721" | "ERC1155";
-  ensSubname?: string | null;
-  isFactoryCreated?: boolean;
-  isUpgradeable?: boolean;
-  auth?: AdminAuth;
-}): Promise<{ ok: boolean; scanned: number; upserted: number; standard: string; ownerAddress: string | null }> {
-  return fetchJson<{ ok: boolean; scanned: number; upserted: number; standard: string; ownerAddress: string | null }>(
-    "/api/admin/collections/backfill-tokens",
-    {
-      method: "POST",
-      headers: adminHeaders(payload.auth),
-      body: JSON.stringify({
-        contractAddress: payload.contractAddress,
-        ownerAddress: payload.ownerAddress,
-        standard: payload.standard,
-        ensSubname: payload.ensSubname,
-        isFactoryCreated: payload.isFactoryCreated,
-        isUpgradeable: payload.isUpgradeable
-      })
-    }
-  );
-}
-
-export async function backfillRegistryCollections(payload?: {
-  fromBlock?: number;
-  auth?: AdminAuth;
-}): Promise<{ ok: boolean; discovered: number; scanned: number; upserted: number }> {
-  return fetchJson<{ ok: boolean; discovered: number; scanned: number; upserted: number }>(
-    "/api/admin/collections/backfill-registry",
-    {
-      method: "POST",
-      headers: adminHeaders(payload?.auth),
-      body: JSON.stringify({ fromBlock: payload?.fromBlock })
-    },
-    0
-  );
-}
-
-export async function backfillMintTxHashes(payload?: {
-  limit?: number;
-  auth?: AdminAuth;
-}): Promise<{ ok: boolean; scanned: number; resolved: number; unresolved: number; limit: number }> {
-  const params = new URLSearchParams();
-  if (payload?.limit && Number.isInteger(payload.limit) && payload.limit > 0) {
-    params.set("limit", String(payload.limit));
-  }
-  const query = params.toString();
-  return fetchJson<{ ok: boolean; scanned: number; resolved: number; unresolved: number; limit: number }>(
-    `/api/admin/tokens/backfill-mint-tx${query ? `?${query}` : ""}`,
-    {
-      method: "POST",
-      headers: adminHeaders(payload?.auth)
-    }
-  );
-}
-
-export async function syncMarketplaceListings(auth?: AdminAuth): Promise<{
-  ok: boolean;
-  configured: boolean;
-  syncInProgress: boolean;
-  lastListingSyncAt: string | null;
-  lastListingSyncCount: number;
-}> {
-  return fetchJson<{
-    ok: boolean;
-    configured: boolean;
-    syncInProgress: boolean;
-    lastListingSyncAt: string | null;
-    lastListingSyncCount: number;
-  }>("/api/admin/listings/sync", {
-    method: "POST",
-    headers: adminHeaders(auth)
   });
 }
