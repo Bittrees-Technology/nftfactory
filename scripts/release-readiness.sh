@@ -131,6 +131,56 @@ fi
 
 echo "Environment presence check passed."
 
+is_private_or_local_url() {
+  local value="$1"
+  [[ -z "$value" ]] && return 1
+  if [[ "$value" =~ ^https?://(localhost|127\.[0-9]+\.[0-9]+\.[0-9]+|0\.0\.0\.0|\[::1\]|::1)(:|/|$) ]]; then
+    return 0
+  fi
+  if [[ "$value" =~ ^https?://10\.[0-9]+\.[0-9]+\.[0-9]+(:|/|$) ]]; then
+    return 0
+  fi
+  if [[ "$value" =~ ^https?://192\.168\.[0-9]+\.[0-9]+(:|/|$) ]]; then
+    return 0
+  fi
+  if [[ "$value" =~ ^https?://172\.([1][6-9]|2[0-9]|3[0-1])\.[0-9]+\.[0-9]+(:|/|$) ]]; then
+    return 0
+  fi
+  return 1
+}
+
+echo "Environment reachability sanity"
+reachability_failed=0
+
+if is_private_or_local_url "${IPFS_API_URL:-}"; then
+  echo "IPFS_API_URL is private/local and will not work from Vercel: ${IPFS_API_URL}"
+  reachability_failed=1
+fi
+
+if is_private_or_local_url "${NEXT_PUBLIC_INDEXER_API_URL:-}"; then
+  echo "NEXT_PUBLIC_INDEXER_API_URL is private/local and will not work from Vercel: ${NEXT_PUBLIC_INDEXER_API_URL}"
+  reachability_failed=1
+fi
+
+for raw_chain_id in "${raw_chain_ids[@]}"; do
+  chain_id="$(echo "$raw_chain_id" | xargs)"
+  [[ -z "$chain_id" ]] && continue
+  scoped_indexer_key="NEXT_PUBLIC_INDEXER_API_URL_${chain_id}"
+  scoped_indexer_value="${!scoped_indexer_key:-}"
+  if is_private_or_local_url "$scoped_indexer_value"; then
+    echo "${scoped_indexer_key} is private/local and will not work from Vercel: ${scoped_indexer_value}"
+    reachability_failed=1
+  fi
+done
+
+if [[ "$reachability_failed" -ne 0 ]]; then
+  echo ""
+  echo "Environment reachability check failed."
+  exit 1
+fi
+
+echo "Environment reachability check passed."
+
 echo ""
 echo "4) Manual release checklist"
 echo "- Validate /, /mint, /profile, /profile/setup, and /profile/<name> in browser."

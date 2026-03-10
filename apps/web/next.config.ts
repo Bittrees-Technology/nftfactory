@@ -27,6 +27,10 @@ function parseEnabledChainIds(): number[] {
     .filter(Number.isFinite);
 }
 
+function getActiveProductionChainIds(primaryChainIdValue: string): number[] {
+  return Array.from(new Set([Number.parseInt(primaryChainIdValue, 10), ...parseEnabledChainIds()])).filter(Number.isFinite);
+}
+
 if (process.env.NODE_ENV === "production") {
   const missing = REQUIRED_PUBLIC_ENV.filter(
     (name) => !process.env[`${name}_${primaryChainId}`] && !process.env[name]
@@ -45,12 +49,25 @@ if (process.env.NODE_ENV === "production") {
   }
 
   if (process.env.VERCEL) {
-    const chainIds = Array.from(new Set([Number.parseInt(primaryChainId, 10), ...parseEnabledChainIds()])).filter(Number.isFinite);
+    const chainIds = getActiveProductionChainIds(primaryChainId);
     const badIndexerEnv: string[] = [];
+    const missingIndexerEnv: string[] = [];
+
+    if (!String(process.env.IPFS_API_URL || "").trim()) {
+      throw new Error("Missing required env var for production build: IPFS_API_URL");
+    }
 
     for (const chainId of chainIds) {
       const scopedName = `NEXT_PUBLIC_INDEXER_API_URL_${chainId}`;
       const scopedValue = process.env[scopedName];
+      const canUseLegacy = String(chainId) === primaryChainId;
+      const fallbackValue = canUseLegacy ? process.env.NEXT_PUBLIC_INDEXER_API_URL : undefined;
+
+      if (!String(scopedValue || "").trim() && !String(fallbackValue || "").trim()) {
+        missingIndexerEnv.push(canUseLegacy ? `${scopedName} (or NEXT_PUBLIC_INDEXER_API_URL)` : scopedName);
+        continue;
+      }
+
       if (scopedValue && isPrivateOrLocalUrl(scopedValue)) {
         badIndexerEnv.push(`${scopedName}=${scopedValue}`);
       }
@@ -64,6 +81,12 @@ if (process.env.NODE_ENV === "production") {
     if (badIndexerEnv.length > 0) {
       throw new Error(
         `Indexer API URL must be publicly reachable from Vercel. Invalid values:\n  ${badIndexerEnv.join("\n  ")}`
+      );
+    }
+
+    if (missingIndexerEnv.length > 0) {
+      throw new Error(
+        `Missing required public indexer env vars for production build:\n  ${missingIndexerEnv.join("\n  ")}`
       );
     }
   }
