@@ -10,6 +10,13 @@ import { encodeRegisterSubname, toHexWei, truncateHash } from "../../lib/abi";
 import { getContractsConfig } from "../../lib/contracts";
 import { getAppChain, getExplorerBaseUrl } from "../../lib/chains";
 import {
+  buildEnsSubnameCreationTx,
+  ENS_NAME_WRAPPER_WRITE_ABI,
+  ENS_REGISTRY_ADDRESS,
+  validateEnsSubnameCreation,
+  ZERO_ADDRESS
+} from "../../lib/ensSubnameCreation";
+import {
   fetchCollectionsByOwner,
   fetchProfileResolution,
   fetchProfilesByOwner,
@@ -20,8 +27,6 @@ import {
 import { verifyOwnedCollectionsOnChain } from "../../lib/onchainCollections";
 
 const SUBNAME_FEE_ETH = "0.001";
-const ENS_REGISTRY_ADDRESS = "0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e" as Address;
-const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const ENS_NAME_WRAPPER_ADDRESS = /^0x[a-fA-F0-9]{40}$/.test(process.env.NEXT_PUBLIC_ENS_NAME_WRAPPER_ADDRESS || "")
   ? (process.env.NEXT_PUBLIC_ENS_NAME_WRAPPER_ADDRESS as Address)
   : null;
@@ -37,45 +42,6 @@ const ENS_REGISTRY_ABI = [
     stateMutability: "view",
     inputs: [{ name: "node", type: "bytes32" }],
     outputs: [{ name: "", type: "address" }]
-  }
-] as const;
-const ENS_REGISTRY_WRITE_ABI = [
-  {
-    type: "function",
-    name: "setSubnodeOwner",
-    stateMutability: "nonpayable",
-    inputs: [
-      { name: "node", type: "bytes32" },
-      { name: "label", type: "bytes32" },
-      { name: "owner", type: "address" }
-    ],
-    outputs: []
-  }
-] as const;
-const ENS_NAME_WRAPPER_WRITE_ABI = [
-  {
-    type: "function",
-    name: "setSubnodeOwner",
-    stateMutability: "nonpayable",
-    inputs: [
-      { name: "parentNode", type: "bytes32" },
-      { name: "label", type: "string" },
-      { name: "owner", type: "address" },
-      { name: "fuses", type: "uint32" },
-      { name: "expiry", type: "uint64" }
-    ],
-    outputs: []
-  },
-  {
-    type: "function",
-    name: "getData",
-    stateMutability: "view",
-    inputs: [{ name: "id", type: "uint256" }],
-    outputs: [
-      { name: "owner", type: "address" },
-      { name: "fuses", type: "uint32" },
-      { name: "expiry", type: "uint64" }
-    ]
   }
 ] as const;
 const ENS_NAME_WRAPPER_ABI = [
@@ -740,34 +706,28 @@ export default function ProfileLandingClient({
 
   async function checkEthSubnameRegistrationAvailability(cancelled = false): Promise<void> {
     try {
-      const { fullName, parentName, current, parent, parentExpiry } = await resolveEthSubnameCreationContext();
+      const { fullName, parentName, parentNode, current, parent, parentExpiry } = await resolveEthSubnameCreationContext();
       if (cancelled) return;
 
-      if (String(current.owner).toLowerCase() !== ZERO_ADDRESS.toLowerCase()) {
+      const validationError = validateEnsSubnameCreation({
+        fullName,
+        label: "",
+        parentName,
+        parentNode,
+        parentExpiry,
+        currentOwner: String(current.owner),
+        parentOwner: String(parent.owner),
+        parentWrapped: parent.wrapped,
+        walletAddress: address || "",
+        wrapperAddress: ENS_NAME_WRAPPER_ADDRESS
+      });
+      if (validationError) {
         setCheckedIdentityReady(false);
-        setLookupNote(`${fullName} is already registered in ENS. Use Link existing ENS subname instead.`);
-        return;
-      }
-
-      const parentOwner = String(parent.owner).toLowerCase();
-      if (parentOwner === ZERO_ADDRESS.toLowerCase()) {
-        setCheckedIdentityReady(false);
-        setLookupNote(`${parentName} is not registered yet, so ${fullName} cannot be created under it.`);
-        return;
-      }
-      if (!address || parentOwner !== address.toLowerCase()) {
-        setCheckedIdentityReady(false);
-        setLookupNote(`${parentName} exists, but the connected wallet does not control that parent name.`);
-        return;
-      }
-      if (parent.wrapped && !ENS_NAME_WRAPPER_ADDRESS) {
-        setCheckedIdentityReady(false);
-        setLookupNote(`${parentName} is wrapped via ENS NameWrapper, but no wrapper contract is configured here.`);
-        return;
-      }
-      if (parent.wrapped && (!parentExpiry || parentExpiry <= 0n)) {
-        setCheckedIdentityReady(false);
-        setLookupNote(`${parentName} is wrapped, but its wrapper expiry could not be read.`);
+        setLookupNote(
+          validationError.includes("already registered")
+            ? `${fullName} is already registered in ENS. Use Link existing ENS subname instead.`
+            : validationError
+        );
         return;
       }
 
@@ -832,27 +792,23 @@ export default function ProfileLandingClient({
       setPostLinkProfile(null);
       setPostLinkMintCta(false);
 
-      const txHash = await walletClient.sendTransaction(
-        parent.wrapped
-          ? {
-              account: walletClient.account,
-              to: ENS_NAME_WRAPPER_ADDRESS!,
-              data: encodeFunctionData({
-                abi: ENS_NAME_WRAPPER_WRITE_ABI,
-                functionName: "setSubnodeOwner",
-                args: [parentNode, label, walletClient.account.address, 0, BigInt(parentExpiry!)]
-              })
-            }
-          : {
-              account: walletClient.account,
-              to: ENS_REGISTRY_ADDRESS,
-              data: encodeFunctionData({
-                abi: ENS_REGISTRY_WRITE_ABI,
-                functionName: "setSubnodeOwner",
-                args: [parentNode, keccak256(stringToBytes(label)), walletClient.account.address]
-              })
-            }
-      );
+      const txRequest = buildEnsSubnameCreationTx({
+        fullName,
+        label,
+        parentName,
+        parentNode,
+        parentExpiry,
+        currentOwner,
+        parentOwner,
+        parentWrapped: parent.wrapped,
+        walletAddress: walletClient.account.address,
+        wrapperAddress: ENS_NAME_WRAPPER_ADDRESS
+      });
+      const txHash = await walletClient.sendTransaction({
+        account: walletClient.account,
+        to: txRequest.to,
+        data: txRequest.data
+      });
       await publicClient.waitForTransactionReceipt({ hash: txHash });
 
       let nextProfile: ApiProfileRecord | null = null;
