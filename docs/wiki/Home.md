@@ -2,23 +2,23 @@
 
 ## Current build scope
 
-The current product is a Sepolia-first creator flow with these live surfaces:
+The current live product is a Sepolia-first creator flow with these active surfaces:
 
-1. **Mint and publish**
+1. **Landing**
+   - root entry at `/`
+   - links into mint and profile flows
+2. **Mint and collection management**
    - publish through shared mint contracts or a creator-owned collection from `/mint`
    - upload media and metadata from the web app
-   - optionally register or attach `nftfactory.eth` attribution during the flow
-2. **List and discover**
-   - create and manage listings from `/list`
-   - browse indexed mints and listings from `/discover`
-   - use `/mod` for moderation review and `/admin` for admin tooling
+   - view and manage collection royalty, split-policy, and identity state from the same workspace
 3. **Profiles and identity**
    - resolve a connected wallet at `/profile`
    - create or link identity at `/profile/setup`
    - render the public creator page at `/profile/[name]`
 4. **Operations**
-   - the indexer mirrors chain state, serves read APIs, and exposes admin backfill/sync tools
-   - the in-app wiki is exposed at `/wiki`
+   - the indexer mirrors chain state and serves read APIs
+   - deploy health is exposed through `/api/deploy/health`
+   - wiki docs are maintained in `docs/wiki/`
 
 ## Release focus
 
@@ -26,9 +26,9 @@ The focus is hardening the current build, not broad feature expansion.
 
 Active work:
 
-- tightening Mint, List, Discover, and Profile UX before mainnet
-- keeping indexer-backed discovery and profile routes reliable on Sepolia
-- improving admin recovery paths, especially collection/token backfills and listing sync
+- tightening Mint and Profile UX before mainnet
+- keeping indexer-backed profile routes and collection identity flows reliable on Sepolia
+- hardening the live Vercel + Cloudflare Tunnel + Kubo deployment path
 - validating the exact env wiring and contract addresses used by the live build
 
 ## Start Here
@@ -48,6 +48,7 @@ Active work:
 | [Operations and Governance](./Operations-and-Governance.md) | Ownership boundaries, auth model, moderator flow, and admin controls |
 | [Deployment and Launch](./Deployment-and-Launch.md) | Current local, Sepolia, and mainnet rollout posture |
 | [Infrastructure and Operations](./Infrastructure-and-Operations.md) | Real env wiring, process model, and troubleshooting |
+| [IPFS Upload Failure Triage](./IPFS-Upload-Failure-Triage.md) | Exact steps for diagnosing Vercel -> Cloudflare Tunnel -> Kubo upload failures |
 | [Marketplace V2 Indexer and API Plan](./Marketplace-V2-Indexer-and-API-Plan.md) | Backend-first schema, sync, and API plan for offers and V2 rollout |
 | [UI Lockdown Plan](./UI-Lockdown-Plan.md) | Page-level lock criteria for Mint, List, Discover, and Profile |
 | [Upgrade Runbook](./Upgrade-Runbook.md) | UUPS upgrade path for creator-owned collections |

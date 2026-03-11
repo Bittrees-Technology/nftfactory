@@ -19,6 +19,18 @@ That means the current deployment model is still:
 
 IPFS only gives you step 1.
 
+## Current live deployment topology
+
+Current production upload path:
+
+1. browser
+2. Vercel web app at `https://nftfactory.org`
+3. `https://ipfs.nftfactory.org`
+4. Cloudflare Tunnel
+5. Kubo API on `127.0.0.1:5001`
+
+This means the public writable IPFS API is not running on Vercel. Vercel forwards mint uploads to the Kubo node behind the tunnel.
+
 ## Current blockers
 
 ### 1. App Router API routes
@@ -96,6 +108,12 @@ Important caveat:
 
 - if the public `IPFS_API_URL` is exposed through a reverse proxy, tunnel, or gateway layer outside Kubo, that ingress may impose a lower upload/body-size or timeout limit than Kubo itself
 - if `IPFS_API_URL` is public, protect it with bearer auth or basic auth; do not expose the Kubo API unauthenticated
+
+## Upload failure triage
+
+Use the dedicated runbook:
+
+- [IPFS Upload Failure Triage](./IPFS-Upload-Failure-Triage.md)
 
 ## Planned redundancy
 

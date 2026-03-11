@@ -18,6 +18,28 @@ Do not treat mainnet as a place to discover missing env wiring or stale addresse
 | **Sepolia** | Canonical proving ground | current configured chain id is `11155111` |
 | **Mainnet** | Release target | only after stable Sepolia flows and ownership transfer |
 
+## Current live deployment state
+
+Current public deployment (`2026-03-11`):
+
+- web app: `https://nftfactory.org`
+- indexer API: `https://api.nftfactory.org`
+- IPFS API: `https://ipfs.nftfactory.org`
+- hosting:
+  - Vercel for the web app
+  - Cloudflare DNS + Tunnel for indexer and IPFS ingress
+  - local Kubo node behind the tunnel for writable IPFS uploads
+
+Operational notes:
+
+- Vercel auto-deploys on push to `main`
+- `https://nftfactory.org/api/deploy/health` should be the first external health check
+- public `IPFS_API_URL` must stay authenticated
+
+Current Sepolia split-registry deployment:
+
+- `RoyaltySplitRegistry`: `0xF2527b3E8085e03A0319CecbcB95a6877546D4B5`
+
 ## Local development
 
 Local work should validate:
@@ -35,6 +57,7 @@ Before calling a release candidate stable, validate on Sepolia:
 - shared mint publish
 - creator collection deploy and mint
 - collection management actions
+- collection royalty split policy writes and reloads
 - profile setup and public profile resolution
 - listing create/cancel/buy paths
 - moderation report and visibility flows
@@ -90,6 +113,7 @@ Before deployment or release validation:
 - [ ] `MODERATOR_REGISTRY_ADDRESS` is set if using on-chain moderator reads
 - [ ] `NEXT_PUBLIC_INDEXER_API_URL` points to a reachable host
 - [ ] IPFS upload service is configured (`IPFS_API_URL`, plus API auth for public endpoints)
+- [ ] `https://nftfactory.org/api/deploy/health` returns `ok: true`
 
 ## Operational launch gates
 

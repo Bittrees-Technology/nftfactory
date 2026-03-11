@@ -22,16 +22,21 @@ Service layout:
 
 - **Web app**
   - Next.js 15
-  - usually runs on port `3000`
+  - local dev usually runs on port `3000`
+  - production is currently hosted on Vercel at `https://nftfactory.org`
 - **Indexer**
   - Node HTTP API
   - code default: `127.0.0.1:8787`
   - current local env in this repo: port `8791`
+  - production ingress is currently `https://api.nftfactory.org`
 - **Database**
   - PostgreSQL
   - local env points to `localhost:5432`
 - **Chain**
   - primary proving chain is Ethereum Sepolia (`11155111`)
+- **IPFS**
+  - local Kubo API on `127.0.0.1:5001`
+  - production ingress is currently `https://ipfs.nftfactory.org` through Cloudflare Tunnel
 
 ## Active app surfaces
 
@@ -171,6 +176,7 @@ The practical process models are:
 
 1. manual terminals
 2. `pm2` for persistent local sessions
+3. `systemd --user` services for persistent local infra processes such as `ipfs` and `cloudflared`
 
 Useful `pm2` commands:
 
@@ -181,6 +187,15 @@ pm2 logs nftfactory-indexer
 pm2 restart nftfactory-web
 pm2 restart nftfactory-indexer
 pm2 save
+```
+
+Useful `systemd --user` commands:
+
+```bash
+systemctl --user status ipfs
+systemctl --user status cloudflared
+journalctl --user -u ipfs -f
+journalctl --user -u cloudflared -f
 ```
 
 ## Data flow
@@ -215,6 +230,14 @@ cd services/indexer
 fuser -k 8791/tcp
 INDEXER_HOST=0.0.0.0 INDEXER_PORT=8791 npm run dev
 ```
+
+### IPFS upload fails with `502` or `terminated`
+
+This is usually the Vercel -> Cloudflare Tunnel -> Kubo path, not the mint form.
+
+Use:
+
+- [IPFS Upload Failure Triage](./IPFS-Upload-Failure-Triage.md)
 
 ### Discover feed missing a fresh mint
 
