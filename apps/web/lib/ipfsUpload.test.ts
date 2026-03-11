@@ -13,19 +13,19 @@ import {
 describe("ipfsUpload", () => {
   it("builds a Kubo add URL from a base host", () => {
     expect(buildIpfsAddUrl("http://127.0.0.1:5001")).toBe(
-      "http://127.0.0.1:5001/api/v0/add?pin=true&cid-version=1&wrap-with-directory=false"
+      "http://127.0.0.1:5001/api/v0/add?pin=true&cid-version=1&wrap-with-directory=false&progress=false&stream-channels=false&quieter=true"
     );
   });
 
   it("extends an api/v0 base path cleanly", () => {
     expect(buildIpfsAddUrl("http://127.0.0.1:5001/api/v0")).toBe(
-      "http://127.0.0.1:5001/api/v0/add?pin=true&cid-version=1&wrap-with-directory=false"
+      "http://127.0.0.1:5001/api/v0/add?pin=true&cid-version=1&wrap-with-directory=false&progress=false&stream-channels=false&quieter=true"
     );
   });
 
   it("preserves an explicit add endpoint and existing query params", () => {
     expect(buildIpfsAddUrl("http://127.0.0.1:5001/api/v0/add?stream-channels=true")).toBe(
-      "http://127.0.0.1:5001/api/v0/add?stream-channels=true&pin=true&cid-version=1&wrap-with-directory=false"
+      "http://127.0.0.1:5001/api/v0/add?stream-channels=true&pin=true&cid-version=1&wrap-with-directory=false&progress=false&quieter=true"
     );
   });
 

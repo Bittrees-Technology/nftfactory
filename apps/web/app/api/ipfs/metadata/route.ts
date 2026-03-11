@@ -4,6 +4,7 @@ import {
   buildIpfsAuthRequirementError,
   buildIpfsAuthHeaders,
   buildIpfsReachabilityError,
+  buildIpfsTerminatedError,
   hasIpfsApiAuthConfigured,
   isPrivateOrLocalUrl,
   parseIpfsAddResponse
@@ -46,7 +47,18 @@ async function pinFile(file: File, fileName: string, apiUrl: string, authHeaders
     throw new Error(`IPFS upload failed (HTTP ${response.status}): ${text}`);
   }
 
-  return parseIpfsAddResponse(await response.text());
+  let responseText: string;
+  try {
+    responseText = await response.text();
+  } catch (error) {
+    const message = error instanceof Error ? error.message.toLowerCase() : "";
+    if (message.includes("terminated") || message.includes("aborted")) {
+      throw new Error(buildIpfsTerminatedError(apiUrl));
+    }
+    throw error instanceof Error ? error : new Error("IPFS upload response could not be read.");
+  }
+
+  return parseIpfsAddResponse(responseText);
 }
 
 export async function POST(request: Request) {

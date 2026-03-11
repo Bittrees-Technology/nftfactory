@@ -79,6 +79,15 @@ export function buildIpfsAuthRequirementError(urlLike: string): string {
   }
 }
 
+export function buildIpfsTerminatedError(urlLike: string): string {
+  try {
+    const url = new URL(urlLike);
+    return `IPFS upload response from ${url.host} terminated before completion. This usually means the upstream IPFS API, tunnel, or reverse proxy cut off the request. Check Cloudflare Tunnel/proxy timeouts, body-size limits, and Kubo availability.`;
+  } catch {
+    return "IPFS upload response terminated before completion. This usually means the upstream IPFS API, tunnel, or reverse proxy cut off the request. Check proxy timeouts, body-size limits, and Kubo availability.";
+  }
+}
+
 export function buildIpfsAddUrl(baseUrl: string): string {
   const normalized = baseUrl.trim();
   if (!normalized) {
@@ -104,6 +113,15 @@ export function buildIpfsAddUrl(baseUrl: string): string {
   }
   if (!url.searchParams.has("wrap-with-directory")) {
     url.searchParams.set("wrap-with-directory", "false");
+  }
+  if (!url.searchParams.has("progress")) {
+    url.searchParams.set("progress", "false");
+  }
+  if (!url.searchParams.has("stream-channels")) {
+    url.searchParams.set("stream-channels", "false");
+  }
+  if (!url.searchParams.has("quieter")) {
+    url.searchParams.set("quieter", "true");
   }
 
   return url.toString();
