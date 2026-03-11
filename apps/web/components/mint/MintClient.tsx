@@ -1150,13 +1150,6 @@ export default function MintClient({
   }, [customCollectionAddress, mintMode, publicClient]);
 
   useEffect(() => {
-    if (identityMode !== "register-eth-subname") return;
-    if (String(collectionSubnameParent || "").trim()) return;
-    if (collectionEnsParentCandidates.length === 0) return;
-    setCollectionSubnameParent(collectionEnsParentCandidates[0]);
-  }, [collectionEnsParentCandidates, collectionSubnameParent, identityMode]);
-
-  useEffect(() => {
     if (verifiedKnownCollections.length === 0) {
       setManageSelector("manual");
       return;

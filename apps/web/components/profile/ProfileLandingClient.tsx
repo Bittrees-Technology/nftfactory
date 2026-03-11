@@ -537,13 +537,6 @@ export default function ProfileLandingClient({
     return () => globalThis.clearInterval(timer);
   }, [pendingEnsRegistration]);
 
-  useEffect(() => {
-    if (identityMode !== "register-eth-subname") return;
-    if (String(subnameParent || "").trim()) return;
-    if (ensParentCandidates.length === 0) return;
-    setSubnameParent(ensParentCandidates[0]);
-  }, [ensParentCandidates, identityMode, subnameParent]);
-
   const identityLabel = useMemo(() => {
     if (identityMode === "register-eth") return "New .eth label";
     if (identityMode === "register-eth-subname") return "New subname label";
