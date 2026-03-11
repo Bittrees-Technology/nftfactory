@@ -790,6 +790,8 @@ export default function MintClient({
       }, 0),
     [manageRoyaltySplits]
   );
+  const manageRoyaltySplitReady = manageRoyaltySplits.length === 0 || manageRoyaltySplitTotal === 10_000;
+  const manageRoyaltyPercent = useMemo(() => formatBpsAsPercent(manageRoyaltyBps), [manageRoyaltyBps]);
   const collectionEnsParentCandidates = useMemo(
     () =>
       collectEnsParentCandidates([
@@ -3258,137 +3260,159 @@ export default function MintClient({
           <div className="card formCard">
             <h3>4. Royalties and Splits</h3>
             <p className="hint">
-              Set the collection-wide default royalty returned by the collection contract, then optionally define a collaborator split policy for that royalty.
+              Manage the collection contract&apos;s default royalty and, if needed, store a collaborator split policy in the protocol split registry.
             </p>
-            <p><strong>Default royalty</strong></p>
-            <label>
-              Default royalty receiver
-              <input
-                value={manageRoyaltyReceiver}
-                onChange={(e) => setManageRoyaltyReceiver(e.target.value)}
-                placeholder={account || "0x..."}
-              />
-            </label>
-            <label>
-              Default royalty (basis points)
-              <input
-                inputMode="numeric"
-                value={manageRoyaltyBps}
-                onChange={(e) => setManageRoyaltyBps(e.target.value)}
-                placeholder="500"
-              />
-            </label>
-            <button
-              type="button"
-              onClick={onSaveDefaultRoyalty}
-              disabled={!isConnected || wrongNetwork || !isAddress(manageAddress) || royaltyTx.status === "pending"}
-            >
-              {royaltyTx.status === "pending" ? "Saving royalty…" : "Save Default Royalty"}
-            </button>
-            <TxStatus state={royaltyTx} />
-
-            <div className="selectionCard" style={{ marginTop: "1rem" }}>
-              <p><strong>Collection split policy</strong></p>
-              <p className="hint">
-                Optional collaborator royalty weights stored in the protocol royalty split registry for {appChain.name}.
-                This does <strong>not</strong> update the collection contract&apos;s default royalty receiver or basis
-                points; keep both aligned if your downstream royalty settlement reads the split registry.
-              </p>
-              {config.royaltySplitRegistry ? (
-                <>
-                  <p className="hint mono">
-                    Split registry:{" "}
-                    {toExplorerAddress(config.chainId, config.royaltySplitRegistry) ? (
-                      <a href={toExplorerAddress(config.chainId, config.royaltySplitRegistry)!} target="_blank" rel="noreferrer">
-                        {config.royaltySplitRegistry}
-                      </a>
-                    ) : (
-                      config.royaltySplitRegistry
-                    )}
+            <div className="mintRoyaltySection">
+              <div className="selectionCard mintRoyaltyPanel">
+                <div className="mintRoyaltyHeader">
+                  <div>
+                    <p><strong>Default royalty</strong></p>
+                    <p className="hint">This is the collection contract&apos;s EIP-2981 royalty receiver and basis points.</p>
+                  </div>
+                  <p className="hint mintRoyaltyMeta">
+                    Current target: <strong>{manageRoyaltyPercent}</strong>
                   </p>
-                  {manageRoyaltySplits.length === 0 ? (
-                    <p className="hint">No split rows configured. Add split rows below to define collaborator payouts, or save now to clear the split policy.</p>
-                  ) : null}
-                  {manageRoyaltySplits.map((split, index) => (
-                    <div key={`royalty-split-${index}`} className="gridMini">
-                      <label>
-                        Recipient {index + 1}
-                        <input
-                          value={split.account}
-                          onChange={(e) => updateRoyaltySplitRow(index, "account", e.target.value)}
-                          placeholder="0x..."
-                        />
-                      </label>
-                      <label>
-                        Bps
-                        <input
-                          inputMode="numeric"
-                          value={split.bps}
-                          onChange={(e) => updateRoyaltySplitRow(index, "bps", e.target.value)}
-                          placeholder="5000"
-                        />
-                        <span className="hint">{formatBpsAsPercent(split.bps)}</span>
-                      </label>
-                      <p className="hint" style={{ alignSelf: "end", margin: 0 }}>
-                        Split: <strong>{formatBpsAsPercent(split.bps)}</strong>
-                      </p>
+                </div>
+                <label>
+                  Default royalty receiver
+                  <input
+                    value={manageRoyaltyReceiver}
+                    onChange={(e) => setManageRoyaltyReceiver(e.target.value)}
+                    placeholder={account || "0x..."}
+                  />
+                </label>
+                <label>
+                  Default royalty (basis points)
+                  <input
+                    inputMode="numeric"
+                    value={manageRoyaltyBps}
+                    onChange={(e) => setManageRoyaltyBps(e.target.value)}
+                    placeholder="500"
+                  />
+                  <span className="hint">{manageRoyaltyPercent}</span>
+                </label>
+                <p className="hint">Use 0 bps to disable the collection contract&apos;s default royalty.</p>
+                <button
+                  type="button"
+                  onClick={onSaveDefaultRoyalty}
+                  disabled={!isConnected || wrongNetwork || !isAddress(manageAddress) || royaltyTx.status === "pending"}
+                >
+                  {royaltyTx.status === "pending" ? "Saving royalty…" : "Save Default Royalty"}
+                </button>
+                <TxStatus state={royaltyTx} />
+              </div>
+
+              <div className="selectionCard mintRoyaltyPanel">
+                <div className="mintRoyaltyHeader">
+                  <div>
+                    <p><strong>Collaborator split policy</strong></p>
+                    <p className="hint">
+                      Optional weights stored in the protocol split registry for {appChain.name}. This does <strong>not</strong> update the collection contract&apos;s default royalty.
+                    </p>
+                  </div>
+                  <p className={`hint mintRoyaltyMeta${manageRoyaltySplitReady ? "" : " error"}`}>
+                    {manageRoyaltySplits.length === 0
+                      ? "No splits configured"
+                      : manageRoyaltySplitReady
+                        ? `Ready: ${formatBpsAsPercent(manageRoyaltySplitTotal)}`
+                        : `Needs 100%: ${formatBpsAsPercent(manageRoyaltySplitTotal)}`}
+                  </p>
+                </div>
+                {config.royaltySplitRegistry ? (
+                  <>
+                    <p className="hint mono">
+                      Split registry:{" "}
+                      {toExplorerAddress(config.chainId, config.royaltySplitRegistry) ? (
+                        <a href={toExplorerAddress(config.chainId, config.royaltySplitRegistry)!} target="_blank" rel="noreferrer">
+                          {config.royaltySplitRegistry}
+                        </a>
+                      ) : (
+                        config.royaltySplitRegistry
+                      )}
+                    </p>
+                    <p className="hint">
+                      Save an empty split list to clear the stored collaborator policy. If downstream royalty settlement reads the split registry, keep it aligned with the default royalty above.
+                    </p>
+                    {manageRoyaltySplits.length === 0 ? <p className="hint">No split rows configured yet.</p> : null}
+                    {manageRoyaltySplits.map((split, index) => (
+                      <div key={`royalty-split-${index}`} className="gridMini selectionCard mintRoyaltySplitRow">
+                        <label>
+                          Recipient {index + 1}
+                          <input
+                            value={split.account}
+                            onChange={(e) => updateRoyaltySplitRow(index, "account", e.target.value)}
+                            placeholder="0x..."
+                          />
+                        </label>
+                        <label>
+                          Bps
+                          <input
+                            inputMode="numeric"
+                            value={split.bps}
+                            onChange={(e) => updateRoyaltySplitRow(index, "bps", e.target.value)}
+                            placeholder="5000"
+                          />
+                          <span className="hint">{formatBpsAsPercent(split.bps)}</span>
+                        </label>
+                        <p className="hint mintRoyaltySplitPreview">
+                          Split: <strong>{formatBpsAsPercent(split.bps)}</strong>
+                        </p>
+                        <button
+                          type="button"
+                          className="secondary"
+                          onClick={() => removeRoyaltySplitRow(index)}
+                          disabled={royaltySplitTx.status === "pending"}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                    <p className={`hint${manageRoyaltySplitReady ? "" : " error"}`}>
+                      Split total: {formatBpsAsPercent(manageRoyaltySplitTotal)} ({manageRoyaltySplitTotal.toLocaleString()} / 10,000 bps)
+                    </p>
+                    <div className="row mintRoyaltyActions">
                       <button
                         type="button"
                         className="secondary"
-                        onClick={() => removeRoyaltySplitRow(index)}
+                        onClick={addRoyaltySplitRow}
                         disabled={royaltySplitTx.status === "pending"}
                       >
-                        Remove
+                        Add split row
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary"
+                        onClick={clearRoyaltySplitRows}
+                        disabled={royaltySplitTx.status === "pending" || manageRoyaltySplits.length === 0}
+                      >
+                        Clear all
+                      </button>
+                      <button
+                        type="button"
+                        onClick={onSaveCollectionRoyaltySplits}
+                        disabled={!isConnected || wrongNetwork || !isAddress(manageAddress) || royaltySplitTx.status === "pending"}
+                      >
+                        {royaltySplitTx.status === "pending" ? "Saving split policy…" : "Save Split Policy"}
                       </button>
                     </div>
-                  ))}
-                  <p className={`hint${manageRoyaltySplitTotal === 10_000 || manageRoyaltySplits.length === 0 ? "" : " error"}`}>
-                    Split total: {formatBpsAsPercent(manageRoyaltySplitTotal)} ({manageRoyaltySplitTotal.toLocaleString()} / 10,000 bps)
-                  </p>
-                  <div className="row">
-                    <button
-                      type="button"
-                      className="secondary"
-                      onClick={addRoyaltySplitRow}
-                      disabled={royaltySplitTx.status === "pending"}
-                    >
-                      Add split row
-                    </button>
-                    <button
-                      type="button"
-                      className="secondary"
-                      onClick={clearRoyaltySplitRows}
-                      disabled={royaltySplitTx.status === "pending" || manageRoyaltySplits.length === 0}
-                    >
-                      Clear all
-                    </button>
-                    <button
-                      type="button"
-                      onClick={onSaveCollectionRoyaltySplits}
-                      disabled={!isConnected || wrongNetwork || !isAddress(manageAddress) || royaltySplitTx.status === "pending"}
-                    >
-                      {royaltySplitTx.status === "pending" ? "Saving split policy…" : "Save Split Policy"}
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <p className="hint">
-                    Royalty split registry is not configured for {appChain.name}. Add{" "}
-                    <code>{royaltySplitRegistryEnvHint.scopedEnvVarName}</code>
-                    {royaltySplitRegistryEnvHint.legacyEnvVarName ? (
-                      <>
-                        {" "}or the legacy primary-chain alias <code>{royaltySplitRegistryEnvHint.legacyEnvVarName}</code>
-                      </>
-                    ) : null}
-                    {" "}and redeploy to enable collaborator split storage here.
-                  </p>
-                  <p className="hint">
-                    Once configured, this tile stores collaborator royalty weights in the on-chain split registry for the selected collection.
-                  </p>
-                </>
-              )}
-              <TxStatus state={royaltySplitTx} />
+                  </>
+                ) : (
+                  <>
+                    <p className="hint">
+                      Royalty split registry is not configured for {appChain.name}. Add{" "}
+                      <code>{royaltySplitRegistryEnvHint.scopedEnvVarName}</code>
+                      {royaltySplitRegistryEnvHint.legacyEnvVarName ? (
+                        <>
+                          {" "}or the legacy primary-chain alias <code>{royaltySplitRegistryEnvHint.legacyEnvVarName}</code>
+                        </>
+                      ) : null}
+                      {" "}and redeploy to enable collaborator split storage here.
+                    </p>
+                    <p className="hint">Once configured, this stores collaborator royalty weights for the selected collection in the on-chain split registry.</p>
+                  </>
+                )}
+                <TxStatus state={royaltySplitTx} />
+              </div>
             </div>
           </div>
 

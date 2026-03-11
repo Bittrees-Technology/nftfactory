@@ -260,6 +260,40 @@ nav {
   gap: 8px;
 }
 
+.mintWorkspace .mintRoyaltySection {
+  display: grid;
+  gap: 10px;
+}
+
+.mintWorkspace .mintRoyaltyPanel {
+  gap: 8px;
+}
+
+.mintWorkspace .mintRoyaltyHeader {
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.mintWorkspace .mintRoyaltyMeta {
+  margin: 0;
+}
+
+.mintWorkspace .mintRoyaltySplitRow {
+  align-items: end;
+}
+
+.mintWorkspace .mintRoyaltySplitPreview {
+  align-self: end;
+  margin: 0;
+}
+
+.mintWorkspace .mintRoyaltyActions {
+  align-items: center;
+}
+
 .row {
   display: flex;
   gap: 12px;
