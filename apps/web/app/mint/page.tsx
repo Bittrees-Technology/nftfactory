@@ -7,6 +7,7 @@ type MintPageProps = {
     collection?: string;
     profile?: string;
     address?: string;
+    identityMode?: string;
   }>;
 };
 
@@ -17,6 +18,7 @@ export default async function MintPage({ searchParams }: MintPageProps) {
   const initialMintMode = params?.collection === "custom" ? "custom" : "shared";
   const initialProfileLabel = params?.profile?.trim() || "";
   const initialCollectionAddress = params?.address?.trim() || "";
+  const initialCollectionIdentityMode = params?.identityMode?.trim() || "";
 
   return (
     <MintClient
@@ -24,6 +26,7 @@ export default async function MintPage({ searchParams }: MintPageProps) {
       initialMintMode={initialMintMode}
       initialProfileLabel={initialProfileLabel}
       initialCollectionAddress={initialCollectionAddress}
+      initialCollectionIdentityMode={initialCollectionIdentityMode}
     />
   );
 }

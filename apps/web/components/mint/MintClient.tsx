@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useAccount, useChainId, usePublicClient, useSwitchChain, useWalletClient } from "wagmi";
+import { encodeFunctionData, formatEther } from "viem";
 import type { Address, Hex } from "viem";
 import { namehash } from "viem/ens";
 import {
@@ -26,6 +27,12 @@ import {
 } from "../../lib/creatorCollection";
 import { getContractsConfig } from "../../lib/contracts";
 import { anvil, getAppChain, getExplorerBaseUrl } from "../../lib/chains";
+import {
+  buildEnsSubnameCreationTx,
+  ENS_NAME_WRAPPER_WRITE_ABI,
+  ENS_REGISTRY_ADDRESS,
+  ZERO_ADDRESS
+} from "../../lib/ensSubnameCreation";
 import {
   fetchCollectionTokens,
   fetchCollectionsByOwner,
@@ -64,16 +71,25 @@ type Standard = "ERC721" | "ERC1155";
 type MintMode = "shared" | "custom";
 /** Which top-level action the user is performing */
 type PageMode = "mint" | "view" | "manage";
+type CollectionIdentityMode =
+  | "register-eth"
+  | "register-eth-subname"
+  | "ens"
+  | "external-subname"
+  | "nftfactory-subname";
 type ManageRoyaltySplitDraft = {
   account: string;
   bps: string;
 };
 
 const SUBNAME_FEE_ETH = "0.001";
-const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
-const ENS_REGISTRY_ADDRESS = "0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e" as Address;
 const ENS_NAME_WRAPPER_ADDRESS = /^0x[a-fA-F0-9]{40}$/.test(process.env.NEXT_PUBLIC_ENS_NAME_WRAPPER_ADDRESS || "")
   ? (process.env.NEXT_PUBLIC_ENS_NAME_WRAPPER_ADDRESS as Address)
+  : null;
+const ENS_ETH_REGISTRAR_CONTROLLER_ADDRESS = /^0x[a-fA-F0-9]{40}$/.test(
+  process.env.NEXT_PUBLIC_ENS_ETH_REGISTRAR_CONTROLLER_ADDRESS || ""
+)
+  ? (process.env.NEXT_PUBLIC_ENS_ETH_REGISTRAR_CONTROLLER_ADDRESS as Address)
   : null;
 
 const ENS_REGISTRY_ABI = [
@@ -93,6 +109,75 @@ const ENS_NAME_WRAPPER_ABI = [
     stateMutability: "view",
     inputs: [{ name: "id", type: "uint256" }],
     outputs: [{ name: "", type: "address" }]
+  }
+] as const;
+
+const ENS_ETH_REGISTRAR_CONTROLLER_ABI = [
+  {
+    type: "function",
+    name: "available",
+    stateMutability: "view",
+    inputs: [{ name: "name", type: "string" }],
+    outputs: [{ name: "", type: "bool" }]
+  },
+  {
+    type: "function",
+    name: "rentPrice",
+    stateMutability: "view",
+    inputs: [
+      { name: "name", type: "string" },
+      { name: "duration", type: "uint256" }
+    ],
+    outputs: [
+      { name: "base", type: "uint256" },
+      { name: "premium", type: "uint256" }
+    ]
+  },
+  {
+    type: "function",
+    name: "minCommitmentAge",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }]
+  },
+  {
+    type: "function",
+    name: "makeCommitment",
+    stateMutability: "view",
+    inputs: [
+      { name: "name", type: "string" },
+      { name: "owner", type: "address" },
+      { name: "duration", type: "uint256" },
+      { name: "secret", type: "bytes32" },
+      { name: "resolver", type: "address" },
+      { name: "data", type: "bytes[]" },
+      { name: "reverseRecord", type: "bool" },
+      { name: "ownerControlledFuses", type: "uint16" }
+    ],
+    outputs: [{ name: "", type: "bytes32" }]
+  },
+  {
+    type: "function",
+    name: "commit",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "commitment", type: "bytes32" }],
+    outputs: []
+  },
+  {
+    type: "function",
+    name: "register",
+    stateMutability: "payable",
+    inputs: [
+      { name: "name", type: "string" },
+      { name: "owner", type: "address" },
+      { name: "duration", type: "uint256" },
+      { name: "secret", type: "bytes32" },
+      { name: "resolver", type: "address" },
+      { name: "data", type: "bytes[]" },
+      { name: "reverseRecord", type: "bool" },
+      { name: "ownerControlledFuses", type: "uint16" }
+    ],
+    outputs: []
   }
 ] as const;
 
@@ -179,6 +264,20 @@ async function resolveEnsEffectiveOwner(
   return registryOwner;
 }
 
+async function readWrappedNameExpiry(
+  publicClient: NonNullable<ReturnType<typeof usePublicClient>>,
+  node: Hex
+): Promise<bigint | null> {
+  if (!ENS_NAME_WRAPPER_ADDRESS) return null;
+  const [, , expiry] = await publicClient.readContract({
+    address: ENS_NAME_WRAPPER_ADDRESS,
+    abi: ENS_NAME_WRAPPER_WRITE_ABI,
+    functionName: "getData",
+    args: [BigInt(node)]
+  });
+  return BigInt(expiry);
+}
+
 function isAddress(value: string): value is `0x${string}` {
   return /^0x[a-fA-F0-9]{40}$/.test(value);
 }
@@ -189,6 +288,10 @@ function storageKey(ownerAddress: string): string {
 
 function metadataDraftKey(ownerAddress: string): string {
   return `nftfactory:mint-draft:${ownerAddress.toLowerCase()}`;
+}
+
+function collectionEnsPendingKey(ownerAddress: string): string {
+  return `nftfactory:collection-ens-registration:${ownerAddress.toLowerCase()}`;
 }
 
 function clearMetadataDraft(ownerAddress: string): void {
@@ -202,6 +305,12 @@ function shortenAddress(value: string): string {
 
 function defaultRoyaltySplits(account: string): ManageRoyaltySplitDraft[] {
   return [{ account, bps: "10000" }];
+}
+
+function createCommitmentSecret(): Hex {
+  const bytes = new Uint8Array(32);
+  globalThis.crypto.getRandomValues(bytes);
+  return `0x${Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("")}` as Hex;
 }
 
 function formatCollectionIdentity(value: string | null): string | null {
@@ -218,6 +327,19 @@ function formatBpsAsPercent(value: string | number): string {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2
   })}%`;
+}
+
+function normalizeCollectionIdentityMode(value: string | undefined): CollectionIdentityMode {
+  switch (value) {
+    case "register-eth":
+    case "register-eth-subname":
+    case "ens":
+    case "external-subname":
+    case "nftfactory-subname":
+      return value;
+    default:
+      return "nftfactory-subname";
+  }
 }
 
 function getSwitchErrorCode(error: unknown): number | string | null {
@@ -272,6 +394,7 @@ type MintClientProps = {
   initialMintMode?: MintMode;
   initialProfileLabel?: string;
   initialCollectionAddress?: string;
+  initialCollectionIdentityMode?: string;
 };
 
 type KnownCollection = {
@@ -308,6 +431,19 @@ type LocalMintFeedItem = {
     updatedAt: string;
   };
   activeListing: null;
+};
+
+type PendingCollectionEnsRegistration = {
+  collectionAddress: string;
+  fullName: string;
+  label: string;
+  durationYears: number;
+  durationSeconds: string;
+  secret: Hex;
+  committedAt: number;
+  minCommitmentAge: number;
+  estimatedCostWei: string;
+  commitHash?: Hex;
 };
 
 const namedContractAbi = [
@@ -457,7 +593,8 @@ export default function MintClient({
   initialPageMode = "mint",
   initialMintMode = "shared",
   initialProfileLabel = "",
-  initialCollectionAddress = ""
+  initialCollectionAddress = "",
+  initialCollectionIdentityMode = ""
 }: MintClientProps) {
   const config = useMemo(() => getContractsConfig(), []);
   const appChain = useMemo(() => getAppChain(config.chainId), [config.chainId]);
@@ -522,7 +659,12 @@ export default function MintClient({
 
   // Collection identity management
   const [registerSubnameLabel, setRegisterSubnameLabel] = useState(initialProfileLabel);
-  const [identityMode, setIdentityMode] = useState<"ens" | "subname" | "nftfactory">("nftfactory");
+  const [identityMode, setIdentityMode] = useState<CollectionIdentityMode>(
+    normalizeCollectionIdentityMode(initialCollectionIdentityMode)
+  );
+  const [pendingCollectionEnsRegistration, setPendingCollectionEnsRegistration] =
+    useState<PendingCollectionEnsRegistration | null>(null);
+  const [collectionRegistrationCountdown, setCollectionRegistrationCountdown] = useState(0);
 
   // Transaction state
   const [uploadTx, setUploadTx] = useState<TxState>({ status: "idle" });
@@ -713,6 +855,49 @@ export default function MintClient({
   useEffect(() => {
     setNetworkSwitchMessage("");
   }, [chainId, isConnected]);
+
+  useEffect(() => {
+    if (!account || typeof window === "undefined") {
+      setPendingCollectionEnsRegistration(null);
+      setCollectionRegistrationCountdown(0);
+      return;
+    }
+    const raw = window.localStorage.getItem(collectionEnsPendingKey(account));
+    if (!raw) {
+      setPendingCollectionEnsRegistration(null);
+      setCollectionRegistrationCountdown(0);
+      return;
+    }
+    try {
+      const parsed = JSON.parse(raw) as PendingCollectionEnsRegistration;
+      setPendingCollectionEnsRegistration(parsed);
+      setIdentityMode("register-eth");
+      setRegisterSubnameLabel(parsed.fullName);
+      if (parsed.collectionAddress && parsed.collectionAddress !== manageAddress) {
+        setManageAddress(parsed.collectionAddress);
+      }
+    } catch {
+      window.localStorage.removeItem(collectionEnsPendingKey(account));
+      setPendingCollectionEnsRegistration(null);
+      setCollectionRegistrationCountdown(0);
+    }
+  }, [account, manageAddress]);
+
+  useEffect(() => {
+    if (!pendingCollectionEnsRegistration) {
+      setCollectionRegistrationCountdown(0);
+      return;
+    }
+    const updateCountdown = () => {
+      const unlockAt =
+        pendingCollectionEnsRegistration.committedAt + pendingCollectionEnsRegistration.minCommitmentAge * 1000;
+      const remaining = Math.max(0, Math.ceil((unlockAt - Date.now()) / 1000));
+      setCollectionRegistrationCountdown(remaining);
+    };
+    updateCountdown();
+    const timer = globalThis.setInterval(updateCountdown, 1000);
+    return () => globalThis.clearInterval(timer);
+  }, [pendingCollectionEnsRegistration]);
 
   useEffect(() => {
     if (!account) {
@@ -1235,6 +1420,33 @@ export default function MintClient({
 
   // ── Register ENS subname ──────────────────────────────────────────────────
 
+  async function attachCollectionIdentity(args: {
+    collectionAddress?: string;
+    requestName?: string;
+    fullName: string;
+    source: "ens" | "external-subname" | "nftfactory-subname";
+    routeSlug?: string;
+    successMessage: string;
+  }): Promise<void> {
+    const targetCollectionAddress = args.collectionAddress || manageAddress;
+    const response = await linkProfileIdentity({
+      name: args.requestName || args.fullName,
+      source: args.source,
+      ownerAddress: account,
+      collectionAddress: targetCollectionAddress,
+      routeSlug: args.routeSlug
+    });
+    mergeKnownCollections([{
+      contractAddress: targetCollectionAddress,
+      ensSubname: response.profile.fullName,
+      ownerAddress: account
+    }]);
+    setSubnameTx({
+      status: "success",
+      message: args.successMessage.replace("{name}", response.profile.fullName)
+    });
+  }
+
   async function onRegisterSubname(): Promise<void> {
     if (!account) { setSubnameTx({ status: "error", message: "Connect wallet first." }); return; }
     if (wrongNetwork) { setSubnameTx({ status: "error", message: `Select ${appChain.name} in the wallet menu first.` }); return; }
@@ -1260,32 +1472,321 @@ export default function MintClient({
         toHexWei(SUBNAME_FEE_ETH) as `0x${string}`
       );
       await waitForReceipt(txHash);
-      let linkWarning = "";
       try {
-        await linkProfileIdentity({
-          name: label,
+        await attachCollectionIdentity({
+          requestName: label,
+          fullName: `${label}.nftfactory.eth`,
           source: "nftfactory-subname",
-          ownerAddress: account,
-          collectionAddress: manageAddress,
-          routeSlug: label
+          routeSlug: label,
+          successMessage: "{name} registered and attached to this collection."
         });
-        mergeKnownCollections([{
-          contractAddress: manageAddress,
-          ensSubname: label,
-          ownerAddress: account
-        }]);
+        setPendingCollectionEnsRegistration(null);
+        if (typeof window !== "undefined") {
+          window.localStorage.removeItem(collectionEnsPendingKey(account));
+        }
       } catch (err) {
-        linkWarning = err instanceof Error ? err.message : "The collection link did not persist.";
+        const linkWarning = err instanceof Error ? err.message : "The collection link did not persist.";
+        setSubnameTx({
+          status: "success",
+          hash: txHash,
+          message: `${label}.nftfactory.eth registered on-chain, but the collection attachment still needs to be saved: ${linkWarning}`
+        });
+        return;
+      }
+      setSubnameTx((current) => ({ ...current, hash: txHash }));
+    } catch (err) {
+      setSubnameTx({ status: "error", message: err instanceof Error ? err.message : "Registration failed" });
+    }
+  }
+
+  async function beginCollectionEthRegistration(): Promise<void> {
+    if (!publicClient || !walletClient?.account || !ENS_ETH_REGISTRAR_CONTROLLER_ADDRESS) {
+      setSubnameTx({ status: "error", message: "ENS .eth registration is not configured here yet." });
+      return;
+    }
+    if (wrongNetwork) {
+      setSubnameTx({ status: "error", message: `Select ${appChain.name} in the wallet menu first.` });
+      return;
+    }
+    if (!isAddress(manageAddress) || !selectedManageCollection) {
+      setSubnameTx({
+        status: "error",
+        message: "Pick an indexed collection before starting ENS registration for it."
+      });
+      return;
+    }
+
+    const label = normalizeSubname(registerSubnameLabel.replace(/\.eth$/i, ""));
+    if (!label || label.includes(".")) {
+      setSubnameTx({ status: "error", message: "Enter a single .eth label like artist.eth." });
+      return;
+    }
+
+    try {
+      setSubnameTx({ status: "pending", message: `Preparing ${label}.eth registration…` });
+      const duration = 31536000n;
+      const minCommitmentAge = Number(
+        await publicClient.readContract({
+          address: ENS_ETH_REGISTRAR_CONTROLLER_ADDRESS,
+          abi: ENS_ETH_REGISTRAR_CONTROLLER_ABI,
+          functionName: "minCommitmentAge"
+        })
+      );
+      const available = await publicClient.readContract({
+        address: ENS_ETH_REGISTRAR_CONTROLLER_ADDRESS,
+        abi: ENS_ETH_REGISTRAR_CONTROLLER_ABI,
+        functionName: "available",
+        args: [label]
+      });
+      if (!available) {
+        setSubnameTx({ status: "error", message: `${label}.eth is already registered in ENS.` });
+        return;
+      }
+
+      const secret = createCommitmentSecret();
+      const commitment = await publicClient.readContract({
+        address: ENS_ETH_REGISTRAR_CONTROLLER_ADDRESS,
+        abi: ENS_ETH_REGISTRAR_CONTROLLER_ABI,
+        functionName: "makeCommitment",
+        args: [label, walletClient.account.address, duration, secret, ZERO_ADDRESS as Address, [], false, 0]
+      });
+      const [base, premium] = await publicClient.readContract({
+        address: ENS_ETH_REGISTRAR_CONTROLLER_ADDRESS,
+        abi: ENS_ETH_REGISTRAR_CONTROLLER_ABI,
+        functionName: "rentPrice",
+        args: [label, duration]
+      });
+      const total = BigInt(base) + BigInt(premium);
+      const commitHash = await walletClient.sendTransaction({
+        account: walletClient.account,
+        to: ENS_ETH_REGISTRAR_CONTROLLER_ADDRESS,
+        data: encodeFunctionData({
+          abi: ENS_ETH_REGISTRAR_CONTROLLER_ABI,
+          functionName: "commit",
+          args: [commitment]
+        })
+      });
+      await publicClient.waitForTransactionReceipt({ hash: commitHash });
+
+      const nextPending: PendingCollectionEnsRegistration = {
+        collectionAddress: manageAddress,
+        fullName: `${label}.eth`,
+        label,
+        durationYears: 1,
+        durationSeconds: duration.toString(),
+        secret,
+        committedAt: Date.now(),
+        minCommitmentAge,
+        estimatedCostWei: total.toString(),
+        commitHash
+      };
+      setPendingCollectionEnsRegistration(nextPending);
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(collectionEnsPendingKey(account), JSON.stringify(nextPending));
       }
       setSubnameTx({
         status: "success",
-        hash: txHash,
-        message: linkWarning
-          ? `${label}.nftfactory.eth registered on-chain, but the collection attachment still needs to be saved: ${linkWarning}`
-          : `${label}.nftfactory.eth registered and attached to this collection.`
+        hash: commitHash,
+        message: `${label}.eth commit sent for this collection. Wait ${minCommitmentAge}s, then complete registration. Estimated cost: ${formatEther(total)} ETH.`
       });
     } catch (err) {
-      setSubnameTx({ status: "error", message: err instanceof Error ? err.message : "Registration failed" });
+      setSubnameTx({
+        status: "error",
+        message: err instanceof Error ? err.message : "Failed to begin ENS registration"
+      });
+    }
+  }
+
+  async function completeCollectionEthRegistration(): Promise<void> {
+    if (!publicClient || !walletClient?.account || !ENS_ETH_REGISTRAR_CONTROLLER_ADDRESS || !pendingCollectionEnsRegistration) {
+      setSubnameTx({ status: "error", message: "ENS registration is not ready to complete." });
+      return;
+    }
+    if (wrongNetwork) {
+      setSubnameTx({ status: "error", message: `Select ${appChain.name} in the wallet menu first.` });
+      return;
+    }
+
+    try {
+      const duration = BigInt(pendingCollectionEnsRegistration.durationSeconds);
+      const [base, premium] = await publicClient.readContract({
+        address: ENS_ETH_REGISTRAR_CONTROLLER_ADDRESS,
+        abi: ENS_ETH_REGISTRAR_CONTROLLER_ABI,
+        functionName: "rentPrice",
+        args: [pendingCollectionEnsRegistration.label, duration]
+      });
+      const total = BigInt(base) + BigInt(premium);
+      const value = (total * 110n) / 100n;
+
+      setSubnameTx({
+        status: "pending",
+        message: `Completing ${pendingCollectionEnsRegistration.fullName} registration…`
+      });
+      const registerHash = await walletClient.sendTransaction({
+        account: walletClient.account,
+        to: ENS_ETH_REGISTRAR_CONTROLLER_ADDRESS,
+        data: encodeFunctionData({
+          abi: ENS_ETH_REGISTRAR_CONTROLLER_ABI,
+          functionName: "register",
+          args: [
+            pendingCollectionEnsRegistration.label,
+            walletClient.account.address,
+            duration,
+            pendingCollectionEnsRegistration.secret,
+            ZERO_ADDRESS as Address,
+            [],
+            false,
+            0
+          ]
+        }),
+        value
+      });
+      await publicClient.waitForTransactionReceipt({ hash: registerHash });
+
+      try {
+        await attachCollectionIdentity({
+          collectionAddress: pendingCollectionEnsRegistration.collectionAddress,
+          fullName: pendingCollectionEnsRegistration.fullName,
+          source: "ens",
+          routeSlug: deriveEnsRouteFromName(pendingCollectionEnsRegistration.fullName),
+          successMessage: "{name} registered in ENS and attached to this collection."
+        });
+        setSubnameTx((current) => ({ ...current, hash: registerHash }));
+      } catch (err) {
+        const linkWarning = err instanceof Error ? err.message : "The collection link did not persist.";
+        setSubnameTx({
+          status: "success",
+          hash: registerHash,
+          message: `${pendingCollectionEnsRegistration.fullName} was registered in ENS, but the collection attachment still needs to be saved: ${linkWarning}`
+        });
+      }
+
+      setPendingCollectionEnsRegistration(null);
+      if (typeof window !== "undefined") {
+        window.localStorage.removeItem(collectionEnsPendingKey(account));
+      }
+    } catch (err) {
+      setSubnameTx({
+        status: "error",
+        message: err instanceof Error ? err.message : "Failed to complete ENS registration"
+      });
+    }
+  }
+
+  async function resolveCollectionEthSubnameCreationContext(): Promise<{
+    fullName: string;
+    label: string;
+    parentName: string;
+    parentNode: Hex;
+    parentExpiry: bigint | null;
+    currentOwner: string;
+    parentOwner: string;
+    parentWrapped: boolean;
+  }> {
+    if (!publicClient) {
+      throw new Error("ENS registry lookup is unavailable right now.");
+    }
+
+    const fullName = normalizeCollectionIdentityName(registerSubnameLabel, "subname");
+    const parts = fullName.split(".").filter(Boolean);
+    if (parts.length < 3 || !fullName.endsWith(".eth")) {
+      throw new Error("Enter a full ENS subname like music.artist.eth.");
+    }
+
+    const label = parts[0] || "";
+    if (!normalizeSubname(label) || label.includes(".")) {
+      throw new Error("Enter a single subname label like music in music.artist.eth.");
+    }
+
+    const currentOwner = await resolveEnsEffectiveOwner(publicClient, fullName);
+    const parentName = parts.slice(1).join(".");
+    const parentOwner = await resolveEnsEffectiveOwner(publicClient, parentName);
+    const parentNode = namehash(parentName);
+    const parentRegistryOwner = String(
+      await publicClient.readContract({
+        address: ENS_REGISTRY_ADDRESS,
+        abi: ENS_REGISTRY_ABI,
+        functionName: "owner",
+        args: [parentNode]
+      })
+    ).toLowerCase();
+    const parentWrapped = Boolean(
+      ENS_NAME_WRAPPER_ADDRESS && parentRegistryOwner === ENS_NAME_WRAPPER_ADDRESS.toLowerCase()
+    );
+    const parentExpiry = parentWrapped ? await readWrappedNameExpiry(publicClient, parentNode) : null;
+
+    return {
+      fullName,
+      label,
+      parentName,
+      parentNode,
+      parentExpiry,
+      currentOwner,
+      parentOwner,
+      parentWrapped
+    };
+  }
+
+  async function createCollectionEthSubname(): Promise<void> {
+    if (!walletClient?.account) {
+      setSubnameTx({ status: "error", message: "Connect wallet first." });
+      return;
+    }
+    if (wrongNetwork) {
+      setSubnameTx({ status: "error", message: `Select ${appChain.name} in the wallet menu first.` });
+      return;
+    }
+    if (!isAddress(manageAddress) || !selectedManageCollection) {
+      setSubnameTx({
+        status: "error",
+        message: "Pick an indexed collection before creating an ENS subname for it."
+      });
+      return;
+    }
+
+    try {
+      const context = await resolveCollectionEthSubnameCreationContext();
+      setSubnameTx({ status: "pending", message: `Creating ${context.fullName} in ENS…` });
+      const txRequest = buildEnsSubnameCreationTx({
+        fullName: context.fullName,
+        label: context.label,
+        parentName: context.parentName,
+        parentNode: context.parentNode,
+        parentExpiry: context.parentExpiry,
+        currentOwner: context.currentOwner,
+        parentOwner: context.parentOwner,
+        parentWrapped: context.parentWrapped,
+        walletAddress: walletClient.account.address,
+        wrapperAddress: ENS_NAME_WRAPPER_ADDRESS
+      });
+      const txHash = await walletClient.sendTransaction({
+        account: walletClient.account,
+        to: txRequest.to,
+        data: txRequest.data
+      });
+      await publicClient!.waitForTransactionReceipt({ hash: txHash });
+
+      try {
+        await attachCollectionIdentity({
+          fullName: context.fullName,
+          source: "external-subname",
+          routeSlug: deriveEnsRouteFromName(context.fullName),
+          successMessage: "{name} created and attached to this collection."
+        });
+        setSubnameTx((current) => ({ ...current, hash: txHash }));
+      } catch (err) {
+        const linkWarning = err instanceof Error ? err.message : "The collection link did not persist.";
+        setSubnameTx({
+          status: "success",
+          hash: txHash,
+          message: `${context.fullName} was created in ENS, but the collection attachment still needs to be saved: ${linkWarning}`
+        });
+      }
+    } catch (err) {
+      setSubnameTx({
+        status: "error",
+        message: err instanceof Error ? err.message : "Failed to create ENS subname"
+      });
     }
   }
 
@@ -1310,8 +1811,27 @@ export default function MintClient({
       setSubnameTx({ status: "error", message: "Enter a collection identity first." });
       return;
     }
-    if (identityMode === "nftfactory") {
+    if (identityMode === "nftfactory-subname") {
       void onRegisterSubname();
+      return;
+    }
+    if (identityMode === "register-eth") {
+      if (pendingCollectionEnsRegistration) {
+        if (collectionRegistrationCountdown > 0) {
+          setSubnameTx({
+            status: "error",
+            message: `Wait ${collectionRegistrationCountdown}s before completing ENS registration.`
+          });
+          return;
+        }
+        void completeCollectionEthRegistration();
+      } else {
+        void beginCollectionEthRegistration();
+      }
+      return;
+    }
+    if (identityMode === "register-eth-subname") {
+      void createCollectionEthSubname();
       return;
     }
     if (!isValidEnsReference(raw)) {
@@ -1327,7 +1847,7 @@ export default function MintClient({
       setSubnameTx({ status: "error", message: "Public client unavailable. Reconnect wallet and try again." });
       return;
     }
-    const fullName = normalizeCollectionIdentityName(raw, identityMode);
+    const fullName = normalizeCollectionIdentityName(raw, identityMode === "ens" ? "ens" : "subname");
     const routeSlug = deriveEnsRouteFromName(fullName);
     if (!fullName || !routeSlug) {
       setSubnameTx({ status: "error", message: "Enter a valid ENS name or subname." });
@@ -1345,22 +1865,11 @@ export default function MintClient({
         setSubnameTx({ status: "error", message: "The connected wallet does not own this ENS identity." });
         return;
       }
-      const source = identityMode === "ens" ? "ens" : "external-subname";
-      const response = await linkProfileIdentity({
-        name: fullName,
-        source,
-        ownerAddress: account,
-        collectionAddress: manageAddress,
-        routeSlug
-      });
-      mergeKnownCollections([{
-        contractAddress: manageAddress,
-        ensSubname: source === "ens" ? response.profile.fullName : fullName,
-        ownerAddress: account
-      }]);
-      setSubnameTx({
-        status: "success",
-        message: `${response.profile.fullName} verified and attached to this collection.`
+      await attachCollectionIdentity({
+        fullName,
+        source: identityMode === "ens" ? "ens" : "external-subname",
+        routeSlug,
+        successMessage: "{name} verified and attached to this collection."
       });
     } catch (err) {
       setSubnameTx({
@@ -1657,20 +2166,41 @@ export default function MintClient({
   const selectedManageCollection = verifiedKnownCollections.find(
     (item) => item.contractAddress.toLowerCase() === manageAddress.toLowerCase()
   ) || null;
-  const profileSetupHref = useMemo(() => {
-    const params = new URLSearchParams();
-    if (isAddress(manageAddress)) {
-      params.set("collection", manageAddress);
+  const collectionIdentityLabel = useMemo(() => {
+    if (identityMode === "register-eth") return "New .eth name";
+    if (identityMode === "register-eth-subname") return "New ENS subname";
+    if (identityMode === "ens") return "Existing ENS name";
+    if (identityMode === "external-subname") return "Existing ENS subname";
+    return "nftfactory label";
+  }, [identityMode]);
+  const collectionIdentityHint = useMemo(() => {
+    if (identityMode === "register-eth") {
+      return "Enter a fresh .eth name like artist.eth. This collection flow handles the ENS commit and register steps here, then attaches the resulting name to this collection.";
     }
-    if (identityMode === "nftfactory") {
-      const suggestedLabel = normalizeSubname(registerSubnameLabel);
-      if (suggestedLabel) {
-        params.set("label", suggestedLabel);
+    if (identityMode === "register-eth-subname") {
+      return "Enter a new ENS subname like music.artist.eth. The connected wallet must control the parent name, and the resulting subname is attached directly to this collection.";
+    }
+    if (identityMode === "ens") {
+      return "Attach an existing ENS name you already own, like artist.eth.";
+    }
+    if (identityMode === "external-subname") {
+      return "Attach an existing ENS subname you already own, like music.artist.eth.";
+    }
+    return `This registers ${normalizeSubname(registerSubnameLabel) || "your-label"}.nftfactory.eth on-chain for ${SUBNAME_FEE_ETH} ETH and attaches it directly to this collection.`;
+  }, [identityMode, registerSubnameLabel]);
+  const collectionIdentityButtonLabel = useMemo(() => {
+    if (subnameTx.status === "pending") return "Saving…";
+    if (identityMode === "register-eth") {
+      if (pendingCollectionEnsRegistration && collectionRegistrationCountdown > 0) {
+        return `Wait ${collectionRegistrationCountdown}s`;
       }
+      return pendingCollectionEnsRegistration ? "Complete .eth Registration" : "Begin .eth Registration";
     }
-    const query = params.toString();
-    return query ? `/profile/setup?${query}` : "/profile/setup";
-  }, [identityMode, manageAddress, registerSubnameLabel]);
+    if (identityMode === "register-eth-subname") return "Create ENS Subname";
+    if (identityMode === "ens") return "Save ENS Identity";
+    if (identityMode === "external-subname") return "Save ENS Subname";
+    return `Register Under nftfactory.eth (${SUBNAME_FEE_ETH} ETH)`;
+  }, [collectionRegistrationCountdown, identityMode, pendingCollectionEnsRegistration, subnameTx.status]);
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -2439,18 +2969,8 @@ export default function MintClient({
           <div className="card formCard">
             <h3>3. Collection Identity</h3>
             <p className="hint">
-              Manage the human-readable identity shown for this collection. Existing ENS names and ENS subnames are
-              verified against the connected wallet before they attach to this collection. You can also register a new
-              <strong> nftfactory.eth</strong> subname here.
-            </p>
-            <div className="row">
-              <Link href={profileSetupHref} className="ctaLink secondaryLink">
-                Open Profile Setup
-              </Link>
-            </div>
-            <p className="hint">
-              Profile Setup handles fresh <strong>.eth</strong> registration. Existing ENS names and existing ENS
-              subnames can be attached here once you already own them.
+              Manage the human-readable identity shown for this collection. This is collection-only setup. Profile ENS
+              setup stays in <strong>Profile Setup</strong> and does not drive this tile.
             </p>
             {!selectedManageCollection && isAddress(manageAddress) ? (
               <p className="hint">
@@ -2460,43 +2980,49 @@ export default function MintClient({
             ) : null}
             <label>
               Identity mode
-              <select value={identityMode} onChange={(e) => setIdentityMode(e.target.value as "ens" | "subname" | "nftfactory")}>
+              <select value={identityMode} onChange={(e) => setIdentityMode(e.target.value as CollectionIdentityMode)}>
+                <option value="nftfactory-subname">Create under nftfactory.eth</option>
+                <option value="register-eth">Register new .eth name</option>
+                <option value="register-eth-subname">Create new ENS subname</option>
                 <option value="ens">Use an existing ENS name</option>
-                <option value="subname">Use an existing subname</option>
-                <option value="nftfactory">Register under nftfactory.eth</option>
+                <option value="external-subname">Use an existing ENS subname</option>
               </select>
             </label>
             <label>
-              {identityMode === "ens"
-                ? "ENS name"
-                : identityMode === "subname"
-                  ? "Subname"
-                  : "nftfactory label"}
+              {collectionIdentityLabel}
               <input
                 value={registerSubnameLabel}
                 onChange={(e) => setRegisterSubnameLabel(e.target.value)}
               />
             </label>
             <p className="hint">
-              {identityMode === "nftfactory"
-                ? `This registers ${normalizeSubname(registerSubnameLabel) || "your-label"}.nftfactory.eth on-chain for ${SUBNAME_FEE_ETH} ETH and saves it to this collection.`
-                : "External ENS names and external subnames are created in your ENS flow, then saved here as this collection's display identity."}
+              {collectionIdentityHint}
             </p>
+            {identityMode === "register-eth" && pendingCollectionEnsRegistration ? (
+              <p className="hint">
+                Pending registration: <strong>{pendingCollectionEnsRegistration.fullName}</strong>.{" "}
+                {collectionRegistrationCountdown > 0
+                  ? `Wait ${collectionRegistrationCountdown}s, then complete registration from this tile.`
+                  : "The wait period is over. Complete registration from this tile now."}
+              </p>
+            ) : null}
             <button
               type="button"
               onClick={() => { void saveCollectionIdentity(); }}
               disabled={
                 !isConnected ||
                 !isAddress(manageAddress) ||
-                (identityMode === "nftfactory" && wrongNetwork) ||
+                ((identityMode === "nftfactory-subname" ||
+                  identityMode === "register-eth" ||
+                  identityMode === "register-eth-subname") &&
+                  wrongNetwork) ||
+                (identityMode === "register-eth" &&
+                  Boolean(pendingCollectionEnsRegistration) &&
+                  collectionRegistrationCountdown > 0) ||
                 subnameTx.status === "pending"
               }
             >
-              {subnameTx.status === "pending"
-                ? "Saving…"
-                : identityMode === "nftfactory"
-                  ? `Register Under nftfactory.eth (${SUBNAME_FEE_ETH} ETH)`
-                  : "Save Collection Identity"}
+              {collectionIdentityButtonLabel}
             </button>
             <TxStatus state={subnameTx} />
           </div>

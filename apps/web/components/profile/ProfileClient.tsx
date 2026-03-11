@@ -151,8 +151,7 @@ function normalizeIdentityLabelForSetup(value: string | null | undefined, mode: 
   return raw;
 }
 
-function buildProfileSetupFixHref(params: {
-  routeName: string;
+function buildCollectionIdentityFixHref(params: {
   collectionAddress?: string | null;
   identityValue?: string | null;
   source?: ApiProfileRecord["source"] | null;
@@ -160,11 +159,11 @@ function buildProfileSetupFixHref(params: {
   const mode = params.source || inferIdentityModeFromValue(params.identityValue);
   const label = normalizeIdentityLabelForSetup(params.identityValue, mode);
   const search = new URLSearchParams();
-  if (label) search.set("label", label);
-  if (params.collectionAddress?.trim()) search.set("collection", params.collectionAddress.trim());
-  search.set("mode", mode);
-  const query = search.toString();
-  return query ? `/profile/setup?${query}` : `/profile/setup?label=${encodeURIComponent(params.routeName)}`;
+  search.set("view", "manage");
+  if (label) search.set("profile", label);
+  if (params.collectionAddress?.trim()) search.set("address", params.collectionAddress.trim());
+  search.set("identityMode", mode);
+  return `/mint?${search.toString()}`;
 }
 
 export default function ProfileClient({ name }: { name: string }) {
@@ -598,8 +597,7 @@ export default function ProfileClient({ name }: { name: string }) {
         normalizedAttachedIdentity,
         status,
         sourceLabel: getProfileSourceLabel(primaryAttachedProfile?.source || "collection-record-only"),
-        fixHref: buildProfileSetupFixHref({
-          routeName: name,
+        fixHref: buildCollectionIdentityFixHref({
           collectionAddress: collection.contractAddress,
           identityValue: primaryAttachedProfile?.fullName || collection.ensSubname || null,
           source: primaryAttachedProfile?.source || null
@@ -1226,8 +1224,8 @@ export default function ProfileClient({ name }: { name: string }) {
             description="Debug view for ENS/profile attachment state. This shows what the collection row currently stores, which linked profile is explicitly attached to it, and whether those identities align."
             descriptionClassName="sectionLead"
             actions={
-              <Link href={`/profile/setup?label=${encodeURIComponent(name)}`} className="ctaLink secondaryLink">
-                Identity setup
+              <Link href={buildMintCollectionHref("manage", mintProfileParam)} className="ctaLink secondaryLink">
+                Open collection tools
               </Link>
             }
           />
@@ -1285,7 +1283,7 @@ export default function ProfileClient({ name }: { name: string }) {
                     )}
                     <div className="row">
                       <Link href={collection.fixHref} className="ctaLink secondaryLink">
-                        Fix in setup
+                        Fix in collection tools
                       </Link>
                     </div>
                   </div>
