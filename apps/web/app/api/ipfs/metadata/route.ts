@@ -6,12 +6,16 @@ import {
   buildIpfsReachabilityError,
   buildIpfsTerminatedError,
   hasIpfsApiAuthConfigured,
+  isRetryableIpfsUploadErrorMessage,
+  isRetryableIpfsUploadStatus,
   isPrivateOrLocalUrl,
   parseIpfsAddResponse
 } from "../../../../lib/ipfsUpload";
 
 const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
 const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
+const MAX_IPFS_UPLOAD_ATTEMPTS = 3;
+const IPFS_UPLOAD_RETRY_DELAYS_MS = [250, 750];
 
 function requireEnv(name: string): string {
   const value = process.env[name];
@@ -22,43 +26,66 @@ function requireEnv(name: string): string {
 }
 
 async function pinFile(file: File, fileName: string, apiUrl: string, authHeaders: HeadersInit): Promise<string> {
-  const form = new FormData();
-  form.append("file", file, fileName);
+  let lastError: Error | null = null;
 
-  let response: Response;
-  try {
-    response = await fetch(apiUrl, {
-      method: "POST",
-      headers: authHeaders,
-      body: form
-    });
-  } catch (error) {
-    throw new Error(
-      error instanceof Error && isPrivateOrLocalUrl(apiUrl)
-        ? buildIpfsReachabilityError(apiUrl)
-        : error instanceof Error
-          ? `IPFS upload request failed: ${error.message}`
-          : "IPFS upload request failed."
-    );
-  }
+  for (let attempt = 1; attempt <= MAX_IPFS_UPLOAD_ATTEMPTS; attempt += 1) {
+    const form = new FormData();
+    form.append("file", file, fileName);
 
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`IPFS upload failed (HTTP ${response.status}): ${text}`);
-  }
+    let response: Response;
+    try {
+      response = await fetch(apiUrl, {
+        method: "POST",
+        headers: authHeaders,
+        body: form
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error && isPrivateOrLocalUrl(apiUrl)
+          ? buildIpfsReachabilityError(apiUrl)
+          : error instanceof Error
+            ? `IPFS upload request failed: ${error.message}`
+            : "IPFS upload request failed.";
+      lastError = new Error(message);
 
-  let responseText: string;
-  try {
-    responseText = await response.text();
-  } catch (error) {
-    const message = error instanceof Error ? error.message.toLowerCase() : "";
-    if (message.includes("terminated") || message.includes("aborted")) {
-      throw new Error(buildIpfsTerminatedError(apiUrl));
+      if (attempt < MAX_IPFS_UPLOAD_ATTEMPTS && isRetryableIpfsUploadErrorMessage(message)) {
+        await new Promise((resolve) => setTimeout(resolve, IPFS_UPLOAD_RETRY_DELAYS_MS[attempt - 1] || 1000));
+        continue;
+      }
+      throw lastError;
     }
-    throw error instanceof Error ? error : new Error("IPFS upload response could not be read.");
+
+    if (!response.ok) {
+      const text = await response.text();
+      lastError = new Error(`IPFS upload failed (HTTP ${response.status}): ${text}`);
+      if (attempt < MAX_IPFS_UPLOAD_ATTEMPTS && isRetryableIpfsUploadStatus(response.status)) {
+        await new Promise((resolve) => setTimeout(resolve, IPFS_UPLOAD_RETRY_DELAYS_MS[attempt - 1] || 1000));
+        continue;
+      }
+      throw lastError;
+    }
+
+    let responseText: string;
+    try {
+      responseText = await response.text();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      lastError = new Error(
+        isRetryableIpfsUploadErrorMessage(message)
+          ? buildIpfsTerminatedError(apiUrl)
+          : "IPFS upload response could not be read."
+      );
+      if (attempt < MAX_IPFS_UPLOAD_ATTEMPTS && isRetryableIpfsUploadErrorMessage(message)) {
+        await new Promise((resolve) => setTimeout(resolve, IPFS_UPLOAD_RETRY_DELAYS_MS[attempt - 1] || 1000));
+        continue;
+      }
+      throw lastError;
+    }
+
+    return parseIpfsAddResponse(responseText);
   }
 
-  return parseIpfsAddResponse(responseText);
+  throw lastError || new Error("IPFS upload failed.");
 }
 
 export async function POST(request: Request) {

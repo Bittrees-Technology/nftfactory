@@ -4,8 +4,11 @@ import {
   buildIpfsAuthRequirementError,
   buildIpfsAuthHeaders,
   buildIpfsReachabilityError,
+  buildIpfsTerminatedError,
   buildIpfsVersionUrl,
   hasIpfsApiAuthConfigured,
+  isRetryableIpfsUploadErrorMessage,
+  isRetryableIpfsUploadStatus,
   isPrivateOrLocalUrl,
   parseIpfsAddResponse
 } from "./ipfsUpload";
@@ -98,5 +101,23 @@ describe("ipfsUpload", () => {
   it("builds a clear auth requirement error", () => {
     expect(buildIpfsAuthRequirementError("https://ipfs.example.com/api/v0")).toContain("ipfs.example.com");
     expect(buildIpfsAuthRequirementError("https://ipfs.example.com/api/v0")).toContain("IPFS_API_BEARER_TOKEN");
+  });
+
+  it("builds a clear terminated error", () => {
+    expect(buildIpfsTerminatedError("https://ipfs.example.com/api/v0")).toContain("ipfs.example.com");
+    expect(buildIpfsTerminatedError("https://ipfs.example.com/api/v0")).toContain("terminated before completion");
+  });
+
+  it("recognizes retryable IPFS upload statuses", () => {
+    expect(isRetryableIpfsUploadStatus(502)).toBe(true);
+    expect(isRetryableIpfsUploadStatus(524)).toBe(true);
+    expect(isRetryableIpfsUploadStatus(400)).toBe(false);
+  });
+
+  it("recognizes retryable IPFS upload error messages", () => {
+    expect(isRetryableIpfsUploadErrorMessage("fetch failed")).toBe(true);
+    expect(isRetryableIpfsUploadErrorMessage("response terminated")).toBe(true);
+    expect(isRetryableIpfsUploadErrorMessage("socket hang up")).toBe(true);
+    expect(isRetryableIpfsUploadErrorMessage("permission denied")).toBe(false);
   });
 });

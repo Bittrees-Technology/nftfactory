@@ -88,6 +88,27 @@ export function buildIpfsTerminatedError(urlLike: string): string {
   }
 }
 
+export function isRetryableIpfsUploadStatus(status: number): boolean {
+  return [408, 429, 500, 502, 503, 504, 522, 523, 524].includes(status);
+}
+
+export function isRetryableIpfsUploadErrorMessage(message: string): boolean {
+  const normalized = message.trim().toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+
+  return (
+    normalized.includes("terminated") ||
+    normalized.includes("aborted") ||
+    normalized.includes("fetch failed") ||
+    normalized.includes("socket hang up") ||
+    normalized.includes("econnreset") ||
+    normalized.includes("und_err_connect_timeout") ||
+    normalized.includes("timeout")
+  );
+}
+
 export function buildIpfsAddUrl(baseUrl: string): string {
   const normalized = baseUrl.trim();
   if (!normalized) {
