@@ -203,6 +203,21 @@ function normalizeIdentityFullName(
   return raw;
 }
 
+function collectEnsParentCandidates(values: Array<string | null | undefined>): string[] {
+  const candidates = new Set<string>();
+  for (const value of values) {
+    const normalized = String(value || "")
+      .trim()
+      .toLowerCase()
+      .replace(/\.+/g, ".")
+      .replace(/^\./, "")
+      .replace(/\.$/, "");
+    if (!normalized || !normalized.endsWith(".eth") || normalized.endsWith(".nftfactory.eth")) continue;
+    candidates.add(normalized);
+  }
+  return [...candidates].sort((a, b) => a.localeCompare(b));
+}
+
 function sourceToIdentityMode(source: ApiProfileRecord["source"]): "ens" | "external-subname" | "nftfactory-subname" {
   if (source === "ens") return "ens";
   if (source === "external-subname") return "external-subname";
@@ -367,6 +382,14 @@ export default function ProfileLandingClient({
       : identityName;
   const normalizedFullName = normalizeIdentityFullName(effectiveIdentityValue, identityMode);
   const derivedRouteSlug = deriveProfileRoute(effectiveIdentityValue, identityMode);
+  const ensParentCandidates = useMemo(
+    () => collectEnsParentCandidates([...profiles.map((profile) => profile.fullName), ...verifiedCollections.map((collection) => collection.ensSubname)]),
+    [profiles, verifiedCollections]
+  );
+  const selectedSubnameParentOption = useMemo(() => {
+    const normalized = String(subnameParent || "").trim().toLowerCase();
+    return ensParentCandidates.includes(normalized) ? normalized : "__custom__";
+  }, [ensParentCandidates, subnameParent]);
 
   useEffect(() => {
     if (!address || !isConnected) {
@@ -514,6 +537,13 @@ export default function ProfileLandingClient({
     return () => globalThis.clearInterval(timer);
   }, [pendingEnsRegistration]);
 
+  useEffect(() => {
+    if (identityMode !== "register-eth-subname") return;
+    if (String(subnameParent || "").trim()) return;
+    if (ensParentCandidates.length === 0) return;
+    setSubnameParent(ensParentCandidates[0]);
+  }, [ensParentCandidates, identityMode, subnameParent]);
+
   const identityLabel = useMemo(() => {
     if (identityMode === "register-eth") return "New .eth label";
     if (identityMode === "register-eth-subname") return "New subname label";
@@ -526,7 +556,7 @@ export default function ProfileLandingClient({
     if (identityMode === "register-eth")
       return "Enter a fresh .eth label like artist. NFTFactory will check ENS availability, then run the commit/register flow.";
     if (identityMode === "register-eth-subname")
-      return "Enter a new subname label and the existing parent .eth name you already control. NFTFactory checks parent ownership here; external ENS subname creation is not fully wired yet.";
+      return "Enter a new subname label and select the parent ENS name you already control. NFTFactory checks parent ownership here before creating the subname.";
     if (identityMode === "ens") return "Enter a full ENS name like artist.eth to link an existing ENS identity you already own.";
     if (identityMode === "external-subname")
       return "Enter a full subname like music.artist.eth to link an existing ENS subname you already control.";
@@ -693,7 +723,14 @@ export default function ProfileLandingClient({
       throw new Error("ENS registry lookup is unavailable right now.");
     }
 
-    const fullName = normalizeIdentityFullName(identityName, "register-eth-subname");
+    const parentNameInput = String(subnameParent || "").trim().toLowerCase();
+    if (!parentNameInput) {
+      throw new Error("Select or enter a parent ENS name first.");
+    }
+    const fullName = normalizeIdentityFullName(
+      [normalizeLabel(identityName), parentNameInput].filter(Boolean).join("."),
+      "register-eth-subname"
+    );
     const parts = fullName.split(".").filter(Boolean);
     if (parts.length < 3 || !fullName.endsWith(".eth")) {
       throw new Error("Enter a full .eth subname like music.artist.eth.");
@@ -1332,10 +1369,36 @@ export default function ProfileLandingClient({
                     <input value={identityName} onChange={(e) => setIdentityName(e.target.value)} />
                   </label>
                   <label>
-                    Parent .eth name
-                    <input value={subnameParent} onChange={(e) => setSubnameParent(e.target.value)} />
+                    Parent ENS name
+                    <select
+                      value={selectedSubnameParentOption}
+                      onChange={(e) => {
+                        if (e.target.value === "__custom__") {
+                          setSubnameParent("");
+                          return;
+                        }
+                        setSubnameParent(e.target.value);
+                      }}
+                    >
+                      {ensParentCandidates.map((candidate) => (
+                        <option key={candidate} value={candidate}>
+                          {candidate}
+                        </option>
+                      ))}
+                      <option value="__custom__">Custom parent…</option>
+                    </select>
                   </label>
                 </div>
+                {(ensParentCandidates.length === 0 || selectedSubnameParentOption === "__custom__") ? (
+                  <label>
+                    Custom parent ENS name
+                    <input
+                      value={subnameParent}
+                      onChange={(e) => setSubnameParent(e.target.value)}
+                      placeholder="artist.eth"
+                    />
+                  </label>
+                ) : null}
                 {normalizedFullName ? (
                   <p className="hint">
                     Full subname: <span className="mono">{normalizedFullName}</span>
@@ -1358,7 +1421,11 @@ export default function ProfileLandingClient({
                     : checkIdentityAvailability()
                 )
               }
-              disabled={!slug || !normalizedFullName}
+              disabled={
+                !slug ||
+                !normalizedFullName ||
+                (identityMode === "register-eth-subname" && !String(subnameParent || "").trim())
+              }
             >
               {checkedIdentityReady
                 ? identityMode === "register-eth"
