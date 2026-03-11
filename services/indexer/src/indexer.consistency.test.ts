@@ -1906,6 +1906,174 @@ describe("indexer consistency hardening", () => {
     );
   });
 
+  it("backfills collection tokens when sync=1 is requested", async () => {
+    const ownerAddress = "0x1111111111111111111111111111111111111111";
+    const contractAddress = "0x3333333333333333333333333333333333333333";
+    const collectionRecord = {
+      id: "col_1",
+      chainId: 11155111,
+      contractAddress,
+      ownerAddress,
+      ensSubname: "artist",
+      standard: "ERC721",
+      isFactoryCreated: true,
+      isUpgradeable: false,
+      finalizedAt: null,
+      createdAt: new Date("2026-03-06T12:00:00.000Z"),
+      updatedAt: new Date("2026-03-06T12:00:00.000Z")
+    };
+    const tokensStore: any[] = [];
+    const tokenUpsert = vi.fn(async () => {
+      const tokenRecord = {
+        id: "tok_1",
+        tokenId: "1",
+        creatorAddress: ownerAddress,
+        ownerAddress,
+        mintTxHash: "0xabc",
+        draftName: null,
+        draftDescription: null,
+        mintedAmountRaw: null,
+        metadataCid: "ipfs://metadata",
+        mediaCid: null,
+        immutable: true,
+        mintedAt: new Date("2026-03-06T12:00:00.000Z"),
+        collection: collectionRecord,
+        listings: []
+      };
+      tokensStore.splice(0, tokensStore.length, tokenRecord);
+      return tokenRecord;
+    });
+    const tokenFindMany = vi.fn(async () => tokensStore);
+    const collectionFindUnique = vi.fn(async () => ({
+      ownerAddress,
+      ensSubname: "artist",
+      standard: "ERC721",
+      isFactoryCreated: true,
+      isUpgradeable: false,
+      finalizedAt: null
+    }));
+
+    readContractMock.mockImplementation(async ({ functionName, args }) => {
+      if (functionName === "owner") return ownerAddress;
+      if (functionName === "supportsInterface") {
+        return args?.[0] === "0x80ac58cd";
+      }
+      if (functionName === "ownerOf") return ownerAddress;
+      if (functionName === "tokenURI") return "ipfs://metadata";
+      throw new Error(`Unexpected contract read: ${String(functionName)}`);
+    });
+    getLogsMock.mockImplementation(async ({ event }) => {
+      if (String(event?.name || "") === "Transfer") {
+        return [
+          {
+            args: {
+              from: "0x0000000000000000000000000000000000000000",
+              to: ownerAddress,
+              tokenId: 1n
+            },
+            transactionHash: "0xabc"
+          }
+        ];
+      }
+      return [];
+    });
+
+    const prisma = {
+      report: {
+        findMany: vi.fn(async () => []),
+        create: vi.fn(),
+        findUnique: vi.fn(),
+        update: vi.fn(),
+        count: vi.fn(async () => 0)
+      },
+      moderationAction: {
+        findMany: vi.fn(async () => []),
+        create: vi.fn()
+      },
+      listing: {
+        findMany: vi.fn(async () => []),
+        findUnique: vi.fn(async () => null),
+        upsert: vi.fn(),
+        updateMany: vi.fn(async () => ({ count: 0 })),
+        count: vi.fn(async () => 0)
+      },
+      collection: {
+        findMany: vi.fn(async () => []),
+        findUnique: collectionFindUnique,
+        updateMany: vi.fn(async () => ({ count: 0 })),
+        upsert: vi.fn(async () => collectionRecord),
+        count: vi.fn(async () => 0)
+      },
+      token: {
+        upsert: tokenUpsert,
+        findMany: tokenFindMany,
+        count: vi.fn(async () => tokensStore.length)
+      },
+      offer: {
+        findMany: vi.fn(async () => []),
+        count: vi.fn(async () => 0)
+      },
+      tokenHolding: {
+        upsert: vi.fn(async () => ({})),
+        deleteMany: vi.fn(async () => ({ count: 0 }))
+      },
+      $queryRawUnsafe: createSchemaQueryMock({
+        mintTxHash: true,
+        tokenPresentation: true,
+        listingV2: true,
+        tokenHoldingTable: false,
+        offerTable: false
+      })
+    } as unknown as PrismaClient;
+
+    const createRequestHandler = await loadCreateRequestHandler();
+    const handler = createRequestHandler(
+      {
+        prisma,
+        getClientIpImpl: () => "127.0.0.1",
+        isRateLimitedImpl: () => false
+      },
+      {
+        chainId: 11155111,
+        rpcUrl: "http://127.0.0.1:8545",
+        adminToken: "",
+        adminAllowlist: new Set(),
+        trustProxy: false,
+        marketplaceAddress: null,
+        marketplaceV2Address: null,
+        registryAddress: null,
+        moderatorRegistryAddress: null
+      }
+    );
+
+    const response = await runHandler(
+      handler,
+      createReq({ method: "GET", url: `/api/collections/${contractAddress}/tokens?sync=1` })
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.count).toBe(1);
+    expect(response.body.tokens[0]).toMatchObject({
+      tokenId: "1",
+      metadataCid: "ipfs://metadata",
+      collection: {
+        contractAddress,
+        standard: "ERC721"
+      }
+    });
+    expect(collectionFindUnique).toHaveBeenCalledWith({
+      where: { contractAddress },
+      select: {
+        ownerAddress: true,
+        ensSubname: true,
+        standard: true,
+        isFactoryCreated: true,
+        isUpgradeable: true
+      }
+    });
+    expect(tokenUpsert).toHaveBeenCalled();
+  });
+
   it("includes holdings-owned tokens and received offers in owner summaries", async () => {
     const ownerAddress = "0x1111111111111111111111111111111111111111";
     const primaryOwnerAddress = "0x2222222222222222222222222222222222222222";

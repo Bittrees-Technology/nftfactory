@@ -58,12 +58,14 @@ if (process.env.NODE_ENV === "production") {
     const badIndexerEnv: string[] = [];
     const missingIndexerEnv: string[] = [];
 
-    if (!String(process.env.IPFS_API_URL || "").trim()) {
+    const ipfsApiUrl = String(process.env.IPFS_API_URL || "").trim();
+
+    if (!ipfsApiUrl) {
       throw new Error("Missing required env var for production build: IPFS_API_URL");
     }
 
-    if (!isPrivateOrLocalUrl(process.env.IPFS_API_URL) && !hasIpfsApiAuthConfigured(process.env)) {
-      throw new Error(buildIpfsAuthRequirementError(process.env.IPFS_API_URL));
+    if (!isPrivateOrLocalUrl(ipfsApiUrl) && !hasIpfsApiAuthConfigured(process.env)) {
+      throw new Error(buildIpfsAuthRequirementError(ipfsApiUrl));
     }
 
     for (const chainId of chainIds) {

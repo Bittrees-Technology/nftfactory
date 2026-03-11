@@ -1376,7 +1376,7 @@ export default function MintClient({
     setViewCollectionLoading(true);
     setViewCollectionError("");
 
-    void fetchCollectionTokens(manageAddress)
+    void fetchCollectionTokens(manageAddress, { chainId: config.chainId, sync: true })
       .then((result) => {
         if (cancelled) return;
         setViewCollectionTokens(result.tokens);
@@ -1396,7 +1396,7 @@ export default function MintClient({
     return () => {
       cancelled = true;
     };
-  }, [manageAddress, pageMode]);
+  }, [config.chainId, manageAddress, pageMode]);
 
   // ── Utilities ─────────────────────────────────────────────────────────────
 

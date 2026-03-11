@@ -540,8 +540,21 @@ export async function fetchOwnerHoldings(
   );
 }
 
-export async function fetchCollectionTokens(contractAddress: string): Promise<ApiCollectionTokens> {
-  return fetchJson<ApiCollectionTokens>(`/api/collections/${encodeURIComponent(contractAddress)}/tokens`);
+export async function fetchCollectionTokens(
+  contractAddress: string,
+  options?: IndexerRequestOptions & { sync?: boolean }
+): Promise<ApiCollectionTokens> {
+  const params = new URLSearchParams();
+  if (options?.sync) {
+    params.set("sync", "1");
+  }
+  const suffix = params.size > 0 ? `?${params.toString()}` : "";
+  return fetchJson<ApiCollectionTokens>(
+    `/api/collections/${encodeURIComponent(contractAddress)}/tokens${suffix}`,
+    undefined,
+    undefined,
+    options
+  );
 }
 
 export async function syncMintedToken(payload: {

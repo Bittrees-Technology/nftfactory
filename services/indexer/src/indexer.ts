@@ -6217,6 +6217,40 @@ async function handleRequest(
       sendJson(res, 400, { error: "Valid contract address is required" });
       return;
     }
+    const syncRequested = ["1", "true", "yes"].includes(String(url.searchParams.get("sync") || "").trim().toLowerCase());
+    if (syncRequested) {
+      if (deps.isRateLimitedImpl(deps.getClientIpImpl(req, config.trustProxy))) {
+        sendJson(res, 429, { error: "Too many requests" });
+        return;
+      }
+      try {
+        const collectionRecord = await deps.prisma.collection.findUnique({
+          where: { contractAddress },
+          select: {
+            ownerAddress: true,
+            ensSubname: true,
+            standard: true,
+            isFactoryCreated: true,
+            isUpgradeable: true
+          }
+        });
+
+        await backfillCollectionTokens(
+          {
+            contractAddress,
+            ownerAddress: collectionRecord?.ownerAddress || undefined,
+            standard: collectionRecord?.standard || undefined,
+            ensSubname: collectionRecord?.ensSubname ?? null,
+            isFactoryCreated: collectionRecord?.isFactoryCreated ?? undefined,
+            isUpgradeable: collectionRecord?.isUpgradeable ?? undefined
+          },
+          deps,
+          config
+        );
+      } catch (error) {
+        log.warn({ err: error, contractAddress }, "collection_token_sync_failed");
+      }
+    }
     await syncMarketplaceV2IfStale(deps, config, { includeListings: true, includeOffers: true });
     const [includeMintTxHash, includeTokenPresentation, includeListingV2, includeTokenHoldings] = await Promise.all([
       hasMintTxHashColumn(deps),
