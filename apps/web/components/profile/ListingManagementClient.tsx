@@ -418,7 +418,7 @@ export default function ListingManagementClient({
   const [mintInventoryLoading, setMintInventoryLoading] = useState(false);
   const [mintInventoryError, setMintInventoryError] = useState("");
   const inventoryOwnerAddress = ownerAddress || address || "";
-  const ipfsGateway = process.env.NEXT_PUBLIC_IPFS_GATEWAY || "https://gateway.pinata.cloud/ipfs";
+  const ipfsGateway = process.env.NEXT_PUBLIC_IPFS_GATEWAY || "https://dweb.link/ipfs";
   const effectiveChainFilter = chainFilter ?? selectedChainFilter;
   const visibleChainIds = useMemo(() => getTargetChainIds(effectiveChainFilter, enabledChainIds), [effectiveChainFilter, enabledChainIds]);
 

@@ -1,7 +1,12 @@
 import type { NextConfig } from "next";
 import path from "node:path";
 import { resolveBasicAuthConfig } from "./lib/basicAuth";
-import { buildIpfsReachabilityError, isPrivateOrLocalUrl } from "./lib/ipfsUpload";
+import {
+  buildIpfsAuthRequirementError,
+  buildIpfsReachabilityError,
+  hasIpfsApiAuthConfigured,
+  isPrivateOrLocalUrl
+} from "./lib/ipfsUpload";
 
 const primaryChainId = process.env.NEXT_PUBLIC_PRIMARY_CHAIN_ID || process.env.NEXT_PUBLIC_CHAIN_ID || "1";
 
@@ -55,6 +60,10 @@ if (process.env.NODE_ENV === "production") {
 
     if (!String(process.env.IPFS_API_URL || "").trim()) {
       throw new Error("Missing required env var for production build: IPFS_API_URL");
+    }
+
+    if (!isPrivateOrLocalUrl(process.env.IPFS_API_URL) && !hasIpfsApiAuthConfigured(process.env)) {
+      throw new Error(buildIpfsAuthRequirementError(process.env.IPFS_API_URL));
     }
 
     for (const chainId of chainIds) {

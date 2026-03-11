@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   buildIpfsAddUrl,
+  buildIpfsAuthRequirementError,
   buildIpfsAuthHeaders,
   buildIpfsReachabilityError,
   buildIpfsVersionUrl,
+  hasIpfsApiAuthConfigured,
   isPrivateOrLocalUrl,
   parseIpfsAddResponse
 } from "./ipfsUpload";
@@ -57,6 +59,17 @@ describe("ipfsUpload", () => {
     );
   });
 
+  it("detects whether IPFS API auth is configured", () => {
+    expect(hasIpfsApiAuthConfigured({ IPFS_API_BEARER_TOKEN: "token" })).toBe(true);
+    expect(
+      hasIpfsApiAuthConfigured({
+        IPFS_API_BASIC_AUTH_USERNAME: "admin",
+        IPFS_API_BASIC_AUTH_PASSWORD: "secret"
+      })
+    ).toBe(true);
+    expect(hasIpfsApiAuthConfigured({})).toBe(false);
+  });
+
   it("parses a standard Kubo add response", () => {
     expect(parseIpfsAddResponse('{"Name":"file","Hash":"bafy123","Size":"42"}\n')).toBe("bafy123");
   });
@@ -80,5 +93,10 @@ describe("ipfsUpload", () => {
   it("builds a clear reachability error", () => {
     expect(buildIpfsReachabilityError("http://192.168.1.115:5001")).toContain("192.168.1.115:5001");
     expect(buildIpfsReachabilityError("http://192.168.1.115:5001")).toContain("public HTTP(S) endpoint");
+  });
+
+  it("builds a clear auth requirement error", () => {
+    expect(buildIpfsAuthRequirementError("https://ipfs.example.com/api/v0")).toContain("ipfs.example.com");
+    expect(buildIpfsAuthRequirementError("https://ipfs.example.com/api/v0")).toContain("IPFS_API_BEARER_TOKEN");
   });
 });

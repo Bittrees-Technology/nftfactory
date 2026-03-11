@@ -26,7 +26,7 @@ import {
   type RoyaltySplitArgs
 } from "../../lib/creatorCollection";
 import { getContractsConfig } from "../../lib/contracts";
-import { anvil, getAppChain, getExplorerBaseUrl } from "../../lib/chains";
+import { anvil, getAppChain, getExplorerBaseUrl, getPrimaryAppChainId } from "../../lib/chains";
 import {
   buildEnsSubnameCreationTx,
   ENS_NAME_WRAPPER_WRITE_ABI,
@@ -49,6 +49,10 @@ import {
   getMintStatusLabel
 } from "../../lib/nftPresentation";
 import { verifyOwnedCollectionsOnChain } from "../../lib/onchainCollections";
+import {
+  formatRoyaltySplitRegistryMissingMessage,
+  getRoyaltySplitRegistryEnvHint
+} from "../../lib/royaltySplitRegistryConfig";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -638,6 +642,10 @@ export default function MintClient({
 }: MintClientProps) {
   const config = useMemo(() => getContractsConfig(), []);
   const appChain = useMemo(() => getAppChain(config.chainId), [config.chainId]);
+  const royaltySplitRegistryEnvHint = useMemo(
+    () => getRoyaltySplitRegistryEnvHint(config.chainId, config.chainId === getPrimaryAppChainId()),
+    [config.chainId]
+  );
   const { address, isConnected, connector } = useAccount();
   const chainId = useChainId();
   const publicClient = usePublicClient();
@@ -2072,7 +2080,7 @@ export default function MintClient({
             : "0"
           : undefined;
       const mintedTokenId = extractMintedTokenId(receipt, targetNft, standard, fallbackTokenId);
-      const gateway = (process.env.NEXT_PUBLIC_IPFS_GATEWAY || "https://gateway.pinata.cloud/ipfs").replace(/\/$/, "");
+      const gateway = (process.env.NEXT_PUBLIC_IPFS_GATEWAY || "https://dweb.link/ipfs").replace(/\/$/, "");
       writeLocalMintFeedItem(config.chainId, {
         id: `local:${targetNft.toLowerCase()}:${mintedTokenId}:${Date.now()}`,
         tokenId: mintedTokenId,
@@ -2198,7 +2206,10 @@ export default function MintClient({
     if (wrongNetwork) { setRoyaltySplitTx({ status: "error", message: `Select ${appChain.name} in the wallet menu first.` }); return; }
     if (!isAddress(manageAddress)) { setRoyaltySplitTx({ status: "error", message: "Enter a valid collection address." }); return; }
     if (!config.royaltySplitRegistry) {
-      setRoyaltySplitTx({ status: "error", message: "Royalty split registry is not configured for this environment." });
+      setRoyaltySplitTx({
+        status: "error",
+        message: formatRoyaltySplitRegistryMissingMessage(appChain.name, royaltySplitRegistryEnvHint)
+      });
       return;
     }
 
@@ -3279,8 +3290,8 @@ export default function MintClient({
             <div className="selectionCard" style={{ marginTop: "1rem" }}>
               <p><strong>Collection split policy</strong></p>
               <p className="hint">
-                Optional collaborator royalty weights stored in the protocol royalty split registry.
-                This does <strong>not</strong> replace the collection&apos;s default royalty receiver or basis
+                Optional collaborator royalty weights stored in the protocol royalty split registry for {appChain.name}.
+                This does <strong>not</strong> update the collection contract&apos;s default royalty receiver or basis
                 points; keep both aligned if your downstream royalty settlement reads the split registry.
               </p>
               {config.royaltySplitRegistry ? (
@@ -3361,10 +3372,21 @@ export default function MintClient({
                   </div>
                 </>
               ) : (
-                <p className="hint">
-                  Royalty split registry is not configured for this environment. Add
-                  <code> NEXT_PUBLIC_ROYALTY_SPLIT_REGISTRY_ADDRESS</code> to enable collaborator split storage here.
-                </p>
+                <>
+                  <p className="hint">
+                    Royalty split registry is not configured for {appChain.name}. Add{" "}
+                    <code>{royaltySplitRegistryEnvHint.scopedEnvVarName}</code>
+                    {royaltySplitRegistryEnvHint.legacyEnvVarName ? (
+                      <>
+                        {" "}or the legacy primary-chain alias <code>{royaltySplitRegistryEnvHint.legacyEnvVarName}</code>
+                      </>
+                    ) : null}
+                    {" "}and redeploy to enable collaborator split storage here.
+                  </p>
+                  <p className="hint">
+                    Once configured, this tile stores collaborator royalty weights in the on-chain split registry for the selected collection.
+                  </p>
+                </>
               )}
               <TxStatus state={royaltySplitTx} />
             </div>

@@ -80,7 +80,7 @@ The web app currently reads these keys:
 - `NEXT_PUBLIC_ENS_NAME_WRAPPER_ADDRESS` (optional)
 - `NEXT_PUBLIC_ENS_ETH_REGISTRAR_CONTROLLER_ADDRESS` (needed for the real `.eth` registration flow)
 - `IPFS_API_URL` (server-side IPFS add endpoint for mint uploads)
-- `IPFS_API_BEARER_TOKEN` or `IPFS_API_BASIC_AUTH_USERNAME` + `IPFS_API_BASIC_AUTH_PASSWORD` (optional server-side IPFS API auth)
+- `IPFS_API_BEARER_TOKEN` or `IPFS_API_BASIC_AUTH_USERNAME` + `IPFS_API_BASIC_AUTH_PASSWORD` (required when `IPFS_API_URL` is public)
 
 Note: `apps/web/.env.example` is not a complete list of every variable the current app can use.
 

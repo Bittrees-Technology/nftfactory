@@ -1159,7 +1159,7 @@ export default function ProfileClient({ name }: { name: string }) {
                   key={listing.key}
                   item={listing}
                   chainId={listing.chainId}
-                  ipfsGateway={process.env.NEXT_PUBLIC_IPFS_GATEWAY || "https://gateway.pinata.cloud/ipfs"}
+                  ipfsGateway={process.env.NEXT_PUBLIC_IPFS_GATEWAY || "https://dweb.link/ipfs"}
                 />
               ))}
             </div>

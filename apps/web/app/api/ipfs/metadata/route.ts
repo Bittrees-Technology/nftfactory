@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import {
   buildIpfsAddUrl,
+  buildIpfsAuthRequirementError,
   buildIpfsAuthHeaders,
   buildIpfsReachabilityError,
+  hasIpfsApiAuthConfigured,
   isPrivateOrLocalUrl,
   parseIpfsAddResponse
 } from "../../../../lib/ipfsUpload";
@@ -50,8 +52,11 @@ async function pinFile(file: File, fileName: string, apiUrl: string, authHeaders
 export async function POST(request: Request) {
   try {
     const apiUrl = buildIpfsAddUrl(requireEnv("IPFS_API_URL"));
+    if (!isPrivateOrLocalUrl(apiUrl) && !hasIpfsApiAuthConfigured(process.env)) {
+      throw new Error(buildIpfsAuthRequirementError(apiUrl));
+    }
     const authHeaders = buildIpfsAuthHeaders(process.env);
-    const gateway = process.env.NEXT_PUBLIC_IPFS_GATEWAY || "https://gateway.pinata.cloud/ipfs";
+    const gateway = process.env.NEXT_PUBLIC_IPFS_GATEWAY || "https://dweb.link/ipfs";
 
     const formData = await request.formData();
     const image = formData.get("image");

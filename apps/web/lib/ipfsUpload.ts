@@ -59,6 +59,26 @@ export function buildIpfsReachabilityError(urlLike: string): string {
   }
 }
 
+export function hasIpfsApiAuthConfigured(env: EnvLike = process.env): boolean {
+  const bearerToken = String(env.IPFS_API_BEARER_TOKEN || "").trim();
+  if (bearerToken) {
+    return true;
+  }
+
+  const username = String(env.IPFS_API_BASIC_AUTH_USERNAME || "").trim();
+  const password = String(env.IPFS_API_BASIC_AUTH_PASSWORD || "").trim();
+  return Boolean(username && password);
+}
+
+export function buildIpfsAuthRequirementError(urlLike: string): string {
+  try {
+    const url = new URL(urlLike);
+    return `Public IPFS API endpoint ${url.host} must be protected. Set IPFS_API_BEARER_TOKEN or both IPFS_API_BASIC_AUTH_USERNAME and IPFS_API_BASIC_AUTH_PASSWORD.`;
+  } catch {
+    return "Public IPFS API endpoint must be protected. Set IPFS_API_BEARER_TOKEN or both IPFS_API_BASIC_AUTH_USERNAME and IPFS_API_BASIC_AUTH_PASSWORD.";
+  }
+}
+
 export function buildIpfsAddUrl(baseUrl: string): string {
   const normalized = baseUrl.trim();
   if (!normalized) {

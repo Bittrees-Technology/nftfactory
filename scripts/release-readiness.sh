@@ -157,6 +157,13 @@ if is_private_or_local_url "${IPFS_API_URL:-}"; then
   reachability_failed=1
 fi
 
+if [[ -n "${IPFS_API_URL:-}" ]] && ! is_private_or_local_url "${IPFS_API_URL:-}"; then
+  if [[ -z "${IPFS_API_BEARER_TOKEN:-}" && ( -z "${IPFS_API_BASIC_AUTH_USERNAME:-}" || -z "${IPFS_API_BASIC_AUTH_PASSWORD:-}" ) ]]; then
+    echo "Public IPFS_API_URL requires IPFS_API_BEARER_TOKEN or both IPFS_API_BASIC_AUTH_USERNAME and IPFS_API_BASIC_AUTH_PASSWORD"
+    reachability_failed=1
+  fi
+fi
+
 if is_private_or_local_url "${NEXT_PUBLIC_INDEXER_API_URL:-}"; then
   echo "NEXT_PUBLIC_INDEXER_API_URL is private/local and will not work from Vercel: ${NEXT_PUBLIC_INDEXER_API_URL}"
   reachability_failed=1
