@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useAccount, useChainId, usePublicClient, useWalletClient } from "wagmi";
 import { encodeFunctionData, formatEther, keccak256, stringToBytes } from "viem";
@@ -379,7 +379,16 @@ export default function ProfileLandingClient({
     }
   }, [initialIdentityMode]);
 
-  const [identityName, setIdentityName] = useState(initialLabel);
+  const [identityName, setIdentityName] = useState(() => {
+    if (
+      normalizedInitialIdentityMode === "register-eth" ||
+      normalizedInitialIdentityMode === "register-eth-subname" ||
+      normalizedInitialIdentityMode === "nftfactory-subname"
+    ) {
+      return "";
+    }
+    return initialLabel;
+  });
   const [subnameParent, setSubnameParent] = useState("");
   const [profiles, setProfiles] = useState<ApiProfileRecord[]>([]);
   const [collections, setCollections] = useState<ApiOwnedCollections["collections"]>([]);
@@ -396,6 +405,7 @@ export default function ProfileLandingClient({
   const [postLinkProfile, setPostLinkProfile] = useState<ApiProfileRecord | null>(null);
   const [postLinkMintCta, setPostLinkMintCta] = useState(false);
   const [setupState, setSetupState] = useState<SetupState>({ status: "idle" });
+  const previousIdentityModeRef = useRef(identityMode);
 
   const explorerBase = getExplorerBaseUrl(config.chainId);
   const wrongNetwork = isConnected && chainId !== config.chainId;
@@ -578,13 +588,24 @@ export default function ProfileLandingClient({
   }, [pendingEnsRegistration]);
 
   useEffect(() => {
-    if (identityMode !== "ens" && identityMode !== "external-subname") return;
-    const options = identityMode === "ens" ? existingEnsOptions : existingSubnameOptions;
-    if (options.length === 0) return;
-    const normalized = String(identityName || "").trim().toLowerCase();
-    if (options.includes(normalized)) return;
-    setIdentityName(options[0]);
-  }, [existingEnsOptions, existingSubnameOptions, identityMode, identityName]);
+    const previousMode = previousIdentityModeRef.current;
+    if (previousMode === identityMode) return;
+    previousIdentityModeRef.current = identityMode;
+
+    if (identityMode === "register-eth-subname") {
+      setIdentityName("");
+      setSubnameParent("");
+      return;
+    }
+    if (identityMode === "register-eth" || identityMode === "nftfactory-subname") {
+      setIdentityName("");
+      return;
+    }
+    if (identityMode === "ens" || identityMode === "external-subname") {
+      setIdentityName("");
+      setSubnameParent("");
+    }
+  }, [identityMode]);
 
   const identityLabel = useMemo(() => {
     if (identityMode === "register-eth") return "New .eth label";

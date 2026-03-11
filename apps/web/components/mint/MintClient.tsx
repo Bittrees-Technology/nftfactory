@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useAccount, useChainId, usePublicClient, useSwitchChain, useWalletClient } from "wagmi";
 import { encodeFunctionData, formatEther } from "viem";
 import type { Address, Hex } from "viem";
@@ -699,7 +699,16 @@ export default function MintClient({
   const [lockMetadata, setLockMetadata] = useState(true);
 
   // Collection identity management
-  const [registerSubnameLabel, setRegisterSubnameLabel] = useState(initialProfileLabel);
+  const [registerSubnameLabel, setRegisterSubnameLabel] = useState(() => {
+    if (
+      normalizeCollectionIdentityMode(initialCollectionIdentityMode) === "register-eth" ||
+      normalizeCollectionIdentityMode(initialCollectionIdentityMode) === "register-eth-subname" ||
+      normalizeCollectionIdentityMode(initialCollectionIdentityMode) === "nftfactory-subname"
+    ) {
+      return "";
+    }
+    return initialProfileLabel;
+  });
   const [collectionSubnameParent, setCollectionSubnameParent] = useState("");
   const [identityMode, setIdentityMode] = useState<CollectionIdentityMode>(
     normalizeCollectionIdentityMode(initialCollectionIdentityMode)
@@ -707,6 +716,7 @@ export default function MintClient({
   const [pendingCollectionEnsRegistration, setPendingCollectionEnsRegistration] =
     useState<PendingCollectionEnsRegistration | null>(null);
   const [collectionRegistrationCountdown, setCollectionRegistrationCountdown] = useState(0);
+  const previousCollectionIdentityModeRef = useRef(identityMode);
 
   // Transaction state
   const [uploadTx, setUploadTx] = useState<TxState>({ status: "idle" });
@@ -1073,18 +1083,24 @@ export default function MintClient({
   }, [audioFile, includeAudio]);
 
   useEffect(() => {
-    if (identityMode !== "ens" && identityMode !== "external-subname") return;
-    const options = identityMode === "ens" ? existingCollectionEnsOptions : existingCollectionSubnameOptions;
-    if (options.length === 0) return;
-    const normalized = String(registerSubnameLabel || "").trim().toLowerCase();
-    if (options.includes(normalized)) return;
-    setRegisterSubnameLabel(options[0]);
-  }, [
-    existingCollectionEnsOptions,
-    existingCollectionSubnameOptions,
-    identityMode,
-    registerSubnameLabel
-  ]);
+    const previousMode = previousCollectionIdentityModeRef.current;
+    if (previousMode === identityMode) return;
+    previousCollectionIdentityModeRef.current = identityMode;
+
+    if (identityMode === "register-eth-subname") {
+      setRegisterSubnameLabel("");
+      setCollectionSubnameParent("");
+      return;
+    }
+    if (identityMode === "register-eth" || identityMode === "nftfactory-subname") {
+      setRegisterSubnameLabel("");
+      return;
+    }
+    if (identityMode === "ens" || identityMode === "external-subname") {
+      setRegisterSubnameLabel("");
+      setCollectionSubnameParent("");
+    }
+  }, [identityMode]);
 
   useEffect(() => {
     if (!includeExternalUrl && externalUrl) {
