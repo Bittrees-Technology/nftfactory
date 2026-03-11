@@ -758,7 +758,7 @@ export default function MintClient({
   );
   const selectedCollectionSubnameParentOption = useMemo(() => {
     const normalized = String(collectionSubnameParent || "").trim().toLowerCase();
-    return collectionEnsParentCandidates.includes(normalized) ? normalized : "__custom__";
+    return collectionEnsParentCandidates.includes(normalized) ? normalized : "";
   }, [collectionEnsParentCandidates, collectionSubnameParent]);
 
   useEffect(() => {
@@ -2241,7 +2241,7 @@ export default function MintClient({
       return "Enter a fresh .eth name like artist.eth. This collection flow handles the ENS commit and register steps here, then attaches the resulting name to this collection.";
     }
     if (identityMode === "register-eth-subname") {
-      return "Enter a new subname label and select the parent ENS name you already control. The resulting subname is attached directly to this collection.";
+      return "Enter a new subname label and the parent ENS name you already control. Choosing a known parent fills the parent field, and the created ENS subname is attached to this collection as part of the same flow.";
     }
     if (identityMode === "ens") {
       return "Attach an existing ENS name you already own, like artist.eth.";
@@ -3063,37 +3063,28 @@ export default function MintClient({
                       />
                     </label>
                     <label>
-                      Parent ENS name
+                      Choose known parent (optional)
                       <select
                         value={selectedCollectionSubnameParentOption}
-                        onChange={(e) => {
-                          if (e.target.value === "__custom__") {
-                            setCollectionSubnameParent("");
-                            return;
-                          }
-                          setCollectionSubnameParent(e.target.value);
-                        }}
+                        onChange={(e) => setCollectionSubnameParent(e.target.value)}
                       >
+                        <option value="">Type a parent ENS name…</option>
                         {collectionEnsParentCandidates.map((candidate) => (
                           <option key={candidate} value={candidate}>
                             {candidate}
                           </option>
                         ))}
-                        <option value="__custom__">Custom parent…</option>
                       </select>
                     </label>
                   </div>
-                  {(collectionEnsParentCandidates.length === 0 ||
-                    selectedCollectionSubnameParentOption === "__custom__") ? (
-                    <label>
-                      Custom parent ENS name
-                      <input
-                        value={collectionSubnameParent}
-                        onChange={(e) => setCollectionSubnameParent(e.target.value)}
-                        placeholder="artist.eth"
-                      />
-                    </label>
-                  ) : null}
+                  <label>
+                    Parent ENS name
+                    <input
+                      value={collectionSubnameParent}
+                      onChange={(e) => setCollectionSubnameParent(e.target.value)}
+                      placeholder="artist.eth"
+                    />
+                  </label>
                   {String(collectionSubnameParent || "").trim() && normalizeSubname(registerSubnameLabel) ? (
                     <p className="hint">
                       Full subname:{" "}

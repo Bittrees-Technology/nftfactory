@@ -388,7 +388,7 @@ export default function ProfileLandingClient({
   );
   const selectedSubnameParentOption = useMemo(() => {
     const normalized = String(subnameParent || "").trim().toLowerCase();
-    return ensParentCandidates.includes(normalized) ? normalized : "__custom__";
+    return ensParentCandidates.includes(normalized) ? normalized : "";
   }, [ensParentCandidates, subnameParent]);
 
   useEffect(() => {
@@ -556,7 +556,7 @@ export default function ProfileLandingClient({
     if (identityMode === "register-eth")
       return "Enter a fresh .eth label like artist. NFTFactory will check ENS availability, then run the commit/register flow.";
     if (identityMode === "register-eth-subname")
-      return "Enter a new subname label and select the parent ENS name you already control. NFTFactory checks parent ownership here before creating the subname.";
+      return "Enter a new subname label and the parent ENS name you already control. Choosing a known parent fills the parent field, and the created subname is linked to this creator identity when minting completes.";
     if (identityMode === "ens") return "Enter a full ENS name like artist.eth to link an existing ENS identity you already own.";
     if (identityMode === "external-subname")
       return "Enter a full subname like music.artist.eth to link an existing ENS subname you already control.";
@@ -1369,36 +1369,28 @@ export default function ProfileLandingClient({
                     <input value={identityName} onChange={(e) => setIdentityName(e.target.value)} />
                   </label>
                   <label>
-                    Parent ENS name
+                    Choose known parent (optional)
                     <select
                       value={selectedSubnameParentOption}
-                      onChange={(e) => {
-                        if (e.target.value === "__custom__") {
-                          setSubnameParent("");
-                          return;
-                        }
-                        setSubnameParent(e.target.value);
-                      }}
+                      onChange={(e) => setSubnameParent(e.target.value)}
                     >
+                      <option value="">Type a parent ENS name…</option>
                       {ensParentCandidates.map((candidate) => (
                         <option key={candidate} value={candidate}>
                           {candidate}
                         </option>
                       ))}
-                      <option value="__custom__">Custom parent…</option>
                     </select>
                   </label>
                 </div>
-                {(ensParentCandidates.length === 0 || selectedSubnameParentOption === "__custom__") ? (
-                  <label>
-                    Custom parent ENS name
-                    <input
-                      value={subnameParent}
-                      onChange={(e) => setSubnameParent(e.target.value)}
-                      placeholder="artist.eth"
-                    />
-                  </label>
-                ) : null}
+                <label>
+                  Parent ENS name
+                  <input
+                    value={subnameParent}
+                    onChange={(e) => setSubnameParent(e.target.value)}
+                    placeholder="artist.eth"
+                  />
+                </label>
                 {normalizedFullName ? (
                   <p className="hint">
                     Full subname: <span className="mono">{normalizedFullName}</span>
