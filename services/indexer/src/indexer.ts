@@ -1345,7 +1345,11 @@ function buildGatewayUrl(cidLike: string | null | undefined): string | null {
   const value = String(cidLike || "").trim();
   if (!value) return null;
   if (value.startsWith("ipfs://")) {
-    return `https://gateway.pinata.cloud/ipfs/${value.replace(/^ipfs:\/\//, "")}`;
+    const gateway = String(process.env.IPFS_GATEWAY_URL || process.env.NEXT_PUBLIC_IPFS_GATEWAY || "https://dweb.link/ipfs").replace(
+      /\/$/,
+      ""
+    );
+    return `${gateway}/${value.replace(/^ipfs:\/\//, "")}`;
   }
   if (value.startsWith("pending://")) return null;
   return value;

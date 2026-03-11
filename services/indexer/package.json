@@ -9,6 +9,7 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "admin:backfill-registry": "node --import tsx ./scripts/run-backfill.ts",
+    "admin:seed-ipfs-cids": "node --import tsx ./scripts/seed-ipfs-cids.ts",
     "admin:backfill-token-presentation": "tsx scripts/backfill-token-presentation.ts",
     "admin:backfill-subname": "tsx scripts/backfill-subnames.ts",
     "admin:backfill-subnames-file": "tsx scripts/backfill-subnames.ts --file",
