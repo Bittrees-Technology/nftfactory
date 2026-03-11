@@ -218,6 +218,30 @@ function collectEnsParentCandidates(values: Array<string | null | undefined>): s
   return [...candidates].sort((a, b) => a.localeCompare(b));
 }
 
+function collectExistingEnsIdentityOptions(
+  values: Array<string | null | undefined>,
+  mode: "ens" | "external-subname"
+): string[] {
+  const candidates = new Set<string>();
+  for (const value of values) {
+    const normalized = String(value || "")
+      .trim()
+      .toLowerCase()
+      .replace(/\.+/g, ".")
+      .replace(/^\./, "")
+      .replace(/\.$/, "");
+    if (!normalized || !normalized.endsWith(".eth") || normalized.endsWith(".nftfactory.eth")) continue;
+    const parts = normalized.split(".").filter(Boolean);
+    if (mode === "ens" && parts.length === 2) {
+      candidates.add(normalized);
+    }
+    if (mode === "external-subname" && parts.length > 2) {
+      candidates.add(normalized);
+    }
+  }
+  return [...candidates].sort((a, b) => a.localeCompare(b));
+}
+
 function sourceToIdentityMode(source: ApiProfileRecord["source"]): "ens" | "external-subname" | "nftfactory-subname" {
   if (source === "ens") return "ens";
   if (source === "external-subname") return "external-subname";
@@ -386,6 +410,22 @@ export default function ProfileLandingClient({
     () => collectEnsParentCandidates([...profiles.map((profile) => profile.fullName), ...verifiedCollections.map((collection) => collection.ensSubname)]),
     [profiles, verifiedCollections]
   );
+  const existingEnsOptions = useMemo(
+    () =>
+      collectExistingEnsIdentityOptions(
+        [...profiles.map((profile) => profile.fullName), ...verifiedCollections.map((collection) => collection.ensSubname)],
+        "ens"
+      ),
+    [profiles, verifiedCollections]
+  );
+  const existingSubnameOptions = useMemo(
+    () =>
+      collectExistingEnsIdentityOptions(
+        [...profiles.map((profile) => profile.fullName), ...verifiedCollections.map((collection) => collection.ensSubname)],
+        "external-subname"
+      ),
+    [profiles, verifiedCollections]
+  );
   const selectedSubnameParentOption = useMemo(() => {
     const normalized = String(subnameParent || "").trim().toLowerCase();
     return ensParentCandidates.includes(normalized) ? normalized : "";
@@ -537,6 +577,15 @@ export default function ProfileLandingClient({
     return () => globalThis.clearInterval(timer);
   }, [pendingEnsRegistration]);
 
+  useEffect(() => {
+    if (identityMode !== "ens" && identityMode !== "external-subname") return;
+    const options = identityMode === "ens" ? existingEnsOptions : existingSubnameOptions;
+    if (options.length === 0) return;
+    const normalized = String(identityName || "").trim().toLowerCase();
+    if (options.includes(normalized)) return;
+    setIdentityName(options[0]);
+  }, [existingEnsOptions, existingSubnameOptions, identityMode, identityName]);
+
   const identityLabel = useMemo(() => {
     if (identityMode === "register-eth") return "New .eth label";
     if (identityMode === "register-eth-subname") return "New subname label";
@@ -550,11 +599,16 @@ export default function ProfileLandingClient({
       return "Enter a fresh .eth label like artist. NFTFactory will check ENS availability, then run the commit/register flow.";
     if (identityMode === "register-eth-subname")
       return "Enter a new subname label and the parent ENS name you already control. Choosing a known parent fills the parent field, and the created subname is linked to this creator identity when minting completes.";
-    if (identityMode === "ens") return "Enter a full ENS name like artist.eth to link an existing ENS identity you already own.";
+    if (identityMode === "ens")
+      return existingEnsOptions.length > 0
+        ? "Select an existing ENS name from your indexed inventory to link it to this creator profile."
+        : "No existing ENS names are available in your inventory. Register or mint one first.";
     if (identityMode === "external-subname")
-      return "Enter a full subname like music.artist.eth to link an existing ENS subname you already control.";
+      return existingSubnameOptions.length > 0
+        ? "Select an existing ENS subname from your indexed inventory to link it to this creator profile."
+        : "No existing ENS subnames are available in your inventory. Create or mint one first.";
     return "Enter a plain label like artist to create artist.nftfactory.eth on-chain. This is the default identity path here.";
-  }, [identityMode]);
+  }, [existingEnsOptions.length, existingSubnameOptions.length, identityMode]);
 
   const ensRegistrationStep = useMemo(() => {
     if (identityMode !== "register-eth") return "";
@@ -1391,7 +1445,33 @@ export default function ProfileLandingClient({
                 ) : null}
               </>
             ) : (
-              <input value={identityName} onChange={(e) => setIdentityName(e.target.value)} />
+              <>
+                {identityMode === "ens" || identityMode === "external-subname" ? (
+                  <select
+                    value={identityName}
+                    onChange={(e) => setIdentityName(e.target.value)}
+                    disabled={(identityMode === "ens" ? existingEnsOptions : existingSubnameOptions).length === 0}
+                  >
+                    <option value="">
+                      {identityMode === "ens" ? "Select existing ENS name" : "Select existing ENS subname"}
+                    </option>
+                    {(identityMode === "ens" ? existingEnsOptions : existingSubnameOptions).map((candidate) => (
+                      <option key={candidate} value={candidate}>
+                        {candidate}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input value={identityName} onChange={(e) => setIdentityName(e.target.value)} />
+                )}
+                {(identityMode === "ens" || identityMode === "external-subname") &&
+                (identityMode === "ens" ? existingEnsOptions : existingSubnameOptions).length === 0 ? (
+                  <p className="hint">
+                    No {identityMode === "ens" ? "ENS names" : "ENS subnames"} exist in your inventory yet.{" "}
+                    {identityMode === "ens" ? "Register or mint one first." : "Create or mint one first."}
+                  </p>
+                ) : null}
+              </>
             )}
           </label>
           <div className="profileIdentityControlRight">
@@ -1409,7 +1489,9 @@ export default function ProfileLandingClient({
               disabled={
                 !slug ||
                 !normalizedFullName ||
-                (identityMode === "register-eth-subname" && !String(subnameParent || "").trim())
+                (identityMode === "register-eth-subname" && !String(subnameParent || "").trim()) ||
+                (identityMode === "ens" && existingEnsOptions.length === 0) ||
+                (identityMode === "external-subname" && existingSubnameOptions.length === 0)
               }
             >
               {checkedIdentityReady

@@ -358,6 +358,30 @@ function collectEnsParentCandidates(values: Array<string | null | undefined>): s
   return [...candidates].sort((a, b) => a.localeCompare(b));
 }
 
+function collectExistingEnsIdentityOptions(
+  values: Array<string | null | undefined>,
+  mode: "ens" | "external-subname"
+): string[] {
+  const candidates = new Set<string>();
+  for (const value of values) {
+    const normalized = String(value || "")
+      .trim()
+      .toLowerCase()
+      .replace(/\.+/g, ".")
+      .replace(/^\./, "")
+      .replace(/\.$/, "");
+    if (!normalized || !normalized.endsWith(".eth") || normalized.endsWith(".nftfactory.eth")) continue;
+    const parts = normalized.split(".").filter(Boolean);
+    if (mode === "ens" && parts.length === 2) {
+      candidates.add(normalized);
+    }
+    if (mode === "external-subname" && parts.length > 2) {
+      candidates.add(normalized);
+    }
+  }
+  return [...candidates].sort((a, b) => a.localeCompare(b));
+}
+
 function getSwitchErrorCode(error: unknown): number | string | null {
   if (!error || typeof error !== "object") return null;
   const candidate = error as {
@@ -756,6 +780,22 @@ export default function MintClient({
       ]),
     [ownedProfiles, verifiedKnownCollections]
   );
+  const existingCollectionEnsOptions = useMemo(
+    () =>
+      collectExistingEnsIdentityOptions(
+        [...ownedProfiles.map((profile) => profile.fullName), ...verifiedKnownCollections.map((collection) => collection.ensSubname)],
+        "ens"
+      ),
+    [ownedProfiles, verifiedKnownCollections]
+  );
+  const existingCollectionSubnameOptions = useMemo(
+    () =>
+      collectExistingEnsIdentityOptions(
+        [...ownedProfiles.map((profile) => profile.fullName), ...verifiedKnownCollections.map((collection) => collection.ensSubname)],
+        "external-subname"
+      ),
+    [ownedProfiles, verifiedKnownCollections]
+  );
   const selectedCollectionSubnameParentOption = useMemo(() => {
     const normalized = String(collectionSubnameParent || "").trim().toLowerCase();
     return collectionEnsParentCandidates.includes(normalized) ? normalized : "";
@@ -1031,6 +1071,20 @@ export default function MintClient({
       setAudioUri("");
     }
   }, [audioFile, includeAudio]);
+
+  useEffect(() => {
+    if (identityMode !== "ens" && identityMode !== "external-subname") return;
+    const options = identityMode === "ens" ? existingCollectionEnsOptions : existingCollectionSubnameOptions;
+    if (options.length === 0) return;
+    const normalized = String(registerSubnameLabel || "").trim().toLowerCase();
+    if (options.includes(normalized)) return;
+    setRegisterSubnameLabel(options[0]);
+  }, [
+    existingCollectionEnsOptions,
+    existingCollectionSubnameOptions,
+    identityMode,
+    registerSubnameLabel
+  ]);
 
   useEffect(() => {
     if (!includeExternalUrl && externalUrl) {
@@ -2236,14 +2290,16 @@ export default function MintClient({
     if (identityMode === "register-eth-subname") {
       return "Enter a new subname label and the parent ENS name you already control. Choosing a known parent fills the parent field, and the created ENS subname is attached to this collection as part of the same flow.";
     }
-    if (identityMode === "ens") {
-      return "Attach an existing ENS name you already own, like artist.eth.";
-    }
-    if (identityMode === "external-subname") {
-      return "Attach an existing ENS subname you already own, like music.artist.eth.";
-    }
+    if (identityMode === "ens")
+      return existingCollectionEnsOptions.length > 0
+        ? "Select an existing ENS name from your indexed inventory to attach it to this collection."
+        : "No existing ENS names are available in your inventory. Register or mint one first.";
+    if (identityMode === "external-subname")
+      return existingCollectionSubnameOptions.length > 0
+        ? "Select an existing ENS subname from your indexed inventory to attach it to this collection."
+        : "No existing ENS subnames are available in your inventory. Create or mint one first.";
     return `This registers ${normalizeSubname(registerSubnameLabel) || "your-label"}.nftfactory.eth on-chain for ${SUBNAME_FEE_ETH} ETH and attaches it directly to this collection.`;
-  }, [identityMode, registerSubnameLabel]);
+  }, [existingCollectionEnsOptions.length, existingCollectionSubnameOptions.length, identityMode, registerSubnameLabel]);
   const collectionIdentityButtonLabel = useMemo(() => {
     if (subnameTx.status === "pending") return "Saving…";
     if (identityMode === "register-eth") {
@@ -3091,11 +3147,42 @@ export default function MintClient({
                 </>
               ) : (
                 <>
-                  {collectionIdentityLabel}
-                  <input
-                    value={registerSubnameLabel}
-                    onChange={(e) => setRegisterSubnameLabel(e.target.value)}
-                  />
+                  {identityMode === "ens" || identityMode === "external-subname" ? (
+                    <>
+                      {collectionIdentityLabel}
+                      <select
+                        value={registerSubnameLabel}
+                        onChange={(e) => setRegisterSubnameLabel(e.target.value)}
+                        disabled={(identityMode === "ens" ? existingCollectionEnsOptions : existingCollectionSubnameOptions).length === 0}
+                      >
+                        <option value="">
+                          {identityMode === "ens" ? "Select existing ENS name" : "Select existing ENS subname"}
+                        </option>
+                        {(identityMode === "ens" ? existingCollectionEnsOptions : existingCollectionSubnameOptions).map(
+                          (candidate) => (
+                            <option key={candidate} value={candidate}>
+                              {candidate}
+                            </option>
+                          )
+                        )}
+                      </select>
+                      {(identityMode === "ens" ? existingCollectionEnsOptions : existingCollectionSubnameOptions)
+                        .length === 0 ? (
+                        <p className="hint">
+                          No {identityMode === "ens" ? "ENS names" : "ENS subnames"} exist in your inventory yet.{" "}
+                          {identityMode === "ens" ? "Register or mint one first." : "Create or mint one first."}
+                        </p>
+                      ) : null}
+                    </>
+                  ) : (
+                    <>
+                      {collectionIdentityLabel}
+                      <input
+                        value={registerSubnameLabel}
+                        onChange={(e) => setRegisterSubnameLabel(e.target.value)}
+                      />
+                    </>
+                  )}
                 </>
               )}
             </label>
@@ -3120,6 +3207,8 @@ export default function MintClient({
                   identityMode === "register-eth" ||
                   identityMode === "register-eth-subname") &&
                   wrongNetwork) ||
+                (identityMode === "ens" && existingCollectionEnsOptions.length === 0) ||
+                (identityMode === "external-subname" && existingCollectionSubnameOptions.length === 0) ||
                 (identityMode === "register-eth-subname" &&
                   !String(collectionSubnameParent || "").trim()) ||
                 (identityMode === "register-eth" &&
