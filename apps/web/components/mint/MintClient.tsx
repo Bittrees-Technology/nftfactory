@@ -2304,7 +2304,9 @@ export default function MintClient({
       return "Enter a fresh .eth name like artist.eth. This collection flow handles the ENS commit and register steps here, then attaches the resulting name to this collection.";
     }
     if (identityMode === "register-eth-subname") {
-      return "Enter a new subname label and the parent ENS name you already control. Choosing a known parent fills the parent field, and the created ENS subname is attached to this collection as part of the same flow.";
+      return collectionEnsParentCandidates.length > 0
+        ? "Enter a new subname label and select an existing parent ENS name you already control. The created ENS subname is attached to this collection as part of the same flow."
+        : "No parent ENS names are available in your inventory. Register a parent .eth name first.";
     }
     if (identityMode === "ens")
       return existingCollectionEnsOptions.length > 0
@@ -2315,7 +2317,13 @@ export default function MintClient({
         ? "Select an existing ENS subname from your indexed inventory to attach it to this collection."
         : "No existing ENS subnames are available in your inventory. Create or mint one first.";
     return `This registers ${normalizeSubname(registerSubnameLabel) || "your-label"}.nftfactory.eth on-chain for ${SUBNAME_FEE_ETH} ETH and attaches it directly to this collection.`;
-  }, [existingCollectionEnsOptions.length, existingCollectionSubnameOptions.length, identityMode, registerSubnameLabel]);
+  }, [
+    collectionEnsParentCandidates.length,
+    existingCollectionEnsOptions.length,
+    existingCollectionSubnameOptions.length,
+    identityMode,
+    registerSubnameLabel
+  ]);
   const collectionIdentityButtonLabel = useMemo(() => {
     if (subnameTx.status === "pending") return "Saving…";
     if (identityMode === "register-eth") {
@@ -3128,12 +3136,13 @@ export default function MintClient({
                       />
                     </label>
                     <label>
-                      Choose known parent (optional)
+                      Parent ENS name
                       <select
                         value={selectedCollectionSubnameParentOption}
                         onChange={(e) => setCollectionSubnameParent(e.target.value)}
+                        disabled={collectionEnsParentCandidates.length === 0}
                       >
-                        <option value="">Type a parent ENS name…</option>
+                        <option value="">Select parent ENS name</option>
                         {collectionEnsParentCandidates.map((candidate) => (
                           <option key={candidate} value={candidate}>
                             {candidate}
@@ -3142,14 +3151,11 @@ export default function MintClient({
                       </select>
                     </label>
                   </div>
-                  <label>
-                    Parent ENS name
-                    <input
-                      value={collectionSubnameParent}
-                      onChange={(e) => setCollectionSubnameParent(e.target.value)}
-                      placeholder="artist.eth"
-                    />
-                  </label>
+                  {collectionEnsParentCandidates.length === 0 ? (
+                    <p className="hint">
+                      No existing parent ENS names are available in your inventory yet. Register a parent <span className="mono">.eth</span> name first, then come back to create a subname for this collection.
+                    </p>
+                  ) : null}
                   {String(collectionSubnameParent || "").trim() && normalizeSubname(registerSubnameLabel) ? (
                     <p className="hint">
                       Full subname:{" "}

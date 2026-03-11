@@ -619,7 +619,9 @@ export default function ProfileLandingClient({
     if (identityMode === "register-eth")
       return "Enter a fresh .eth label like artist. NFTFactory will check ENS availability, then run the commit/register flow.";
     if (identityMode === "register-eth-subname")
-      return "Enter a new subname label and the parent ENS name you already control. Choosing a known parent fills the parent field, and the created subname is linked to this creator identity when minting completes.";
+      return ensParentCandidates.length > 0
+        ? "Enter a new subname label and select an existing parent ENS name you already control. The created subname is linked to this creator identity when minting completes."
+        : "No parent ENS names are available in your inventory. Register a parent .eth name first.";
     if (identityMode === "ens")
       return existingEnsOptions.length > 0
         ? "Select an existing ENS name from your indexed inventory to link it to this creator profile."
@@ -629,7 +631,7 @@ export default function ProfileLandingClient({
         ? "Select an existing ENS subname from your indexed inventory to link it to this creator profile."
         : "No existing ENS subnames are available in your inventory. Create or mint one first.";
     return "Enter a plain label like artist to create artist.nftfactory.eth on-chain. This is the default identity path here.";
-  }, [existingEnsOptions.length, existingSubnameOptions.length, identityMode]);
+  }, [ensParentCandidates.length, existingEnsOptions.length, existingSubnameOptions.length, identityMode]);
 
   const ensRegistrationStep = useMemo(() => {
     if (identityMode !== "register-eth") return "";
@@ -1437,12 +1439,13 @@ export default function ProfileLandingClient({
                     <input value={identityName} onChange={(e) => setIdentityName(e.target.value)} />
                   </label>
                   <label>
-                    Choose known parent (optional)
+                    Parent ENS name
                     <select
                       value={selectedSubnameParentOption}
                       onChange={(e) => setSubnameParent(e.target.value)}
+                      disabled={ensParentCandidates.length === 0}
                     >
-                      <option value="">Type a parent ENS name…</option>
+                      <option value="">Select parent ENS name</option>
                       {ensParentCandidates.map((candidate) => (
                         <option key={candidate} value={candidate}>
                           {candidate}
@@ -1451,14 +1454,11 @@ export default function ProfileLandingClient({
                     </select>
                   </label>
                 </div>
-                <label>
-                  Parent ENS name
-                  <input
-                    value={subnameParent}
-                    onChange={(e) => setSubnameParent(e.target.value)}
-                    placeholder="artist.eth"
-                  />
-                </label>
+                {ensParentCandidates.length === 0 ? (
+                  <p className="hint">
+                    No existing parent ENS names are available in your inventory yet. Register a parent <span className="mono">.eth</span> name first.
+                  </p>
+                ) : null}
                 {normalizedFullName ? (
                   <p className="hint">
                     Full subname: <span className="mono">{normalizedFullName}</span>
