@@ -6,13 +6,16 @@ These are the addresses currently wired into the local Sepolia env files in this
 
 | Contract | Address | Source |
 |----------|---------|--------|
-| `NftFactoryRegistry` | `0x1c8124F401Ac7A067f0c3dD39ce102D3623F4DE3` | web + indexer env |
-| `Marketplace` | `0xc0098BCC01e2179A5018EFabf64a9c74a2E6244B` | web env |
-| `SharedMint721` | `0x4018dD11271CecFAbb275656631896F7A8811965` | web env |
-| `SharedMint1155` | `0x530C5f6F1728dCF60C3399e6D9d3aC729a7637Ce` | web env |
-| `SubnameRegistrar` | `0x0e8027b4b1E9B288E0e3Eedb50C52C20b8291294` | web env |
-| `CreatorFactory` | `0xe2E33E37A7bA2cAe9DEf60B1E1643c2803458DA8` | web env |
-| `ModeratorRegistry` | `0x0ff43403902fA2D6D8dcD587429dc94a23CC1CBC` | indexer env |
+| `NftFactoryRegistry` | `0x2A31aE082179E3AdbCfC4Cf27aC3c094Fd41F56f` | web + indexer env |
+| `RoyaltySplitRegistry` | `0x6617DD523409a78831E75E156f532d1F0402b5D8` | web env |
+| `SubnameRegistrar` | `0x549530BF5E17697d6C249Ba2b3E408aCA38f7b3F` | web env |
+| `ModeratorRegistry` | `0x5F6F4f93127c9c04a142C5138523a734112fBE40` | indexer env |
+| `SharedMint721` | `0xA98Db2732baD732aA588cad65478D3153A48f606` | web env |
+| `SharedMint1155` | `0xe0F306B9fB44C3d46C0360503D3B1b68366BA97d` | web env |
+| `CreatorCollection721 impl` | `0x8F85E590047480b68cBe210AC9a433d88B2747BC` | deploy artifact |
+| `CreatorCollection1155 impl` | `0xFc7F35DD10B5aEBA8e39eCb1CaeE3a319c0d1503` | deploy artifact |
+| `CreatorFactory` | `0xC3D1fbacC9BF055A8c125056aB46955A268c7c56` | web env |
+| `Marketplace` | `0xdB8429Eb30f36F8DB0146441645B7295fF37FfD0` | web + indexer env |
 
 For implementation addresses or deployment history, refer to deployment logs and scripts.
 
@@ -104,12 +107,12 @@ The app does not require it to boot, but the indexer will read from it when `MOD
 
 `Marketplace` provides:
 
-- listing creation
-- listing cancellation
+- listing creation and cancellation
+- offer creation, acceptance, and cancellation
 - purchase settlement
 - per-collection marketplace blocklist toggles
 
-It depends on registry blocklist and fee state at runtime.
+It depends on registry blocklist and fee state at runtime. The original basic Marketplace (listings only) and MarketplaceV2 (listings + offers) have been merged into a single `Marketplace` contract.
 
 ## RoyaltySplitRegistry
 

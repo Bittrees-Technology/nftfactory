@@ -1,14 +1,16 @@
-# Marketplace V2 Indexer and API Plan
+# Marketplace Indexer and API Plan
+
+> **Status: Completed.** The original MarketplaceV2 contract has been merged into a single `Marketplace` contract. All v1/v2 config-level branching has been removed from the web app and indexer. The plan below is preserved for historical context — references to "V2" describe the original migration path that has now been consolidated.
 
 ## Purpose
 
-This page defines the backend-first plan for Marketplace V2.
+This page defines the backend-first plan for the Marketplace indexer and API layer.
 
 The goal is to stabilize the data model before contract and UI work lands, so:
 
 - the indexer can serve fixed-price listings and offers from one coherent schema
 - `/list`, `/discover`, and `/profile` can read the same fields
-- rollout from the current `Marketplace` to a new `MarketplaceV2` can happen without ad hoc API churn
+- the marketplace contract can evolve without ad hoc API churn
 
 ## Current constraints
 

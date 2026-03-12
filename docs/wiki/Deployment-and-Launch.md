@@ -38,7 +38,7 @@ Operational notes:
 
 Current Sepolia split-registry deployment:
 
-- `RoyaltySplitRegistry`: `0xF2527b3E8085e03A0319CecbcB95a6877546D4B5`
+- `RoyaltySplitRegistry`: `0x6617DD523409a78831E75E156f532d1F0402b5D8`
 
 ## Local development
 

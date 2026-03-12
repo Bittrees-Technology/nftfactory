@@ -15,7 +15,10 @@ Deploy order:
 Post deploy:
 - authorize CreatorFactory in registry
 - set treasury and protocol fee
-- transfer contract ownerships to Safe
+- initiate contract ownership transfers to Safe (two-step: deployer calls `transferOwnership(safe)`)
+- Safe must call `acceptOwnership()` on each contract to complete the transfer
 - seed ModeratorRegistry with the initial moderator set
 - set `MODERATOR_REGISTRY_ADDRESS` in `services/indexer/.env`
+- set `REGISTRY_ADDRESS` in `services/indexer/.env`
+- update all `NEXT_PUBLIC_*_ADDRESS` values in `apps/web/.env.local`
 - restart the indexer so `/api/admin/moderators` reflects the on-chain allowlist

@@ -15,8 +15,12 @@ contract PostDeployTransferToSafeScript is Script {
         vm.startBroadcast(pk);
         for (uint256 i = 0; i < ownables.length; i++) {
             Owned(ownables[i]).transferOwnership(safe);
-            console2.log("Ownership transferred", ownables[i]);
+            console2.log("Ownership transfer initiated (pending acceptance)", ownables[i]);
         }
         vm.stopBroadcast();
+
+        console2.log("");
+        console2.log("NOTE: Ownership now uses two-step transfer.");
+        console2.log("The Safe must call acceptOwnership() on each contract to complete the transfer.");
     }
 }

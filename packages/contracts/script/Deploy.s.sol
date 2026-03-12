@@ -12,7 +12,6 @@ import {CreatorCollection721} from "../src/token/CreatorCollection721.sol";
 import {CreatorCollection1155} from "../src/token/CreatorCollection1155.sol";
 import {CreatorFactory} from "../src/core/CreatorFactory.sol";
 import {Marketplace} from "../src/core/Marketplace.sol";
-import {MarketplaceV2} from "../src/core/MarketplaceV2.sol";
 import {ModeratorRegistry} from "../src/core/ModeratorRegistry.sol";
 
 contract DeployScript is Script {
@@ -45,7 +44,6 @@ contract DeployScript is Script {
 
         CreatorFactory factory = new CreatorFactory(deployer, address(registry));
         Marketplace marketplace = new Marketplace(deployer, address(registry));
-        MarketplaceV2 marketplaceV2 = new MarketplaceV2(deployer, address(registry));
 
         factory.setImplementations(address(impl721), address(impl1155));
         registry.setFactoryAuthorization(address(factory), true);
@@ -68,7 +66,6 @@ contract DeployScript is Script {
         console2.log("CreatorCollection1155 impl", address(impl1155));
         console2.log("CreatorFactory", address(factory));
         console2.log("Marketplace", address(marketplace));
-        console2.log("MarketplaceV2", address(marketplaceV2));
         console2.log("Allowed payment tokens", paymentTokens.length);
     }
 }
