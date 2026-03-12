@@ -743,6 +743,7 @@ export default function MintClient({
   const [viewCollectionCount, setViewCollectionCount] = useState(0);
   const [viewCollectionLoading, setViewCollectionLoading] = useState(false);
   const [viewCollectionError, setViewCollectionError] = useState("");
+  const [viewCollectionLastSyncedAt, setViewCollectionLastSyncedAt] = useState<number | null>(null);
   const [manageRoyaltyReceiver, setManageRoyaltyReceiver] = useState("");
   const [manageRoyaltyBps, setManageRoyaltyBps] = useState("0");
   const [manageRoyaltySplits, setManageRoyaltySplits] = useState<ManageRoyaltySplitDraft[]>(defaultRoyaltySplits(""));
@@ -1371,29 +1372,34 @@ export default function MintClient({
       setViewCollectionCount(0);
       setViewCollectionError("");
       setViewCollectionLoading(false);
+      setViewCollectionLastSyncedAt(null);
       return;
     }
 
     let cancelled = false;
-    setViewCollectionLoading(true);
-    setViewCollectionError("");
+    const loadTokens = async () => {
+      setViewCollectionLoading(true);
+      setViewCollectionError("");
 
-    void fetchCollectionTokens(manageAddress, { chainId: config.chainId, sync: true })
-      .then((result) => {
+      try {
+        const result = await fetchCollectionTokens(manageAddress, { chainId: config.chainId, sync: true });
         if (cancelled) return;
         setViewCollectionTokens(result.tokens);
         setViewCollectionCount(result.count);
-      })
-      .catch((error) => {
+        setViewCollectionLastSyncedAt(Date.now());
+      } catch (error) {
         if (cancelled) return;
         setViewCollectionTokens([]);
         setViewCollectionCount(0);
+        setViewCollectionLastSyncedAt(null);
         setViewCollectionError(error instanceof Error ? error.message : "Could not load collection tokens.");
-      })
-      .finally(() => {
+      } finally {
         if (cancelled) return;
         setViewCollectionLoading(false);
-      });
+      }
+    };
+
+    void loadTokens();
 
     return () => {
       cancelled = true;
@@ -2940,6 +2946,41 @@ export default function MintClient({
 
           <div className="card formCard">
             <h3>3. Indexed Tokens</h3>
+            <div className="row" style={{ justifyContent: "space-between", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+              <p className="hint" style={{ margin: 0 }}>
+                This view triggers a live collection sync before reading indexed tokens.
+                {viewCollectionLastSyncedAt
+                  ? ` Last synced ${new Date(viewCollectionLastSyncedAt).toLocaleTimeString()}.`
+                  : ""}
+              </p>
+              <button
+                type="button"
+                className="secondaryButton"
+                disabled={!isAddress(manageAddress) || viewCollectionLoading}
+                onClick={() => {
+                  if (!isAddress(manageAddress)) return;
+                  setViewCollectionLoading(true);
+                  setViewCollectionError("");
+                  void fetchCollectionTokens(manageAddress, { chainId: config.chainId, sync: true })
+                    .then((result) => {
+                      setViewCollectionTokens(result.tokens);
+                      setViewCollectionCount(result.count);
+                      setViewCollectionLastSyncedAt(Date.now());
+                    })
+                    .catch((error) => {
+                      setViewCollectionTokens([]);
+                      setViewCollectionCount(0);
+                      setViewCollectionLastSyncedAt(null);
+                      setViewCollectionError(error instanceof Error ? error.message : "Could not load collection tokens.");
+                    })
+                    .finally(() => {
+                      setViewCollectionLoading(false);
+                    });
+                }}
+              >
+                {viewCollectionLoading ? "Syncing…" : "Re-sync collection"}
+              </button>
+            </div>
             {!isAddress(manageAddress) ? (
               <p className="hint">Choose a collection above to view tokens.</p>
             ) : viewCollectionLoading ? (
@@ -2950,7 +2991,10 @@ export default function MintClient({
               <p className="hint">No indexed tokens found for this collection yet.</p>
             ) : (
               <div className="stack">
-                <p className="hint">Showing {viewCollectionTokens.length} indexed token{viewCollectionTokens.length === 1 ? "" : "s"} for this collection.</p>
+                <p className="hint">
+                  Indexed token count: <strong>{viewCollectionCount}</strong>.
+                  {" "}Showing {viewCollectionTokens.length} token{viewCollectionTokens.length === 1 ? "" : "s"} in this view.
+                </p>
                 {viewCollectionTokens.map((token) => {
                   const collectionIdentity = formatCollectionIdentity(token.collection.ensSubname);
                   const title = getMintDisplayTitle({
