@@ -2,43 +2,28 @@
 pragma solidity ^0.8.24;
 
 import {Test} from "forge-std/Test.sol";
-import {CreatorCollection1155} from "../src/token/CreatorCollection1155.sol";
+import {CreatorCollection721} from "../src/token/CreatorCollection721.sol";
 
-contract CreatorCollection1155Test is Test {
-    CreatorCollection1155 internal collection;
+contract CreatorCollection721Test is Test {
+    CreatorCollection721 internal collection;
 
     address internal creator = address(0xCAFE);
     address internal holder = address(0xBEEF);
     address internal nextOwner = address(0xA11CE);
 
     function setUp() external {
-        collection = new CreatorCollection1155();
-        collection.initialize(creator, "Creator Multi", "CM", "studio", creator, 500);
+        collection = new CreatorCollection721();
+        collection.initialize(creator, "Creator 721", "C721", "studio", creator, 500);
     }
 
-    function testPublishMintsNewTokenId() external {
+    function testPublishMintsSequentialToken() external {
         vm.prank(creator);
-        collection.publish(holder, 1, 3, "ipfs://one", true);
+        uint256 tokenId = collection.publish(holder, "ipfs://one", true);
 
-        assertEq(collection.balanceOf(holder, 1), 3);
-        assertEq(collection.uri(1), "ipfs://one");
-        assertTrue(collection.tokenExists(1));
-        assertTrue(collection.metadataLocked(1));
-    }
-
-    function testPublishRevertsForZeroAmount() external {
-        vm.prank(creator);
-        vm.expectRevert(CreatorCollection1155.InvalidAmount.selector);
-        collection.publish(holder, 1, 0, "ipfs://one", false);
-    }
-
-    function testPublishRevertsWhenTokenIdAlreadyMinted() external {
-        vm.prank(creator);
-        collection.publish(holder, 7, 2, "ipfs://one", true);
-
-        vm.prank(creator);
-        vm.expectRevert(CreatorCollection1155.TokenAlreadyMinted.selector);
-        collection.publish(holder, 7, 1, "ipfs://two", false);
+        assertEq(tokenId, 1);
+        assertEq(collection.ownerOf(tokenId), holder);
+        assertEq(collection.tokenURI(tokenId), "ipfs://one");
+        assertTrue(collection.metadataLocked(tokenId));
     }
 
     function testTransferOwnershipRequiresAcceptance() external {

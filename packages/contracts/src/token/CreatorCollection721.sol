@@ -2,12 +2,12 @@
 pragma solidity ^0.8.24;
 
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import {Ownable2StepUpgradeable} from "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {ERC721URIStorageUpgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC721/extensions/ERC721URIStorageUpgradeable.sol";
 import {ERC2981Upgradeable} from "@openzeppelin/contracts-upgradeable/token/common/ERC2981Upgradeable.sol";
 
-contract CreatorCollection721 is Initializable, OwnableUpgradeable, UUPSUpgradeable, ERC721URIStorageUpgradeable, ERC2981Upgradeable {
+contract CreatorCollection721 is Initializable, Ownable2StepUpgradeable, UUPSUpgradeable, ERC721URIStorageUpgradeable, ERC2981Upgradeable {
     string public ensSubname;
     uint256 public totalSupply;
     bool public upgradesFinalized;
@@ -16,6 +16,7 @@ contract CreatorCollection721 is Initializable, OwnableUpgradeable, UUPSUpgradea
 
     event TokenPublished(address indexed creator, uint256 indexed tokenId, string uri);
     event TokenRoyaltySet(uint256 indexed tokenId, address indexed receiver, uint96 feeNumerator);
+    event MetadataLockUpdated(uint256 indexed tokenId, bool locked);
     event ContractUpgradesFinalized(address indexed owner);
 
     error MetadataLocked();
@@ -30,6 +31,7 @@ contract CreatorCollection721 is Initializable, OwnableUpgradeable, UUPSUpgradea
         uint96 defaultRoyaltyBps
     ) external initializer {
         __Ownable_init(creator);
+        __Ownable2Step_init();
         __UUPSUpgradeable_init();
         __ERC721_init(tokenName, tokenSymbol);
         __ERC721URIStorage_init();
@@ -58,6 +60,7 @@ contract CreatorCollection721 is Initializable, OwnableUpgradeable, UUPSUpgradea
     function setMetadataLock(uint256 tokenId, bool locked) external onlyOwner {
         if (metadataLocked[tokenId]) revert MetadataLocked();
         metadataLocked[tokenId] = locked;
+        emit MetadataLockUpdated(tokenId, locked);
     }
 
     function setDefaultRoyalty(address receiver, uint96 feeNumerator) external onlyOwner {

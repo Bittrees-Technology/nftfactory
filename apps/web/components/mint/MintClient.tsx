@@ -16,6 +16,8 @@ import {
   truncateHash
 } from "../../lib/abi";
 import {
+  encodeAcceptOwnership,
+  encodeCancelOwnershipTransfer,
   encodeDeployCollection,
   encodeFinalizeUpgrades,
   encodeSetCollectionRoyaltySplits,
@@ -696,6 +698,23 @@ const royaltySplitRegistryReadAbi = [
   }
 ] as const;
 
+const collectionOwnershipReadAbi = [
+  {
+    type: "function",
+    name: "owner",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }]
+  },
+  {
+    type: "function",
+    name: "pendingOwner",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }]
+  }
+] as const;
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function MintClient({
@@ -817,6 +836,9 @@ export default function MintClient({
   const [manageRoyaltySplits, setManageRoyaltySplits] = useState<ManageRoyaltySplitDraft[]>(defaultRoyaltySplits(""));
   const [royaltyTx, setRoyaltyTx] = useState<TxState>({ status: "idle" });
   const [royaltySplitTx, setRoyaltySplitTx] = useState<TxState>({ status: "idle" });
+  const [manageCollectionOwner, setManageCollectionOwner] = useState("");
+  const [manageCollectionPendingOwner, setManageCollectionPendingOwner] = useState("");
+  const [manageSupportsTwoStepOwnership, setManageSupportsTwoStepOwnership] = useState(false);
   const [transferTarget, setTransferTarget] = useState("");
   const [transferTx, setTransferTx] = useState<TxState>({ status: "idle" });
   const [finalizeTx, setFinalizeTx] = useState<TxState>({ status: "idle" });
@@ -858,6 +880,40 @@ export default function MintClient({
         return total + (Number.isInteger(nextBps) ? nextBps : 0);
       }, 0),
     [manageRoyaltySplits]
+  );
+  const hasPendingOwnershipTransfer = useMemo(
+    () =>
+      Boolean(
+        isAddress(manageCollectionPendingOwner) &&
+          manageCollectionPendingOwner.toLowerCase() !== ZERO_ADDRESS.toLowerCase()
+      ),
+    [manageCollectionPendingOwner]
+  );
+  const connectedWalletOwnsCollection = useMemo(
+    () =>
+      Boolean(
+        account &&
+          isAddress(manageCollectionOwner) &&
+          manageCollectionOwner.toLowerCase() === account.toLowerCase()
+      ),
+    [account, manageCollectionOwner]
+  );
+  const connectedWalletIsPendingOwner = useMemo(
+    () =>
+      Boolean(
+        account &&
+          isAddress(manageCollectionPendingOwner) &&
+          manageCollectionPendingOwner.toLowerCase() === account.toLowerCase()
+      ),
+    [account, manageCollectionPendingOwner]
+  );
+  const hasValidTransferTarget = useMemo(
+    () => isAddress(transferTarget) && transferTarget.toLowerCase() !== ZERO_ADDRESS.toLowerCase(),
+    [transferTarget]
+  );
+  const ownerExplorerUrl = useMemo(
+    () => (isAddress(manageCollectionOwner) ? toExplorerAddress(config.chainId, manageCollectionOwner) : null),
+    [config.chainId, manageCollectionOwner]
   );
   const manageRoyaltySplitReady = manageRoyaltySplits.length === 0 || manageRoyaltySplitTotal === 10_000;
   const manageRoyaltyPercent = useMemo(() => formatBpsAsPercent(manageRoyaltyBps), [manageRoyaltyBps]);
@@ -1318,6 +1374,9 @@ export default function MintClient({
     if (!isAddress(manageAddress) || !publicClient) {
       setManageCollectionStandard("");
       setManageImplementationAddress("");
+      setManageCollectionOwner("");
+      setManageCollectionPendingOwner("");
+      setManageSupportsTwoStepOwnership(false);
       return;
     }
     const client = publicClient;
@@ -1325,7 +1384,7 @@ export default function MintClient({
     let cancelled = false;
 
     async function loadVerificationState(): Promise<void> {
-      const [is721, is1155] = await Promise.all([
+      const [is721, is1155, ownerAddress, pendingOwnerAddress] = await Promise.all([
         client.readContract({
           address: manageAddress as Address,
           abi: interfaceProbeAbi,
@@ -1337,13 +1396,30 @@ export default function MintClient({
           abi: interfaceProbeAbi,
           functionName: "supportsInterface",
           args: ["0xd9b67a26"]
-        }).catch(() => false)
+        }).catch(() => false),
+        client.readContract({
+          address: manageAddress as Address,
+          abi: collectionOwnershipReadAbi,
+          functionName: "owner"
+        }).catch(() => null),
+        client.readContract({
+          address: manageAddress as Address,
+          abi: collectionOwnershipReadAbi,
+          functionName: "pendingOwner"
+        }).catch(() => null)
       ]);
 
       if (cancelled) return;
 
       const nextStandard: Standard | "" = is721 ? "ERC721" : is1155 ? "ERC1155" : "";
       setManageCollectionStandard(nextStandard);
+      setManageCollectionOwner(typeof ownerAddress === "string" ? ownerAddress : "");
+      setManageSupportsTwoStepOwnership(typeof pendingOwnerAddress === "string");
+      setManageCollectionPendingOwner(
+        typeof pendingOwnerAddress === "string" && pendingOwnerAddress.toLowerCase() !== ZERO_ADDRESS.toLowerCase()
+          ? pendingOwnerAddress
+          : ""
+      );
 
       if (!nextStandard) {
         setManageImplementationAddress("");
@@ -1438,6 +1514,8 @@ export default function MintClient({
     setRoyaltyTx({ status: "idle" });
     setRoyaltySplitTx({ status: "idle" });
     setCollectionVerificationTx({ status: "idle" });
+    setTransferTx({ status: "idle" });
+    setTransferTarget("");
   }, [manageAddress]);
 
   useEffect(() => {
@@ -2382,17 +2460,83 @@ export default function MintClient({
     if (!account) { setTransferTx({ status: "error", message: "Connect wallet first." }); return; }
     if (wrongNetwork) { setTransferTx({ status: "error", message: `Select ${appChain.name} in the wallet menu first.` }); return; }
     if (!isAddress(manageAddress)) { setTransferTx({ status: "error", message: "Enter a valid collection address." }); return; }
-    if (!isAddress(transferTarget)) { setTransferTx({ status: "error", message: "Enter a valid new owner address." }); return; }
+    if (!hasValidTransferTarget) { setTransferTx({ status: "error", message: "Enter a valid non-zero new owner address." }); return; }
     try {
-      setTransferTx({ status: "pending", message: "Transferring ownership…" });
+      setTransferTx({
+        status: "pending",
+        message: manageSupportsTwoStepOwnership
+          ? hasPendingOwnershipTransfer
+            ? "Updating pending ownership transfer…"
+            : "Starting pending ownership transfer…"
+          : "Transferring ownership…"
+      });
       const txHash = await sendTransaction(
         manageAddress as `0x${string}`,
         encodeTransferOwnership(transferTarget as `0x${string}`)
       );
       await waitForReceipt(txHash);
-      setTransferTx({ status: "success", hash: txHash, message: `Ownership transferred to ${transferTarget}.` });
+      setTransferTx({
+        status: "success",
+        hash: txHash,
+        message: manageSupportsTwoStepOwnership
+          ? `Pending ownership transfer started for ${transferTarget}. The new owner must accept it.`
+          : `Ownership transferred to ${transferTarget}.`
+      });
+      if (manageSupportsTwoStepOwnership) {
+        setManageCollectionPendingOwner(transferTarget);
+      } else {
+        setManageCollectionOwner(transferTarget);
+      }
+      setTransferTarget("");
     } catch (err) {
       setTransferTx({ status: "error", message: err instanceof Error ? err.message : "Transfer failed" });
+    }
+  }
+
+  async function onCancelPendingOwnershipTransfer(): Promise<void> {
+    if (!account) { setTransferTx({ status: "error", message: "Connect wallet first." }); return; }
+    if (wrongNetwork) { setTransferTx({ status: "error", message: `Select ${appChain.name} in the wallet menu first.` }); return; }
+    if (!isAddress(manageAddress)) { setTransferTx({ status: "error", message: "Enter a valid collection address." }); return; }
+    if (!manageSupportsTwoStepOwnership) { setTransferTx({ status: "error", message: "This collection still uses legacy single-step ownership." }); return; }
+    try {
+      setTransferTx({ status: "pending", message: "Rejecting pending ownership transfer…" });
+      const txHash = await sendTransaction(
+        manageAddress as `0x${string}`,
+        encodeCancelOwnershipTransfer()
+      );
+      await waitForReceipt(txHash);
+      setTransferTx({
+        status: "success",
+        hash: txHash,
+        message: "Pending ownership transfer rejected."
+      });
+      setManageCollectionPendingOwner("");
+    } catch (err) {
+      setTransferTx({ status: "error", message: err instanceof Error ? err.message : "Reject failed" });
+    }
+  }
+
+  async function onAcceptOwnership(): Promise<void> {
+    if (!account) { setTransferTx({ status: "error", message: "Connect wallet first." }); return; }
+    if (wrongNetwork) { setTransferTx({ status: "error", message: `Select ${appChain.name} in the wallet menu first.` }); return; }
+    if (!isAddress(manageAddress)) { setTransferTx({ status: "error", message: "Enter a valid collection address." }); return; }
+    if (!manageSupportsTwoStepOwnership) { setTransferTx({ status: "error", message: "This collection still uses legacy single-step ownership." }); return; }
+    try {
+      setTransferTx({ status: "pending", message: "Accepting ownership…" });
+      const txHash = await sendTransaction(
+        manageAddress as `0x${string}`,
+        encodeAcceptOwnership()
+      );
+      await waitForReceipt(txHash);
+      setTransferTx({
+        status: "success",
+        hash: txHash,
+        message: "Ownership accepted."
+      });
+      setManageCollectionOwner(account);
+      setManageCollectionPendingOwner("");
+    } catch (err) {
+      setTransferTx({ status: "error", message: err instanceof Error ? err.message : "Accept failed" });
     }
   }
 
@@ -3572,24 +3716,164 @@ export default function MintClient({
           <div className="card formCard">
             <h3>5. Transfer Ownership</h3>
             <p className="hint">
-              Passes full control of this collection to a new address. The new owner can mint tokens,
-              update metadata (if not locked), set royalties, and finalize upgrades. This action
-              <strong> can be reversed</strong> by the new owner calling transfer ownership again.
+              Passes full control of this collection to a new address. New collection implementations use a
+              pending acceptance flow: the next owner must accept ownership, and the current owner can reject
+              the pending transfer before it is accepted.
             </p>
-            <label>
-              New owner address
-              <input
-                value={transferTarget}
-                onChange={(e) => setTransferTarget(e.target.value)}
-              />
-            </label>
-            <button
-              type="button"
-              onClick={onTransferOwnership}
-              disabled={!isConnected || wrongNetwork || !isAddress(manageAddress) || !isAddress(transferTarget) || transferTx.status === "pending"}
-            >
-              {transferTx.status === "pending" ? "Transferring…" : "Transfer Ownership"}
-            </button>
+            <div className="gridMini">
+              <p>
+                <strong>Current owner</strong>
+                <br />
+                {isAddress(manageCollectionOwner) ? (
+                  ownerExplorerUrl ? (
+                    <a href={ownerExplorerUrl} target="_blank" rel="noreferrer" className="mono">
+                      {shortenAddress(manageCollectionOwner)}
+                    </a>
+                  ) : (
+                    <span className="mono">{manageCollectionOwner}</span>
+                  )
+                ) : (
+                  <span className="hint">Loading…</span>
+                )}
+              </p>
+              <p>
+                <strong>Pending validation</strong>
+                <br />
+                {hasPendingOwnershipTransfer ? (
+                  <span className="mono">{shortenAddress(manageCollectionPendingOwner)}</span>
+                ) : (
+                  <span className="hint">No pending transfer</span>
+                )}
+              </p>
+              <p>
+                <strong>Transfer mode</strong>
+                <br />
+                {manageSupportsTwoStepOwnership ? "Two-step" : "Legacy immediate transfer"}
+              </p>
+            </div>
+            {manageSupportsTwoStepOwnership ? (
+              hasPendingOwnershipTransfer ? (
+                <>
+                  <p className="hint">
+                    This transfer is waiting for the pending owner to accept it. The current owner can reject it before it is finalized.
+                  </p>
+                  {connectedWalletOwnsCollection ? (
+                    <>
+                      <label>
+                        Replace pending owner
+                        <input
+                          value={transferTarget}
+                          onChange={(e) => setTransferTarget(e.target.value)}
+                          placeholder="0x..."
+                        />
+                      </label>
+                      <div className="row">
+                        <button
+                          type="button"
+                          onClick={onCancelPendingOwnershipTransfer}
+                          disabled={
+                            !isConnected ||
+                            wrongNetwork ||
+                            !isAddress(manageAddress) ||
+                            !connectedWalletOwnsCollection ||
+                            transferTx.status === "pending"
+                          }
+                        >
+                          {transferTx.status === "pending" ? "Rejecting…" : "Reject Pending Transfer"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={onTransferOwnership}
+                          disabled={
+                            !isConnected ||
+                            wrongNetwork ||
+                            !isAddress(manageAddress) ||
+                            !connectedWalletOwnsCollection ||
+                            !hasValidTransferTarget ||
+                            transferTx.status === "pending"
+                          }
+                        >
+                          {transferTx.status === "pending" ? "Updating…" : "Replace Pending Owner"}
+                        </button>
+                      </div>
+                    </>
+                  ) : null}
+                  {connectedWalletIsPendingOwner ? (
+                    <button
+                      type="button"
+                      onClick={onAcceptOwnership}
+                      disabled={
+                        !isConnected ||
+                        wrongNetwork ||
+                        !isAddress(manageAddress) ||
+                        !connectedWalletIsPendingOwner ||
+                        transferTx.status === "pending"
+                      }
+                    >
+                      {transferTx.status === "pending" ? "Accepting…" : "Accept Ownership"}
+                    </button>
+                  ) : null}
+                  {!connectedWalletOwnsCollection && !connectedWalletIsPendingOwner ? (
+                    <p className="hint">
+                      Only the current owner can reject this transfer, and only the pending owner can accept it.
+                    </p>
+                  ) : null}
+                </>
+              ) : (
+                <>
+                  <label>
+                    New owner address
+                    <input
+                      value={transferTarget}
+                      onChange={(e) => setTransferTarget(e.target.value)}
+                      placeholder="0x..."
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={onTransferOwnership}
+                    disabled={
+                      !isConnected ||
+                      wrongNetwork ||
+                      !isAddress(manageAddress) ||
+                      !connectedWalletOwnsCollection ||
+                      !hasValidTransferTarget ||
+                      transferTx.status === "pending"
+                    }
+                  >
+                    {transferTx.status === "pending" ? "Starting…" : "Start Ownership Transfer"}
+                  </button>
+                </>
+              )
+            ) : (
+              <>
+                <p className="hint">
+                  This collection still uses the legacy one-step ownership flow. A pending accept/reject path is only available after upgrading to the latest collection implementation.
+                </p>
+                <label>
+                  New owner address
+                  <input
+                    value={transferTarget}
+                    onChange={(e) => setTransferTarget(e.target.value)}
+                    placeholder="0x..."
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={onTransferOwnership}
+                  disabled={
+                    !isConnected ||
+                    wrongNetwork ||
+                    !isAddress(manageAddress) ||
+                    !connectedWalletOwnsCollection ||
+                    !hasValidTransferTarget ||
+                    transferTx.status === "pending"
+                  }
+                >
+                  {transferTx.status === "pending" ? "Transferring…" : "Transfer Ownership"}
+                </button>
+              </>
+            )}
             <TxStatus state={transferTx} />
           </div>
 

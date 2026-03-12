@@ -125,15 +125,25 @@ const collectionManagementAbi = [
   },
   {
     /**
-     * Transfers ownership of the collection contract to a new address.
-     * The new owner gains full control: minting, metadata updates, royalty settings,
-     * and the ability to finalize upgrades.
-     * Inherited from OpenZeppelin OwnableUpgradeable.
+     * Starts the two-step ownership transfer of the collection contract to a new address.
+     * The pending owner must call acceptOwnership() to complete the transfer.
+     * Passing address(0) clears an in-flight pending transfer.
      */
     name: "transferOwnership",
     type: "function",
     stateMutability: "nonpayable",
     inputs: [{ name: "newOwner", type: "address" }],
+    outputs: []
+  },
+  {
+    /**
+     * Completes a pending ownership transfer for the caller.
+     * Inherited from OpenZeppelin Ownable2StepUpgradeable.
+     */
+    name: "acceptOwnership",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [],
     outputs: []
   }
 ] as const;
@@ -191,17 +201,39 @@ export function encodeSetDefaultRoyalty(
 }
 
 /**
- * Encodes a call to OwnableUpgradeable.transferOwnership(address).
+ * Encodes a call to Ownable2StepUpgradeable.transferOwnership(address).
  *
- * Passes control of the collection to `newOwner`. The new owner can mint,
- * update metadata, set royalties, and run finalizeUpgrades.
- * This operation can be reversed by the new owner calling transferOwnership again.
+ * Starts a pending transfer to `newOwner`. The pending owner must call
+ * `acceptOwnership()` to complete the transfer.
  */
 export function encodeTransferOwnership(newOwner: `0x${string}`): `0x${string}` {
   return encodeFunctionData({
     abi: collectionManagementAbi,
     functionName: "transferOwnership",
     args: [newOwner]
+  });
+}
+
+/**
+ * Encodes a call to Ownable2StepUpgradeable.transferOwnership(address(0)).
+ *
+ * This clears a pending ownership transfer without changing the current owner.
+ */
+export function encodeCancelOwnershipTransfer(): `0x${string}` {
+  return encodeFunctionData({
+    abi: collectionManagementAbi,
+    functionName: "transferOwnership",
+    args: ["0x0000000000000000000000000000000000000000"]
+  });
+}
+
+/**
+ * Encodes a call to Ownable2StepUpgradeable.acceptOwnership().
+ */
+export function encodeAcceptOwnership(): `0x${string}` {
+  return encodeFunctionData({
+    abi: collectionManagementAbi,
+    functionName: "acceptOwnership"
   });
 }
 

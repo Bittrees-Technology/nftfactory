@@ -2,12 +2,12 @@
 pragma solidity ^0.8.24;
 
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import {Ownable2StepUpgradeable} from "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {ERC1155Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC1155/ERC1155Upgradeable.sol";
 import {ERC2981Upgradeable} from "@openzeppelin/contracts-upgradeable/token/common/ERC2981Upgradeable.sol";
 
-contract CreatorCollection1155 is Initializable, OwnableUpgradeable, UUPSUpgradeable, ERC1155Upgradeable, ERC2981Upgradeable {
+contract CreatorCollection1155 is Initializable, Ownable2StepUpgradeable, UUPSUpgradeable, ERC1155Upgradeable, ERC2981Upgradeable {
     string public name;
     string public symbol;
     string public ensSubname;
@@ -19,6 +19,7 @@ contract CreatorCollection1155 is Initializable, OwnableUpgradeable, UUPSUpgrade
 
     event TokenPublished(address indexed creator, uint256 indexed tokenId, uint256 amount, string uri);
     event TokenRoyaltySet(uint256 indexed tokenId, address indexed receiver, uint96 feeNumerator);
+    event MetadataLockUpdated(uint256 indexed tokenId, bool locked);
     event ContractUpgradesFinalized(address indexed owner);
 
     error MetadataLocked();
@@ -35,6 +36,7 @@ contract CreatorCollection1155 is Initializable, OwnableUpgradeable, UUPSUpgrade
         uint96 defaultRoyaltyBps
     ) external initializer {
         __Ownable_init(creator);
+        __Ownable2Step_init();
         __UUPSUpgradeable_init();
         __ERC1155_init("");
         __ERC2981_init();
@@ -69,6 +71,7 @@ contract CreatorCollection1155 is Initializable, OwnableUpgradeable, UUPSUpgrade
     function setMetadataLock(uint256 tokenId, bool locked) external onlyOwner {
         if (metadataLocked[tokenId]) revert MetadataLocked();
         metadataLocked[tokenId] = locked;
+        emit MetadataLockUpdated(tokenId, locked);
     }
 
     function uri(uint256 tokenId) public view override returns (string memory) {
