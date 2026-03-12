@@ -13,6 +13,8 @@ contract RoyaltySplitRegistry is Owned {
         uint96 bps;
     }
 
+    uint256 public constant MAX_SPLITS = 20;
+
     mapping(address => Split[]) public collectionSplits;
     mapping(address => mapping(uint256 => Split[])) public tokenSplits;
 
@@ -20,6 +22,7 @@ contract RoyaltySplitRegistry is Owned {
     event TokenSplitsSet(address indexed collection, uint256 indexed tokenId, uint256 count);
 
     error InvalidSplit();
+    error TooManySplits();
     error UnauthorizedCollectionManager();
 
     constructor(address initialOwner) Owned(initialOwner) {}
@@ -54,6 +57,7 @@ contract RoyaltySplitRegistry is Owned {
 
     function _validateSplits(Split[] calldata splits) internal pure {
         if (splits.length == 0) return;
+        if (splits.length > MAX_SPLITS) revert TooManySplits();
         uint256 total;
         for (uint256 i = 0; i < splits.length; i++) {
             if (splits[i].account == address(0)) revert InvalidSplit();

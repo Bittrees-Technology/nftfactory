@@ -4,6 +4,9 @@ pragma solidity ^0.8.24;
 import {Owned} from "../utils/Owned.sol";
 
 contract NftFactoryRegistry is Owned {
+    bytes32 private constant _ERC721_KEY = keccak256("ERC721");
+    bytes32 private constant _ERC1155_KEY = keccak256("ERC1155");
+
     struct CreatorRecord {
         address owner;
         address contractAddress;
@@ -117,6 +120,6 @@ contract NftFactoryRegistry is Owned {
 
     function _validateStandard(string calldata standard) internal pure {
         bytes32 key = keccak256(bytes(standard));
-        if (key != keccak256("ERC721") && key != keccak256("ERC1155")) revert InvalidStandard();
+        if (key != _ERC721_KEY && key != _ERC1155_KEY) revert InvalidStandard();
     }
 }

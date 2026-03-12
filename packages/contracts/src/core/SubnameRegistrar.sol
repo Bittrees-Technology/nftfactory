@@ -19,6 +19,8 @@ contract SubnameRegistrar is Owned {
 
     mapping(bytes32 => SubnameRecord) public subnames;
     mapping(address => bytes32[]) public ownerSubnames;
+    /// @dev O(1) lookup: ownerSubnameIndex[owner][key] stores the array index + 1 (0 = not present).
+    mapping(address => mapping(bytes32 => uint256)) private _ownerSubnameIndex;
 
     event SubnameRegistered(string indexed label, address indexed owner, uint256 expiresAt);
     event SubnameRenewed(string indexed label, uint256 expiresAt);
@@ -31,9 +33,12 @@ contract SubnameRegistrar is Owned {
     error NotAuthorizedMinter();
     error SubnameActive();
     error InvalidLabel();
+    error InvalidTreasury();
     error RenewalNotRequired();
+    error TreasuryTransferFailed();
 
     constructor(address initialOwner, address initialTreasury) Owned(initialOwner) {
+        if (initialTreasury == address(0)) revert InvalidTreasury();
         treasury = initialTreasury;
     }
 
@@ -52,15 +57,16 @@ contract SubnameRegistrar is Owned {
 
         rec.owner = msg.sender;
         rec.expiresAt = block.timestamp + RENEWAL_PERIOD;
-        if (!_ownerHasSubname(msg.sender, key)) {
+        if (_ownerSubnameIndex[msg.sender][key] == 0) {
             ownerSubnames[msg.sender].push(key);
+            _ownerSubnameIndex[msg.sender][key] = ownerSubnames[msg.sender].length;
         }
         if (!rec.exists) {
             rec.exists = true;
         }
 
         (bool ok,) = treasury.call{value: msg.value}("");
-        require(ok, "TREASURY_TRANSFER_FAILED");
+        if (!ok) revert TreasuryTransferFailed();
 
         emit SubnameRegistered(label, msg.sender, rec.expiresAt);
     }
@@ -80,7 +86,7 @@ contract SubnameRegistrar is Owned {
         rec.expiresAt = block.timestamp + RENEWAL_PERIOD;
 
         (bool ok,) = treasury.call{value: msg.value}("");
-        require(ok, "TREASURY_TRANSFER_FAILED");
+        if (!ok) revert TreasuryTransferFailed();
 
         emit SubnameRenewed(label, rec.expiresAt);
     }
@@ -100,23 +106,21 @@ contract SubnameRegistrar is Owned {
         emit MintCountUpdated(label, rec.mintedCount);
     }
 
-    function _ownerHasSubname(address subnameOwner, bytes32 key) internal view returns (bool) {
-        bytes32[] storage keys = ownerSubnames[subnameOwner];
-        for (uint256 i = 0; i < keys.length; i++) {
-            if (keys[i] == key) return true;
-        }
-        return false;
-    }
-
     function _removeOwnerSubname(address subnameOwner, bytes32 key) internal {
+        uint256 indexPlusOne = _ownerSubnameIndex[subnameOwner][key];
+        if (indexPlusOne == 0) return;
+
         bytes32[] storage keys = ownerSubnames[subnameOwner];
-        for (uint256 i = 0; i < keys.length; i++) {
-            if (keys[i] == key) {
-                keys[i] = keys[keys.length - 1];
-                keys.pop();
-                return;
-            }
+        uint256 lastIndex = keys.length - 1;
+        uint256 removeIndex = indexPlusOne - 1;
+
+        if (removeIndex != lastIndex) {
+            bytes32 lastKey = keys[lastIndex];
+            keys[removeIndex] = lastKey;
+            _ownerSubnameIndex[subnameOwner][lastKey] = indexPlusOne;
         }
+        keys.pop();
+        _ownerSubnameIndex[subnameOwner][key] = 0;
     }
 
     function _validateLabel(string calldata label) internal pure {

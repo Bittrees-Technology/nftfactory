@@ -92,7 +92,7 @@ contract CreatorFactoryTest is Test {
     function testUnauthorizedDeployerReverts() external {
         address other = address(0xBAAD);
         vm.prank(other);
-        vm.expectRevert("UNAUTHORIZED_DEPLOYER");
+        vm.expectRevert(CreatorFactory.UnauthorizedDeployer.selector);
         factory.deployCollection(
             CreatorFactory.DeployRequest({
                 standard: "ERC721",

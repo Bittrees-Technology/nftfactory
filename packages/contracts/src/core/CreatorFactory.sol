@@ -8,6 +8,9 @@ import {CreatorCollection1155} from "../token/CreatorCollection1155.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 contract CreatorFactory is Owned {
+    bytes32 private constant _ERC721_KEY = keccak256("ERC721");
+    bytes32 private constant _ERC1155_KEY = keccak256("ERC1155");
+
     struct DeployRequest {
         string standard;
         address creator;
@@ -18,7 +21,7 @@ contract CreatorFactory is Owned {
         uint96 defaultRoyaltyBps;
     }
 
-    NftFactoryRegistry public registry;
+    NftFactoryRegistry public immutable registry;
 
     address public implementation721;
     address public implementation1155;
@@ -35,6 +38,7 @@ contract CreatorFactory is Owned {
 
     error UnknownStandard();
     error MissingImplementation();
+    error UnauthorizedDeployer();
 
     constructor(address initialOwner, address registryAddress) Owned(initialOwner) {
         registry = NftFactoryRegistry(registryAddress);
@@ -48,13 +52,13 @@ contract CreatorFactory is Owned {
 
     function deployCollection(DeployRequest calldata req) external returns (address deployedCollection) {
         // Creator can self-deploy; owner (Safe/admin) can also deploy on creator's behalf.
-        require(msg.sender == req.creator || msg.sender == owner, "UNAUTHORIZED_DEPLOYER");
+        if (msg.sender != req.creator && msg.sender != owner) revert UnauthorizedDeployer();
 
         bytes32 key = keccak256(bytes(req.standard));
 
-        if (key == keccak256("ERC721")) {
+        if (key == _ERC721_KEY) {
             deployedCollection = _deploy721(req);
-        } else if (key == keccak256("ERC1155")) {
+        } else if (key == _ERC1155_KEY) {
             deployedCollection = _deploy1155(req);
         } else {
             revert UnknownStandard();
