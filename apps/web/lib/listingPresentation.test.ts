@@ -47,7 +47,7 @@ describe("listingPresentation", () => {
         marketplaceVersion: "v1"
       })
     );
-    expect(presentation.title).toBe("NFTFactory mint #7");
+    expect(presentation.title).toBe("NFTFactory mint");
     expect(presentation.description).toBe("Collection untitled · token #7");
     expect(presentation.marketLabel).toBe("Legacy Marketplace V1");
     expect(presentation.amountLabel).toBe("1 of 1");

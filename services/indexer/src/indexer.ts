@@ -50,6 +50,7 @@ type BackfillCollectionTokensPayload = {
   isFactoryCreated?: boolean;
   isUpgradeable?: boolean;
   fromBlock?: number;
+  collectionCreatedAt?: string | null;
 };
 
 type ModeratorPayload = {
@@ -155,6 +156,7 @@ type SyncMintedTokenPayload = {
   mediaCid?: string | null;
   immutable?: boolean;
   mintedAt?: string;
+  collectionCreatedAt?: string | null;
   skipHoldingSync?: boolean;
 };
 
@@ -3506,6 +3508,7 @@ async function upsertMintedToken(
   const mintedAmountRaw = toNormalizedOptionalText(payload.mintedAmountRaw);
   const heldAmountRaw = toNormalizedOptionalText(payload.heldAmountRaw);
   const mintedAt = payload.mintedAt?.trim() ? new Date(payload.mintedAt) : new Date();
+  const collectionCreatedAt = payload.collectionCreatedAt?.trim() ? new Date(payload.collectionCreatedAt) : null;
   const finalizedAt =
     payload.finalizedAt && payload.finalizedAt.trim()
       ? new Date(payload.finalizedAt)
@@ -3535,7 +3538,8 @@ async function upsertMintedToken(
       standard,
       isFactoryCreated: payload.isFactoryCreated === true,
       isUpgradeable: payload.isUpgradeable !== false,
-      finalizedAt: finalizedAt || undefined
+      finalizedAt: finalizedAt || undefined,
+      ...(collectionCreatedAt ? { createdAt: collectionCreatedAt } : {})
     },
     create: {
       chainId: config.chainId,
@@ -3545,7 +3549,8 @@ async function upsertMintedToken(
       standard,
       isFactoryCreated: payload.isFactoryCreated === true,
       isUpgradeable: payload.isUpgradeable !== false,
-      finalizedAt
+      finalizedAt,
+      ...(collectionCreatedAt ? { createdAt: collectionCreatedAt } : {})
     }
   });
 
@@ -3672,6 +3677,25 @@ async function getLogsChunked(
   return allLogs;
 }
 
+async function getBlockTimestampIso(
+  client: ReturnType<typeof createPublicClient>,
+  cache: Map<string, string>,
+  blockNumber: bigint | null | undefined
+): Promise<string | null> {
+  if (typeof blockNumber !== "bigint") return null;
+  const cacheKey = blockNumber.toString();
+  const cached = cache.get(cacheKey);
+  if (cached) return cached;
+  try {
+    const block = await client.getBlock({ blockNumber });
+    const iso = new Date(Number(block.timestamp) * 1000).toISOString();
+    cache.set(cacheKey, iso);
+    return iso;
+  } catch {
+    return null;
+  }
+}
+
 async function backfillCollectionTokens(
   payload: BackfillCollectionTokensPayload,
   deps: IndexerDeps,
@@ -3746,8 +3770,28 @@ async function backfillCollectionTokens(
   const effectiveOwnerAddress = requestedCollectionOwner || chainOwnerAddress || existingCollection?.ownerAddress || null;
   const effectiveIsUpgradeable = payload.isUpgradeable ?? existingCollection?.isUpgradeable ?? true;
   const scanFromBlock = payload.fromBlock != null ? BigInt(payload.fromBlock) : 0n;
+  const blockTimestampCache = new Map<string, string>();
+  let collectionCreatedAtIso = payload.collectionCreatedAt?.trim() || null;
   let scanned = 0;
   let upserted = 0;
+
+  if (!collectionCreatedAtIso && (payload.isFactoryCreated ?? existingCollection?.isFactoryCreated ?? false) && config.registryAddress) {
+    try {
+      const registrationLogs = await client.getLogs({
+        address: config.registryAddress,
+        event: creatorRegisteredEvent,
+        args: { contractAddress: contractAddress as `0x${string}` },
+        fromBlock: 0n,
+        toBlock: "latest"
+      });
+      const firstRegistration = [...registrationLogs]
+        .filter((log: any) => typeof log.blockNumber === "bigint")
+        .sort((left: any, right: any) => (left.blockNumber < right.blockNumber ? -1 : left.blockNumber > right.blockNumber ? 1 : 0))[0];
+      collectionCreatedAtIso = await getBlockTimestampIso(client, blockTimestampCache, firstRegistration?.blockNumber);
+    } catch {
+      collectionCreatedAtIso = null;
+    }
+  }
 
   if (standard === "ERC721") {
     const logs = await getLogsChunked(client, {
@@ -3761,6 +3805,7 @@ async function backfillCollectionTokens(
     for (const log of mintedLogs) {
       const tokenId = log.args.tokenId?.toString();
       if (!tokenId) continue;
+      const mintedAtIso = await getBlockTimestampIso(client, blockTimestampCache, log.blockNumber);
 
       let currentOwner = effectiveOwnerAddress;
       try {
@@ -3808,7 +3853,9 @@ async function backfillCollectionTokens(
           mintTxHash: log.transactionHash,
           metadataCid,
           mediaCid: null,
-          immutable: !effectiveIsUpgradeable
+          immutable: !effectiveIsUpgradeable,
+          mintedAt: mintedAtIso || undefined,
+          collectionCreatedAt: collectionCreatedAtIso || undefined
         },
         deps,
         config
@@ -3899,6 +3946,18 @@ async function backfillCollectionTokens(
 
     scanned = tokenIds.size;
     for (const tokenId of tokenIds) {
+      const mintBlockNumber = [...singleLogs, ...batchLogs]
+        .filter((log) => {
+          if (String(log.args.from || "").toLowerCase() !== ZERO_ADDRESS) return false;
+          if ("id" in log.args) {
+            return log.args.id?.toString() === tokenId;
+          }
+          return Array.isArray(log.args.ids) && log.args.ids.some((id: bigint) => id.toString() === tokenId);
+        })
+        .map((log) => log.blockNumber)
+        .filter((blockNumber): blockNumber is bigint => typeof blockNumber === "bigint")
+        .sort((left, right) => (left < right ? -1 : left > right ? 1 : 0))[0];
+      const mintedAtIso = await getBlockTimestampIso(client, blockTimestampCache, mintBlockNumber);
       let metadataCid = "";
       try {
         metadataCid = String(
@@ -3946,6 +4005,8 @@ async function backfillCollectionTokens(
           metadataCid,
           mediaCid: null,
           immutable: true,
+          mintedAt: mintedAtIso || undefined,
+          collectionCreatedAt: collectionCreatedAtIso || undefined,
           skipHoldingSync: true
         },
         deps,

@@ -53,6 +53,7 @@ import {
   formatRoyaltySplitRegistryMissingMessage,
   getRoyaltySplitRegistryEnvHint
 } from "../../lib/royaltySplitRegistryConfig";
+import { useNftMetadataPreview } from "../../lib/nftMetadata";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -445,6 +446,8 @@ type KnownCollection = {
   contractAddress: string;
   ensSubname: string | null;
   ownerAddress: string;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 type LocalMintFeedItem = {
@@ -543,6 +546,60 @@ function writeLocalMintFeedItem(chainId: number, nextItem: LocalMintFeedItem): v
     return !(sameContract && sameToken);
   })].slice(0, LOCAL_MINT_FEED_LIMIT);
   window.localStorage.setItem(localMintFeedKey(chainId), JSON.stringify(merged));
+}
+
+const DEFAULT_IPFS_GATEWAY = (process.env.NEXT_PUBLIC_IPFS_GATEWAY || "https://dweb.link/ipfs").replace(/\/$/, "");
+
+type ViewCollectionToken = Awaited<ReturnType<typeof fetchCollectionTokens>>["tokens"][number];
+
+function ViewCollectionTokenCard({ token }: { token: ViewCollectionToken }) {
+  const preview = useNftMetadataPreview({
+    metadataUri: token.metadataCid,
+    mediaUri: token.mediaCid,
+    gateway: DEFAULT_IPFS_GATEWAY
+  });
+  const collectionIdentity = formatCollectionIdentity(token.collection.ensSubname);
+  const title = getMintDisplayTitle({
+    previewName: preview.name,
+    draftName: token.draftName,
+    collectionIdentity,
+    tokenId: token.tokenId
+  });
+  const description = getMintDisplayDescription({
+    previewDescription: preview.description,
+    draftDescription: token.draftDescription,
+    collectionIdentity,
+    tokenId: token.tokenId
+  });
+  const metadataLink = token.metadataUrl || token.metadataCid;
+  const mediaLink = token.mediaUrl || token.mediaCid;
+
+  return (
+    <div className="selectionCard">
+      <p><strong>{title}</strong></p>
+      <p className="hint">{description}</p>
+      <div className="gridMini">
+        <p><strong>Token ID</strong><br /><span className="mono">{token.tokenId}</span></p>
+        <p><strong>Amount</strong><br />{getMintAmountLabel(token.collection.standard, token.mintedAmountRaw)}</p>
+        <p><strong>Status</strong><br />{getMintStatusLabel(token.activeListing)}</p>
+        <p><strong>Published</strong><br />{new Date(token.mintedAt).toLocaleString()}</p>
+      </div>
+      {(metadataLink || mediaLink) ? (
+        <div className="row">
+          {metadataLink ? (
+            <a href={metadataLink} target="_blank" rel="noreferrer" className="ctaLink secondaryLink">
+              Metadata
+            </a>
+          ) : null}
+          {mediaLink ? (
+            <a href={mediaLink} target="_blank" rel="noreferrer" className="ctaLink secondaryLink">
+              Media
+            </a>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 function extractMintedTokenId(
@@ -904,7 +961,9 @@ export default function MintClient({
         merged.set(key, {
           contractAddress: item.contractAddress,
           ensSubname: item.ensSubname || existing?.ensSubname || null,
-          ownerAddress: item.ownerAddress
+          ownerAddress: item.ownerAddress,
+          createdAt: item.createdAt || existing?.createdAt,
+          updatedAt: item.updatedAt || existing?.updatedAt
         });
       }
       const values = [...merged.values()];
@@ -1028,7 +1087,9 @@ export default function MintClient({
           .map((item) => ({
             contractAddress: item.contractAddress,
             ensSubname: item.ensSubname,
-            ownerAddress: item.ownerAddress
+            ownerAddress: item.ownerAddress,
+            createdAt: item.createdAt,
+            updatedAt: item.updatedAt
           }));
         if (owned.length > 0) {
           mergeKnownCollections(owned);
@@ -1079,7 +1140,9 @@ export default function MintClient({
           .map((item) => ({
             contractAddress: item.contractAddress,
             ensSubname: item.ensSubname,
-            ownerAddress: item.ownerAddress
+            ownerAddress: item.ownerAddress,
+            createdAt: item.createdAt,
+            updatedAt: item.updatedAt
           }));
         if (owned.length > 0) mergeKnownCollections(owned);
       });
@@ -2088,7 +2151,9 @@ export default function MintClient({
             : "0"
           : undefined;
       const mintedTokenId = extractMintedTokenId(receipt, targetNft, standard, fallbackTokenId);
-      const gateway = (process.env.NEXT_PUBLIC_IPFS_GATEWAY || "https://dweb.link/ipfs").replace(/\/$/, "");
+      const gateway = DEFAULT_IPFS_GATEWAY;
+      const mintedBlock = await publicClient.getBlock({ blockHash: receipt.blockHash });
+      const mintedAtIso = new Date(Number(mintedBlock.timestamp) * 1000).toISOString();
       writeLocalMintFeedItem(config.chainId, {
         id: `local:${targetNft.toLowerCase()}:${mintedTokenId}:${Date.now()}`,
         tokenId: mintedTokenId,
@@ -2103,7 +2168,7 @@ export default function MintClient({
         mediaCid: uploadReceipt.imageUri || uploadReceipt.audioUri || null,
         mediaUrl: toGatewayUrl(uploadReceipt.imageUri || uploadReceipt.audioUri || null, gateway),
         immutable: standard === "ERC721" ? mintMode === "shared" ? true : lockMetadata : lockMetadata,
-        mintedAt: new Date().toISOString(),
+        mintedAt: mintedAtIso,
         collection: {
           chainId: config.chainId,
           contractAddress: targetNft.toLowerCase(),
@@ -2113,8 +2178,8 @@ export default function MintClient({
           isFactoryCreated: mintMode === "shared",
           isUpgradeable: mintMode === "custom",
           finalizedAt: null,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
+          createdAt: mintMode === "custom" ? selectedKnownCollection?.createdAt || mintedAtIso : mintedAtIso,
+          updatedAt: mintedAtIso
         },
         activeListing: null
       });
@@ -2130,6 +2195,7 @@ export default function MintClient({
           isFactoryCreated: mintMode === "shared",
           isUpgradeable: mintMode === "custom",
           ensSubname: mintMode === "custom" ? selectedKnownCollection?.ensSubname ?? null : null,
+          collectionCreatedAt: mintMode === "custom" ? selectedKnownCollection?.createdAt ?? null : null,
           finalizedAt: null,
           mintTxHash: txHash,
           draftName: name.trim() || null,
@@ -2138,7 +2204,7 @@ export default function MintClient({
           metadataCid: effectiveMetadataUri,
           mediaCid: uploadReceipt.imageUri || uploadReceipt.audioUri || null,
           immutable: standard === "ERC721" ? (mintMode === "shared" ? true : lockMetadata) : lockMetadata,
-          mintedAt: new Date().toISOString()
+          mintedAt: mintedAtIso
         });
       } catch {
         // Keep the mint flow successful even if indexer sync is temporarily unavailable.
@@ -2897,6 +2963,10 @@ export default function MintClient({
                     {manageCollectionStandard || "Unknown"}
                   </p>
                   <p>
+                    <strong>Published</strong><br />
+                    {selectedManageCollection?.createdAt ? new Date(selectedManageCollection.createdAt).toLocaleString() : "Not indexed yet"}
+                  </p>
+                  <p>
                     <strong>Default royalty</strong><br />
                     {manageRoyaltyBps} bps
                   </p>
@@ -2995,48 +3065,12 @@ export default function MintClient({
                   Indexed token count: <strong>{viewCollectionCount}</strong>.
                   {" "}Showing {viewCollectionTokens.length} token{viewCollectionTokens.length === 1 ? "" : "s"} in this view.
                 </p>
-                {viewCollectionTokens.map((token) => {
-                  const collectionIdentity = formatCollectionIdentity(token.collection.ensSubname);
-                  const title = getMintDisplayTitle({
-                    draftName: token.draftName,
-                    collectionIdentity,
-                    tokenId: token.tokenId
-                  });
-                  const description = getMintDisplayDescription({
-                    draftDescription: token.draftDescription,
-                    collectionIdentity,
-                    tokenId: token.tokenId
-                  });
-                  const metadataLink = token.metadataUrl || token.metadataCid;
-                  const mediaLink = token.mediaUrl || token.mediaCid;
-
-                  return (
-                    <div key={`${token.collection.contractAddress.toLowerCase()}:${token.tokenId}`} className="selectionCard">
-                      <p><strong>{title}</strong></p>
-                      <p className="hint">{description}</p>
-                      <div className="gridMini">
-                        <p><strong>Token ID</strong><br /><span className="mono">{token.tokenId}</span></p>
-                        <p><strong>Amount</strong><br />{getMintAmountLabel(token.collection.standard, token.mintedAmountRaw)}</p>
-                        <p><strong>Status</strong><br />{getMintStatusLabel(token.activeListing)}</p>
-                        <p><strong>Minted</strong><br />{new Date(token.mintedAt).toLocaleString()}</p>
-                      </div>
-                      {(metadataLink || mediaLink) ? (
-                        <div className="row">
-                          {metadataLink ? (
-                            <a href={metadataLink} target="_blank" rel="noreferrer" className="ctaLink secondaryLink">
-                              Metadata
-                            </a>
-                          ) : null}
-                          {mediaLink ? (
-                            <a href={mediaLink} target="_blank" rel="noreferrer" className="ctaLink secondaryLink">
-                              Media
-                            </a>
-                          ) : null}
-                        </div>
-                      ) : null}
-                    </div>
-                  );
-                })}
+                {viewCollectionTokens.map((token) => (
+                  <ViewCollectionTokenCard
+                    key={`${token.collection.contractAddress.toLowerCase()}:${token.tokenId}`}
+                    token={token}
+                  />
+                ))}
               </div>
             )}
           </div>

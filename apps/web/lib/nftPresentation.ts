@@ -34,7 +34,7 @@ export function getMintDisplayTitle(params: {
   if (previewName) return previewName;
   const draftName = String(params.draftName || "").trim();
   if (draftName) return draftName;
-  return `${params.collectionIdentity || "NFTFactory mint"} #${params.tokenId}`;
+  return params.collectionIdentity || "NFTFactory mint";
 }
 
 export function getMintDisplayDescription(params: {

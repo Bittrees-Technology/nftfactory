@@ -31,6 +31,14 @@ describe("nftPresentation", () => {
         tokenId: "7"
       })
     ).toBe("Draft description");
+    expect(
+      getMintDisplayTitle({
+        previewName: "",
+        draftName: "",
+        collectionIdentity: "artist.nftfactory.eth",
+        tokenId: "7"
+      })
+    ).toBe("artist.nftfactory.eth");
   });
 
   it("builds listing status and amount labels", () => {
