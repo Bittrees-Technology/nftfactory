@@ -572,9 +572,8 @@ export default function ListingManagementClient({
     const metadataCollection = metadata && "collection" in metadata ? metadata.collection : null;
     const metadataEnsSubname = metadata && "ensSubname" in metadata ? metadata.ensSubname : null;
     const chainId = listingChainId;
-    const marketplaceVersion = String(listing.marketplaceVersion || "v2").toLowerCase();
-    const marketplaceAddress = ((listing.marketplaceAddress || chainConfig?.marketplaceV2 || chainConfig?.marketplace || config.marketplace) as Address);
-    const marketplaceLabel = marketplaceVersion === "v2" ? "Marketplace V2" : "Legacy Marketplace V1";
+    const marketplaceAddress = ((listing.marketplaceAddress || chainConfig?.marketplace || config.marketplace) as Address);
+    const marketplaceLabel = "Marketplace";
     return {
       key: listing.listingRecordId ? `${chainId}:${listing.listingRecordId}` : listingMarketKey(chainId, marketplaceAddress, listing.id),
       chainId,
@@ -598,7 +597,7 @@ export default function ListingManagementClient({
       marketplaceAddress,
       marketplaceLabel
     };
-  }, [config.marketplace, config.marketplaceV2, listingMetadata]);
+  }, [config.marketplace, listingMetadata]);
 
   const loadManagementView = useCallback(async (): Promise<void> => {
     const requestId = managementViewRequestIdRef.current + 1;
@@ -725,7 +724,7 @@ export default function ListingManagementClient({
     setListingDays(nextDays.toString());
     setState(
       idleActionState(
-        `Editing ${item.marketplaceLabel} listing #${item.id} on ${getAppChain(item.chainId).name}. Submitting will replace it on Marketplace V2.`,
+        `Editing ${item.marketplaceLabel} listing #${item.id} on ${getAppChain(item.chainId).name}. Submitting will replace it on Marketplace.`,
         undefined,
         item.chainId
       )
@@ -830,8 +829,7 @@ export default function ListingManagementClient({
       return;
     }
     const submitMarketplace = requireMarketplaceAddress(submitConfig, {
-      preferredVersion: "v2",
-      missingMessage: "Marketplace V2 is not configured in this app build."
+      missingMessage: "Marketplace is not configured in this app build."
     });
     const submitContract = editingListing ? editingListing.nft : selectedContract;
     const submitStandard = editingListing
@@ -980,7 +978,7 @@ export default function ListingManagementClient({
 
       setState(
         pendingActionState(
-          `Checking Marketplace V2 approval on ${getAppChain(submitTargetChainId).name} for the selected collection...`,
+          `Checking Marketplace approval on ${getAppChain(submitTargetChainId).name} for the selected collection...`,
           undefined,
           submitTargetChainId
         )
@@ -1001,7 +999,7 @@ export default function ListingManagementClient({
         const token = listingTargets[index];
         setState(
           pendingActionState(
-            `Creating Marketplace V2 listing ${index + 1} of ${listingTargets.length} on ${getAppChain(submitTargetChainId).name}...`,
+            `Creating Marketplace listing ${index + 1} of ${listingTargets.length} on ${getAppChain(submitTargetChainId).name}...`,
             latestHash || undefined,
             submitTargetChainId
           )
@@ -1037,10 +1035,10 @@ export default function ListingManagementClient({
       setState(
         successActionState(
           editingListing
-            ? `Listing #${editingListing.id} was replaced on Marketplace V2 (${getAppChain(submitTargetChainId).name}).`
+            ? `Listing #${editingListing.id} was replaced on Marketplace (${getAppChain(submitTargetChainId).name}).`
             : selectedTokens.length === 1
-              ? `Marketplace V2 listing submitted on ${getAppChain(submitTargetChainId).name}.`
-              : `${selectedTokens.length} Marketplace V2 listings submitted on ${getAppChain(submitTargetChainId).name}.`,
+              ? `Marketplace listing submitted on ${getAppChain(submitTargetChainId).name}.`
+              : `${selectedTokens.length} Marketplace listings submitted on ${getAppChain(submitTargetChainId).name}.`,
           latestHash || undefined,
           submitTargetChainId
         )
@@ -1250,7 +1248,7 @@ export default function ListingManagementClient({
           <h3>2. Create Listing</h3>
           <p className="hint">Set the payment asset, choose the fixed price, and choose how long the listing should stay live.</p>
           <p className="hint">
-            New listings target Marketplace V2 on the selected token’s chain. Active listings below are loaded across the configured V2 indexers and remain chain-scoped for actions.
+            New listings target Marketplace on the selected token’s chain. Active listings below are loaded across the configured V2 indexers and remain chain-scoped for actions.
           </p>
           {editingListing ? (
             <div className="selectionCard">
@@ -1260,7 +1258,7 @@ export default function ListingManagementClient({
               </p>
               <p className="hint">Chain: {getAppChain(editingListing.chainId).name}</p>
               <p className="hint">
-                Submitting this form will cancel the current listing and create a replacement on Marketplace V2 for that same chain.
+                Submitting this form will cancel the current listing and create a replacement on Marketplace for that same chain.
               </p>
               <div className="row">
                 <button type="button" className="miniBtn" onClick={clearListingUpdate}>
@@ -1365,7 +1363,7 @@ export default function ListingManagementClient({
           ) : null}
           {myListings.length > 0 ? (
             <p className="hint">
-              Showing indexed listings from Marketplace V2 across the configured chains. Cancel actions will switch the wallet to the listing chain when needed.
+              Showing indexed listings from Marketplace across the configured chains. Cancel actions will switch the wallet to the listing chain when needed.
             </p>
           ) : null}
         </div>

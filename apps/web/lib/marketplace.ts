@@ -97,11 +97,7 @@ export const marketplaceAbi = [
       { name: "expiresAt", type: "uint256" },
       { name: "active", type: "bool" }
     ]
-  }
-] as const;
-
-export const marketplaceV2Abi = [
-  ...marketplaceAbi,
+  },
   {
     type: "function",
     name: "nextOfferId",
@@ -270,7 +266,7 @@ export async function fetchActiveOffersBatch(params: {
 
   const nextId = (await publicClient.readContract({
     address: marketplace,
-    abi: marketplaceV2Abi,
+    abi: marketplaceAbi,
     functionName: "nextOfferId"
   })) as bigint;
 
@@ -290,7 +286,7 @@ export async function fetchActiveOffersBatch(params: {
       batch.map((id) =>
         publicClient.readContract({
           address: marketplace,
-          abi: marketplaceV2Abi,
+          abi: marketplaceAbi,
           functionName: "offers",
           args: [BigInt(id)]
         })

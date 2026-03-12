@@ -6,25 +6,17 @@ import {
 } from "./marketplacePreflight";
 
 describe("marketplacePreflight", () => {
-  it("resolves the requested marketplace address without falling back to V1", () => {
+  it("resolves the marketplace address from config", () => {
     expect(
-      resolveMarketplaceAddress(
-        {
-          marketplace: "0x0000000000000000000000000000000000000001",
-          marketplaceV2: "0x0000000000000000000000000000000000000002"
-        },
-        { preferredVersion: "v2" }
-      )
-    ).toBe("0x0000000000000000000000000000000000000002");
+      resolveMarketplaceAddress({
+        marketplace: "0x0000000000000000000000000000000000000001"
+      })
+    ).toBe("0x0000000000000000000000000000000000000001");
 
     expect(
-      resolveMarketplaceAddress(
-        {
-          marketplace: "0x0000000000000000000000000000000000000001",
-          marketplaceV2: null
-        },
-        { preferredVersion: "v2" }
-      )
+      resolveMarketplaceAddress({
+        marketplace: null
+      })
     ).toBeNull();
   });
 
@@ -32,15 +24,13 @@ describe("marketplacePreflight", () => {
     expect(() =>
       requireMarketplaceAddress(
         {
-          marketplace: "0x0000000000000000000000000000000000000001",
-          marketplaceV2: null
+          marketplace: null
         },
         {
-          preferredVersion: "v2",
-          missingMessage: "Marketplace V2 address is not configured."
+          missingMessage: "Marketplace address is not configured."
         }
       )
-    ).toThrow("Marketplace V2 address is not configured.");
+    ).toThrow("Marketplace address is not configured.");
   });
 
   it("checks the registry allowlist and skips ETH", async () => {

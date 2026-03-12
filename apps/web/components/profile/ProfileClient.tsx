@@ -174,7 +174,7 @@ export default function ProfileClient({ name }: { name: string }) {
   const { data: walletClient } = useWalletClient();
   const { switchChainAsync, switchChain } = useSwitchChain();
   const canonicalRoute = `/profile/${name}`;
-  const offerMarketplace = (config.marketplaceV2 || null) as Address | null;
+  const offerMarketplace = (config.marketplace || null) as Address | null;
 
   const [sellerAddress, setSellerAddress] = useState("");
   const [scanDepth, setScanDepth] = useState("250");
@@ -775,9 +775,9 @@ export default function ProfileClient({ name }: { name: string }) {
   }
 
   async function cancelOffer(offer: MarketplaceOffer): Promise<void> {
-    const offerMarketplace = (getContractsConfig(offer.chainId).marketplaceV2 || null) as Address | null;
+    const offerMarketplace = (getContractsConfig(offer.chainId).marketplace || null) as Address | null;
     if (!offerMarketplace) {
-      setOfferActionState(errorActionState("Marketplace V2 is not configured for this app."));
+      setOfferActionState(errorActionState("Marketplace is not configured for this app."));
       return;
     }
     if (!(await ensureChainReady(offer.chainId, `cancel offer #${offer.id}`))) {
@@ -820,9 +820,9 @@ export default function ProfileClient({ name }: { name: string }) {
   }
 
   async function acceptOffer(offer: MarketplaceOffer): Promise<void> {
-    const offerMarketplace = (getContractsConfig(offer.chainId).marketplaceV2 || null) as Address | null;
+    const offerMarketplace = (getContractsConfig(offer.chainId).marketplace || null) as Address | null;
     if (!offerMarketplace) {
-      setOfferActionState(errorActionState("Marketplace V2 is not configured for this app."));
+      setOfferActionState(errorActionState("Marketplace is not configured for this app."));
       return;
     }
     if (!(await ensureChainReady(offer.chainId, `accept offer #${offer.id}`))) {
@@ -1121,7 +1121,7 @@ export default function ProfileClient({ name }: { name: string }) {
         <div className="card formCard profileStorefrontCard">
           <SectionCardHeader
             title="Storefront Feed"
-            description="Live Marketplace V2 listings currently indexed for this profile. This stays public-facing, while holdings and listing management stay owner-scoped above."
+            description="Live Marketplace listings currently indexed for this profile. This stays public-facing, while holdings and listing management stay owner-scoped above."
             descriptionClassName="sectionLead"
           />
           <StatusStack

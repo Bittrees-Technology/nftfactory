@@ -168,14 +168,13 @@ const TRUST_PROXY = process.env.TRUST_PROXY === "true";
 const MODERATOR_REGISTRY_ADDRESS = process.env.MODERATOR_REGISTRY_ADDRESS || "";
 const REGISTRY_ADDRESS = process.env.REGISTRY_ADDRESS || process.env.NEXT_PUBLIC_REGISTRY_ADDRESS || "";
 const MARKETPLACE_ADDRESS = process.env.MARKETPLACE_ADDRESS || process.env.NEXT_PUBLIC_MARKETPLACE_ADDRESS || "";
-const MARKETPLACE_V2_ADDRESS = process.env.MARKETPLACE_V2_ADDRESS || process.env.NEXT_PUBLIC_MARKETPLACE_V2_ADDRESS || "";
 const MODERATOR_FILE = process.env.INDEXER_MODERATOR_FILE || path.join(process.cwd(), "data", "moderators.json");
 const PROFILE_FILE = process.env.INDEXER_PROFILE_FILE || path.join(process.cwd(), "data", "profiles.json");
 const PAYMENT_TOKEN_FILE = process.env.INDEXER_PAYMENT_TOKEN_FILE || path.join(process.cwd(), "data", "payment-tokens.json");
 const TOKEN_PRESENTATION_FILE =
   process.env.INDEXER_TOKEN_PRESENTATION_FILE || path.join(process.cwd(), "data", "token-presentation.json");
-const MARKETPLACE_V2_SYNC_STATE_FILE =
-  process.env.INDEXER_MARKETPLACE_V2_SYNC_STATE_FILE || path.join(process.cwd(), "data", "marketplace-v2-sync-state.json");
+const MARKETPLACE_SYNC_STATE_FILE =
+  process.env.INDEXER_MARKETPLACE_SYNC_STATE_FILE || path.join(process.cwd(), "data", "marketplace-sync-state.json");
 const ADMIN_ALLOWLIST = new Set(
   (process.env.INDEXER_ADMIN_ALLOWLIST || "")
     .split(",")
@@ -183,7 +182,7 @@ const ADMIN_ALLOWLIST = new Set(
     .filter(Boolean)
 );
 
-type MarketplaceV2SyncStateRecord = {
+type MarketplaceSyncStateRecord = {
   listingsLastBlock: string | null;
   offersLastBlock: string | null;
   updatedAt: string | null;
@@ -262,7 +261,6 @@ type RequestHandlerConfig = {
   adminAllowlist: Set<string>;
   trustProxy: boolean;
   marketplaceAddress: `0x${string}` | null;
-  marketplaceV2Address: `0x${string}` | null;
   registryAddress: `0x${string}` | null;
   moderatorRegistryAddress: `0x${string}` | null;
 };
@@ -487,11 +485,7 @@ const marketplaceReadAbi = [
       { name: "expiresAt", type: "uint256" },
       { name: "active", type: "bool" }
     ]
-  }
-] as const;
-
-const marketplaceV2ReadAbi = [
-  ...marketplaceReadAbi,
+  },
   {
     type: "function",
     name: "nextOfferId",
@@ -590,16 +584,16 @@ const marketplaceOfferAcceptedEvent = {
 
 const LISTING_SYNC_BATCH_SIZE = 20;
 const LISTING_SYNC_TTL_MS = 30_000;
-const MARKETPLACE_V2_SYNC_TTL_MS = 30_000;
+const MARKETPLACE_SYNC_TTL_MS = 30_000;
 let lastListingSyncAt = 0;
 let lastListingSyncCount = 0;
 let listingSyncPromise: Promise<void> | null = null;
-let lastMarketplaceV2ListingSyncAt = 0;
-let lastMarketplaceV2OfferSyncAt = 0;
-let lastMarketplaceV2ListingSyncCount = 0;
+let lastMarketplaceListingSyncAt = 0;
+let lastMarketplaceOfferSyncAt = 0;
+let lastMarketplaceListingSyncCount = 0;
 let lastOfferSyncCount = 0;
-let marketplaceV2ListingSyncPromise: Promise<void> | null = null;
-let marketplaceV2OfferSyncPromise: Promise<void> | null = null;
+let marketplaceListingSyncPromise: Promise<void> | null = null;
+let marketplaceOfferSyncPromise: Promise<void> | null = null;
 type ListingSnapshot = {
   listingId: string;
   amountRaw: string;
@@ -779,60 +773,60 @@ async function writeTokenPresentationRecords(records: TokenPresentationRecord[])
   await writeFile(TOKEN_PRESENTATION_FILE, JSON.stringify(records, null, 2), "utf8");
 }
 
-let marketplaceV2SyncStateCache: MarketplaceV2SyncStateRecord | null = null;
-let marketplaceV2SyncStateReadPromise: Promise<MarketplaceV2SyncStateRecord> | null = null;
-let marketplaceV2SyncStateWritePromise: Promise<MarketplaceV2SyncStateRecord> = Promise.resolve({
+let marketplaceSyncStateCache: MarketplaceSyncStateRecord | null = null;
+let marketplaceSyncStateReadPromise: Promise<MarketplaceSyncStateRecord> | null = null;
+let marketplaceSyncStateWritePromise: Promise<MarketplaceSyncStateRecord> = Promise.resolve({
   listingsLastBlock: null,
   offersLastBlock: null,
   updatedAt: null
 });
 
-async function readMarketplaceV2SyncState(): Promise<MarketplaceV2SyncStateRecord> {
-  if (marketplaceV2SyncStateCache) return marketplaceV2SyncStateCache;
-  if (marketplaceV2SyncStateReadPromise) return marketplaceV2SyncStateReadPromise;
+async function readMarketplaceSyncState(): Promise<MarketplaceSyncStateRecord> {
+  if (marketplaceSyncStateCache) return marketplaceSyncStateCache;
+  if (marketplaceSyncStateReadPromise) return marketplaceSyncStateReadPromise;
 
-  marketplaceV2SyncStateReadPromise = (async () => {
+  marketplaceSyncStateReadPromise = (async () => {
     try {
-      const raw = await readFile(MARKETPLACE_V2_SYNC_STATE_FILE, "utf8");
-      const parsed = JSON.parse(raw) as Partial<MarketplaceV2SyncStateRecord>;
-      marketplaceV2SyncStateCache = {
+      const raw = await readFile(MARKETPLACE_SYNC_STATE_FILE, "utf8");
+      const parsed = JSON.parse(raw) as Partial<MarketplaceSyncStateRecord>;
+      marketplaceSyncStateCache = {
         listingsLastBlock: typeof parsed.listingsLastBlock === "string" ? parsed.listingsLastBlock : null,
         offersLastBlock: typeof parsed.offersLastBlock === "string" ? parsed.offersLastBlock : null,
         updatedAt: typeof parsed.updatedAt === "string" ? parsed.updatedAt : null
       };
     } catch {
-      marketplaceV2SyncStateCache = {
+      marketplaceSyncStateCache = {
         listingsLastBlock: null,
         offersLastBlock: null,
         updatedAt: null
       };
     } finally {
-      marketplaceV2SyncStateReadPromise = null;
+      marketplaceSyncStateReadPromise = null;
     }
 
-    return marketplaceV2SyncStateCache;
+    return marketplaceSyncStateCache;
   })();
 
-  return marketplaceV2SyncStateReadPromise;
+  return marketplaceSyncStateReadPromise;
 }
 
-async function writeMarketplaceV2SyncState(
-  patch: Partial<Pick<MarketplaceV2SyncStateRecord, "listingsLastBlock" | "offersLastBlock">>
-): Promise<MarketplaceV2SyncStateRecord> {
-  marketplaceV2SyncStateWritePromise = marketplaceV2SyncStateWritePromise.then(async () => {
-    const current = await readMarketplaceV2SyncState();
-    const next: MarketplaceV2SyncStateRecord = {
+async function writeMarketplaceSyncState(
+  patch: Partial<Pick<MarketplaceSyncStateRecord, "listingsLastBlock" | "offersLastBlock">>
+): Promise<MarketplaceSyncStateRecord> {
+  marketplaceSyncStateWritePromise = marketplaceSyncStateWritePromise.then(async () => {
+    const current = await readMarketplaceSyncState();
+    const next: MarketplaceSyncStateRecord = {
       listingsLastBlock: patch.listingsLastBlock ?? current.listingsLastBlock ?? null,
       offersLastBlock: patch.offersLastBlock ?? current.offersLastBlock ?? null,
       updatedAt: new Date().toISOString()
     };
-    await mkdir(path.dirname(MARKETPLACE_V2_SYNC_STATE_FILE), { recursive: true });
-    await writeFile(MARKETPLACE_V2_SYNC_STATE_FILE, JSON.stringify(next, null, 2), "utf8");
-    marketplaceV2SyncStateCache = next;
+    await mkdir(path.dirname(MARKETPLACE_SYNC_STATE_FILE), { recursive: true });
+    await writeFile(MARKETPLACE_SYNC_STATE_FILE, JSON.stringify(next, null, 2), "utf8");
+    marketplaceSyncStateCache = next;
     return next;
   });
 
-  return marketplaceV2SyncStateWritePromise;
+  return marketplaceSyncStateWritePromise;
 }
 
 function parseSyncStateBlock(value: string | null | undefined): bigint | null {
@@ -976,16 +970,16 @@ function getMarketplaceAddressForVersion(
   marketplaceVersion: string | null | undefined
 ): string | null {
   return String(marketplaceVersion || "v1").toLowerCase() === "v2"
-    ? config.marketplaceV2Address || null
+    ? config.marketplaceAddress || null
     : config.marketplaceAddress || null;
 }
 
 function pickPrimaryActiveListing(
   rows: any[] | null | undefined,
-  config?: Pick<RequestHandlerConfig, "marketplaceV2Address">
+  config?: Pick<RequestHandlerConfig, "marketplaceAddress">
 ): any | null {
   if (!Array.isArray(rows) || rows.length === 0) return null;
-  const filteredRows = config?.marketplaceV2Address
+  const filteredRows = config?.marketplaceAddress
     ? rows.filter((row) => String(row?.marketplaceVersion || "v1").toLowerCase() === "v2")
     : rows;
   if (filteredRows.length === 0) return null;
@@ -1359,15 +1353,15 @@ function buildGatewayUrl(cidLike: string | null | undefined): string | null {
 
 function getPreferredPublicMarketplaceVersion(
   includeListingV2: boolean,
-  config?: Pick<RequestHandlerConfig, "marketplaceV2Address">
+  config?: Pick<RequestHandlerConfig, "marketplaceAddress">
 ): "v1" | "v2" | null {
   if (!includeListingV2) return null;
-  return config?.marketplaceV2Address ? "v2" : "v1";
+  return config?.marketplaceAddress ? "v2" : "v1";
 }
 
 function getPublicActiveListingWhere(
   includeListingV2 = true,
-  config?: Pick<RequestHandlerConfig, "marketplaceV2Address">
+  config?: Pick<RequestHandlerConfig, "marketplaceAddress">
 ): Record<string, unknown> {
   const preferredVersion = getPreferredPublicMarketplaceVersion(includeListingV2, config);
   return {
@@ -1378,7 +1372,7 @@ function getPublicActiveListingWhere(
 
 function getPublicTokenListingsWhere(
   includeListingV2: boolean,
-  config: Pick<RequestHandlerConfig, "marketplaceV2Address">,
+  config: Pick<RequestHandlerConfig, "marketplaceAddress">,
   sellerAddress?: string
 ): Record<string, unknown> {
   return {
@@ -2586,7 +2580,7 @@ async function syncMarketplaceListingsIfStale(
   await listingSyncPromise;
 }
 
-async function expireMarketplaceV2Listings(
+async function expireMarketplaceListings(
   deps: IndexerDeps,
   config: RequestHandlerConfig,
   currentUnix: bigint
@@ -2607,17 +2601,17 @@ async function expireMarketplaceV2Listings(
   });
 }
 
-async function fullSyncMarketplaceV2Listings(
+async function fullSyncMarketplaceListings(
   deps: IndexerDeps,
   config: RequestHandlerConfig,
   client: ReturnType<typeof createPublicClient>,
   currentBlock?: bigint
 ): Promise<number> {
-  if (!config.marketplaceV2Address) return 0;
+  if (!config.marketplaceAddress) return 0;
   if (!(await hasListingV2Columns(deps))) return 0;
 
   const nextListingId = (await client.readContract({
-    address: config.marketplaceV2Address as `0x${string}`,
+    address: config.marketplaceAddress as `0x${string}`,
     abi: marketplaceReadAbi,
     functionName: "nextListingId"
   })) as bigint;
@@ -2634,7 +2628,7 @@ async function fullSyncMarketplaceV2Listings(
     const rows = (await Promise.all(
       batchIds.map((id) =>
         client.readContract({
-          address: config.marketplaceV2Address as `0x${string}`,
+          address: config.marketplaceAddress as `0x${string}`,
           abi: marketplaceReadAbi,
           functionName: "listings",
           args: [BigInt(id)]
@@ -2717,52 +2711,52 @@ async function fullSyncMarketplaceV2Listings(
     }
   });
 
-  await writeMarketplaceV2SyncState({
+  await writeMarketplaceSyncState({
     listingsLastBlock: String(currentBlock ?? (await client.getBlockNumber()))
   });
 
   return activeListingIds.size;
 }
 
-async function syncMarketplaceV2Listings(
+async function syncMarketplaceListings(
   deps: IndexerDeps,
   config: RequestHandlerConfig,
   client: ReturnType<typeof createPublicClient>,
   force = false
 ): Promise<number> {
-  if (!config.marketplaceV2Address) return 0;
+  if (!config.marketplaceAddress) return 0;
   if (!(await hasListingV2Columns(deps))) return 0;
 
   const currentBlock = await client.getBlockNumber();
-  const syncState = await readMarketplaceV2SyncState();
+  const syncState = await readMarketplaceSyncState();
   const lastSyncedBlock = parseSyncStateBlock(syncState.listingsLastBlock);
   if (force || lastSyncedBlock === null) {
-    return fullSyncMarketplaceV2Listings(deps, config, client, currentBlock);
+    return fullSyncMarketplaceListings(deps, config, client, currentBlock);
   }
 
   const fromBlock = lastSyncedBlock + 1n;
   const currentUnix = BigInt(Math.floor(Date.now() / 1000));
   if (fromBlock > currentBlock) {
-    await expireMarketplaceV2Listings(deps, config, currentUnix);
-    await writeMarketplaceV2SyncState({ listingsLastBlock: String(currentBlock) });
+    await expireMarketplaceListings(deps, config, currentUnix);
+    await writeMarketplaceSyncState({ listingsLastBlock: String(currentBlock) });
     return 0;
   }
 
   const [listedLogs, cancelledLogs, saleLogs] = await Promise.all([
     getLogsChunked(client, {
-      address: config.marketplaceV2Address as `0x${string}`,
+      address: config.marketplaceAddress as `0x${string}`,
       event: marketplaceListedEvent,
       fromBlock,
       toBlock: currentBlock
     }),
     getLogsChunked(client, {
-      address: config.marketplaceV2Address as `0x${string}`,
+      address: config.marketplaceAddress as `0x${string}`,
       event: marketplaceCancelledEvent,
       fromBlock,
       toBlock: currentBlock
     }),
     getLogsChunked(client, {
-      address: config.marketplaceV2Address as `0x${string}`,
+      address: config.marketplaceAddress as `0x${string}`,
       event: marketplaceSaleEvent,
       fromBlock,
       toBlock: currentBlock
@@ -2795,8 +2789,8 @@ async function syncMarketplaceV2Listings(
   }
 
   if (affectedListingIds.size === 0) {
-    await expireMarketplaceV2Listings(deps, config, currentUnix);
-    await writeMarketplaceV2SyncState({ listingsLastBlock: String(currentBlock) });
+    await expireMarketplaceListings(deps, config, currentUnix);
+    await writeMarketplaceSyncState({ listingsLastBlock: String(currentBlock) });
     return 0;
   }
 
@@ -2806,7 +2800,7 @@ async function syncMarketplaceV2Listings(
     const rows = (await Promise.all(
       batchIds.map((id) =>
         client.readContract({
-          address: config.marketplaceV2Address as `0x${string}`,
+          address: config.marketplaceAddress as `0x${string}`,
           abi: marketplaceReadAbi,
           functionName: "listings",
           args: [BigInt(id)]
@@ -2895,12 +2889,12 @@ async function syncMarketplaceV2Listings(
     );
   }
 
-  await expireMarketplaceV2Listings(deps, config, currentUnix);
-  await writeMarketplaceV2SyncState({ listingsLastBlock: String(currentBlock) });
+  await expireMarketplaceListings(deps, config, currentUnix);
+  await writeMarketplaceSyncState({ listingsLastBlock: String(currentBlock) });
   return listingIds.length;
 }
 
-async function expireMarketplaceV2Offers(
+async function expireMarketplaceOffers(
   deps: IndexerDeps,
   config: RequestHandlerConfig,
   currentUnix: bigint
@@ -2922,32 +2916,32 @@ async function expireMarketplaceV2Offers(
   });
 }
 
-async function fullSyncMarketplaceV2Offers(
+async function fullSyncMarketplaceOffers(
   deps: IndexerDeps,
   config: RequestHandlerConfig,
   client: ReturnType<typeof createPublicClient>,
   currentBlock?: bigint
 ): Promise<number> {
-  if (!config.marketplaceV2Address) return 0;
+  if (!config.marketplaceAddress) return 0;
   if (!(await hasOfferTable(deps))) return 0;
 
   const offerDelegate = (deps.prisma as any).offer;
   if (!offerDelegate || typeof offerDelegate.upsert !== "function") return 0;
 
   const nextOfferId = (await client.readContract({
-    address: config.marketplaceV2Address as `0x${string}`,
-    abi: marketplaceV2ReadAbi,
+    address: config.marketplaceAddress as `0x${string}`,
+    abi: marketplaceReadAbi,
     functionName: "nextOfferId"
   })) as bigint;
 
   const [cancelledLogs, acceptedLogs] = await Promise.all([
     getLogsChunked(client, {
-      address: config.marketplaceV2Address as `0x${string}`,
+      address: config.marketplaceAddress as `0x${string}`,
       event: marketplaceOfferCancelledEvent,
       fromBlock: 0n
     }),
     getLogsChunked(client, {
-      address: config.marketplaceV2Address as `0x${string}`,
+      address: config.marketplaceAddress as `0x${string}`,
       event: marketplaceOfferAcceptedEvent,
       fromBlock: 0n
     })
@@ -2986,8 +2980,8 @@ async function fullSyncMarketplaceV2Offers(
     const rows = (await Promise.all(
       batchIds.map((id) =>
         client.readContract({
-          address: config.marketplaceV2Address as `0x${string}`,
-          abi: marketplaceV2ReadAbi,
+          address: config.marketplaceAddress as `0x${string}`,
+          abi: marketplaceReadAbi,
           functionName: "offers",
           args: [BigInt(id)]
         })
@@ -3077,55 +3071,55 @@ async function fullSyncMarketplaceV2Offers(
     );
   }
 
-  await writeMarketplaceV2SyncState({
+  await writeMarketplaceSyncState({
     offersLastBlock: String(currentBlock ?? (await client.getBlockNumber()))
   });
 
   return Number(nextOfferId);
 }
 
-async function syncMarketplaceV2Offers(
+async function syncMarketplaceOffers(
   deps: IndexerDeps,
   config: RequestHandlerConfig,
   client: ReturnType<typeof createPublicClient>,
   force = false
 ): Promise<number> {
-  if (!config.marketplaceV2Address) return 0;
+  if (!config.marketplaceAddress) return 0;
   if (!(await hasOfferTable(deps))) return 0;
 
   const offerDelegate = (deps.prisma as any).offer;
   if (!offerDelegate || typeof offerDelegate.upsert !== "function") return 0;
 
   const currentBlock = await client.getBlockNumber();
-  const syncState = await readMarketplaceV2SyncState();
+  const syncState = await readMarketplaceSyncState();
   const lastSyncedBlock = parseSyncStateBlock(syncState.offersLastBlock);
   if (force || lastSyncedBlock === null) {
-    return fullSyncMarketplaceV2Offers(deps, config, client, currentBlock);
+    return fullSyncMarketplaceOffers(deps, config, client, currentBlock);
   }
 
   const fromBlock = lastSyncedBlock + 1n;
   const currentUnix = BigInt(Math.floor(Date.now() / 1000));
   if (fromBlock > currentBlock) {
-    await expireMarketplaceV2Offers(deps, config, currentUnix);
-    await writeMarketplaceV2SyncState({ offersLastBlock: String(currentBlock) });
+    await expireMarketplaceOffers(deps, config, currentUnix);
+    await writeMarketplaceSyncState({ offersLastBlock: String(currentBlock) });
     return 0;
   }
 
   const [createdLogs, cancelledLogs, acceptedLogs] = await Promise.all([
     getLogsChunked(client, {
-      address: config.marketplaceV2Address as `0x${string}`,
+      address: config.marketplaceAddress as `0x${string}`,
       event: marketplaceOfferCreatedEvent,
       fromBlock,
       toBlock: currentBlock
     }),
     getLogsChunked(client, {
-      address: config.marketplaceV2Address as `0x${string}`,
+      address: config.marketplaceAddress as `0x${string}`,
       event: marketplaceOfferCancelledEvent,
       fromBlock,
       toBlock: currentBlock
     }),
     getLogsChunked(client, {
-      address: config.marketplaceV2Address as `0x${string}`,
+      address: config.marketplaceAddress as `0x${string}`,
       event: marketplaceOfferAcceptedEvent,
       fromBlock,
       toBlock: currentBlock
@@ -3165,8 +3159,8 @@ async function syncMarketplaceV2Offers(
   }
 
   if (affectedOfferIds.size === 0) {
-    await expireMarketplaceV2Offers(deps, config, currentUnix);
-    await writeMarketplaceV2SyncState({ offersLastBlock: String(currentBlock) });
+    await expireMarketplaceOffers(deps, config, currentUnix);
+    await writeMarketplaceSyncState({ offersLastBlock: String(currentBlock) });
     return 0;
   }
 
@@ -3176,8 +3170,8 @@ async function syncMarketplaceV2Offers(
     const rows = (await Promise.all(
       batchIds.map((id) =>
         client.readContract({
-          address: config.marketplaceV2Address as `0x${string}`,
-          abi: marketplaceV2ReadAbi,
+          address: config.marketplaceAddress as `0x${string}`,
+          abi: marketplaceReadAbi,
           functionName: "offers",
           args: [BigInt(id)]
         })
@@ -3267,21 +3261,19 @@ async function syncMarketplaceV2Offers(
     );
   }
 
-  await expireMarketplaceV2Offers(deps, config, currentUnix);
-  await writeMarketplaceV2SyncState({ offersLastBlock: String(currentBlock) });
+  await expireMarketplaceOffers(deps, config, currentUnix);
+  await writeMarketplaceSyncState({ offersLastBlock: String(currentBlock) });
   return offerIds.length;
 }
 
-async function syncMarketplaceV2IfStale(
+async function syncMarketplaceIfStale(
   deps: IndexerDeps,
   config: RequestHandlerConfig,
   options?: { force?: boolean; includeListings?: boolean; includeOffers?: boolean }
 ): Promise<void> {
-  if (!config.marketplaceV2Address) return;
+  if (!config.marketplaceAddress) return;
 
-  const shouldSyncListings =
-    options?.includeListings !== false &&
-    (!config.marketplaceAddress || config.marketplaceV2Address.toLowerCase() !== config.marketplaceAddress.toLowerCase());
+  const shouldSyncListings = options?.includeListings !== false;
   const shouldSyncOffers = options?.includeOffers !== false;
   if (!shouldSyncListings && !shouldSyncOffers) return;
 
@@ -3295,67 +3287,67 @@ async function syncMarketplaceV2IfStale(
   };
 
   await Promise.all([
-    shouldSyncListings ? syncMarketplaceV2ListingsIfStale(deps, config, getClient(), options?.force) : Promise.resolve(),
-    shouldSyncOffers ? syncMarketplaceV2OffersIfStale(deps, config, getClient(), options?.force) : Promise.resolve()
+    shouldSyncListings ? runMarketplaceListingSyncIfStale(deps, config, getClient(), options?.force) : Promise.resolve(),
+    shouldSyncOffers ? runMarketplaceOfferSyncIfStale(deps, config, getClient(), options?.force) : Promise.resolve()
   ]);
 }
 
-async function syncMarketplaceV2ListingsIfStale(
+async function runMarketplaceListingSyncIfStale(
   deps: IndexerDeps,
   config: RequestHandlerConfig,
   client: ReturnType<typeof createPublicClient>,
   force = false
 ): Promise<void> {
   const now = Date.now();
-  if (marketplaceV2ListingSyncPromise) {
-    await marketplaceV2ListingSyncPromise;
+  if (marketplaceListingSyncPromise) {
+    await marketplaceListingSyncPromise;
     return;
   }
-  if (!force && now - lastMarketplaceV2ListingSyncAt < MARKETPLACE_V2_SYNC_TTL_MS) {
+  if (!force && now - lastMarketplaceListingSyncAt < MARKETPLACE_SYNC_TTL_MS) {
     return;
   }
 
-  marketplaceV2ListingSyncPromise = (async () => {
+  marketplaceListingSyncPromise = (async () => {
     try {
-      lastMarketplaceV2ListingSyncCount = await syncMarketplaceV2Listings(deps, config, client, force);
-      lastMarketplaceV2ListingSyncAt = Date.now();
+      lastMarketplaceListingSyncCount = await syncMarketplaceListings(deps, config, client, force);
+      lastMarketplaceListingSyncAt = Date.now();
     } catch (err) {
-      log.warn({ err }, "marketplace_v2_listing_sync_failed");
+      log.warn({ err }, "marketplace_listing_sync_failed");
     } finally {
-      marketplaceV2ListingSyncPromise = null;
+      marketplaceListingSyncPromise = null;
     }
   })();
 
-  await marketplaceV2ListingSyncPromise;
+  await marketplaceListingSyncPromise;
 }
 
-async function syncMarketplaceV2OffersIfStale(
+async function runMarketplaceOfferSyncIfStale(
   deps: IndexerDeps,
   config: RequestHandlerConfig,
   client: ReturnType<typeof createPublicClient>,
   force = false
 ): Promise<void> {
   const now = Date.now();
-  if (marketplaceV2OfferSyncPromise) {
-    await marketplaceV2OfferSyncPromise;
+  if (marketplaceOfferSyncPromise) {
+    await marketplaceOfferSyncPromise;
     return;
   }
-  if (!force && now - lastMarketplaceV2OfferSyncAt < MARKETPLACE_V2_SYNC_TTL_MS) {
+  if (!force && now - lastMarketplaceOfferSyncAt < MARKETPLACE_SYNC_TTL_MS) {
     return;
   }
 
-  marketplaceV2OfferSyncPromise = (async () => {
+  marketplaceOfferSyncPromise = (async () => {
     try {
-      lastOfferSyncCount = await syncMarketplaceV2Offers(deps, config, client, force);
-      lastMarketplaceV2OfferSyncAt = Date.now();
+      lastOfferSyncCount = await syncMarketplaceOffers(deps, config, client, force);
+      lastMarketplaceOfferSyncAt = Date.now();
     } catch (err) {
-      log.warn({ err }, "marketplace_v2_offer_sync_failed");
+      log.warn({ err }, "marketplace_offer_sync_failed");
     } finally {
-      marketplaceV2OfferSyncPromise = null;
+      marketplaceOfferSyncPromise = null;
     }
   })();
 
-  await marketplaceV2OfferSyncPromise;
+  await marketplaceOfferSyncPromise;
 }
 
 async function syncPreferredMarketplaceIfStale(
@@ -3363,16 +3355,15 @@ async function syncPreferredMarketplaceIfStale(
   config: RequestHandlerConfig,
   options?: { includeOffers?: boolean; force?: boolean }
 ): Promise<void> {
-  if (config.marketplaceV2Address) {
-    await syncMarketplaceV2IfStale(deps, config, {
-      includeListings: true,
-      includeOffers: options?.includeOffers ?? false,
+  await syncMarketplaceListingsIfStale(deps, config, { force: options?.force });
+
+  if (config.marketplaceAddress && (options?.includeOffers ?? false)) {
+    await syncMarketplaceIfStale(deps, config, {
+      includeListings: false,
+      includeOffers: true,
       force: options?.force
     });
-    return;
   }
-
-  await syncMarketplaceListingsIfStale(deps, config, { force: options?.force });
 }
 
 async function readJsonBody<T>(req: IncomingMessage): Promise<T> {
@@ -4241,19 +4232,19 @@ async function handleRequest(
         syncInProgress: Boolean(listingSyncPromise),
         lastListingSyncAt: lastListingSyncAt > 0 ? new Date(lastListingSyncAt).toISOString() : null,
         lastListingSyncCount,
-        v2Configured: Boolean(config.marketplaceV2Address),
-        v2SyncInProgress: Boolean(marketplaceV2ListingSyncPromise || marketplaceV2OfferSyncPromise),
-        v2ListingSyncInProgress: Boolean(marketplaceV2ListingSyncPromise),
-        v2OfferSyncInProgress: Boolean(marketplaceV2OfferSyncPromise),
-        lastMarketplaceV2SyncAt:
-          Math.max(lastMarketplaceV2ListingSyncAt, lastMarketplaceV2OfferSyncAt) > 0
-            ? new Date(Math.max(lastMarketplaceV2ListingSyncAt, lastMarketplaceV2OfferSyncAt)).toISOString()
+        marketplaceConfigured: Boolean(config.marketplaceAddress),
+        marketplaceSyncInProgress: Boolean(marketplaceListingSyncPromise || marketplaceOfferSyncPromise),
+        marketplaceListingSyncInProgress: Boolean(marketplaceListingSyncPromise),
+        marketplaceOfferSyncInProgress: Boolean(marketplaceOfferSyncPromise),
+        lastMarketplaceSyncAt:
+          Math.max(lastMarketplaceListingSyncAt, lastMarketplaceOfferSyncAt) > 0
+            ? new Date(Math.max(lastMarketplaceListingSyncAt, lastMarketplaceOfferSyncAt)).toISOString()
             : null,
-        lastMarketplaceV2ListingSyncAt:
-          lastMarketplaceV2ListingSyncAt > 0 ? new Date(lastMarketplaceV2ListingSyncAt).toISOString() : null,
-        lastMarketplaceV2OfferSyncAt:
-          lastMarketplaceV2OfferSyncAt > 0 ? new Date(lastMarketplaceV2OfferSyncAt).toISOString() : null,
-        lastMarketplaceV2ListingSyncCount,
+        lastMarketplaceListingSyncAt:
+          lastMarketplaceListingSyncAt > 0 ? new Date(lastMarketplaceListingSyncAt).toISOString() : null,
+        lastMarketplaceOfferSyncAt:
+          lastMarketplaceOfferSyncAt > 0 ? new Date(lastMarketplaceOfferSyncAt).toISOString() : null,
+        lastMarketplaceListingSyncCount,
         lastOfferSyncCount
       }
     });
@@ -4947,7 +4938,7 @@ async function handleRequest(
     return;
   }
 
-  if (req.method === "POST" && (path === "/api/admin/offers/sync" || path === "/api/admin/marketplace-v2/sync")) {
+  if (req.method === "POST" && (path === "/api/admin/offers/sync" || path === "/api/admin/marketplace/sync")) {
     if (deps.isRateLimitedImpl(deps.getClientIpImpl(req, config.trustProxy))) {
       sendJson(res, 429, { error: "Too many requests" });
       return;
@@ -4957,12 +4948,12 @@ async function handleRequest(
       sendJson(res, 401, { error: auth.error });
       return;
     }
-    if (!config.marketplaceV2Address) {
-      sendJson(res, 409, { error: "Marketplace V2 sync is not configured" });
+    if (!config.marketplaceAddress) {
+      sendJson(res, 409, { error: "Marketplace sync is not configured" });
       return;
     }
     const syncOffersOnly = path === "/api/admin/offers/sync";
-    await syncMarketplaceV2IfStale(deps, config, {
+    await syncMarketplaceIfStale(deps, config, {
       force: true,
       includeListings: !syncOffersOnly,
       includeOffers: true
@@ -4970,25 +4961,25 @@ async function handleRequest(
     sendJson(res, 200, {
       ok: true,
       configured: true,
-      syncInProgress: Boolean(marketplaceV2ListingSyncPromise || marketplaceV2OfferSyncPromise),
-      listingSyncInProgress: Boolean(marketplaceV2ListingSyncPromise),
-      offerSyncInProgress: Boolean(marketplaceV2OfferSyncPromise),
-      lastMarketplaceV2SyncAt:
-        Math.max(lastMarketplaceV2ListingSyncAt, lastMarketplaceV2OfferSyncAt) > 0
-          ? new Date(Math.max(lastMarketplaceV2ListingSyncAt, lastMarketplaceV2OfferSyncAt)).toISOString()
+      syncInProgress: Boolean(marketplaceListingSyncPromise || marketplaceOfferSyncPromise),
+      listingSyncInProgress: Boolean(marketplaceListingSyncPromise),
+      offerSyncInProgress: Boolean(marketplaceOfferSyncPromise),
+      lastMarketplaceSyncAt:
+        Math.max(lastMarketplaceListingSyncAt, lastMarketplaceOfferSyncAt) > 0
+          ? new Date(Math.max(lastMarketplaceListingSyncAt, lastMarketplaceOfferSyncAt)).toISOString()
           : null,
-      lastMarketplaceV2ListingSyncAt:
-        lastMarketplaceV2ListingSyncAt > 0 ? new Date(lastMarketplaceV2ListingSyncAt).toISOString() : null,
-      lastMarketplaceV2OfferSyncAt:
-        lastMarketplaceV2OfferSyncAt > 0 ? new Date(lastMarketplaceV2OfferSyncAt).toISOString() : null,
-      lastMarketplaceV2ListingSyncCount,
+      lastMarketplaceListingSyncAt:
+        lastMarketplaceListingSyncAt > 0 ? new Date(lastMarketplaceListingSyncAt).toISOString() : null,
+      lastMarketplaceOfferSyncAt:
+        lastMarketplaceOfferSyncAt > 0 ? new Date(lastMarketplaceOfferSyncAt).toISOString() : null,
+      lastMarketplaceListingSyncCount,
       lastOfferSyncCount
     });
     return;
   }
 
   if (req.method === "GET" && path === "/api/offers") {
-    await syncMarketplaceV2IfStale(deps, config, { includeListings: false, includeOffers: true });
+    await syncMarketplaceIfStale(deps, config, { includeListings: false, includeOffers: true });
     const cursor = Math.max(0, Number.parseInt(String(url.searchParams.get("cursor") || "0"), 10) || 0);
     const limit = Math.min(100, Math.max(1, Number.parseInt(String(url.searchParams.get("limit") || "50"), 10) || 50));
     const buyerAddress = String(url.searchParams.get("buyer") || "").trim().toLowerCase();
@@ -5037,7 +5028,7 @@ async function handleRequest(
   }
 
   if (req.method === "GET" && /^\/api\/users\/[^/]+\/offers-made$/.test(path)) {
-    await syncMarketplaceV2IfStale(deps, config, { includeListings: false, includeOffers: true });
+    await syncMarketplaceIfStale(deps, config, { includeListings: false, includeOffers: true });
     const address = String(decodeURIComponent(path.split("/")[3] || "")).trim().toLowerCase();
     if (!address || !isAddress(address)) {
       sendJson(res, 400, { error: "Valid user address is required" });
@@ -5167,7 +5158,7 @@ async function handleRequest(
   }
 
   if (req.method === "GET" && /^\/api\/users\/[^/]+\/offers-received$/.test(path)) {
-    await syncMarketplaceV2IfStale(deps, config, { includeListings: false, includeOffers: true });
+    await syncMarketplaceIfStale(deps, config, { includeListings: false, includeOffers: true });
     const address = String(decodeURIComponent(path.split("/")[3] || "")).trim().toLowerCase();
     if (!address || !isAddress(address)) {
       sendJson(res, 400, { error: "Valid user address is required" });
@@ -5993,10 +5984,7 @@ async function handleRequest(
       hasTokenHoldingTable(deps)
     ]);
     if (includeAllMarkets) {
-      await Promise.all([
-        syncMarketplaceListingsIfStale(deps, config),
-        syncMarketplaceV2IfStale(deps, config, { includeListings: true, includeOffers: false })
-      ]);
+      await syncMarketplaceIfStale(deps, config, { includeListings: true, includeOffers: false });
     } else {
       await syncPreferredMarketplaceIfStale(deps, config);
     }
@@ -6316,7 +6304,7 @@ async function handleRequest(
         log.warn({ err: error, contractAddress }, "collection_token_sync_failed");
       }
     }
-    await syncMarketplaceV2IfStale(deps, config, { includeListings: true, includeOffers: true });
+    await syncMarketplaceIfStale(deps, config, { includeListings: true, includeOffers: true });
     const [includeMintTxHash, includeTokenPresentation, includeListingV2, includeTokenHoldings] = await Promise.all([
       hasMintTxHashColumn(deps),
       hasTokenPresentationColumns(deps),
@@ -6438,10 +6426,6 @@ export async function main() {
       marketplaceAddress:
         MARKETPLACE_ADDRESS && isAddress(MARKETPLACE_ADDRESS.toLowerCase())
           ? (MARKETPLACE_ADDRESS.toLowerCase() as `0x${string}`)
-          : null,
-      marketplaceV2Address:
-        MARKETPLACE_V2_ADDRESS && isAddress(MARKETPLACE_V2_ADDRESS.toLowerCase())
-          ? (MARKETPLACE_V2_ADDRESS.toLowerCase() as `0x${string}`)
           : null,
       registryAddress:
         REGISTRY_ADDRESS && isAddress(REGISTRY_ADDRESS.toLowerCase())

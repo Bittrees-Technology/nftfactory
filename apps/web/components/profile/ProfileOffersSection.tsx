@@ -59,18 +59,18 @@ export default function ProfileOffersSection({
       <h3>Offers</h3>
       {!offerMarketplace ? (
         <p className="sectionLead">
-          Wallet-to-wallet offers need `NEXT_PUBLIC_MARKETPLACE_V2_ADDRESS`. Listing activity now indexes on Marketplace V2.
+          Wallet-to-wallet offers need `NEXT_PUBLIC_MARKETPLACE_ADDRESS`. No marketplace address is configured.
         </p>
       ) : (
         <>
           <p className="sectionLead">
-            Active V2 offers tied to this profile. Indexed ownership and ERC-1155 balances are used first, with on-chain fallback only for unresolved legacy rows.
+            Active offers tied to this profile. Indexed ownership and ERC-1155 balances are used first, with on-chain fallback only for unresolved rows.
           </p>
           <StatusStack
             items={buildSectionLoadStatusItems({
               keyPrefix: "offers",
               loadState: offerLoadState,
-              loadingMessage: "Loading active offers from Marketplace V2...",
+              loadingMessage: "Loading active offers...",
               hintMessage: offerLoadHint,
               actionState: offerActionState
             })}

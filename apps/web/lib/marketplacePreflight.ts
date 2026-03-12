@@ -3,29 +3,19 @@ import { readPaymentTokenAllowed, ZERO_ADDRESS } from "./marketplace";
 
 type MarketplaceConfigLike = {
   marketplace?: string | null;
-  marketplaceV2?: string | null;
-};
-
-type ResolveMarketplaceOptions = {
-  preferredVersion: "v1" | "v2";
 };
 
 export function resolveMarketplaceAddress(
-  config: MarketplaceConfigLike,
-  { preferredVersion }: ResolveMarketplaceOptions
+  config: MarketplaceConfigLike
 ): Address | null {
-  if (preferredVersion === "v2") {
-    if (config.marketplaceV2) return config.marketplaceV2 as Address;
-    return null;
-  }
   return config.marketplace ? (config.marketplace as Address) : null;
 }
 
 export function requireMarketplaceAddress(
   config: MarketplaceConfigLike,
-  options: ResolveMarketplaceOptions & { missingMessage: string }
+  options: { missingMessage: string }
 ): Address {
-  const address = resolveMarketplaceAddress(config, options);
+  const address = resolveMarketplaceAddress(config);
   if (!address) {
     throw new Error(options.missingMessage);
   }

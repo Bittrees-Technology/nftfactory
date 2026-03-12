@@ -198,7 +198,6 @@ describe("indexer consistency hardening", () => {
         adminAllowlist: new Set(),
         trustProxy: false,
         marketplaceAddress: null,
-        marketplaceV2Address: null,
         registryAddress: null,
         moderatorRegistryAddress: null
       }
@@ -314,7 +313,6 @@ describe("indexer consistency hardening", () => {
         adminAllowlist: new Set(),
         trustProxy: false,
         marketplaceAddress: null,
-        marketplaceV2Address: null,
         registryAddress: "0x1111111111111111111111111111111111111111",
         moderatorRegistryAddress: null
       }
@@ -439,7 +437,6 @@ describe("indexer consistency hardening", () => {
         adminAllowlist: new Set(),
         trustProxy: false,
         marketplaceAddress: null,
-        marketplaceV2Address: null,
         registryAddress: null,
         moderatorRegistryAddress: null
       }
@@ -559,7 +556,6 @@ describe("indexer consistency hardening", () => {
         adminAllowlist: new Set(),
         trustProxy: false,
         marketplaceAddress: "0x4444444444444444444444444444444444444444",
-        marketplaceV2Address: null,
         registryAddress: null,
         moderatorRegistryAddress: null
       }
@@ -693,7 +689,6 @@ describe("indexer consistency hardening", () => {
         adminAllowlist: new Set(),
         trustProxy: false,
         marketplaceAddress: "0x4444444444444444444444444444444444444444",
-        marketplaceV2Address: null,
         registryAddress: null,
         moderatorRegistryAddress: null
       }
@@ -720,7 +715,7 @@ describe("indexer consistency hardening", () => {
     });
   });
 
-  it("syncs marketplace v2 listings and offers from the admin endpoint", async () => {
+  it("syncs marketplace listings and offers from the admin endpoint", async () => {
     readContractMock.mockImplementation(async ({ address, functionName, args }) => {
       const normalizedAddress = String(address).toLowerCase();
       if (normalizedAddress !== "0x5555555555555555555555555555555555555555") {
@@ -784,8 +779,7 @@ describe("indexer consistency hardening", () => {
         adminToken: "secret",
         adminAllowlist: new Set(),
         trustProxy: false,
-        marketplaceAddress: null,
-        marketplaceV2Address: "0x5555555555555555555555555555555555555555",
+        marketplaceAddress: "0x5555555555555555555555555555555555555555",
         registryAddress: null,
         moderatorRegistryAddress: null
       }
@@ -795,14 +789,14 @@ describe("indexer consistency hardening", () => {
       handler,
       createReq({
         method: "POST",
-        url: "/api/admin/marketplace-v2/sync",
+        url: "/api/admin/marketplace/sync",
         headers: { authorization: "Bearer secret" }
       })
     );
 
     expect(response.status).toBe(200);
     expect(response.body.ok).toBe(true);
-    expect(response.body.lastMarketplaceV2ListingSyncCount).toBe(1);
+    expect(response.body.lastMarketplaceListingSyncCount).toBe(1);
     expect(response.body.lastOfferSyncCount).toBe(1);
     expect((prisma.listing.upsert as any).mock.calls[0][0]).toMatchObject({
       where: { listingId: "v2:0" },
@@ -825,7 +819,7 @@ describe("indexer consistency hardening", () => {
 
   it("does not let a recent v2 offer sync suppress listing sync", async () => {
     const tempDir = await mkdtemp(path.join(os.tmpdir(), "nftfactory-indexer-sync-state-"));
-    vi.stubEnv("INDEXER_MARKETPLACE_V2_SYNC_STATE_FILE", path.join(tempDir, "marketplace-v2-sync-state.json"));
+    vi.stubEnv("INDEXER_MARKETPLACE_SYNC_STATE_FILE", path.join(tempDir, "marketplace-sync-state.json"));
     readContractMock.mockImplementation(async ({ functionName, args }) => {
       if (functionName === "nextOfferId") return 1n;
       if (functionName === "offers" && String(args?.[0]) === "0") {
@@ -891,8 +885,7 @@ describe("indexer consistency hardening", () => {
         adminToken: "",
         adminAllowlist: new Set(),
         trustProxy: false,
-        marketplaceAddress: null,
-        marketplaceV2Address: "0x5555555555555555555555555555555555555555",
+        marketplaceAddress: "0x5555555555555555555555555555555555555555",
         registryAddress: null,
         moderatorRegistryAddress: null
       }
@@ -1004,8 +997,7 @@ describe("indexer consistency hardening", () => {
         adminToken: "secret",
         adminAllowlist: new Set(),
         trustProxy: false,
-        marketplaceAddress: null,
-        marketplaceV2Address: "0x5555555555555555555555555555555555555555",
+        marketplaceAddress: "0x5555555555555555555555555555555555555555",
         registryAddress: null,
         moderatorRegistryAddress: null
       }
@@ -1155,7 +1147,6 @@ describe("indexer consistency hardening", () => {
         adminAllowlist: new Set(),
         trustProxy: false,
         marketplaceAddress: null,
-        marketplaceV2Address: null,
         registryAddress: null,
         moderatorRegistryAddress: null
       }
@@ -1183,7 +1174,7 @@ describe("indexer consistency hardening", () => {
 
   it("incrementally syncs only changed v2 listings after a checkpoint exists", async () => {
     const tempDir = await mkdtemp(path.join(os.tmpdir(), "nftfactory-indexer-sync-state-"));
-    vi.stubEnv("INDEXER_MARKETPLACE_V2_SYNC_STATE_FILE", path.join(tempDir, "marketplace-v2-sync-state.json"));
+    vi.stubEnv("INDEXER_MARKETPLACE_SYNC_STATE_FILE", path.join(tempDir, "marketplace-sync-state.json"));
 
     let phase: 1 | 2 = 1;
     const nowSpy = vi.spyOn(Date, "now");
@@ -1263,8 +1254,7 @@ describe("indexer consistency hardening", () => {
         adminToken: "secret",
         adminAllowlist: new Set(),
         trustProxy: false,
-        marketplaceAddress: null,
-        marketplaceV2Address: "0x5555555555555555555555555555555555555555",
+        marketplaceAddress: "0x5555555555555555555555555555555555555555",
         registryAddress: null,
         moderatorRegistryAddress: null
       }
@@ -1274,7 +1264,7 @@ describe("indexer consistency hardening", () => {
       handler,
       createReq({
         method: "POST",
-        url: "/api/admin/marketplace-v2/sync",
+        url: "/api/admin/marketplace/sync",
         headers: { authorization: "Bearer secret" }
       })
     );
@@ -1303,7 +1293,7 @@ describe("indexer consistency hardening", () => {
 
   it("incrementally syncs only changed v2 offers after a checkpoint exists", async () => {
     const tempDir = await mkdtemp(path.join(os.tmpdir(), "nftfactory-indexer-sync-state-"));
-    vi.stubEnv("INDEXER_MARKETPLACE_V2_SYNC_STATE_FILE", path.join(tempDir, "marketplace-v2-sync-state.json"));
+    vi.stubEnv("INDEXER_MARKETPLACE_SYNC_STATE_FILE", path.join(tempDir, "marketplace-sync-state.json"));
 
     let phase: 1 | 2 = 1;
     const nowSpy = vi.spyOn(Date, "now");
@@ -1379,8 +1369,7 @@ describe("indexer consistency hardening", () => {
         adminToken: "secret",
         adminAllowlist: new Set(),
         trustProxy: false,
-        marketplaceAddress: null,
-        marketplaceV2Address: "0x5555555555555555555555555555555555555555",
+        marketplaceAddress: "0x5555555555555555555555555555555555555555",
         registryAddress: null,
         moderatorRegistryAddress: null
       }
@@ -1465,7 +1454,6 @@ describe("indexer consistency hardening", () => {
         adminAllowlist: new Set(),
         trustProxy: false,
         marketplaceAddress: null,
-        marketplaceV2Address: null,
         registryAddress: null,
         moderatorRegistryAddress: null
       }
@@ -1580,7 +1568,6 @@ describe("indexer consistency hardening", () => {
         adminAllowlist: new Set(),
         trustProxy: false,
         marketplaceAddress: null,
-        marketplaceV2Address: null,
         registryAddress: null,
         moderatorRegistryAddress: null
       }
@@ -1685,7 +1672,6 @@ describe("indexer consistency hardening", () => {
         adminAllowlist: new Set(),
         trustProxy: false,
         marketplaceAddress: null,
-        marketplaceV2Address: null,
         registryAddress: null,
         moderatorRegistryAddress: null
       }
@@ -1845,7 +1831,6 @@ describe("indexer consistency hardening", () => {
         adminAllowlist: new Set(),
         trustProxy: false,
         marketplaceAddress: null,
-        marketplaceV2Address: null,
         registryAddress: null,
         moderatorRegistryAddress: null
       }
@@ -2040,7 +2025,6 @@ describe("indexer consistency hardening", () => {
         adminAllowlist: new Set(),
         trustProxy: false,
         marketplaceAddress: null,
-        marketplaceV2Address: null,
         registryAddress: null,
         moderatorRegistryAddress: null
       }
@@ -2232,7 +2216,6 @@ describe("indexer consistency hardening", () => {
         adminAllowlist: new Set(),
         trustProxy: false,
         marketplaceAddress: null,
-        marketplaceV2Address: null,
         registryAddress: null,
         moderatorRegistryAddress: null
       }
@@ -2339,7 +2322,6 @@ describe("indexer consistency hardening", () => {
         adminAllowlist: new Set(),
         trustProxy: false,
         marketplaceAddress: null,
-        marketplaceV2Address: null,
         registryAddress: "0x1111111111111111111111111111111111111111",
         moderatorRegistryAddress: "0x2222222222222222222222222222222222222222"
       }
@@ -2527,7 +2509,6 @@ describe("indexer consistency hardening", () => {
         adminAllowlist: new Set(),
         trustProxy: false,
         marketplaceAddress: null,
-        marketplaceV2Address: null,
         registryAddress: null,
         moderatorRegistryAddress: null
       }
@@ -2720,7 +2701,6 @@ describe("indexer consistency hardening", () => {
         adminAllowlist: new Set(),
         trustProxy: false,
         marketplaceAddress: null,
-        marketplaceV2Address: null,
         registryAddress: null,
         moderatorRegistryAddress: null
       }
@@ -2812,7 +2792,6 @@ describe("indexer consistency hardening", () => {
         adminAllowlist: new Set(),
         trustProxy: false,
         marketplaceAddress: null,
-        marketplaceV2Address: null,
         registryAddress: null,
         moderatorRegistryAddress: null
       }
@@ -2899,7 +2878,6 @@ describe("indexer consistency hardening", () => {
         adminAllowlist: new Set(),
         trustProxy: false,
         marketplaceAddress: null,
-        marketplaceV2Address: null,
         registryAddress: null,
         moderatorRegistryAddress: null
       }
@@ -2995,7 +2973,6 @@ describe("indexer consistency hardening", () => {
         adminAllowlist: new Set(),
         trustProxy: false,
         marketplaceAddress: null,
-        marketplaceV2Address: null,
         registryAddress: null,
         moderatorRegistryAddress: null
       }
@@ -3083,7 +3060,6 @@ describe("indexer consistency hardening", () => {
         adminAllowlist: new Set(),
         trustProxy: false,
         marketplaceAddress: null,
-        marketplaceV2Address: null,
         registryAddress: null,
         moderatorRegistryAddress: null
       }

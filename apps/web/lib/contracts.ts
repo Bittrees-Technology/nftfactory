@@ -13,7 +13,6 @@ export type ContractsConfig = {
   registry: `0x${string}`;
   royaltySplitRegistry?: `0x${string}`;
   marketplace: `0x${string}`;
-  marketplaceV2?: `0x${string}`;
   shared721: `0x${string}`;
   shared1155: `0x${string}`;
   subnameRegistrar: `0x${string}`;
@@ -85,7 +84,6 @@ export function getContractsConfig(chainId = getPrimaryAppChainId()): ContractsC
     registry: requireScopedAddress("NEXT_PUBLIC_REGISTRY_ADDRESS", chainId),
     royaltySplitRegistry: optionalScopedAddress("NEXT_PUBLIC_ROYALTY_SPLIT_REGISTRY_ADDRESS", chainId),
     marketplace: requireScopedAddress("NEXT_PUBLIC_MARKETPLACE_ADDRESS", chainId),
-    marketplaceV2: optionalScopedAddress("NEXT_PUBLIC_MARKETPLACE_V2_ADDRESS", chainId),
     shared721: requireScopedAddress("NEXT_PUBLIC_SHARED_721_ADDRESS", chainId),
     shared1155: requireScopedAddress("NEXT_PUBLIC_SHARED_1155_ADDRESS", chainId),
     subnameRegistrar: requireScopedAddress("NEXT_PUBLIC_SUBNAME_REGISTRAR_ADDRESS", chainId),

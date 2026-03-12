@@ -3,7 +3,7 @@ import { getListingPresentation, type ListingViewModel } from "./listingPresenta
 
 function listing(overrides: Partial<ListingViewModel> = {}): ListingViewModel {
   return {
-    key: "1:v2:11",
+    key: "1:listing:11",
     chainId: 1,
     id: 11,
     seller: "0x0000000000000000000000000000000000000001",
@@ -18,7 +18,6 @@ function listing(overrides: Partial<ListingViewModel> = {}): ListingViewModel {
     draftName: "Edition Seven",
     draftDescription: "Profile storefront edition",
     ensSubname: "artist",
-    marketplaceVersion: "v2",
     ...overrides
   };
 }
@@ -29,8 +28,8 @@ describe("listingPresentation", () => {
     expect(presentation.collectionIdentity).toBe("artist.nftfactory.eth");
     expect(presentation.title).toBe("Edition Seven");
     expect(presentation.description).toBe("Profile storefront edition");
-    expect(presentation.marketLabel).toBe("Marketplace V2");
-    expect(presentation.listingLabel).toBe("Listing #11 · Marketplace V2");
+    expect(presentation.marketLabel).toBe("Marketplace");
+    expect(presentation.listingLabel).toBe("Listing #11 · Marketplace");
     expect(presentation.amountLabel).toBe("2 editions listed");
     expect(presentation.priceLabel).toBe("0.01 ETH");
   });
@@ -43,13 +42,12 @@ describe("listingPresentation", () => {
         amount: 1n,
         draftName: null,
         draftDescription: null,
-        ensSubname: null,
-        marketplaceVersion: "v1"
+        ensSubname: null
       })
     );
     expect(presentation.title).toBe("NFTFactory mint");
     expect(presentation.description).toBe("Collection untitled · token #7");
-    expect(presentation.marketLabel).toBe("Legacy Marketplace V1");
+    expect(presentation.marketLabel).toBe("Marketplace");
     expect(presentation.amountLabel).toBe("1 of 1");
   });
 });

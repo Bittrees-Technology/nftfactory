@@ -143,7 +143,7 @@ export default function ProfileHoldingsSection({
           <div className="card formCard">
             <SectionCardHeader
               title="Listing Management"
-              description="Manage inventory and Marketplace V2 listings directly from this profile. Collection tools stay in Mint, but listing actions now live here."
+              description="Manage inventory and Marketplace listings directly from this profile. Collection tools stay in Mint, but listing actions now live here."
               descriptionClassName="sectionLead"
               actions={
                 <>

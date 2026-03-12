@@ -204,7 +204,7 @@ export default function ProfileHeroSections({
                 />
                 <DetailGridItem
                   label="Market"
-                  value={featuredListingPresentation?.marketLabel || "Marketplace V2"}
+                  value={featuredListingPresentation?.marketLabel || "Marketplace"}
                 />
                 <DetailGridItem
                   label="Ends"
