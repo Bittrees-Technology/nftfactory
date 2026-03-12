@@ -16,6 +16,7 @@ import { existsSync, readFileSync, writeFileSync, unlinkSync } from "fs";
 import { resolve } from "path";
 import { PrismaClient } from "@prisma/client";
 import { createPublicClient, http, isAddress } from "viem";
+import { sepolia } from "viem/chains";
 
 const REGISTRY_ADDRESS = process.env.REGISTRY_ADDRESS || "";
 const RPC_URL = process.env.RPC_URL || "";
@@ -474,7 +475,7 @@ async function main() {
     throw new Error("Missing RPC_URL");
   }
 
-  const client = createPublicClient({ transport: http(RPC_URL) });
+  const client = createPublicClient({ chain: sepolia, transport: http(RPC_URL) });
 
   console.log(`Registry backfill`);
   console.log(`  Registry : ${REGISTRY_ADDRESS}`);
@@ -496,6 +497,7 @@ async function main() {
     ensSubname: string;
     standard: string;
     isNftFactoryCreated: boolean;
+    registeredAtBlock: bigint;
   }>();
 
   for (const log of registryLogs) {
@@ -507,13 +509,14 @@ async function main() {
       contractAddress: addr,
       ensSubname: String(log.args?.ensSubname || "").trim(),
       standard: String(log.args?.standard || "").trim().toUpperCase(),
-      isNftFactoryCreated: Boolean(log.args?.isNftFactoryCreated)
+      isNftFactoryCreated: Boolean(log.args?.isNftFactoryCreated),
+      registeredAtBlock: BigInt(log.blockNumber ?? FROM_BLOCK)
     });
   }
 
   console.log(`\nDiscovered ${collectionMap.size} collections:`);
   for (const c of collectionMap.values()) {
-    console.log(`  ${c.contractAddress} (${c.standard || "?"}) creator=${c.creator} ens=${c.ensSubname || "-"} factory=${c.isNftFactoryCreated}`);
+    console.log(`  ${c.contractAddress} (${c.standard || "?"}) creator=${c.creator} ens=${c.ensSubname || "-"} factory=${c.isNftFactoryCreated} block=${c.registeredAtBlock}`);
   }
 
   if (collectionMap.size === 0) {
@@ -535,9 +538,10 @@ async function main() {
       skipped++;
       continue;
     }
-    console.log(`\n► ${addr} (${collection.standard})`);
+    const scanFrom = collection.registeredAtBlock > 0n ? collection.registeredAtBlock : FROM_BLOCK;
+    console.log(`\n► ${addr} (${collection.standard}) scanning from block ${scanFrom}`);
     try {
-      const { scanned, upserted } = await backfillCollection(client, collection, FROM_BLOCK);
+      const { scanned, upserted } = await backfillCollection(client, collection, scanFrom);
       totalScanned += scanned;
       totalUpserted += upserted;
       console.log(`  ✓ scanned=${scanned} upserted=${upserted}`);
