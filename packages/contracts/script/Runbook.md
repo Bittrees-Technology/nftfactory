@@ -25,6 +25,25 @@ forge script script/Deploy.s.sol:DeployScript \
   --etherscan-api-key $ETHERSCAN_API_KEY -vvv
 ```
 
+## Verify creator collection implementations
+After deployment, verify the shared creator implementations so collection proxy verification can resolve against verified source:
+
+```bash
+cd /home/robert/nftfactory/packages/contracts
+source .env
+./script/VerifyCreatorImplementations.sh 11155111
+```
+
+This reads the latest `Deploy.s.sol` broadcast artifact for the target chain and verifies:
+- `CreatorCollection721`
+- `CreatorCollection1155`
+
+If you need a non-default artifact, set:
+
+```bash
+BROADCAST_FILE=broadcast/Deploy.s.sol/<chainId>/run-<timestamp>.json
+```
+
 ## Transfer ownerships to Safe
 Set `OWNABLE_ADDRESSES` as comma-separated contract addresses.
 

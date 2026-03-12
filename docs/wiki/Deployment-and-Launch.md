@@ -56,6 +56,8 @@ Before calling a release candidate stable, validate on Sepolia:
 - wallet connection
 - shared mint publish
 - creator collection deploy and mint
+- creator collection implementation verification
+- creator collection proxy verification from `Manage Collection -> Verification`
 - collection management actions
 - collection royalty split policy writes and reloads
 - profile setup and public profile resolution
@@ -107,6 +109,7 @@ Before deployment or release validation:
 
 - [ ] deployer or Safe is funded
 - [ ] RPC endpoints are valid
+- [ ] `ETHERSCAN_API_KEY` is present wherever contract or proxy verification should run
 - [ ] web and indexer point to the same chain
 - [ ] `NEXT_PUBLIC_*` contract addresses match the intended deployment
 - [ ] `REGISTRY_ADDRESS` and `MARKETPLACE_ADDRESS` are set in the indexer env
@@ -125,6 +128,8 @@ Before deployment or release validation:
 - [ ] `npm run test:web` passes
 - [ ] `npm run test:contracts` passes
 - [ ] current env addresses are verified against the deployed contracts
+- [ ] creator collection implementations are verified on the explorer
+- [ ] fresh creator collection proxies can be verified from the web app
 - [ ] admin backfill and listing-sync tools behave as expected
 - [ ] profile, discover, and moderation routes are stable
 - [ ] protocol ownership is transferred where required

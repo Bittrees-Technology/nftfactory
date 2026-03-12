@@ -31,13 +31,9 @@ npm run test:web
 Then manually validate:
 
 - `/mint`
-- `/list`
-- `/discover`
 - `/profile`
 - `/profile/setup`
 - `/profile/[name]`
-- `/mod`
-- `/admin`
 
 ## 3. Indexer validation
 
@@ -64,6 +60,8 @@ For a deployed network, verify:
 
 - code exists at the configured addresses
 - registry, marketplace, and factory addresses match the env files
+- creator collection implementations are verified on the explorer
+- newly deployed creator collection proxies verify successfully from the web UI
 - key owners and pointers match expectations
 
 Typical checks:
@@ -94,13 +92,11 @@ Use this as the acceptance path:
 1. connect wallet on Sepolia
 2. publish through shared mint
 3. deploy or select a creator collection
-4. mint into the creator collection
-5. create or link a creator profile
-6. open the public profile route
-7. create a listing
-8. verify discovery
-9. submit and resolve a moderation action
-10. confirm admin recovery actions if the index is intentionally lagged
+4. verify the creator implementation contracts on the explorer
+5. open `Manage Collection -> Verification` and verify a fresh collection proxy
+6. mint into the creator collection
+7. create or link a creator profile
+8. open the public profile route
 
 ## Validation rhythm
 
