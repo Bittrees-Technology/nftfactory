@@ -115,6 +115,12 @@ Use the dedicated runbook:
 
 - [IPFS Upload Failure Triage](./IPFS-Upload-Failure-Triage.md)
 
+## Historical recovery
+
+If older collections or tokens are missing from the indexer, or historical metadata needs to be re-pinned into Kubo, use the exact recovery commands in:
+
+- [Infrastructure and Operations -> Historical recovery](./Infrastructure-and-Operations.md#historical-recovery)
+
 ## Planned redundancy
 
 This is intentionally **tabled for later**, not part of the current live deployment.

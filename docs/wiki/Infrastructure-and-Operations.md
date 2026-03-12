@@ -252,6 +252,59 @@ Check:
 
 The current build has explicit long-running backfill routes. If HTTP is still unreliable for a large recovery job, use the standalone indexer script path from `services/indexer/scripts` instead of keeping the browser request open.
 
+## Historical recovery
+
+Use this when older collections or tokens are missing from the indexer, or when historical metadata needs to be re-pinned into Kubo.
+
+Preconditions:
+
+- PostgreSQL is reachable on the configured `DATABASE_URL`
+- the Sepolia RPC endpoint in `services/indexer/.env` is reachable
+- the Kubo API is reachable on the configured IPFS endpoint
+
+Historical registry backfill:
+
+```bash
+cd /home/robert/nftfactory
+npm --workspace services/indexer run admin:backfill-registry -- 10359500
+```
+
+Notes:
+
+- `10359500` is the current documented Sepolia registry deployment block for the historical recovery pass
+- the backfill now scans each collection from its own `CreatorRegistered` block instead of rescanning from the global start block
+
+Reseed indexed metadata/media CIDs into Kubo:
+
+```bash
+cd /home/robert/nftfactory
+npm --workspace services/indexer run admin:seed-ipfs-cids
+```
+
+Useful variants:
+
+```bash
+cd /home/robert/nftfactory
+npm --workspace services/indexer run admin:seed-ipfs-cids -- --dry-run
+```
+
+```bash
+cd /home/robert/nftfactory
+npm --workspace services/indexer run admin:seed-ipfs-cids -- --from-report
+```
+
+Outputs:
+
+- CID reseed report:
+  - `services/indexer/data/ipfs-seed-report.json`
+
+Recommended sequence:
+
+1. Run `admin:backfill-registry`
+2. Confirm the expected collections/tokens are now present in the DB
+3. Run `admin:seed-ipfs-cids`
+4. Verify the updated CID report shows `failed: 0`
+
 ## Related pages
 
 - [Architecture](./Architecture.md)

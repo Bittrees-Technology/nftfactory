@@ -16,7 +16,7 @@ import { existsSync, readFileSync, writeFileSync, unlinkSync } from "fs";
 import { resolve } from "path";
 import { PrismaClient } from "@prisma/client";
 import { createPublicClient, http, isAddress } from "viem";
-import { sepolia } from "viem/chains";
+import { getCollectionScanFromBlock, getRegistryBackfillChain } from "../src/registryBackfill.js";
 
 const REGISTRY_ADDRESS = process.env.REGISTRY_ADDRESS || "";
 const RPC_URL = process.env.RPC_URL || "";
@@ -475,7 +475,7 @@ async function main() {
     throw new Error("Missing RPC_URL");
   }
 
-  const client = createPublicClient({ chain: sepolia, transport: http(RPC_URL) });
+  const client = createPublicClient({ chain: getRegistryBackfillChain(CHAIN_ID), transport: http(RPC_URL) });
 
   console.log(`Registry backfill`);
   console.log(`  Registry : ${REGISTRY_ADDRESS}`);
@@ -538,7 +538,7 @@ async function main() {
       skipped++;
       continue;
     }
-    const scanFrom = collection.registeredAtBlock > 0n ? collection.registeredAtBlock : FROM_BLOCK;
+    const scanFrom = getCollectionScanFromBlock(collection.registeredAtBlock, FROM_BLOCK);
     console.log(`\n► ${addr} (${collection.standard}) scanning from block ${scanFrom}`);
     try {
       const { scanned, upserted } = await backfillCollection(client, collection, scanFrom);
