@@ -114,6 +114,11 @@ const nextConfig: NextConfig = {
   },
   outputFileTracingRoot: path.join(__dirname, "../.."),
   allowedDevOrigins: ["192.168.1.115", "localhost", "127.0.0.1"],
+  // Tree-shake large barrel packages so webpack only resolves the named exports
+  // actually used. Dramatically reduces the module graph for wagmi/viem/rainbowkit.
+  experimental: {
+    optimizePackageImports: ["wagmi", "viem", "@wagmi/core", "@rainbow-me/rainbowkit"]
+  },
   webpack: (config) => {
     config.resolve = config.resolve || {};
     config.resolve.alias = {
@@ -121,6 +126,9 @@ const nextConfig: NextConfig = {
       "@react-native-async-storage/async-storage": false,
       "pino-pretty": false
     };
+    // Limit concurrent module builds to reduce peak heap on memory-constrained
+    // hosts (e.g. Raspberry Pi running a dev server in parallel).
+    config.parallelism = 1;
     return config;
   }
 };
