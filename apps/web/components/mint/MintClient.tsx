@@ -25,6 +25,7 @@ import {
   type DeployCollectionArgs,
   type RoyaltySplitArgs
 } from "../../lib/creatorCollection";
+import { verifyCollectionContract } from "../../lib/collectionVerificationApi";
 import { getContractsConfig } from "../../lib/contracts";
 import { anvil, getAppChain, getExplorerBaseUrl, getPrimaryAppChainId } from "../../lib/chains";
 import {
@@ -61,6 +62,13 @@ type TxState = {
   status: "idle" | "pending" | "success" | "error";
   hash?: string;
   message?: string;
+};
+
+type CollectionVerificationTxState = {
+  status: "idle" | "pending" | "success" | "error";
+  message?: string;
+  explorerUrl?: string | null;
+  implementationAddress?: string | null;
 };
 
 type UploadReceipt = {
@@ -741,6 +749,9 @@ export default function MintClient({
   const [deployRoyaltyReceiver, setDeployRoyaltyReceiver] = useState("");
   const [deployRoyaltyBps, setDeployRoyaltyBps] = useState("500");
   const [deployTx, setDeployTx] = useState<TxState>({ status: "idle" });
+  const [collectionVerificationTx, setCollectionVerificationTx] = useState<CollectionVerificationTxState>({
+    status: "idle"
+  });
   const [networkSwitchMessage, setNetworkSwitchMessage] = useState("");
   const [requestedWalletNetworkId, setRequestedWalletNetworkId] = useState<string | null>(null);
 
@@ -1426,6 +1437,7 @@ export default function MintClient({
   useEffect(() => {
     setRoyaltyTx({ status: "idle" });
     setRoyaltySplitTx({ status: "idle" });
+    setCollectionVerificationTx({ status: "idle" });
   }, [manageAddress]);
 
   useEffect(() => {
@@ -1489,6 +1501,36 @@ export default function MintClient({
   async function waitForReceipt(hash: `0x${string}`) {
     if (!publicClient) throw new Error("Public client unavailable — reconnect wallet.");
     return publicClient.waitForTransactionReceipt({ hash: hash as Hex });
+  }
+
+  async function runCollectionVerification(
+    collectionAddress: `0x${string}`,
+    standardToVerify: Standard
+  ): Promise<void> {
+    setCollectionVerificationTx({
+      status: "pending",
+      message: "Submitting proxy verification to the explorer…"
+    });
+
+    try {
+      const result = await verifyCollectionContract({
+        chainId: config.chainId,
+        collectionAddress,
+        standard: standardToVerify
+      });
+
+      setCollectionVerificationTx({
+        status: result.state === "verified" ? "success" : result.state === "pending" ? "pending" : "error",
+        message: result.message,
+        explorerUrl: result.explorerUrl,
+        implementationAddress: result.implementationAddress || null
+      });
+    } catch (error) {
+      setCollectionVerificationTx({
+        status: "error",
+        message: error instanceof Error ? error.message : "Collection verification failed."
+      });
+    }
   }
 
   // ── Upload metadata to IPFS ───────────────────────────────────────────────
@@ -1604,6 +1646,7 @@ export default function MintClient({
           message: `Collection deployed at ${deployed}. Address auto-filled above.`
         });
         setShowDeployForm(false);
+        void runCollectionVerification(deployed, standard);
       } else {
         setDeployTx({
           status: "success",
@@ -2694,6 +2737,9 @@ export default function MintClient({
                       {deployTx.status === "pending" ? "Deploying…" : `Deploy ${standard} Collection`}
                     </button>
                     <TxStatus state={deployTx} />
+                    <p className="hint">
+                      New creator collections automatically submit explorer proxy verification after deployment. You can retry or inspect verification from <strong>Manage Collection → Verification</strong>.
+                    </p>
                   </div>
                 </details>
               </>
@@ -3159,8 +3205,8 @@ export default function MintClient({
           <div className="card formCard">
             <h3>2. Verification</h3>
             <p className="hint">
-              Creator collections are deployed as upgradeable proxy contracts. Explorers often show the proxy address
-              first, so use the links below to inspect both the collection proxy and the current factory implementation.
+              Creator collections are deployed as ERC-1967 proxies. This action submits proxy verification to the explorer
+              so the collection address resolves to verified source instead of only showing the raw proxy shell.
             </p>
             <div className="selectionCard">
               <p><strong>Collection proxy</strong></p>
@@ -3190,6 +3236,34 @@ export default function MintClient({
                   The implementation link appears once the app confirms the selected collection standard on-chain.
                 </p>
               )}
+              <div className="row" style={{ alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  className="secondaryButton"
+                  disabled={!isAddress(manageAddress) || !manageCollectionStandard || collectionVerificationTx.status === "pending"}
+                  onClick={() => {
+                    if (!isAddress(manageAddress) || !manageCollectionStandard) return;
+                    void runCollectionVerification(manageAddress, manageCollectionStandard);
+                  }}
+                >
+                  {collectionVerificationTx.status === "pending" ? "Submitting Verification…" : "Verify on Explorer"}
+                </button>
+                {collectionVerificationTx.explorerUrl ? (
+                  <a href={collectionVerificationTx.explorerUrl} target="_blank" rel="noreferrer" className="ctaLink secondaryLink">
+                    Open Code View
+                  </a>
+                ) : null}
+              </div>
+              {collectionVerificationTx.message ? (
+                <p className={collectionVerificationTx.status === "error" ? "error" : "hint"}>
+                  {collectionVerificationTx.message}
+                </p>
+              ) : null}
+              {collectionVerificationTx.implementationAddress ? (
+                <p className="hint mono">
+                  Expected implementation: {collectionVerificationTx.implementationAddress}
+                </p>
+              ) : null}
             </div>
           </div>
 
