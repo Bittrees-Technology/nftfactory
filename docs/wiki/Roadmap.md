@@ -15,7 +15,7 @@ Live today:
 
 The focus is hardening the existing build, not broad feature expansion.
 
-## Current audit (March 5, 2026)
+## Current audit (March 25, 2026)
 
 Validated in-repo today:
 
@@ -24,12 +24,13 @@ Validated in-repo today:
 - [x] `npm run test:web`
 - [x] `npm run test:indexer`
 - [x] `npm run test:contracts`
-- [ ] `npm run build:web` (intermittent `/_document` page collection failure; not stable yet)
+- [x] `npm run build:web` when the required public build env vars are provided
 
 Notes:
 
-- Web production build still intermittently fails with a Next.js `/_document` page collection error during `Collecting page data`; pages fallbacks were added under `apps/web/pages/*` but this is not fully resolved yet.
-- Primary release risk is now split between this flaky production build step and remaining integration/environment validation.
+- The previously documented intermittent `/_document` production-build failure did not reproduce in the current local validation pass once the required `NEXT_PUBLIC_*` build env vars were present.
+- Primary release risk is now environment correctness and deployed-network validation, not a confirmed reproducible local build failure.
+- Contract validation now succeeds through the repo scripts, but contributor setup still depends on Foundry being installed and reachable either on `PATH` or through `FOUNDRY_FORGE_BIN`.
 
 ## Active release work
 
@@ -56,7 +57,7 @@ Notes:
 
 Before expanding scope again, the current stack should be solid on:
 
-- [ ] env wiring (automation exists; production values still need operator validation)
+- [ ] env wiring with canonical deployment values
 - [ ] address correctness (requires deployed-network verification)
 - [ ] Sepolia validation (manual matrix still required)
 - [ ] admin recovery paths (manual run-through still required)

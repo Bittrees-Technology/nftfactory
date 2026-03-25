@@ -2,17 +2,22 @@
 
 ## Install dependencies
 ```bash
-cd /home/robert/nftfactory/packages/contracts
+cd packages/contracts
 forge install foundry-rs/forge-std
 forge install OpenZeppelin/openzeppelin-contracts@v5.4.0
 forge install OpenZeppelin/openzeppelin-contracts-upgradeable@v5.4.0
 npm install
 ```
 
+If `forge` is not already on `PATH`, either:
+
+- install Foundry with `foundryup`, or
+- set `FOUNDRY_FORGE_BIN` to the absolute forge binary path
+
 ## Build and test
 ```bash
-forge build
-forge test -vv
+npm run build
+npm run test
 ```
 
 ## Sepolia deploy
@@ -29,7 +34,7 @@ forge script script/Deploy.s.sol:DeployScript \
 After deployment, verify the shared creator implementations so collection proxy verification can resolve against verified source:
 
 ```bash
-cd /home/robert/nftfactory/packages/contracts
+cd packages/contracts
 source .env
 ./script/VerifyCreatorImplementations.sh 11155111
 ```

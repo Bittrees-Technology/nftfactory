@@ -14,9 +14,14 @@ Or directly inside the contracts workspace:
 
 ```bash
 cd packages/contracts
-forge build
-forge test -q
+npm run build
+npm run test
 ```
+
+Notes:
+
+- The contracts workspace now resolves `forge` through `PATH` first and falls back to `FOUNDRY_FORGE_BIN` when set.
+- If Foundry is not installed, install it with `foundryup` before running the contract checks.
 
 ## 2. Web validation
 
@@ -34,6 +39,11 @@ Then manually validate:
 - `/profile`
 - `/profile/setup`
 - `/profile/[name]`
+
+Notes:
+
+- `npm run build:web` requires the production public env vars checked in `apps/web/next.config.ts`, even for local production-build validation.
+- The previously documented intermittent `/_document` page collection failure did not reproduce in the latest local validation pass once those env vars were present.
 
 ## 3. Indexer validation
 
