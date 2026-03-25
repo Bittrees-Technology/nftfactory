@@ -21,6 +21,9 @@ npm run test
 ```
 
 ## Sepolia deploy
+
+After wiring the deployed addresses into the app/indexer env set, verify them from the repo root with `npm run check:deployments`.
+
 ```bash
 source .env
 forge script script/Deploy.s.sol:DeployScript \

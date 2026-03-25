@@ -40,6 +40,7 @@ Production-grade monorepo scaffold for `nftfactory.eth`.
 This repo includes build-ready scaffolding and first-pass contract/backend code. Dependency install and deployment credentials are intentionally not included.
 
 Before a production web build or release check, validate the required public build env set with `npm run check:web-env`.
+For deployed-network verification, run `npm run check:deployments` with the canonical chain RPC and contract env values.
 
 ## Local development
 1. `npm install`

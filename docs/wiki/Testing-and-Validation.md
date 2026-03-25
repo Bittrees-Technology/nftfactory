@@ -67,7 +67,13 @@ If Prisma is unavailable locally, also confirm the degraded startup mode still s
 
 ## 4. Deployment validation
 
-For a deployed network, verify:
+Start with the scripted deployment check:
+
+```bash
+npm run check:deployments
+```
+
+Then verify:
 
 - code exists at the configured addresses
 - registry, marketplace, and factory addresses match the env files

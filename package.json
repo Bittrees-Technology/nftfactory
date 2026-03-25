@@ -23,6 +23,7 @@
     "check:ensv2": "node scripts/check-ensv2-readiness.mjs",
     "check:ipfs": "bash scripts/ipfs-readiness.sh",
     "check:web-env": "node scripts/check-web-build-env.mjs",
+    "check:deployments": "node scripts/check-deployment-addresses.mjs",
     "validate:release": "npm run typecheck:web && npm run test:web && npm run build:web:clean && npm run typecheck:indexer && npm run test:indexer && npm run test:contracts",
     "check:release": "bash scripts/release-readiness.sh",
     "typecheck:all": "npm run typecheck:web && npm run typecheck:indexer",
