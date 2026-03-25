@@ -127,6 +127,8 @@ export type ApiProfileResolution = {
     ensSubname: string | null;
     contractAddress: string;
     ownerAddress: string;
+    createdAt?: string;
+    updatedAt?: string;
   }>;
 };
 
@@ -568,6 +570,7 @@ export async function syncMintedToken(payload: {
   isFactoryCreated: boolean;
   isUpgradeable: boolean;
   ensSubname?: string | null;
+  collectionCreatedAt?: string | null;
   finalizedAt?: string | null;
   mintTxHash?: string | null;
   draftName?: string | null;

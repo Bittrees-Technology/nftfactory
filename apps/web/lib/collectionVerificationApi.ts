@@ -24,6 +24,13 @@ export async function verifyCollectionContract(
     },
     body: JSON.stringify(params)
   });
-  return parseJsonResponse<VerifyCollectionContractResponse>(response);
+  const text = await response.text();
+  if (!response.ok) {
+    throw new Error(text || "Collection verification request failed.");
+  }
+  return parseJsonResponse<VerifyCollectionContractResponse>(
+    text,
+    "Collection verification response was not valid JSON."
+  );
 }
 

@@ -5626,7 +5626,7 @@ async function handleRequest(
             }));
 
     await Promise.all(
-      mergedFactoryCollections.map((item) => attachOfferSummaries(item.tokens as Array<any>, deps))
+      mergedFactoryCollections.map((item: any) => attachOfferSummaries(item.tokens as Array<any>, deps))
     );
     const recentOwnedMints = recentOwnedTokens.map((item: any) => toOwnerHoldingApiShape(item, owner, config, presentationIndex));
     await attachOfferSummaries(recentOwnedMints as Array<any>, deps);
@@ -5638,7 +5638,7 @@ async function handleRequest(
         ownedCollections: Math.max(collections.length, mergedFactoryCollections.length),
         ownedTokens: Math.max(
           ownedTokenCount,
-          mergedFactoryCollections.reduce((sum, item) => sum + item.tokens.length, 0)
+          mergedFactoryCollections.reduce((sum: number, item: any) => sum + item.tokens.length, 0)
         ),
         createdTokens: createdTokenCount,
         activeListings,

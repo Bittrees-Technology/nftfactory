@@ -2273,6 +2273,9 @@ export default function MintClient({
           : undefined;
       const mintedTokenId = extractMintedTokenId(receipt, targetNft, standard, fallbackTokenId);
       const gateway = DEFAULT_IPFS_GATEWAY;
+      if (!publicClient) {
+        throw new Error("Public client is unavailable for the active chain.");
+      }
       const mintedBlock = await publicClient.getBlock({ blockHash: receipt.blockHash });
       const mintedAtIso = new Date(Number(mintedBlock.timestamp) * 1000).toISOString();
       writeLocalMintFeedItem(config.chainId, {
