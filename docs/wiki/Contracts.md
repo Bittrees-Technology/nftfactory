@@ -19,7 +19,7 @@ These are the addresses currently wired into the local Sepolia env files in this
 
 For implementation addresses or deployment history, refer to deployment logs and scripts.
 
-Use `npm run check:deployments` with the canonical RPC and contract env values when you want to verify that the configured addresses have code, expected ownership, registry wiring, and shared-minter authorization on the target chain.
+Use `npm run check:deployments` with a real RPC when you want to verify that the configured addresses have code, expected ownership, registry wiring, and shared-minter authorization on the target chain. If the contract env values are unset, the command falls back to `docs/deployments.sepolia-app-wired.json`.
 
 ## Contract families
 

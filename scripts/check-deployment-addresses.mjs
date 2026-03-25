@@ -1,8 +1,19 @@
 #!/usr/bin/env node
+import { existsSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { createPublicClient, getAddress, http } from 'viem';
 
+const DEFAULT_SNAPSHOT_PATH = resolve(process.cwd(), 'docs/deployments.sepolia-app-wired.json');
+
+function loadSnapshot(pathname) {
+  if (!pathname || !existsSync(pathname)) return null;
+  const parsed = JSON.parse(readFileSync(pathname, 'utf8'));
+  return parsed && typeof parsed === 'object' ? parsed : null;
+}
+
+const snapshot = loadSnapshot(process.env.DEPLOYMENT_SNAPSHOT || DEFAULT_SNAPSHOT_PATH);
 const chainId = Number.parseInt(
-  String(process.env.NEXT_PUBLIC_PRIMARY_CHAIN_ID || process.env.NEXT_PUBLIC_CHAIN_ID || process.env.CHAIN_ID || '11155111'),
+  String(process.env.NEXT_PUBLIC_PRIMARY_CHAIN_ID || process.env.NEXT_PUBLIC_CHAIN_ID || process.env.CHAIN_ID || snapshot?.chainId || '11155111'),
   10
 );
 
@@ -16,8 +27,8 @@ function readScoped(name, id, { allowLegacy = true } = {}) {
   return '';
 }
 
-function readAddress(name, id, options) {
-  const value = readScoped(name, id, options);
+function readAddress(name, id, snapshotKey, options) {
+  const value = readScoped(name, id, options) || String(snapshot?.contracts?.[snapshotKey] || '').trim();
   if (!value) return '';
   return getAddress(value);
 }
@@ -31,20 +42,22 @@ function readRpcUrl(id) {
 }
 
 const deployment = {
-  registry: readAddress('NEXT_PUBLIC_REGISTRY_ADDRESS', chainId),
-  royaltySplitRegistry: readAddress('NEXT_PUBLIC_ROYALTY_SPLIT_REGISTRY_ADDRESS', chainId),
-  moderatorRegistry: readAddress('NEXT_PUBLIC_MODERATOR_REGISTRY_ADDRESS', chainId) || String(process.env.MODERATOR_REGISTRY_ADDRESS || '').trim(),
-  subnameRegistrar: readAddress('NEXT_PUBLIC_SUBNAME_REGISTRAR_ADDRESS', chainId),
-  shared721: readAddress('NEXT_PUBLIC_SHARED_721_ADDRESS', chainId),
-  shared1155: readAddress('NEXT_PUBLIC_SHARED_1155_ADDRESS', chainId),
-  factory: readAddress('NEXT_PUBLIC_FACTORY_ADDRESS', chainId),
-  marketplace: readAddress('NEXT_PUBLIC_MARKETPLACE_ADDRESS', chainId),
+  registry: readAddress('NEXT_PUBLIC_REGISTRY_ADDRESS', chainId, 'registry'),
+  royaltySplitRegistry: readAddress('NEXT_PUBLIC_ROYALTY_SPLIT_REGISTRY_ADDRESS', chainId, 'royaltySplitRegistry'),
+  moderatorRegistry: readAddress('NEXT_PUBLIC_MODERATOR_REGISTRY_ADDRESS', chainId, 'moderatorRegistry') || String(process.env.MODERATOR_REGISTRY_ADDRESS || '').trim(),
+  subnameRegistrar: readAddress('NEXT_PUBLIC_SUBNAME_REGISTRAR_ADDRESS', chainId, 'subnameRegistrar'),
+  shared721: readAddress('NEXT_PUBLIC_SHARED_721_ADDRESS', chainId, 'shared721'),
+  shared1155: readAddress('NEXT_PUBLIC_SHARED_1155_ADDRESS', chainId, 'shared1155'),
+  factory: readAddress('NEXT_PUBLIC_FACTORY_ADDRESS', chainId, 'factory'),
+  marketplace: readAddress('NEXT_PUBLIC_MARKETPLACE_ADDRESS', chainId, 'marketplace'),
+  creatorCollection721Implementation: getAddress(String(snapshot?.contracts?.creatorCollection721Implementation || '0x0000000000000000000000000000000000000000')),
+  creatorCollection1155Implementation: getAddress(String(snapshot?.contracts?.creatorCollection1155Implementation || '0x0000000000000000000000000000000000000000'))
 };
 
 const rpcUrl = readRpcUrl(chainId);
 
 if (!Number.isInteger(chainId) || chainId <= 0) {
-  console.error('Invalid chain id. Set NEXT_PUBLIC_PRIMARY_CHAIN_ID, NEXT_PUBLIC_CHAIN_ID, or CHAIN_ID.');
+  console.error('Invalid chain id. Set NEXT_PUBLIC_PRIMARY_CHAIN_ID, NEXT_PUBLIC_CHAIN_ID, CHAIN_ID, or DEPLOYMENT_SNAPSHOT.');
   process.exit(1);
 }
 
@@ -64,7 +77,7 @@ const required = [
 
 const missing = required.filter(([, value]) => !value).map(([name]) => name);
 if (missing.length > 0) {
-  console.error(`Missing required deployment env values for chain ${chainId}: ${missing.join(', ')}`);
+  console.error(`Missing required deployment addresses for chain ${chainId}: ${missing.join(', ')}`);
   process.exit(1);
 }
 
@@ -107,17 +120,13 @@ async function safeRead(label, fn) {
     const value = await fn();
     return { label, ok: true, detail: String(value) };
   } catch (error) {
-    return {
-      label,
-      ok: false,
-      detail: error instanceof Error ? error.message : String(error)
-    };
+    return { label, ok: false, detail: error instanceof Error ? error.message : String(error) };
   }
 }
 
 const checks = [];
 for (const [label, address] of Object.entries(deployment)) {
-  if (!address) continue;
+  if (!address || address === '0x0000000000000000000000000000000000000000') continue;
   checks.push(await getCodeStatus(label, address));
 }
 
@@ -143,13 +152,15 @@ checks.push(await safeRead('marketplace.registry', () => client.readContract({ a
 if (deployment.royaltySplitRegistry) {
   checks.push(await safeRead('royaltySplitRegistry.owner', () => client.readContract({ address: deployment.royaltySplitRegistry, abi: ownedAbi, functionName: 'owner' })));
 }
-
 if (deployment.moderatorRegistry) {
   checks.push(await safeRead('moderatorRegistry.owner', () => client.readContract({ address: deployment.moderatorRegistry, abi: ownedAbi, functionName: 'owner' })));
 }
 
 console.log(`Deployment verification for chain ${chainId}`);
 console.log(`RPC: ${rpcUrl}`);
+if (snapshot) {
+  console.log(`Snapshot: ${process.env.DEPLOYMENT_SNAPSHOT || DEFAULT_SNAPSHOT_PATH}`);
+}
 console.log('');
 
 let failures = 0;
@@ -158,6 +169,4 @@ for (const check of checks) {
   console.log(`- ${check.ok ? 'PASS' : 'FAIL'} ${check.label}: ${check.detail}`);
 }
 
-if (failures > 0) {
-  process.exitCode = 1;
-}
+if (failures > 0) process.exitCode = 1;

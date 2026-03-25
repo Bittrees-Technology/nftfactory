@@ -73,6 +73,8 @@ Start with the scripted deployment check:
 npm run check:deployments
 ```
 
+Provide a real RPC with `RPC_URL`, `SEPOLIA_RPC_URL`, or `NEXT_PUBLIC_RPC_URL_<chainId>`. If the contract addresses are unset, the command falls back to `docs/deployments.sepolia-app-wired.json`.
+
 Then verify:
 
 - code exists at the configured addresses

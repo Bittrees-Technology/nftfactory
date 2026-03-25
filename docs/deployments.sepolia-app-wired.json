@@ -1,0 +1,17 @@
+{
+  "chainId": 11155111,
+  "label": "Current app-wired Sepolia snapshot",
+  "source": "docs/wiki/Contracts.md",
+  "contracts": {
+    "registry": "0x2A31aE082179E3AdbCfC4Cf27aC3c094Fd41F56f",
+    "royaltySplitRegistry": "0x6617DD523409a78831E75E156f532d1F0402b5D8",
+    "subnameRegistrar": "0x549530BF5E17697d6C249Ba2b3E408aCA38f7b3F",
+    "moderatorRegistry": "0x5F6F4f93127c9c04a142C5138523a734112fBE40",
+    "shared721": "0xA98Db2732baD732aA588cad65478D3153A48f606",
+    "shared1155": "0xe0F306B9fB44C3d46C0360503D3B1b68366BA97d",
+    "creatorCollection721Implementation": "0x8F85E590047480b68cBe210AC9a433d88B2747BC",
+    "creatorCollection1155Implementation": "0xFc7F35DD10B5aEBA8e39eCb1CaeE3a319c0d1503",
+    "factory": "0xC3D1fbacC9BF055A8c125056aB46955A268c7c56",
+    "marketplace": "0xdB8429Eb30f36F8DB0146441645B7295fF37FfD0"
+  }
+}
