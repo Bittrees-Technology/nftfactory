@@ -25,9 +25,10 @@ Notes:
 
 ## 2. Web validation
 
-Run the web gates:
+Run the web env and web gates:
 
 ```bash
+npm run check:web-env
 npm run typecheck:web
 npm run build:web
 npm run test:web
