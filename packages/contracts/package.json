@@ -3,8 +3,8 @@
   "private": true,
   "version": "0.1.0",
   "scripts": {
-    "build": "forge build",
-    "test": "forge test -q",
+    "build": "./script/run-forge.sh build",
+    "test": "./script/run-forge.sh test -q",
     "verify:creator-implementations": "./script/VerifyCreatorImplementations.sh"
   },
   "dependencies": {
