@@ -29,6 +29,8 @@
     "check:release": "bash scripts/release-readiness.sh",
     "typecheck:all": "npm run typecheck:web && npm run typecheck:indexer",
     "test:all": "npm run test:web && npm run test:indexer && npm run test:contracts",
-    "check:all": "npm run typecheck:all && npm run test:all"
+    "check:all": "npm run typecheck:all && npm run test:all",
+    "ipfs:publish": "node scripts/publish-artifact.mjs",
+    "ipfs:publish:metadata": "node scripts/publish-metadata-json.mjs"
   }
 }

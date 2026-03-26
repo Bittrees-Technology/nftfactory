@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { buildGatewayUrl } from "../../../../../../ipfs-evm-system/src/gateway.js";
 import {
   buildIpfsAddUrl,
   buildIpfsAuthRequirementError,
@@ -181,9 +182,9 @@ export async function POST(request: Request) {
       imageUri,
       audioUri,
       metadataUri,
-      imageGatewayUrl: imageHash ? `${gateway}/${imageHash}` : null,
-      audioGatewayUrl: audioHash ? `${gateway}/${audioHash}` : null,
-      metadataGatewayUrl: `${gateway}/${metadataHash}`
+      imageGatewayUrl: imageHash ? buildGatewayUrl({ gatewayBaseUrl: gateway, cid: imageHash }) : null,
+      audioGatewayUrl: audioHash ? buildGatewayUrl({ gatewayBaseUrl: gateway, cid: audioHash }) : null,
+      metadataGatewayUrl: buildGatewayUrl({ gatewayBaseUrl: gateway, cid: metadataHash })
     });
   } catch (err) {
     return NextResponse.json(
