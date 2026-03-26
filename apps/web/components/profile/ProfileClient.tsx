@@ -250,6 +250,32 @@ function normalizeIdentityLabelForSetup(value: string | null | undefined, mode: 
   return raw;
 }
 
+const MYSPACE_ORDERABLE_MODULE_IDS = ["social", "media", "boxes", "guestbook", "custom"] as const;
+
+type MyspaceOrderableModuleId = (typeof MYSPACE_ORDERABLE_MODULE_IDS)[number];
+
+function normalizeMyspaceModuleOrder(order: string[] | null | undefined): MyspaceOrderableModuleId[] {
+  const allowed = new Set<string>(MYSPACE_ORDERABLE_MODULE_IDS);
+  const normalized = Array.isArray(order) ? order.map((item) => String(item || "").trim().toLowerCase()).filter((item): item is MyspaceOrderableModuleId => allowed.has(item)) : [];
+  const deduped = Array.from(new Set(normalized));
+  for (const moduleId of MYSPACE_ORDERABLE_MODULE_IDS) {
+    if (!deduped.includes(moduleId)) deduped.push(moduleId);
+  }
+  return deduped;
+}
+
+function parseMyspaceModuleOrderInput(value: string): MyspaceOrderableModuleId[] {
+  return normalizeMyspaceModuleOrder(String(value || "").split("\n"));
+}
+
+function formatMyspaceModuleOrderInput(order: string[] | null | undefined): string {
+  return normalizeMyspaceModuleOrder(order).join("\n");
+}
+
+function getMyspaceModuleOrderStyle(order: MyspaceOrderableModuleId[], moduleId: MyspaceOrderableModuleId): CSSProperties {
+  return { order: normalizeMyspaceModuleOrder(order).indexOf(moduleId) };
+}
+
 function buildCollectionIdentityFixHref(params: {
   collectionAddress?: string | null;
   identityValue?: string | null;
@@ -315,6 +341,7 @@ export default function ProfileClient({ name }: { name: string }) {
   const [editProfileSongUrl, setEditProfileSongUrl] = useState("");
   const [editStampsText, setEditStampsText] = useState("");
   const [editMediaEmbedsText, setEditMediaEmbedsText] = useState("");
+  const [editModuleOrderText, setEditModuleOrderText] = useState("");
   const [editCustomBoxesText, setEditCustomBoxesText] = useState("");
   const [editLinksText, setEditLinksText] = useState("");
   const [transferAddress, setTransferAddress] = useState("");
@@ -774,6 +801,7 @@ export default function ProfileClient({ name }: { name: string }) {
   const hasProfileData = hasResolvedIdentity || hasManualWallet;
   const featuredMediaKind = useMemo(() => getFeaturedMediaKind(primaryProfile?.featuredUrl), [primaryProfile]);
   const mediaEmbedCards = useMemo(() => (primaryProfile?.mediaEmbeds || []).map((item) => toProfileMediaEmbedView(item)), [primaryProfile]);
+  const myspaceModuleOrder = useMemo(() => normalizeMyspaceModuleOrder(primaryProfile?.moduleOrder), [primaryProfile]);
 
   useEffect(() => {
     void loadGuestbookEntries();
@@ -844,6 +872,7 @@ export default function ProfileClient({ name }: { name: string }) {
         testimonials: editTestimonialsText.split("\n\n").map((item) => item.trim()).filter(Boolean),
         profileSongUrl: editProfileSongUrl,
         mediaEmbeds: parseMediaEmbedsInput(editMediaEmbedsText),
+        moduleOrder: parseMyspaceModuleOrderInput(editModuleOrderText),
         stamps: editStampsText.split("\n").map((item) => item.trim()).filter(Boolean),
         customBoxes: parseCustomBoxesInput(editCustomBoxesText),
         links: editLinksText.split("\n").map((item) => item.trim()).filter(Boolean)
@@ -1251,7 +1280,7 @@ export default function ProfileClient({ name }: { name: string }) {
               </div>
             </div>
             </div>
-            <div className="profileMyspaceSocialGrid">
+            <div className="profileMyspaceSocialGrid" style={getMyspaceModuleOrderStyle(myspaceModuleOrder, "social")}>
               <section className="profileMyspaceSocialCard">
                 <h4>Stamps</h4>
                 {primaryProfile?.stamps?.length ? (
@@ -1289,7 +1318,7 @@ export default function ProfileClient({ name }: { name: string }) {
                 )}
               </section>
             </div>
-            <div className="profileMyspaceEmbedsGrid">
+            <div className="profileMyspaceEmbedsGrid" style={getMyspaceModuleOrderStyle(myspaceModuleOrder, "media")}>
               {mediaEmbedCards.length ? mediaEmbedCards.map((embed) => (
                 <section key={embed.title + ":" + embed.url} className="profileMyspaceEmbedCard">
                   <h4>{embed.title}</h4>
@@ -1313,7 +1342,7 @@ export default function ProfileClient({ name }: { name: string }) {
                 </section>
               )}
             </div>
-            <div className="profileMyspaceBoxesGrid">
+            <div className="profileMyspaceBoxesGrid" style={getMyspaceModuleOrderStyle(myspaceModuleOrder, "boxes")}>
               {primaryProfile?.customBoxes?.length ? primaryProfile.customBoxes.map((box) => (
                 <section key={`${box.title}:${box.content}`} className="profileMyspaceBoxCard">
                   <h4>{box.title}</h4>
@@ -1328,7 +1357,7 @@ export default function ProfileClient({ name }: { name: string }) {
             </div>
           </section>
 
-          <section className="card formCard profileMyspaceCustomCard">
+          <section className="card formCard profileMyspaceCustomCard" style={getMyspaceModuleOrderStyle(myspaceModuleOrder, "guestbook")}>
             <div className="profileMyspaceCustomHeader">
               <div>
                 <p className="eyebrow">Guestbook</p>
@@ -1388,7 +1417,7 @@ export default function ProfileClient({ name }: { name: string }) {
           </section>
 
           {(primaryProfile?.customHtml || primaryProfile?.customCss) ? (
-            <section className="card formCard profileMyspaceCustomCard">
+            <section className="card formCard profileMyspaceCustomCard" style={getMyspaceModuleOrderStyle(myspaceModuleOrder, "custom")}>
               <div className="profileMyspaceCustomHeader">
                 <div>
                   <p className="eyebrow">Custom Module</p>
@@ -1918,6 +1947,14 @@ Playlist | https://open.spotify.com/playlist/..." />
                         <textarea value={editStampsText} onChange={(e) => setEditStampsText(e.target.value)} placeholder="online now
 scene kid
 collector core" />
+                      </label>
+                      <label>
+                        Module order (one per line: social, media, boxes, guestbook, custom)
+                        <textarea value={editModuleOrderText} onChange={(e) => setEditModuleOrderText(e.target.value)} placeholder="social
+media
+boxes
+guestbook
+custom" />
                       </label>
                       <label>
                         Custom boxes

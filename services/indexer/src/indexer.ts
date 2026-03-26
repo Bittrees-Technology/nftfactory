@@ -87,6 +87,7 @@ type ProfileLinkPayload = {
   statusHeadline?: string;
   sidebarFacts?: ProfileSidebarFact[];
   mediaEmbeds?: ProfileMediaEmbed[];
+  moduleOrder?: string[];
   stamps?: string[];
   customBoxes?: ProfileCustomBox[];
   bannerUrl?: string;
@@ -148,6 +149,7 @@ type ProfileRecord = {
   statusHeadline: string | null;
   sidebarFacts: ProfileSidebarFact[];
   mediaEmbeds: ProfileMediaEmbed[];
+  moduleOrder: string[];
   stamps: string[];
   customBoxes: ProfileCustomBox[];
   bannerUrl: string | null;
@@ -1374,6 +1376,16 @@ function sanitizeProfileMediaEmbeds(value: ProfileMediaEmbed[] | undefined, maxI
     .slice(0, maxItems);
 }
 
+function sanitizeProfileModuleOrder(value: string[] | undefined): string[] {
+  const allowed = new Set(["social", "media", "boxes", "guestbook", "custom"]);
+  const normalized = Array.isArray(value) ? value.map((item) => String(item || "").trim().toLowerCase()).filter((item) => allowed.has(item)) : [];
+  const deduped = Array.from(new Set(normalized));
+  for (const moduleId of ["social", "media", "boxes", "guestbook", "custom"]) {
+    if (!deduped.includes(moduleId)) deduped.push(moduleId);
+  }
+  return deduped;
+}
+
 async function readProfileRecords(): Promise<ProfileRecord[]> {
   try {
     const raw = await readFile(PROFILE_FILE, "utf8");
@@ -1403,6 +1415,7 @@ async function readProfileRecords(): Promise<ProfileRecord[]> {
           statusHeadline: sanitizeProfileText(item.statusHeadline || undefined, 160),
           sidebarFacts: sanitizeProfileSidebarFacts(item.sidebarFacts),
           mediaEmbeds: sanitizeProfileMediaEmbeds(item.mediaEmbeds),
+          moduleOrder: sanitizeProfileModuleOrder(item.moduleOrder),
           topFriends: sanitizeProfileList(item.topFriends, 8, 80),
           stamps: sanitizeProfileList(item.stamps, 24, 48),
           testimonials: sanitizeProfileList(item.testimonials, 12, 280),
@@ -5957,6 +5970,7 @@ async function handleRequest(
       statusHeadline: sanitizeProfileText(payload.statusHeadline, 160) || existingIdentity?.statusHeadline || null,
       sidebarFacts: payload.sidebarFacts !== undefined ? sanitizeProfileSidebarFacts(payload.sidebarFacts) : existingIdentity?.sidebarFacts || [],
       mediaEmbeds: payload.mediaEmbeds !== undefined ? sanitizeProfileMediaEmbeds(payload.mediaEmbeds) : existingIdentity?.mediaEmbeds || [],
+      moduleOrder: payload.moduleOrder !== undefined ? sanitizeProfileModuleOrder(payload.moduleOrder) : existingIdentity?.moduleOrder || sanitizeProfileModuleOrder(undefined),
       topFriends: sanitizeProfileList(payload.topFriends, 8, 80).length > 0 ? sanitizeProfileList(payload.topFriends, 8, 80) : existingIdentity?.topFriends || [],
       testimonials: sanitizeProfileList(payload.testimonials, 12, 280).length > 0 ? sanitizeProfileList(payload.testimonials, 12, 280) : existingIdentity?.testimonials || [],
       profileSongUrl: sanitizeProfileUrl(payload.profileSongUrl) || existingIdentity?.profileSongUrl || null,
@@ -5993,6 +6007,7 @@ async function handleRequest(
         statusHeadline: sanitizeProfileText(payload.statusHeadline, 160) || existingIdentity?.statusHeadline || null,
         sidebarFacts: payload.sidebarFacts !== undefined ? sanitizeProfileSidebarFacts(payload.sidebarFacts) : existingIdentity?.sidebarFacts || [],
         mediaEmbeds: payload.mediaEmbeds !== undefined ? sanitizeProfileMediaEmbeds(payload.mediaEmbeds) : existingIdentity?.mediaEmbeds || [],
+        moduleOrder: payload.moduleOrder !== undefined ? sanitizeProfileModuleOrder(payload.moduleOrder) : existingIdentity?.moduleOrder || sanitizeProfileModuleOrder(undefined),
         topFriends: sanitizeProfileList(payload.topFriends, 8, 80).length > 0 ? sanitizeProfileList(payload.topFriends, 8, 80) : existingIdentity?.topFriends || [],
         testimonials: sanitizeProfileList(payload.testimonials, 12, 280).length > 0 ? sanitizeProfileList(payload.testimonials, 12, 280) : existingIdentity?.testimonials || [],
         profileSongUrl: sanitizeProfileUrl(payload.profileSongUrl) || existingIdentity?.profileSongUrl || null,
@@ -6088,6 +6103,7 @@ async function handleRequest(
           statusHeadline: target.statusHeadline,
           sidebarFacts: target.sidebarFacts,
           mediaEmbeds: target.mediaEmbeds,
+          moduleOrder: target.moduleOrder,
           stamps: target.stamps,
           customBoxes: target.customBoxes,
           bannerUrl: target.bannerUrl,
