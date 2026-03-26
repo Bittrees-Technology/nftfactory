@@ -1,0 +1,6 @@
+{
+  "name": "Smoke NFT",
+  "description": "Shared IPFS smoke-validation metadata artifact for NFTFactory.",
+  "image": "ipfs://bafy-smoke-image-placeholder",
+  "external_url": "https://nftfactory.org/smoke"
+}
