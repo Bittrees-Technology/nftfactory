@@ -63,6 +63,9 @@ Run these from the project root:
 | `npm run typecheck:indexer` | Typecheck the indexer |
 | `npm run test:indexer` | Run indexer tests |
 | `npm run test:contracts` | Run contract tests |
+| `npm run print:deployment-env -- web` | Print web env exports from the checked-in deployment snapshot |
+| `npm run print:deployment-env -- indexer` | Print indexer env exports from the checked-in deployment snapshot |
+| `npm run check:deployments` | Verify deployed code, ownership, and contract wiring against the current env or snapshot |
 | `npm run docs:contracts-deps` | Regenerate archived contract dependency output |
 
 ## Environment configuration

@@ -84,6 +84,7 @@ After deployment:
 - authorize shared mint contracts in `SubnameRegistrar` if they should record attribution
 - seed the moderator set in `ModeratorRegistry` if using the on-chain moderator path
 - update web and indexer env files to the exact deployed addresses
+- use `npm run print:deployment-env -- web` and `npm run print:deployment-env -- indexer` to scaffold the current app-wired Sepolia address set before filling RPC and indexer URL values
 
 ## Current service wiring
 
