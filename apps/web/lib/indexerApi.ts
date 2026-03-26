@@ -145,6 +145,9 @@ export type ApiProfileRecord = {
   aboutMe: string | null;
   interests: string | null;
   whoIdLikeToMeet: string | null;
+  topFriends: string[];
+  testimonials: string[];
+  profileSongUrl: string | null;
   bannerUrl: string | null;
   avatarUrl: string | null;
   featuredUrl: string | null;
@@ -606,6 +609,9 @@ export async function linkProfileIdentity(payload: {
   aboutMe?: string;
   interests?: string;
   whoIdLikeToMeet?: string;
+  topFriends?: string[];
+  testimonials?: string[];
+  profileSongUrl?: string;
   bannerUrl?: string;
   avatarUrl?: string;
   featuredUrl?: string;

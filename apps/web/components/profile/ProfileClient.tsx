@@ -209,6 +209,9 @@ export default function ProfileClient({ name }: { name: string }) {
   const [editAccentColor, setEditAccentColor] = useState("#c53a1f");
   const [editCustomCss, setEditCustomCss] = useState("");
   const [editCustomHtml, setEditCustomHtml] = useState("");
+  const [editTopFriendsText, setEditTopFriendsText] = useState("");
+  const [editTestimonialsText, setEditTestimonialsText] = useState("");
+  const [editProfileSongUrl, setEditProfileSongUrl] = useState("");
   const [editLinksText, setEditLinksText] = useState("");
   const [transferAddress, setTransferAddress] = useState("");
   const [editState, setEditState] = useState<ActionState>(idleActionState());
@@ -676,6 +679,9 @@ export default function ProfileClient({ name }: { name: string }) {
     setEditAccentColor(primaryProfile.accentColor || "#c53a1f");
     setEditCustomCss(primaryProfile.customCss || "");
     setEditCustomHtml(primaryProfile.customHtml || "");
+    setEditTopFriendsText((primaryProfile.topFriends || []).join("\n"));
+    setEditTestimonialsText((primaryProfile.testimonials || []).join("\n\n"));
+    setEditProfileSongUrl(primaryProfile.profileSongUrl || "");
     setEditLinksText((primaryProfile.links || []).join("\n"));
     setEditState(idleActionState());
     setTransferAddress("");
@@ -712,6 +718,9 @@ export default function ProfileClient({ name }: { name: string }) {
         accentColor: editAccentColor,
         customCss: editCustomCss,
         customHtml: editCustomHtml,
+        topFriends: editTopFriendsText.split("\n").map((item) => item.trim()).filter(Boolean),
+        testimonials: editTestimonialsText.split("\n\n").map((item) => item.trim()).filter(Boolean),
+        profileSongUrl: editProfileSongUrl,
         links: editLinksText.split("\n").map((item) => item.trim()).filter(Boolean)
       });
 
@@ -743,6 +752,13 @@ export default function ProfileClient({ name }: { name: string }) {
       const trimmed = String(value || "").trim();
       if (!trimmed) return "";
       return `<section class="myspace-panel"><h2>${escapeText(label)}</h2><div class="content"><p>${escapeText(trimmed)}</p></div></section>`;
+    };
+    const buildListPanel = (label: string, values: string[] | null | undefined) => {
+      const items = Array.isArray(values) ? values.map((item) => String(item || "").trim()).filter(Boolean) : [];
+      if (items.length === 0) return "";
+      return `<section class="myspace-panel"><h2>${escapeText(label)}</h2><div class="content"><ol>${items
+        .map((item) => `<li>${escapeText(item)}</li>`)
+        .join("")}</ol></div></section>`;
     };
     return `<!doctype html>
 <html>
@@ -791,6 +807,9 @@ export default function ProfileClient({ name }: { name: string }) {
       ${buildPanel("About Me", primaryProfile.aboutMe)}
       ${buildPanel("Interests", primaryProfile.interests)}
       ${buildPanel("Who I'd Like To Meet", primaryProfile.whoIdLikeToMeet)}
+      ${buildListPanel("Top Friends", primaryProfile.topFriends)}
+      ${buildListPanel("Testimonials", primaryProfile.testimonials)}
+      ${primaryProfile.profileSongUrl ? `<section class="myspace-panel"><h2>Profile Song</h2><div class="content"><audio controls preload="none"><source src="${primaryProfile.profileSongUrl}" /></audio></div></section>` : ""}
       ${primaryProfile.customHtml ? `<section class="myspace-panel"><h2>Custom HTML</h2><div class="content">${primaryProfile.customHtml}</div></section>` : ""}
     </div>
   </body>
@@ -1017,14 +1036,43 @@ export default function ProfileClient({ name }: { name: string }) {
                 <p>{primaryProfile?.whoIdLikeToMeet?.trim() || "No dream collabs or friend list notes yet."}</p>
               </div>
               <div className="profileMyspaceTopCard">
-                <h4>Top 4</h4>
-                <ol>
-                  <li>{creatorDisplayName}</li>
-                  <li>{primaryProfileName}</li>
-                  <li>{stats.uniqueCollections} collections</li>
-                  <li>{stats.listings} live listings</li>
-                </ol>
+                <h4>Top Friends</h4>
+                {primaryProfile?.topFriends?.length ? (
+                  <ol>
+                    {primaryProfile.topFriends.map((friend) => (
+                      <li key={friend}>{friend}</li>
+                    ))}
+                  </ol>
+                ) : (
+                  <p>No Top Friends picked yet.</p>
+                )}
               </div>
+            </div>
+            <div className="profileMyspaceSocialGrid">
+              <section className="profileMyspaceSocialCard">
+                <h4>Testimonials</h4>
+                {primaryProfile?.testimonials?.length ? (
+                  <div className="profileMyspaceTestimonialsList">
+                    {primaryProfile.testimonials.map((testimonial) => (
+                      <blockquote key={testimonial} className="profileMyspaceTestimonial">
+                        {testimonial}
+                      </blockquote>
+                    ))}
+                  </div>
+                ) : (
+                  <p>No testimonials pinned yet.</p>
+                )}
+              </section>
+              <section className="profileMyspaceSocialCard">
+                <h4>Profile Song</h4>
+                {primaryProfile?.profileSongUrl ? (
+                  <audio controls preload="none" className="profileMyspaceSongPlayer">
+                    <source src={primaryProfile.profileSongUrl} />
+                  </audio>
+                ) : (
+                  <p>No profile song set yet.</p>
+                )}
+              </section>
             </div>
           </section>
 
@@ -1522,6 +1570,22 @@ export default function ProfileClient({ name }: { name: string }) {
                       <label>
                         Custom HTML
                         <textarea value={editCustomHtml} onChange={(e) => setEditCustomHtml(e.target.value)} placeholder="<div><marquee>Welcome to my page</marquee></div>" />
+                      </label>
+                      <label>
+                        Top Friends (one per line)
+                        <textarea value={editTopFriendsText} onChange={(e) => setEditTopFriendsText(e.target.value)} placeholder="Tom
+Bestie
+Favorite collector" />
+                      </label>
+                      <label>
+                        Testimonials (separate entries with a blank line)
+                        <textarea value={editTestimonialsText} onChange={(e) => setEditTestimonialsText(e.target.value)} placeholder="legendary page coder
+
+instant follow" />
+                      </label>
+                      <label>
+                        Profile song URL
+                        <input value={editProfileSongUrl} onChange={(e) => setEditProfileSongUrl(e.target.value)} placeholder="https://.../song.mp3" />
                       </label>
                       <label>
                         Links (one per line)

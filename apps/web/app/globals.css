@@ -1507,3 +1507,42 @@ button:disabled {
   border-radius: 6px;
   background: #fff;
 }
+
+
+.profileMyspaceSocialGrid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.profileMyspaceSocialCard {
+  padding: 12px;
+  border: 2px solid #0f2f77;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 4px 4px 0 rgba(15, 47, 119, 0.14);
+}
+
+.profileMyspaceSocialCard h4 {
+  margin: 0 0 8px;
+  color: #0f2f77;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.76rem;
+}
+
+.profileMyspaceTestimonialsList {
+  display: grid;
+  gap: 10px;
+}
+
+.profileMyspaceTestimonial {
+  margin: 0;
+  padding: 10px 12px;
+  border-left: 4px solid var(--profile-accent, #ff6a00);
+  background: #fff7e8;
+  font-style: italic;
+}
+
+.profileMyspaceSongPlayer {
+  width: 100%;
+}

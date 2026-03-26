@@ -81,6 +81,9 @@ type ProfileLinkPayload = {
   aboutMe?: string;
   interests?: string;
   whoIdLikeToMeet?: string;
+  topFriends?: string[];
+  testimonials?: string[];
+  profileSongUrl?: string;
   bannerUrl?: string;
   avatarUrl?: string;
   featuredUrl?: string;
@@ -109,6 +112,9 @@ type ProfileRecord = {
   aboutMe: string | null;
   interests: string | null;
   whoIdLikeToMeet: string | null;
+  topFriends: string[];
+  testimonials: string[];
+  profileSongUrl: string | null;
   bannerUrl: string | null;
   avatarUrl: string | null;
   featuredUrl: string | null;
@@ -1281,6 +1287,14 @@ function sanitizeProfileLinks(value: string[] | undefined): string[] {
     .slice(0, 8);
 }
 
+function sanitizeProfileList(value: string[] | undefined, maxItems = 8, itemMax = 120): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => sanitizeProfileText(item, itemMax))
+    .filter((item): item is string => Boolean(item))
+    .slice(0, maxItems);
+}
+
 async function readProfileRecords(): Promise<ProfileRecord[]> {
   try {
     const raw = await readFile(PROFILE_FILE, "utf8");
@@ -1307,6 +1321,9 @@ async function readProfileRecords(): Promise<ProfileRecord[]> {
           aboutMe: sanitizeProfileText(item.aboutMe || undefined, 1200),
           interests: sanitizeProfileText(item.interests || undefined, 1200),
           whoIdLikeToMeet: sanitizeProfileText(item.whoIdLikeToMeet || undefined, 1200),
+          topFriends: sanitizeProfileList(item.topFriends, 8, 80),
+          testimonials: sanitizeProfileList(item.testimonials, 12, 280),
+          profileSongUrl: sanitizeProfileUrl(item.profileSongUrl || undefined),
           bannerUrl: sanitizeProfileUrl(item.bannerUrl || undefined),
           avatarUrl: sanitizeProfileUrl(item.avatarUrl || undefined),
           featuredUrl: sanitizeProfileUrl(item.featuredUrl || undefined),
@@ -5824,6 +5841,9 @@ async function handleRequest(
       aboutMe: sanitizeProfileText(payload.aboutMe, 1200) || existingIdentity?.aboutMe || null,
       interests: sanitizeProfileText(payload.interests, 1200) || existingIdentity?.interests || null,
       whoIdLikeToMeet: sanitizeProfileText(payload.whoIdLikeToMeet, 1200) || existingIdentity?.whoIdLikeToMeet || null,
+      topFriends: sanitizeProfileList(payload.topFriends, 8, 80).length > 0 ? sanitizeProfileList(payload.topFriends, 8, 80) : existingIdentity?.topFriends || [],
+      testimonials: sanitizeProfileList(payload.testimonials, 12, 280).length > 0 ? sanitizeProfileList(payload.testimonials, 12, 280) : existingIdentity?.testimonials || [],
+      profileSongUrl: sanitizeProfileUrl(payload.profileSongUrl) || existingIdentity?.profileSongUrl || null,
       bannerUrl: sanitizeProfileUrl(payload.bannerUrl) || existingIdentity?.bannerUrl || null,
       avatarUrl: sanitizeProfileUrl(payload.avatarUrl) || existingIdentity?.avatarUrl || null,
       featuredUrl: sanitizeProfileUrl(payload.featuredUrl) || existingIdentity?.featuredUrl || null,
@@ -5852,6 +5872,9 @@ async function handleRequest(
         aboutMe: sanitizeProfileText(payload.aboutMe, 1200) || existingIdentity?.aboutMe || null,
         interests: sanitizeProfileText(payload.interests, 1200) || existingIdentity?.interests || null,
         whoIdLikeToMeet: sanitizeProfileText(payload.whoIdLikeToMeet, 1200) || existingIdentity?.whoIdLikeToMeet || null,
+        topFriends: sanitizeProfileList(payload.topFriends, 8, 80).length > 0 ? sanitizeProfileList(payload.topFriends, 8, 80) : existingIdentity?.topFriends || [],
+        testimonials: sanitizeProfileList(payload.testimonials, 12, 280).length > 0 ? sanitizeProfileList(payload.testimonials, 12, 280) : existingIdentity?.testimonials || [],
+        profileSongUrl: sanitizeProfileUrl(payload.profileSongUrl) || existingIdentity?.profileSongUrl || null,
         bannerUrl: sanitizeProfileUrl(payload.bannerUrl) || existingIdentity?.bannerUrl || null,
         avatarUrl: sanitizeProfileUrl(payload.avatarUrl) || existingIdentity?.avatarUrl || null,
         featuredUrl: sanitizeProfileUrl(payload.featuredUrl) || existingIdentity?.featuredUrl || null,
@@ -5936,6 +5959,9 @@ async function handleRequest(
           aboutMe: target.aboutMe,
           interests: target.interests,
           whoIdLikeToMeet: target.whoIdLikeToMeet,
+          topFriends: target.topFriends,
+          testimonials: target.testimonials,
+          profileSongUrl: target.profileSongUrl,
           bannerUrl: target.bannerUrl,
           avatarUrl: target.avatarUrl,
           featuredUrl: target.featuredUrl,
