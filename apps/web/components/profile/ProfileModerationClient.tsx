@@ -24,6 +24,13 @@ function isAddress(value: string): boolean {
   return /^0x[a-fA-F0-9]{40}$/.test(value);
 }
 
+function getModerationActorLabel(actorAddress: string | null | undefined, ownerAddress: string): string {
+  const normalizedActor = String(actorAddress || "").trim().toLowerCase();
+  if (!normalizedActor) return "Unknown moderator";
+  if (normalizedActor == ownerAddress) return "Owner";
+  return "Moderator " + truncateAddress(normalizedActor as `0x${string}`);
+}
+
 function getEntryStatus(entry: ApiProfileGuestbookEntry): "Visible" | "Hidden" | "Deleted" {
   if (entry.deletedAt) return "Deleted";
   if (entry.hiddenAt) return "Hidden";
@@ -211,8 +218,8 @@ export default function ProfileModerationClient() {
                     <strong>Status</strong> {status}
                   </span>
                   <span>{entry.message}</span>
-                  {entry.hiddenAt ? <span className="hint">Hidden {new Date(entry.hiddenAt).toLocaleString()}</span> : null}
-                  {entry.deletedAt ? <span className="hint">Deleted {new Date(entry.deletedAt).toLocaleString()}</span> : null}
+                  {entry.hiddenAt ? <span className="hint">Hidden {new Date(entry.hiddenAt).toLocaleString()} by {getModerationActorLabel(entry.hiddenBy, normalizedActorAddress)}</span> : null}
+                  {entry.deletedAt ? <span className="hint">Deleted {new Date(entry.deletedAt).toLocaleString()} by {getModerationActorLabel(entry.deletedBy, normalizedActorAddress)}</span> : null}
                   <div className="row">
                     {!entry.hiddenAt && !entry.deletedAt ? (
                       <button type="button" disabled={isBusy} onClick={() => void hideEntry(entry.id)}>

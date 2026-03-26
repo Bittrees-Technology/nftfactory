@@ -76,6 +76,14 @@ function isAddress(value: string): value is Address {
   return /^0x[a-fA-F0-9]{40}$/.test(value);
 }
 
+function getModerationActorLabel(actorAddress: string | null | undefined, ownerAddress: string | null | undefined): string {
+  const normalizedActor = String(actorAddress || "").trim().toLowerCase();
+  const normalizedOwner = String(ownerAddress || "").trim().toLowerCase();
+  if (!normalizedActor) return "Unknown moderator";
+  if (normalizedOwner && normalizedActor == normalizedOwner) return "Owner";
+  return "Moderator " + truncateAddress(normalizedActor as Address);
+}
+
 function parseCustomBoxesInput(value: string): Array<{ title: string; content: string }> {
   return String(value || "")
     .split(/\n\s*\n(?=Title:)/)
@@ -1486,8 +1494,8 @@ export default function ProfileClient({ name }: { name: string }) {
                     <p>{entry.message}</p>
                     <p className="hint">
                       Posted {new Date(entry.createdAt).toLocaleString()}
-                      {entry.hiddenAt ? " | Hidden " + new Date(entry.hiddenAt).toLocaleString() : ""}
-                      {entry.deletedAt ? " | Deleted " + new Date(entry.deletedAt).toLocaleString() : ""}
+                      {entry.hiddenAt ? " | Hidden " + new Date(entry.hiddenAt).toLocaleString() + " by " + getModerationActorLabel(entry.hiddenBy, primaryProfile?.ownerAddress) : ""}
+                      {entry.deletedAt ? " | Deleted " + new Date(entry.deletedAt).toLocaleString() + " by " + getModerationActorLabel(entry.deletedBy, primaryProfile?.ownerAddress) : ""}
                     </p>
                     <div className="row">
                       <button
