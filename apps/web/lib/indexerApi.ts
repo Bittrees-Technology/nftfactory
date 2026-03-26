@@ -147,6 +147,14 @@ export type ApiProfileMediaEmbed = {
   url: string;
 };
 
+export type ApiProfileRetroBlock = {
+  kind: "text" | "image" | "links";
+  title: string;
+  content: string | null;
+  imageUrl: string | null;
+  links: string[];
+};
+
 export type ApiProfileRecord = {
   slug: string;
   fullName: string;
@@ -166,6 +174,7 @@ export type ApiProfileRecord = {
   statusHeadline: string | null;
   sidebarFacts: ApiProfileSidebarFact[];
   mediaEmbeds: ApiProfileMediaEmbed[];
+  retroBlocks: ApiProfileRetroBlock[];
   moduleOrder: string[];
   stamps: string[];
   customBoxes: ApiProfileCustomBox[];
@@ -654,6 +663,7 @@ export async function linkProfileIdentity(payload: {
   statusHeadline?: string;
   sidebarFacts?: ApiProfileSidebarFact[];
   mediaEmbeds?: ApiProfileMediaEmbed[];
+  retroBlocks?: ApiProfileRetroBlock[];
   moduleOrder?: string[];
   stamps?: string[];
   customBoxes?: ApiProfileCustomBox[];

@@ -59,7 +59,8 @@ import {
   type ApiProfileRecord,
   type ApiOfferSummary,
   type ApiProfileResolution,
-  type ApiProfileGuestbookEntry
+  type ApiProfileGuestbookEntry,
+  type ApiProfileRetroBlock
 } from "../../lib/indexerApi";
 import { getListingPresentation, toListingViewModel, type ListingViewModel } from "../../lib/listingPresentation";
 import { buildSectionLoadStatusItems } from "../../lib/loadStateSections";
@@ -142,6 +143,52 @@ function parseMediaEmbedsInput(value: string): Array<{ title: string; url: strin
 function formatMediaEmbedsInput(embeds: Array<{ title: string; url: string }> | null | undefined): string {
   if (!Array.isArray(embeds) || embeds.length === 0) return "";
   return embeds.map((embed) => embed.title + " | " + embed.url).join("\n");
+}
+
+function parseRetroBlocksInput(value: string): ApiProfileRetroBlock[] {
+  const blocks: ApiProfileRetroBlock[] = [];
+  for (const block of String(value || "").split(/\n\s*\n(?=Type:)/)) {
+    const trimmedBlock = block.trim();
+    if (!trimmedBlock) continue;
+    const lines = trimmedBlock.split("\n");
+    const kind = String(lines[0] || "").replace(/^Type:\s*/i, "").trim().toLowerCase();
+    const title = String(lines[1] || "").replace(/^Title:\s*/i, "").trim();
+    const bodyLines = lines.slice(2).map((line) => line.trim()).filter(Boolean);
+    if (!title || (kind !== "text" && kind !== "image" && kind !== "links")) continue;
+    if (kind === "text") {
+      const content = bodyLines.join("\n").trim();
+      if (content) blocks.push({ kind: "text", title, content, imageUrl: null, links: [] });
+      continue;
+    }
+    if (kind === "image") {
+      const imageUrl = bodyLines[0] || "";
+      const content = bodyLines.slice(1).join("\n").trim();
+      if (imageUrl) blocks.push({ kind: "image", title, content: content || null, imageUrl, links: [] });
+      continue;
+    }
+    if (bodyLines.length > 0) {
+      blocks.push({ kind: "links", title, content: null, imageUrl: null, links: bodyLines });
+    }
+  }
+  return blocks;
+}
+
+function formatRetroBlocksInput(blocks: ApiProfileRetroBlock[] | null | undefined): string {
+  if (!Array.isArray(blocks) || blocks.length === 0) return "";
+  return blocks
+    .map((block) => {
+      const lines = ["Type: " + block.kind, "Title: " + block.title];
+      if (block.kind === "text" && block.content) {
+        lines.push(block.content);
+      } else if (block.kind === "image") {
+        if (block.imageUrl) lines.push(block.imageUrl);
+        if (block.content) lines.push(block.content);
+      } else if (block.kind === "links" && block.links.length > 0) {
+        lines.push(...block.links);
+      }
+      return lines.join("\n");
+    })
+    .join("\n\n");
 }
 
 type ProfileMediaEmbedView = {
@@ -260,7 +307,7 @@ function normalizeIdentityLabelForSetup(value: string | null | undefined, mode: 
   return raw;
 }
 
-const MYSPACE_ORDERABLE_MODULE_IDS = ["social", "media", "boxes", "guestbook", "custom"] as const;
+const MYSPACE_ORDERABLE_MODULE_IDS = ["social", "media", "retro", "boxes", "guestbook", "custom"] as const;
 
 type MyspaceOrderableModuleId = (typeof MYSPACE_ORDERABLE_MODULE_IDS)[number];
 
@@ -351,6 +398,7 @@ export default function ProfileClient({ name }: { name: string }) {
   const [editProfileSongUrl, setEditProfileSongUrl] = useState("");
   const [editStampsText, setEditStampsText] = useState("");
   const [editMediaEmbedsText, setEditMediaEmbedsText] = useState("");
+  const [editRetroBlocksText, setEditRetroBlocksText] = useState("");
   const [editModuleOrderText, setEditModuleOrderText] = useState("");
   const [editCustomBoxesText, setEditCustomBoxesText] = useState("");
   const [editLinksText, setEditLinksText] = useState("");
@@ -813,6 +861,7 @@ export default function ProfileClient({ name }: { name: string }) {
   const hasProfileData = hasResolvedIdentity || hasManualWallet;
   const featuredMediaKind = useMemo(() => getFeaturedMediaKind(primaryProfile?.featuredUrl), [primaryProfile]);
   const mediaEmbedCards = useMemo(() => (primaryProfile?.mediaEmbeds || []).map((item) => toProfileMediaEmbedView(item)), [primaryProfile]);
+  const retroBlocks = useMemo(() => primaryProfile?.retroBlocks || [], [primaryProfile]);
   const myspaceModuleOrder = useMemo(() => normalizeMyspaceModuleOrder(primaryProfile?.moduleOrder), [primaryProfile]);
 
   useEffect(() => {
@@ -840,6 +889,8 @@ export default function ProfileClient({ name }: { name: string }) {
     setEditTestimonialsText((primaryProfile.testimonials || []).join("\n\n"));
     setEditProfileSongUrl(primaryProfile.profileSongUrl || "");
     setEditMediaEmbedsText(formatMediaEmbedsInput(primaryProfile.mediaEmbeds));
+    setEditRetroBlocksText(formatRetroBlocksInput(primaryProfile.retroBlocks));
+    setEditModuleOrderText(formatMyspaceModuleOrderInput(primaryProfile.moduleOrder));
     setEditStampsText((primaryProfile.stamps || []).join("\n"));
     setEditCustomBoxesText(formatCustomBoxesInput(primaryProfile.customBoxes));
     setEditLinksText((primaryProfile.links || []).join("\n"));
@@ -884,6 +935,7 @@ export default function ProfileClient({ name }: { name: string }) {
         testimonials: editTestimonialsText.split("\n\n").map((item) => item.trim()).filter(Boolean),
         profileSongUrl: editProfileSongUrl,
         mediaEmbeds: parseMediaEmbedsInput(editMediaEmbedsText),
+        retroBlocks: parseRetroBlocksInput(editRetroBlocksText),
         moduleOrder: parseMyspaceModuleOrderInput(editModuleOrderText),
         stamps: editStampsText.split("\n").map((item) => item.trim()).filter(Boolean),
         customBoxes: parseCustomBoxesInput(editCustomBoxesText),
@@ -1399,6 +1451,35 @@ export default function ProfileClient({ name }: { name: string }) {
                 <section className="profileMyspaceEmbedCard">
                   <h4>Media</h4>
                   <p>No structured embeds pinned yet.</p>
+                </section>
+              )}
+            </div>
+            <div className="profileMyspaceRetroGrid" style={getMyspaceModuleOrderStyle(myspaceModuleOrder, "retro")}>
+              {retroBlocks.length ? retroBlocks.map((block, index) => (
+                <section key={`${block.kind}:${block.title}:${index}`} className="profileMyspaceRetroCard">
+                  <h4>{block.title}</h4>
+                  <span className="profileMyspaceRetroType">{block.kind}</span>
+                  {block.kind === "text" ? <p>{block.content || ""}</p> : null}
+                  {block.kind === "image" ? (
+                    <>
+                      {block.imageUrl ? <img src={block.imageUrl} alt={block.title} /> : null}
+                      {block.content ? <p>{block.content}</p> : null}
+                    </>
+                  ) : null}
+                  {block.kind === "links" ? (
+                    <ul className="profileMyspaceRetroLinks">
+                      {block.links.map((link) => (
+                        <li key={link}>
+                          <a href={link} target="_blank" rel="noreferrer" className="mono">{link}</a>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </section>
+              )) : (
+                <section className="profileMyspaceRetroCard">
+                  <h4>Retro Blocks</h4>
+                  <p>No structured retro blocks pinned yet.</p>
                 </section>
               )}
             </div>
@@ -2039,15 +2120,24 @@ instant follow" />
 Playlist | https://open.spotify.com/playlist/..." />
                       </label>
                       <label>
+                        Retro blocks (blank-line separated; Type: text|image|links, then Title:, then body)
+                        <textarea
+                          value={editRetroBlocksText}
+                          onChange={(e) => setEditRetroBlocksText(e.target.value)}
+                          placeholder={"Type: text\nTitle: Latest Bulletin\nReworking this profile to feel like 2006 again.\n\nType: image\nTitle: Moodboard\nhttps://images.example.com/moodboard.jpg\nGlitter assets only.\n\nType: links\nTitle: Daily Clicks\nhttps://forum.example.com\nhttps://playlist.example.com"}
+                        />
+                      </label>
+                      <label>
                         Stamps (one per line)
                         <textarea value={editStampsText} onChange={(e) => setEditStampsText(e.target.value)} placeholder="online now
 scene kid
 collector core" />
                       </label>
                       <label>
-                        Module order (one per line: social, media, boxes, guestbook, custom)
+                        Module order (one per line: social, media, retro, boxes, guestbook, custom)
                         <textarea value={editModuleOrderText} onChange={(e) => setEditModuleOrderText(e.target.value)} placeholder="social
 media
+retro
 boxes
 guestbook
 custom" />

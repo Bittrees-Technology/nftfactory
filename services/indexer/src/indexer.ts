@@ -87,6 +87,7 @@ type ProfileLinkPayload = {
   statusHeadline?: string;
   sidebarFacts?: ProfileSidebarFact[];
   mediaEmbeds?: ProfileMediaEmbed[];
+  retroBlocks?: ProfileRetroBlock[];
   moduleOrder?: string[];
   stamps?: string[];
   customBoxes?: ProfileCustomBox[];
@@ -138,6 +139,14 @@ type ProfileMediaEmbed = {
   url: string;
 };
 
+type ProfileRetroBlock = {
+  kind: "text" | "image" | "links";
+  title: string;
+  content: string | null;
+  imageUrl: string | null;
+  links: string[];
+};
+
 type ProfileRecord = {
   slug: string;
   fullName: string;
@@ -157,6 +166,7 @@ type ProfileRecord = {
   statusHeadline: string | null;
   sidebarFacts: ProfileSidebarFact[];
   mediaEmbeds: ProfileMediaEmbed[];
+  retroBlocks: ProfileRetroBlock[];
   moduleOrder: string[];
   stamps: string[];
   customBoxes: ProfileCustomBox[];
@@ -1415,11 +1425,34 @@ function sanitizeProfileMediaEmbeds(value: ProfileMediaEmbed[] | undefined, maxI
     .slice(0, maxItems);
 }
 
+function sanitizeProfileRetroBlocks(value: ProfileRetroBlock[] | undefined, maxItems = 8): ProfileRetroBlock[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      const kind = String(item?.kind || "").trim().toLowerCase();
+      if (kind !== "text" && kind !== "image" && kind !== "links") return null;
+      return {
+        kind,
+        title: sanitizeProfileText(item?.title, 80) || "",
+        content: sanitizeProfileText(item?.content || undefined, 1200) || null,
+        imageUrl: sanitizeProfileUrl(item?.imageUrl || undefined) || null,
+        links: sanitizeProfileLinks(item?.links)
+      } satisfies ProfileRetroBlock;
+    })
+    .filter((item): item is ProfileRetroBlock => {
+      if (!item || !item.title) return false;
+      if (item.kind === "text") return Boolean(item.content);
+      if (item.kind === "image") return Boolean(item.imageUrl);
+      return item.links.length > 0;
+    })
+    .slice(0, maxItems);
+}
+
 function sanitizeProfileModuleOrder(value: string[] | undefined): string[] {
-  const allowed = new Set(["social", "media", "boxes", "guestbook", "custom"]);
+  const allowed = new Set(["social", "media", "retro", "boxes", "guestbook", "custom"]);
   const normalized = Array.isArray(value) ? value.map((item) => String(item || "").trim().toLowerCase()).filter((item) => allowed.has(item)) : [];
   const deduped = Array.from(new Set(normalized));
-  for (const moduleId of ["social", "media", "boxes", "guestbook", "custom"]) {
+  for (const moduleId of ["social", "media", "retro", "boxes", "guestbook", "custom"]) {
     if (!deduped.includes(moduleId)) deduped.push(moduleId);
   }
   return deduped;
@@ -1454,6 +1487,7 @@ async function readProfileRecords(): Promise<ProfileRecord[]> {
           statusHeadline: sanitizeProfileText(item.statusHeadline || undefined, 160),
           sidebarFacts: sanitizeProfileSidebarFacts(item.sidebarFacts),
           mediaEmbeds: sanitizeProfileMediaEmbeds(item.mediaEmbeds),
+          retroBlocks: sanitizeProfileRetroBlocks(item.retroBlocks),
           moduleOrder: sanitizeProfileModuleOrder(item.moduleOrder),
           topFriends: sanitizeProfileList(item.topFriends, 8, 80),
           stamps: sanitizeProfileList(item.stamps, 24, 48),
@@ -6012,6 +6046,7 @@ async function handleRequest(
       statusHeadline: sanitizeProfileText(payload.statusHeadline, 160) || existingIdentity?.statusHeadline || null,
       sidebarFacts: payload.sidebarFacts !== undefined ? sanitizeProfileSidebarFacts(payload.sidebarFacts) : existingIdentity?.sidebarFacts || [],
       mediaEmbeds: payload.mediaEmbeds !== undefined ? sanitizeProfileMediaEmbeds(payload.mediaEmbeds) : existingIdentity?.mediaEmbeds || [],
+      retroBlocks: payload.retroBlocks !== undefined ? sanitizeProfileRetroBlocks(payload.retroBlocks) : existingIdentity?.retroBlocks || [],
       moduleOrder: payload.moduleOrder !== undefined ? sanitizeProfileModuleOrder(payload.moduleOrder) : existingIdentity?.moduleOrder || sanitizeProfileModuleOrder(undefined),
       topFriends: sanitizeProfileList(payload.topFriends, 8, 80).length > 0 ? sanitizeProfileList(payload.topFriends, 8, 80) : existingIdentity?.topFriends || [],
       testimonials: sanitizeProfileList(payload.testimonials, 12, 280).length > 0 ? sanitizeProfileList(payload.testimonials, 12, 280) : existingIdentity?.testimonials || [],
@@ -6049,6 +6084,7 @@ async function handleRequest(
         statusHeadline: sanitizeProfileText(payload.statusHeadline, 160) || existingIdentity?.statusHeadline || null,
         sidebarFacts: payload.sidebarFacts !== undefined ? sanitizeProfileSidebarFacts(payload.sidebarFacts) : existingIdentity?.sidebarFacts || [],
         mediaEmbeds: payload.mediaEmbeds !== undefined ? sanitizeProfileMediaEmbeds(payload.mediaEmbeds) : existingIdentity?.mediaEmbeds || [],
+        retroBlocks: payload.retroBlocks !== undefined ? sanitizeProfileRetroBlocks(payload.retroBlocks) : existingIdentity?.retroBlocks || [],
         moduleOrder: payload.moduleOrder !== undefined ? sanitizeProfileModuleOrder(payload.moduleOrder) : existingIdentity?.moduleOrder || sanitizeProfileModuleOrder(undefined),
         topFriends: sanitizeProfileList(payload.topFriends, 8, 80).length > 0 ? sanitizeProfileList(payload.topFriends, 8, 80) : existingIdentity?.topFriends || [],
         testimonials: sanitizeProfileList(payload.testimonials, 12, 280).length > 0 ? sanitizeProfileList(payload.testimonials, 12, 280) : existingIdentity?.testimonials || [],
@@ -6145,6 +6181,7 @@ async function handleRequest(
           statusHeadline: target.statusHeadline,
           sidebarFacts: target.sidebarFacts,
           mediaEmbeds: target.mediaEmbeds,
+          retroBlocks: target.retroBlocks,
           moduleOrder: target.moduleOrder,
           stamps: target.stamps,
           customBoxes: target.customBoxes,

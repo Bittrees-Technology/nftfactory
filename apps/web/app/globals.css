@@ -1712,3 +1712,66 @@ button:disabled {
 .profileMyspaceEmbedCard a {
   word-break: break-word;
 }
+
+.profileMyspaceRetroGrid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  margin-bottom: 12px;
+}
+
+.profileMyspaceRetroCard {
+  position: relative;
+  padding: 12px;
+  border: 2px solid #0f2f77;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 4px 4px 0 rgba(15, 47, 119, 0.14);
+}
+
+.profileMyspaceRetroCard h4 {
+  margin: 0 0 8px;
+  color: #0f2f77;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.76rem;
+}
+
+.profileMyspaceRetroCard p {
+  margin: 0;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.profileMyspaceRetroCard img {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin-bottom: 10px;
+  border: 1px solid rgba(15, 47, 119, 0.22);
+  background: #f8f4e8;
+}
+
+.profileMyspaceRetroType {
+  display: inline-flex;
+  margin-bottom: 10px;
+  padding: 2px 8px;
+  border: 1px solid rgba(15, 47, 119, 0.26);
+  background: #fff3c4;
+  color: #8b1e3f;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.profileMyspaceRetroLinks {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.profileMyspaceRetroLinks li + li {
+  margin-top: 6px;
+}
+
+.profileMyspaceRetroLinks a {
+  word-break: break-word;
+}
