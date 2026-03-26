@@ -681,7 +681,7 @@ export async function transferProfileOwnership(payload: {
 
 
 export async function fetchProfileGuestbook(name: string, options?: IndexerRequestOptions): Promise<ApiProfileGuestbookResponse> {
-  return fetchJson<ApiProfileGuestbookResponse>(`/api/profile/${encodeURIComponent(name)}/guestbook`, undefined, undefined, options);
+  return fetchJson<ApiProfileGuestbookResponse>("/api/profile/" + encodeURIComponent(name) + "/guestbook", undefined, undefined, options);
 }
 
 export async function createProfileGuestbookEntry(payload: {

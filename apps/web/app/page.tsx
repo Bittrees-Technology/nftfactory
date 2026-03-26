@@ -60,6 +60,16 @@ export default function HomePage() {
           <p className="actionHint">Opens the collection management flow directly.</p>
         </Link>
       </div>
+
+      <div className="grid">
+        <Link href="/profile/moderation" className="card actionCard">
+          <h3>Moderate Guestbook</h3>
+          <p>
+            Review creator guestbook entries, hide or delete abuse, and triage moderation without needing to open each public profile manually.
+          </p>
+          <p className="actionHint">Opens the profile moderation workspace.</p>
+        </Link>
+      </div>
     </section>
   );
 }
