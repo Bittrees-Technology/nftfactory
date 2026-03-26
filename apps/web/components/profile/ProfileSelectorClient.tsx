@@ -47,6 +47,7 @@ function normalizeDerivedProfile(collection: ApiOwnedCollections["collections"][
     whoIdLikeToMeet: null,
     statusHeadline: null,
     sidebarFacts: [],
+    mediaEmbeds: [],
     topFriends: [],
     stamps: [],
     testimonials: [],

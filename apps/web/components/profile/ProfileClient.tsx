@@ -114,6 +114,61 @@ function formatSidebarFactsInput(facts: Array<{ label: string; value: string }> 
   return facts.map((fact) => fact.label + ": " + fact.value).join("\n");
 }
 
+function parseMediaEmbedsInput(value: string): Array<{ title: string; url: string }> {
+  return String(value || "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const separatorIndex = line.indexOf("|");
+      if (separatorIndex <= 0) return null;
+      const title = line.slice(0, separatorIndex).trim();
+      const url = line.slice(separatorIndex + 1).trim();
+      return title && url ? { title, url } : null;
+    })
+    .filter((item): item is { title: string; url: string } => Boolean(item));
+}
+
+function formatMediaEmbedsInput(embeds: Array<{ title: string; url: string }> | null | undefined): string {
+  if (!Array.isArray(embeds) || embeds.length === 0) return "";
+  return embeds.map((embed) => embed.title + " | " + embed.url).join("\n");
+}
+
+type ProfileMediaEmbedView = {
+  title: string;
+  url: string;
+  kind: "youtube" | "spotify" | "link";
+  embedUrl: string | null;
+};
+
+function toProfileMediaEmbedView(embed: { title: string; url: string }): ProfileMediaEmbedView {
+  try {
+    const parsed = new URL(embed.url);
+    const host = parsed.hostname.replace(/^www\./, "").toLowerCase();
+    if (host === "youtu.be") {
+      const videoId = parsed.pathname.replace(/^\//, "").trim();
+      if (videoId) {
+        return { title: embed.title, url: embed.url, kind: "youtube", embedUrl: "https://www.youtube.com/embed/" + videoId };
+      }
+    }
+    if (host === "youtube.com" || host === "m.youtube.com") {
+      const videoId = parsed.searchParams.get("v") || parsed.pathname.split("/").filter(Boolean)[1] || "";
+      if (videoId) {
+        return { title: embed.title, url: embed.url, kind: "youtube", embedUrl: "https://www.youtube.com/embed/" + videoId };
+      }
+    }
+    if (host === "open.spotify.com") {
+      const parts = parsed.pathname.split("/").filter(Boolean);
+      if (parts.length >= 2 && ["track", "album", "playlist", "artist", "show", "episode"].includes(parts[0] || "")) {
+        return { title: embed.title, url: embed.url, kind: "spotify", embedUrl: "https://open.spotify.com/embed/" + parts[0] + "/" + parts[1] };
+      }
+    }
+  } catch {
+    return { title: embed.title, url: embed.url, kind: "link", embedUrl: null };
+  }
+  return { title: embed.title, url: embed.url, kind: "link", embedUrl: null };
+}
+
 function getFeaturedMediaKind(url: string | null | undefined): "image" | "audio" | "video" | "link" | null {
   if (!url) return null;
   const normalized = url.trim().toLowerCase();
@@ -259,6 +314,7 @@ export default function ProfileClient({ name }: { name: string }) {
   const [editTestimonialsText, setEditTestimonialsText] = useState("");
   const [editProfileSongUrl, setEditProfileSongUrl] = useState("");
   const [editStampsText, setEditStampsText] = useState("");
+  const [editMediaEmbedsText, setEditMediaEmbedsText] = useState("");
   const [editCustomBoxesText, setEditCustomBoxesText] = useState("");
   const [editLinksText, setEditLinksText] = useState("");
   const [transferAddress, setTransferAddress] = useState("");
@@ -717,6 +773,7 @@ export default function ProfileClient({ name }: { name: string }) {
   const hasManualWallet = Boolean(sellerAddress.trim());
   const hasProfileData = hasResolvedIdentity || hasManualWallet;
   const featuredMediaKind = useMemo(() => getFeaturedMediaKind(primaryProfile?.featuredUrl), [primaryProfile]);
+  const mediaEmbedCards = useMemo(() => (primaryProfile?.mediaEmbeds || []).map((item) => toProfileMediaEmbedView(item)), [primaryProfile]);
 
   useEffect(() => {
     void loadGuestbookEntries();
@@ -742,6 +799,7 @@ export default function ProfileClient({ name }: { name: string }) {
     setEditTopFriendsText((primaryProfile.topFriends || []).join("\n"));
     setEditTestimonialsText((primaryProfile.testimonials || []).join("\n\n"));
     setEditProfileSongUrl(primaryProfile.profileSongUrl || "");
+    setEditMediaEmbedsText(formatMediaEmbedsInput(primaryProfile.mediaEmbeds));
     setEditStampsText((primaryProfile.stamps || []).join("\n"));
     setEditCustomBoxesText(formatCustomBoxesInput(primaryProfile.customBoxes));
     setEditLinksText((primaryProfile.links || []).join("\n"));
@@ -785,6 +843,7 @@ export default function ProfileClient({ name }: { name: string }) {
         topFriends: editTopFriendsText.split("\n").map((item) => item.trim()).filter(Boolean),
         testimonials: editTestimonialsText.split("\n\n").map((item) => item.trim()).filter(Boolean),
         profileSongUrl: editProfileSongUrl,
+        mediaEmbeds: parseMediaEmbedsInput(editMediaEmbedsText),
         stamps: editStampsText.split("\n").map((item) => item.trim()).filter(Boolean),
         customBoxes: parseCustomBoxesInput(editCustomBoxesText),
         links: editLinksText.split("\n").map((item) => item.trim()).filter(Boolean)
@@ -1229,6 +1288,30 @@ export default function ProfileClient({ name }: { name: string }) {
                   <p>No profile song set yet.</p>
                 )}
               </section>
+            </div>
+            <div className="profileMyspaceEmbedsGrid">
+              {mediaEmbedCards.length ? mediaEmbedCards.map((embed) => (
+                <section key={embed.title + ":" + embed.url} className="profileMyspaceEmbedCard">
+                  <h4>{embed.title}</h4>
+                  {embed.embedUrl ? (
+                    <iframe
+                      title={embed.title}
+                      src={embed.embedUrl}
+                      loading="lazy"
+                      allow={embed.kind === "youtube" ? "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" : "autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"}
+                      allowFullScreen={embed.kind === "youtube"}
+                      referrerPolicy="strict-origin-when-cross-origin"
+                    />
+                  ) : (
+                    <a href={embed.url} target="_blank" rel="noreferrer" className="mono">{embed.url}</a>
+                  )}
+                </section>
+              )) : (
+                <section className="profileMyspaceEmbedCard">
+                  <h4>Media</h4>
+                  <p>No structured embeds pinned yet.</p>
+                </section>
+              )}
             </div>
             <div className="profileMyspaceBoxesGrid">
               {primaryProfile?.customBoxes?.length ? primaryProfile.customBoxes.map((box) => (
@@ -1824,6 +1907,11 @@ instant follow" />
                       <label>
                         Profile song URL
                         <input value={editProfileSongUrl} onChange={(e) => setEditProfileSongUrl(e.target.value)} placeholder="https://.../song.mp3" />
+                      </label>
+                      <label>
+                        Media embeds (one per line as Title | URL)
+                        <textarea value={editMediaEmbedsText} onChange={(e) => setEditMediaEmbedsText(e.target.value)} placeholder="Favorite Video | https://www.youtube.com/watch?v=dQw4w9WgXcQ
+Playlist | https://open.spotify.com/playlist/..." />
                       </label>
                       <label>
                         Stamps (one per line)

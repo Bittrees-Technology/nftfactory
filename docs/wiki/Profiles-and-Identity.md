@@ -56,7 +56,7 @@ The public creator page renders:
 - a pinned collection when available
 - a creator collection wall
 - a storefront feed based on indexed data
-- optional Myspace-style profile customization with blurbs, Top Friends, testimonials, a profile song, structured custom boxes, a status headline, sidebar facts, retro stamps, a guestbook with owner moderation, plus sandboxed custom HTML/CSS modules
+- optional Myspace-style profile customization with blurbs, Top Friends, testimonials, a profile song, structured custom boxes, a status headline, sidebar facts, structured media embeds, retro stamps, a guestbook with owner moderation, plus sandboxed custom HTML/CSS modules
 
 ## Data sources
 

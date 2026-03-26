@@ -86,6 +86,7 @@ type ProfileLinkPayload = {
   profileSongUrl?: string;
   statusHeadline?: string;
   sidebarFacts?: ProfileSidebarFact[];
+  mediaEmbeds?: ProfileMediaEmbed[];
   stamps?: string[];
   customBoxes?: ProfileCustomBox[];
   bannerUrl?: string;
@@ -123,6 +124,11 @@ type ProfileSidebarFact = {
   value: string;
 };
 
+type ProfileMediaEmbed = {
+  title: string;
+  url: string;
+};
+
 type ProfileRecord = {
   slug: string;
   fullName: string;
@@ -141,6 +147,7 @@ type ProfileRecord = {
   profileSongUrl: string | null;
   statusHeadline: string | null;
   sidebarFacts: ProfileSidebarFact[];
+  mediaEmbeds: ProfileMediaEmbed[];
   stamps: string[];
   customBoxes: ProfileCustomBox[];
   bannerUrl: string | null;
@@ -1356,6 +1363,17 @@ function sanitizeProfileSidebarFacts(value: ProfileSidebarFact[] | undefined, ma
     .slice(0, maxItems);
 }
 
+function sanitizeProfileMediaEmbeds(value: ProfileMediaEmbed[] | undefined, maxItems = 6): ProfileMediaEmbed[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => ({
+      title: sanitizeProfileText(item?.title, 80),
+      url: sanitizeProfileUrl(item?.url)
+    }))
+    .filter((item): item is { title: string; url: string } => Boolean(item.title && item.url))
+    .slice(0, maxItems);
+}
+
 async function readProfileRecords(): Promise<ProfileRecord[]> {
   try {
     const raw = await readFile(PROFILE_FILE, "utf8");
@@ -1384,6 +1402,7 @@ async function readProfileRecords(): Promise<ProfileRecord[]> {
           whoIdLikeToMeet: sanitizeProfileText(item.whoIdLikeToMeet || undefined, 1200),
           statusHeadline: sanitizeProfileText(item.statusHeadline || undefined, 160),
           sidebarFacts: sanitizeProfileSidebarFacts(item.sidebarFacts),
+          mediaEmbeds: sanitizeProfileMediaEmbeds(item.mediaEmbeds),
           topFriends: sanitizeProfileList(item.topFriends, 8, 80),
           stamps: sanitizeProfileList(item.stamps, 24, 48),
           testimonials: sanitizeProfileList(item.testimonials, 12, 280),
@@ -5937,6 +5956,7 @@ async function handleRequest(
       whoIdLikeToMeet: sanitizeProfileText(payload.whoIdLikeToMeet, 1200) || existingIdentity?.whoIdLikeToMeet || null,
       statusHeadline: sanitizeProfileText(payload.statusHeadline, 160) || existingIdentity?.statusHeadline || null,
       sidebarFacts: payload.sidebarFacts !== undefined ? sanitizeProfileSidebarFacts(payload.sidebarFacts) : existingIdentity?.sidebarFacts || [],
+      mediaEmbeds: payload.mediaEmbeds !== undefined ? sanitizeProfileMediaEmbeds(payload.mediaEmbeds) : existingIdentity?.mediaEmbeds || [],
       topFriends: sanitizeProfileList(payload.topFriends, 8, 80).length > 0 ? sanitizeProfileList(payload.topFriends, 8, 80) : existingIdentity?.topFriends || [],
       testimonials: sanitizeProfileList(payload.testimonials, 12, 280).length > 0 ? sanitizeProfileList(payload.testimonials, 12, 280) : existingIdentity?.testimonials || [],
       profileSongUrl: sanitizeProfileUrl(payload.profileSongUrl) || existingIdentity?.profileSongUrl || null,
@@ -5972,6 +5992,7 @@ async function handleRequest(
         whoIdLikeToMeet: sanitizeProfileText(payload.whoIdLikeToMeet, 1200) || existingIdentity?.whoIdLikeToMeet || null,
         statusHeadline: sanitizeProfileText(payload.statusHeadline, 160) || existingIdentity?.statusHeadline || null,
         sidebarFacts: payload.sidebarFacts !== undefined ? sanitizeProfileSidebarFacts(payload.sidebarFacts) : existingIdentity?.sidebarFacts || [],
+        mediaEmbeds: payload.mediaEmbeds !== undefined ? sanitizeProfileMediaEmbeds(payload.mediaEmbeds) : existingIdentity?.mediaEmbeds || [],
         topFriends: sanitizeProfileList(payload.topFriends, 8, 80).length > 0 ? sanitizeProfileList(payload.topFriends, 8, 80) : existingIdentity?.topFriends || [],
         testimonials: sanitizeProfileList(payload.testimonials, 12, 280).length > 0 ? sanitizeProfileList(payload.testimonials, 12, 280) : existingIdentity?.testimonials || [],
         profileSongUrl: sanitizeProfileUrl(payload.profileSongUrl) || existingIdentity?.profileSongUrl || null,
@@ -6066,6 +6087,7 @@ async function handleRequest(
           profileSongUrl: target.profileSongUrl,
           statusHeadline: target.statusHeadline,
           sidebarFacts: target.sidebarFacts,
+          mediaEmbeds: target.mediaEmbeds,
           stamps: target.stamps,
           customBoxes: target.customBoxes,
           bannerUrl: target.bannerUrl,

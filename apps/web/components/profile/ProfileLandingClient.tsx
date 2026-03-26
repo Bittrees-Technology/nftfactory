@@ -344,6 +344,7 @@ function createLocalProfileRecord(args: {
     whoIdLikeToMeet: null,
     statusHeadline: null,
     sidebarFacts: [],
+    mediaEmbeds: [],
     topFriends: [],
     stamps: [],
     testimonials: [],

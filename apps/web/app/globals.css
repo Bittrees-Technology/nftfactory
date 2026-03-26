@@ -1679,3 +1679,36 @@ button:disabled {
   line-height: 1.5;
   white-space: pre-wrap;
 }
+
+.profileMyspaceEmbedsGrid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  margin-bottom: 12px;
+}
+
+.profileMyspaceEmbedCard {
+  padding: 12px;
+  border: 2px solid #0f2f77;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 4px 4px 0 rgba(15, 47, 119, 0.14);
+}
+
+.profileMyspaceEmbedCard h4 {
+  margin: 0 0 10px;
+  color: #0f2f77;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.76rem;
+}
+
+.profileMyspaceEmbedCard iframe {
+  width: 100%;
+  min-height: 220px;
+  border: 1px solid rgba(15, 47, 119, 0.18);
+  background: #f8f4e8;
+}
+
+.profileMyspaceEmbedCard a {
+  word-break: break-word;
+}

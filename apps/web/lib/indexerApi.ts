@@ -142,6 +142,11 @@ export type ApiProfileSidebarFact = {
   value: string;
 };
 
+export type ApiProfileMediaEmbed = {
+  title: string;
+  url: string;
+};
+
 export type ApiProfileRecord = {
   slug: string;
   fullName: string;
@@ -160,6 +165,7 @@ export type ApiProfileRecord = {
   profileSongUrl: string | null;
   statusHeadline: string | null;
   sidebarFacts: ApiProfileSidebarFact[];
+  mediaEmbeds: ApiProfileMediaEmbed[];
   stamps: string[];
   customBoxes: ApiProfileCustomBox[];
   bannerUrl: string | null;
@@ -642,6 +648,7 @@ export async function linkProfileIdentity(payload: {
   profileSongUrl?: string;
   statusHeadline?: string;
   sidebarFacts?: ApiProfileSidebarFact[];
+  mediaEmbeds?: ApiProfileMediaEmbed[];
   stamps?: string[];
   customBoxes?: ApiProfileCustomBox[];
   bannerUrl?: string;
