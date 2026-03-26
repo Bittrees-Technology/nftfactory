@@ -107,6 +107,7 @@ type ProfileTransferPayload = {
 
 type ProfileGuestbookPayload = {
   authorName: string;
+  authorAddress?: string;
   message: string;
 };
 
@@ -167,6 +168,7 @@ type ProfileGuestbookEntry = {
   id: string;
   profileSlug: string;
   authorName: string;
+  authorAddress?: string | null;
   message: string;
   createdAt: string;
   hiddenAt?: string | null;
@@ -1455,6 +1457,7 @@ async function readProfileGuestbookEntries(): Promise<ProfileGuestbookEntry[]> {
         id: String(item.id || "").trim(),
         profileSlug: normalizeRouteSlug(String(item.profileSlug || "")) || "",
         authorName: sanitizeProfileText(item.authorName || undefined, 80) || "Anonymous",
+        authorAddress: isAddress(String(item.authorAddress || "").toLowerCase()) ? String(item.authorAddress).toLowerCase() : null,
         message: sanitizeProfileText(item.message || undefined, 600) || "",
         createdAt: item.createdAt || new Date().toISOString(),
         hiddenAt: item.hiddenAt || null,
@@ -6223,6 +6226,7 @@ async function handleRequest(
 
     const payload = await readJsonBody<ProfileGuestbookPayload>(req);
     const authorName = sanitizeProfileText(payload.authorName, 80) || null;
+    const authorAddress = isAddress(String(payload.authorAddress || "").toLowerCase()) ? String(payload.authorAddress).toLowerCase() : null;
     const message = sanitizeProfileText(payload.message, 600) || null;
     if (!authorName || !message) {
       sendJson(res, 400, { error: "authorName and message are required" });
@@ -6234,11 +6238,12 @@ async function handleRequest(
       id: `guestbook_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
       profileSlug: slug,
       authorName,
+      authorAddress,
       message,
       createdAt: now
     };
     const current = await readProfileGuestbookEntries();
-    const next = [entry, ...current.filter((item) => item.profileSlug !== slug || item.message !== entry.message || item.authorName !== entry.authorName)].slice(0, 500);
+    const next = [entry, ...current.filter((item) => item.profileSlug !== slug || item.message !== entry.message || item.authorName !== entry.authorName || item.authorAddress !== entry.authorAddress)].slice(0, 500);
     await writeProfileGuestbookEntries(next);
     sendJson(res, 201, { ok: true, entry });
     return;

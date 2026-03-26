@@ -207,6 +207,7 @@ export type ApiProfileGuestbookEntry = {
   id: string;
   profileSlug: string;
   authorName: string;
+  authorAddress?: string | null;
   message: string;
   createdAt: string;
   hiddenAt?: string | null;
@@ -686,12 +687,14 @@ export async function fetchProfileGuestbook(name: string, options?: IndexerReque
 export async function createProfileGuestbookEntry(payload: {
   name: string;
   authorName: string;
+  authorAddress?: string;
   message: string;
 }, options?: IndexerRequestOptions): Promise<{ ok: boolean; entry: ApiProfileGuestbookEntry }> {
   return fetchJson<{ ok: boolean; entry: ApiProfileGuestbookEntry }>(`/api/profile/${encodeURIComponent(payload.name)}/guestbook`, {
     method: "POST",
     body: JSON.stringify({
       authorName: payload.authorName,
+      authorAddress: payload.authorAddress,
       message: payload.message
     })
   }, undefined, options);

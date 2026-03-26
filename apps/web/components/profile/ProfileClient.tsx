@@ -995,6 +995,7 @@ export default function ProfileClient({ name }: { name: string }) {
       const response = await createProfileGuestbookEntry({
         name,
         authorName: guestbookName,
+        authorAddress: connectedAddress || undefined,
         message: guestbookMessage
       });
       setGuestbookEntries((current) => [response.entry, ...current].slice(0, 25));
@@ -1394,6 +1395,7 @@ export default function ProfileClient({ name }: { name: string }) {
                   <article key={entry.id} className="profileMyspaceGuestbookEntry">
                     <div className="profileMyspaceGuestbookMeta">
                       <strong>{entry.authorName}</strong>
+                      {entry.authorAddress ? <span className="mono">{truncateAddress(entry.authorAddress as Address)}</span> : null}
                       <span className="hint">{new Date(entry.createdAt).toLocaleString()}</span>
                     </div>
                     <p>{entry.message}</p>
