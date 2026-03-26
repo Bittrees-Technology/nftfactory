@@ -1807,8 +1807,36 @@ button:disabled {
   padding: 10px 12px;
   border: 1px solid rgba(15, 47, 119, 0.16);
   background: rgba(255, 255, 255, 0.72);
+  cursor: grab;
+  transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+}
+
+.profileModuleOrderItem.is-dragging {
+  opacity: 0.72;
+  transform: scale(0.98);
+  cursor: grabbing;
+}
+
+.profileModuleOrderItem.is-drag-over {
+  border-color: #0f2f77;
+  box-shadow: 0 0 0 2px rgba(15, 47, 119, 0.12);
 }
 
 .profileModuleOrderItem p {
   margin: 4px 0 0;
+}
+
+.profileModuleOrderActions {
+  align-items: center;
+}
+
+.profileModuleOrderHandle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  color: #0f2f77;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  user-select: none;
 }

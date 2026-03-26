@@ -359,6 +359,21 @@ function moveMyspaceModuleOrder(
   return next;
 }
 
+function reorderMyspaceModuleOrder(
+  order: MyspaceOrderableModuleId[],
+  draggedModuleId: MyspaceOrderableModuleId,
+  targetModuleId: MyspaceOrderableModuleId
+): MyspaceOrderableModuleId[] {
+  const normalized = normalizeMyspaceModuleOrder(order);
+  const draggedIndex = normalized.indexOf(draggedModuleId);
+  const targetIndex = normalized.indexOf(targetModuleId);
+  if (draggedIndex < 0 || targetIndex < 0 || draggedIndex == targetIndex) return normalized;
+  const next = [...normalized];
+  const [dragged] = next.splice(draggedIndex, 1);
+  next.splice(targetIndex, 0, dragged);
+  return next;
+}
+
 function getMyspaceModuleOrderStyle(order: MyspaceOrderableModuleId[], moduleId: MyspaceOrderableModuleId): CSSProperties {
   return { order: normalizeMyspaceModuleOrder(order).indexOf(moduleId) };
 }
@@ -430,6 +445,8 @@ export default function ProfileClient({ name }: { name: string }) {
   const [editMediaEmbedsText, setEditMediaEmbedsText] = useState("");
   const [editRetroBlocksText, setEditRetroBlocksText] = useState("");
   const [editModuleOrder, setEditModuleOrder] = useState<MyspaceOrderableModuleId[]>(normalizeMyspaceModuleOrder(undefined));
+  const [draggingModuleId, setDraggingModuleId] = useState<MyspaceOrderableModuleId | null>(null);
+  const [dragOverModuleId, setDragOverModuleId] = useState<MyspaceOrderableModuleId | null>(null);
   const [editCustomBoxesText, setEditCustomBoxesText] = useState("");
   const [editLinksText, setEditLinksText] = useState("");
   const [transferAddress, setTransferAddress] = useState("");
@@ -931,6 +948,8 @@ export default function ProfileClient({ name }: { name: string }) {
     setEditStampsText((primaryProfile.stamps || []).join("\n"));
     setEditCustomBoxesText(formatCustomBoxesInput(primaryProfile.customBoxes));
     setEditLinksText((primaryProfile.links || []).join("\n"));
+    setDraggingModuleId(null);
+    setDragOverModuleId(null);
     setEditState(idleActionState());
     setTransferAddress("");
     setTransferState(idleActionState());
@@ -2200,12 +2219,39 @@ collector core" />
                         <p className="hint">Rearrange the retro page modules directly instead of editing raw IDs.</p>
                         <div className="profileModuleOrderList">
                           {editModuleOrder.map((moduleId, index) => (
-                            <div key={moduleId} className="profileModuleOrderItem">
+                            <div
+                              key={moduleId}
+                              className={`profileModuleOrderItem ${draggingModuleId === moduleId ? "is-dragging" : ""} ${dragOverModuleId === moduleId ? "is-drag-over" : ""}`.trim()}
+                              draggable
+                              onDragStart={() => {
+                                setDraggingModuleId(moduleId);
+                                setDragOverModuleId(moduleId);
+                              }}
+                              onDragOver={(event) => {
+                                event.preventDefault();
+                                if (dragOverModuleId !== moduleId) {
+                                  setDragOverModuleId(moduleId);
+                                }
+                              }}
+                              onDrop={(event) => {
+                                event.preventDefault();
+                                setEditModuleOrder((current) =>
+                                  draggingModuleId ? reorderMyspaceModuleOrder(current, draggingModuleId, moduleId) : current
+                                );
+                                setDraggingModuleId(null);
+                                setDragOverModuleId(null);
+                              }}
+                              onDragEnd={() => {
+                                setDraggingModuleId(null);
+                                setDragOverModuleId(null);
+                              }}
+                            >
                               <div>
                                 <strong>{index + 1}. {MYSPACE_MODULE_LABELS[moduleId]}</strong>
                                 <p className="hint mono">{moduleId}</p>
                               </div>
-                              <div className="row">
+                              <div className="row profileModuleOrderActions">
+                                <span className="profileModuleOrderHandle" aria-hidden="true">::</span>
                                 <button
                                   type="button"
                                   onClick={() => setEditModuleOrder((current) => moveMyspaceModuleOrder(current, moduleId, -1))}
