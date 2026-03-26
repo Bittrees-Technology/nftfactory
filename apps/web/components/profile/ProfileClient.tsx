@@ -74,6 +74,26 @@ function isAddress(value: string): value is Address {
   return /^0x[a-fA-F0-9]{40}$/.test(value);
 }
 
+function parseCustomBoxesInput(value: string): Array<{ title: string; content: string }> {
+  return String(value || "")
+    .split(/\n\s*\n(?=Title:)/)
+    .map((block) => block.trim())
+    .filter(Boolean)
+    .map((block) => {
+      const lines = block.split("\n");
+      const first = lines[0] || "";
+      const title = first.replace(/^Title:\s*/i, "").trim();
+      const content = lines.slice(1).join("\n").trim();
+      return { title, content };
+    })
+    .filter((item) => item.title && item.content);
+}
+
+function formatCustomBoxesInput(boxes: Array<{ title: string; content: string }> | null | undefined): string {
+  if (!Array.isArray(boxes) || boxes.length === 0) return "";
+  return boxes.map((box) => ["Title: " + box.title, box.content].join("\n")).join("\n\n");
+}
+
 function getFeaturedMediaKind(url: string | null | undefined): "image" | "audio" | "video" | "link" | null {
   if (!url) return null;
   const normalized = url.trim().toLowerCase();
@@ -216,6 +236,7 @@ export default function ProfileClient({ name }: { name: string }) {
   const [editTopFriendsText, setEditTopFriendsText] = useState("");
   const [editTestimonialsText, setEditTestimonialsText] = useState("");
   const [editProfileSongUrl, setEditProfileSongUrl] = useState("");
+  const [editCustomBoxesText, setEditCustomBoxesText] = useState("");
   const [editLinksText, setEditLinksText] = useState("");
   const [transferAddress, setTransferAddress] = useState("");
   const [guestbookEntries, setGuestbookEntries] = useState<ApiProfileGuestbookEntry[]>([]);
@@ -696,6 +717,7 @@ export default function ProfileClient({ name }: { name: string }) {
     setEditTopFriendsText((primaryProfile.topFriends || []).join("\n"));
     setEditTestimonialsText((primaryProfile.testimonials || []).join("\n\n"));
     setEditProfileSongUrl(primaryProfile.profileSongUrl || "");
+    setEditCustomBoxesText(formatCustomBoxesInput(primaryProfile.customBoxes));
     setEditLinksText((primaryProfile.links || []).join("\n"));
     setEditState(idleActionState());
     setTransferAddress("");
@@ -735,6 +757,7 @@ export default function ProfileClient({ name }: { name: string }) {
         topFriends: editTopFriendsText.split("\n").map((item) => item.trim()).filter(Boolean),
         testimonials: editTestimonialsText.split("\n\n").map((item) => item.trim()).filter(Boolean),
         profileSongUrl: editProfileSongUrl,
+        customBoxes: parseCustomBoxesInput(editCustomBoxesText),
         links: editLinksText.split("\n").map((item) => item.trim()).filter(Boolean)
       });
 
@@ -823,6 +846,7 @@ export default function ProfileClient({ name }: { name: string }) {
       ${buildPanel("Who I'd Like To Meet", primaryProfile.whoIdLikeToMeet)}
       ${buildListPanel("Top Friends", primaryProfile.topFriends)}
       ${buildListPanel("Testimonials", primaryProfile.testimonials)}
+      ${(primaryProfile.customBoxes || []).map((box) => `<section class="myspace-panel"><h2>${escapeText(box.title)}</h2><div class="content"><p>${escapeText(box.content)}</p></div></section>`).join("")}
       ${primaryProfile.profileSongUrl ? `<section class="myspace-panel"><h2>Profile Song</h2><div class="content"><audio controls preload="none"><source src="${primaryProfile.profileSongUrl}" /></audio></div></section>` : ""}
       ${primaryProfile.customHtml ? `<section class="myspace-panel"><h2>Custom HTML</h2><div class="content">${primaryProfile.customHtml}</div></section>` : ""}
     </div>
@@ -1141,6 +1165,19 @@ export default function ProfileClient({ name }: { name: string }) {
                   <p>No profile song set yet.</p>
                 )}
               </section>
+            </div>
+            <div className="profileMyspaceBoxesGrid">
+              {primaryProfile?.customBoxes?.length ? primaryProfile.customBoxes.map((box) => (
+                <section key={`${box.title}:${box.content}`} className="profileMyspaceBoxCard">
+                  <h4>{box.title}</h4>
+                  <p>{box.content}</p>
+                </section>
+              )) : (
+                <section className="profileMyspaceBoxCard">
+                  <h4>Custom Boxes</h4>
+                  <p>No extra custom boxes pinned yet.</p>
+                </section>
+              )}
             </div>
           </section>
 
@@ -1713,6 +1750,14 @@ instant follow" />
                       <label>
                         Profile song URL
                         <input value={editProfileSongUrl} onChange={(e) => setEditProfileSongUrl(e.target.value)} placeholder="https://.../song.mp3" />
+                      </label>
+                      <label>
+                        Custom boxes
+                        <textarea
+                          value={editCustomBoxesText}
+                          onChange={(e) => setEditCustomBoxesText(e.target.value)}
+                          placeholder={"Title: Favorite Movies\nHackers, Ghost World, Blade Runner\n\nTitle: Latest Obsession\nCollecting weird internet relics."}
+                        />
                       </label>
                       <label>
                         Links (one per line)

@@ -84,6 +84,7 @@ type ProfileLinkPayload = {
   topFriends?: string[];
   testimonials?: string[];
   profileSongUrl?: string;
+  customBoxes?: ProfileCustomBox[];
   bannerUrl?: string;
   avatarUrl?: string;
   featuredUrl?: string;
@@ -109,6 +110,11 @@ type ProfileGuestbookHidePayload = {
   currentOwnerAddress: string;
 };
 
+type ProfileCustomBox = {
+  title: string;
+  content: string;
+};
+
 type ProfileRecord = {
   slug: string;
   fullName: string;
@@ -125,6 +131,7 @@ type ProfileRecord = {
   topFriends: string[];
   testimonials: string[];
   profileSongUrl: string | null;
+  customBoxes: ProfileCustomBox[];
   bannerUrl: string | null;
   avatarUrl: string | null;
   featuredUrl: string | null;
@@ -1316,6 +1323,17 @@ function sanitizeProfileList(value: string[] | undefined, maxItems = 8, itemMax 
     .slice(0, maxItems);
 }
 
+function sanitizeProfileBoxes(value: ProfileCustomBox[] | undefined, maxItems = 8): ProfileCustomBox[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => ({
+      title: sanitizeProfileText(item?.title, 80),
+      content: sanitizeProfileText(item?.content, 600)
+    }))
+    .filter((item): item is { title: string; content: string } => Boolean(item.title && item.content))
+    .slice(0, maxItems);
+}
+
 async function readProfileRecords(): Promise<ProfileRecord[]> {
   try {
     const raw = await readFile(PROFILE_FILE, "utf8");
@@ -1345,6 +1363,7 @@ async function readProfileRecords(): Promise<ProfileRecord[]> {
           topFriends: sanitizeProfileList(item.topFriends, 8, 80),
           testimonials: sanitizeProfileList(item.testimonials, 12, 280),
           profileSongUrl: sanitizeProfileUrl(item.profileSongUrl || undefined),
+          customBoxes: sanitizeProfileBoxes(item.customBoxes),
           bannerUrl: sanitizeProfileUrl(item.bannerUrl || undefined),
           avatarUrl: sanitizeProfileUrl(item.avatarUrl || undefined),
           featuredUrl: sanitizeProfileUrl(item.featuredUrl || undefined),
@@ -5894,6 +5913,7 @@ async function handleRequest(
       topFriends: sanitizeProfileList(payload.topFriends, 8, 80).length > 0 ? sanitizeProfileList(payload.topFriends, 8, 80) : existingIdentity?.topFriends || [],
       testimonials: sanitizeProfileList(payload.testimonials, 12, 280).length > 0 ? sanitizeProfileList(payload.testimonials, 12, 280) : existingIdentity?.testimonials || [],
       profileSongUrl: sanitizeProfileUrl(payload.profileSongUrl) || existingIdentity?.profileSongUrl || null,
+      customBoxes: payload.customBoxes !== undefined ? sanitizeProfileBoxes(payload.customBoxes) : existingIdentity?.customBoxes || [],
       bannerUrl: sanitizeProfileUrl(payload.bannerUrl) || existingIdentity?.bannerUrl || null,
       avatarUrl: sanitizeProfileUrl(payload.avatarUrl) || existingIdentity?.avatarUrl || null,
       featuredUrl: sanitizeProfileUrl(payload.featuredUrl) || existingIdentity?.featuredUrl || null,
@@ -5925,6 +5945,7 @@ async function handleRequest(
         topFriends: sanitizeProfileList(payload.topFriends, 8, 80).length > 0 ? sanitizeProfileList(payload.topFriends, 8, 80) : existingIdentity?.topFriends || [],
         testimonials: sanitizeProfileList(payload.testimonials, 12, 280).length > 0 ? sanitizeProfileList(payload.testimonials, 12, 280) : existingIdentity?.testimonials || [],
         profileSongUrl: sanitizeProfileUrl(payload.profileSongUrl) || existingIdentity?.profileSongUrl || null,
+        customBoxes: payload.customBoxes !== undefined ? sanitizeProfileBoxes(payload.customBoxes) : existingIdentity?.customBoxes || [],
         bannerUrl: sanitizeProfileUrl(payload.bannerUrl) || existingIdentity?.bannerUrl || null,
         avatarUrl: sanitizeProfileUrl(payload.avatarUrl) || existingIdentity?.avatarUrl || null,
         featuredUrl: sanitizeProfileUrl(payload.featuredUrl) || existingIdentity?.featuredUrl || null,
@@ -6012,6 +6033,7 @@ async function handleRequest(
           topFriends: target.topFriends,
           testimonials: target.testimonials,
           profileSongUrl: target.profileSongUrl,
+          customBoxes: target.customBoxes,
           bannerUrl: target.bannerUrl,
           avatarUrl: target.avatarUrl,
           featuredUrl: target.featuredUrl,

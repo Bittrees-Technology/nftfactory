@@ -48,6 +48,7 @@ function normalizeDerivedProfile(collection: ApiOwnedCollections["collections"][
     topFriends: [],
     testimonials: [],
     profileSongUrl: null,
+    customBoxes: [],
     bannerUrl: null,
     avatarUrl: null,
     featuredUrl: null,

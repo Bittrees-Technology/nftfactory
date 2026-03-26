@@ -132,6 +132,11 @@ export type ApiProfileResolution = {
   }>;
 };
 
+export type ApiProfileCustomBox = {
+  title: string;
+  content: string;
+};
+
 export type ApiProfileRecord = {
   slug: string;
   fullName: string;
@@ -148,6 +153,7 @@ export type ApiProfileRecord = {
   topFriends: string[];
   testimonials: string[];
   profileSongUrl: string | null;
+  customBoxes: ApiProfileCustomBox[];
   bannerUrl: string | null;
   avatarUrl: string | null;
   featuredUrl: string | null;
@@ -626,6 +632,7 @@ export async function linkProfileIdentity(payload: {
   topFriends?: string[];
   testimonials?: string[];
   profileSongUrl?: string;
+  customBoxes?: ApiProfileCustomBox[];
   bannerUrl?: string;
   avatarUrl?: string;
   featuredUrl?: string;
