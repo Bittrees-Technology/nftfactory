@@ -56,7 +56,7 @@ The public creator page renders:
 - a pinned collection when available
 - a creator collection wall
 - a storefront feed based on indexed data
-- optional Myspace-style profile customization with blurbs, Top Friends, testimonials, a profile song, plus sandboxed custom HTML/CSS modules
+- optional Myspace-style profile customization with blurbs, Top Friends, testimonials, a profile song, a guestbook, plus sandboxed custom HTML/CSS modules
 
 ## Data sources
 
@@ -82,7 +82,7 @@ The profile system is functional. Ongoing work includes:
 - better canonical-profile selection for wallets with multiple identities
 - clearer ownership validation for linked identities
 - cleaner public presentation with less diagnostic copy
-- richer creator customization controls, starting with Myspace-style layout mode, blurbs, Top Friends, testimonials, a profile song, and sandboxed HTML/CSS modules
+- richer creator customization controls, starting with Myspace-style layout mode, blurbs, Top Friends, testimonials, a profile song, a guestbook, and sandboxed HTML/CSS modules
 
 ## Related pages
 

@@ -50,10 +50,13 @@ import StatusStack from "../StatusStack";
 import {
   linkProfileIdentity,
   transferProfileOwnership,
+  fetchProfileGuestbook,
+  createProfileGuestbookEntry,
   type ApiActiveListingItem,
   type ApiProfileRecord,
   type ApiOfferSummary,
-  type ApiProfileResolution
+  type ApiProfileResolution,
+  type ApiProfileGuestbookEntry
 } from "../../lib/indexerApi";
 import { getListingPresentation, toListingViewModel, type ListingViewModel } from "../../lib/listingPresentation";
 import { buildSectionLoadStatusItems } from "../../lib/loadStateSections";
@@ -214,6 +217,11 @@ export default function ProfileClient({ name }: { name: string }) {
   const [editProfileSongUrl, setEditProfileSongUrl] = useState("");
   const [editLinksText, setEditLinksText] = useState("");
   const [transferAddress, setTransferAddress] = useState("");
+  const [guestbookEntries, setGuestbookEntries] = useState<ApiProfileGuestbookEntry[]>([]);
+  const [guestbookName, setGuestbookName] = useState("");
+  const [guestbookMessage, setGuestbookMessage] = useState("");
+  const [guestbookState, setGuestbookState] = useState<ActionState>(idleActionState());
+  const [guestbookLoadState, setGuestbookLoadState] = useState<LoadState>(idleLoadState());
   const [editState, setEditState] = useState<ActionState>(idleActionState());
   const [transferState, setTransferState] = useState<ActionState>(idleActionState());
   const profileViewRequestIdRef = useRef(0);
@@ -665,6 +673,10 @@ export default function ProfileClient({ name }: { name: string }) {
   const featuredMediaKind = useMemo(() => getFeaturedMediaKind(primaryProfile?.featuredUrl), [primaryProfile]);
 
   useEffect(() => {
+    void loadGuestbookEntries();
+  }, [name]);
+
+  useEffect(() => {
     if (!primaryProfile) return;
     setEditTagline(primaryProfile.tagline || "");
     setEditDisplayName(primaryProfile.displayName || "");
@@ -815,6 +827,38 @@ export default function ProfileClient({ name }: { name: string }) {
   </body>
 </html>`;
   }, [creatorDisplayName, primaryProfile, primaryProfileName]);
+
+  async function loadGuestbookEntries(): Promise<void> {
+    try {
+      setGuestbookLoadState(loadingLoadState());
+      const response = await fetchProfileGuestbook(name);
+      setGuestbookEntries(response.entries || []);
+      setGuestbookLoadState(readyLoadState());
+    } catch (err) {
+      setGuestbookEntries([]);
+      setGuestbookLoadState(errorLoadState(err instanceof Error ? err.message : "Failed to load guestbook."));
+    }
+  }
+
+  async function submitGuestbookEntry(): Promise<void> {
+    if (!guestbookName.trim() || !guestbookMessage.trim()) {
+      setGuestbookState(errorActionState("Enter a display name and a message."));
+      return;
+    }
+    try {
+      setGuestbookState(pendingActionState("Posting guestbook entry..."));
+      const response = await createProfileGuestbookEntry({
+        name,
+        authorName: guestbookName,
+        message: guestbookMessage
+      });
+      setGuestbookEntries((current) => [response.entry, ...current].slice(0, 25));
+      setGuestbookMessage("");
+      setGuestbookState(successActionState("Guestbook entry posted."));
+    } catch (err) {
+      setGuestbookState(errorActionState(err instanceof Error ? err.message : "Failed to post guestbook entry."));
+    }
+  }
 
   async function submitProfileTransfer(): Promise<void> {
     if (!primaryProfile) {
@@ -1074,6 +1118,54 @@ export default function ProfileClient({ name }: { name: string }) {
                 )}
               </section>
             </div>
+          </section>
+
+          <section className="card formCard profileMyspaceCustomCard">
+            <div className="profileMyspaceCustomHeader">
+              <div>
+                <p className="eyebrow">Guestbook</p>
+                <h3>Comments + Guestbook</h3>
+              </div>
+              <span className="profileChip">Public posts</span>
+            </div>
+            <StatusStack
+              items={buildSectionLoadStatusItems({
+                keyPrefix: "guestbook",
+                loadState: guestbookLoadState,
+                loadingMessage: "Loading guestbook..."
+              })}
+            />
+            <div className="profileMyspaceGuestbookComposer">
+              <label>
+                Your display name
+                <input value={guestbookName} onChange={(e) => setGuestbookName(e.target.value)} placeholder="space friend" />
+              </label>
+              <label>
+                Guestbook message
+                <textarea value={guestbookMessage} onChange={(e) => setGuestbookMessage(e.target.value)} placeholder="leave a comment for this page" />
+              </label>
+              <div className="row">
+                <button type="button" onClick={() => void submitGuestbookEntry()} disabled={guestbookState.status === "pending"}>
+                  {guestbookState.status === "pending" ? "Posting..." : "Sign Guestbook"}
+                </button>
+              </div>
+              <StatusStack items={[actionStateStatusItem(guestbookState, "guestbook-action")]} />
+            </div>
+            {guestbookEntries.length > 0 ? (
+              <div className="profileMyspaceGuestbookList">
+                {guestbookEntries.map((entry) => (
+                  <article key={entry.id} className="profileMyspaceGuestbookEntry">
+                    <div className="profileMyspaceGuestbookMeta">
+                      <strong>{entry.authorName}</strong>
+                      <span className="hint">{new Date(entry.createdAt).toLocaleString()}</span>
+                    </div>
+                    <p>{entry.message}</p>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <p className="hint">No guestbook entries yet. Be the first to sign this page.</p>
+            )}
           </section>
 
           {(primaryProfile?.customHtml || primaryProfile?.customCss) ? (

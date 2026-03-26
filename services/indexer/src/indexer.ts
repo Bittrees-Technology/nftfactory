@@ -99,6 +99,11 @@ type ProfileTransferPayload = {
   newOwnerAddress: string;
 };
 
+type ProfileGuestbookPayload = {
+  authorName: string;
+  message: string;
+};
+
 type ProfileRecord = {
   slug: string;
   fullName: string;
@@ -124,6 +129,14 @@ type ProfileRecord = {
   links: string[];
   createdAt: string;
   updatedAt: string;
+};
+
+type ProfileGuestbookEntry = {
+  id: string;
+  profileSlug: string;
+  authorName: string;
+  message: string;
+  createdAt: string;
 };
 
 type PaymentTokenLogPayload = {
@@ -188,6 +201,7 @@ const REGISTRY_ADDRESS = process.env.REGISTRY_ADDRESS || process.env.NEXT_PUBLIC
 const MARKETPLACE_ADDRESS = process.env.MARKETPLACE_ADDRESS || process.env.NEXT_PUBLIC_MARKETPLACE_ADDRESS || "";
 const MODERATOR_FILE = process.env.INDEXER_MODERATOR_FILE || path.join(process.cwd(), "data", "moderators.json");
 const PROFILE_FILE = process.env.INDEXER_PROFILE_FILE || path.join(process.cwd(), "data", "profiles.json");
+const PROFILE_GUESTBOOK_FILE = process.env.INDEXER_PROFILE_GUESTBOOK_FILE || path.join(process.cwd(), "data", "profile-guestbook.json");
 const PAYMENT_TOKEN_FILE = process.env.INDEXER_PAYMENT_TOKEN_FILE || path.join(process.cwd(), "data", "payment-tokens.json");
 const TOKEN_PRESENTATION_FILE =
   process.env.INDEXER_TOKEN_PRESENTATION_FILE || path.join(process.cwd(), "data", "token-presentation.json");
@@ -1344,6 +1358,33 @@ async function readProfileRecords(): Promise<ProfileRecord[]> {
 async function writeProfileRecords(records: ProfileRecord[]): Promise<void> {
   await mkdir(path.dirname(PROFILE_FILE), { recursive: true });
   await writeFile(PROFILE_FILE, JSON.stringify(records, null, 2), "utf8");
+}
+
+
+async function readProfileGuestbookEntries(): Promise<ProfileGuestbookEntry[]> {
+  try {
+    const raw = await readFile(PROFILE_GUESTBOOK_FILE, "utf8");
+    const parsed = JSON.parse(raw) as ProfileGuestbookEntry[];
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((item) => item && String(item.id || "").trim() && String(item.profileSlug || "").trim())
+      .map((item) => ({
+        id: String(item.id || "").trim(),
+        profileSlug: normalizeRouteSlug(String(item.profileSlug || "")) || "",
+        authorName: sanitizeProfileText(item.authorName || undefined, 80) || "Anonymous",
+        message: sanitizeProfileText(item.message || undefined, 600) || "",
+        createdAt: item.createdAt || new Date().toISOString()
+      }))
+      .filter((item) => item.profileSlug && item.message)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  } catch {
+    return [];
+  }
+}
+
+async function writeProfileGuestbookEntries(entries: ProfileGuestbookEntry[]): Promise<void> {
+  await mkdir(path.dirname(PROFILE_GUESTBOOK_FILE), { recursive: true });
+  await writeFile(PROFILE_GUESTBOOK_FILE, JSON.stringify(entries, null, 2), "utf8");
 }
 
 async function getEffectiveAdminAllowlist(
@@ -6000,6 +6041,55 @@ async function handleRequest(
     next.sort((a, b) => a.fullName.localeCompare(b.fullName));
     await writeProfileRecords(next);
     sendJson(res, 200, { ok: true, profile: toProfileResponse(updatedRecord) });
+    return;
+  }
+
+  if ((req.method === "GET" || req.method === "POST") && /^\/api\/profile\/[^/]+\/guestbook$/.test(path)) {
+    const rawName = String(decodeURIComponent(path.split("/")[3] || "")).trim().toLowerCase();
+    const lookup = resolveProfileLookup(rawName);
+    const slug = lookup?.slugCandidates[0] || "";
+
+    if (!rawName || !slug || !lookup) {
+      sendJson(res, 400, { error: "Invalid profile name" });
+      return;
+    }
+
+    if (req.method === "GET") {
+      const entries = (await readProfileGuestbookEntries())
+        .filter((item) => item.profileSlug === slug)
+        .slice(0, 25);
+      sendJson(res, 200, {
+        profileSlug: slug,
+        entries
+      });
+      return;
+    }
+
+    if (deps.isRateLimitedImpl(deps.getClientIpImpl(req, config.trustProxy))) {
+      sendJson(res, 429, { error: "Too many requests" });
+      return;
+    }
+
+    const payload = await readJsonBody<ProfileGuestbookPayload>(req);
+    const authorName = sanitizeProfileText(payload.authorName, 80) || null;
+    const message = sanitizeProfileText(payload.message, 600) || null;
+    if (!authorName || !message) {
+      sendJson(res, 400, { error: "authorName and message are required" });
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const entry: ProfileGuestbookEntry = {
+      id: `guestbook_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
+      profileSlug: slug,
+      authorName,
+      message,
+      createdAt: now
+    };
+    const current = await readProfileGuestbookEntries();
+    const next = [entry, ...current.filter((item) => item.profileSlug !== slug || item.message !== entry.message || item.authorName !== entry.authorName)].slice(0, 500);
+    await writeProfileGuestbookEntries(next);
+    sendJson(res, 201, { ok: true, entry });
     return;
   }
 

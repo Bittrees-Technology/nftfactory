@@ -182,6 +182,19 @@ export type ApiOwnedProfiles = {
   profiles: ApiProfileRecord[];
 };
 
+export type ApiProfileGuestbookEntry = {
+  id: string;
+  profileSlug: string;
+  authorName: string;
+  message: string;
+  createdAt: string;
+};
+
+export type ApiProfileGuestbookResponse = {
+  profileSlug: string;
+  entries: ApiProfileGuestbookEntry[];
+};
+
 export type ApiOfferSummary = {
   id: string;
   offerId: string;
@@ -635,4 +648,23 @@ export async function transferProfileOwnership(payload: {
     method: "POST",
     body: JSON.stringify(payload)
   });
+}
+
+
+export async function fetchProfileGuestbook(name: string, options?: IndexerRequestOptions): Promise<ApiProfileGuestbookResponse> {
+  return fetchJson<ApiProfileGuestbookResponse>(`/api/profile/${encodeURIComponent(name)}/guestbook`, undefined, undefined, options);
+}
+
+export async function createProfileGuestbookEntry(payload: {
+  name: string;
+  authorName: string;
+  message: string;
+}, options?: IndexerRequestOptions): Promise<{ ok: boolean; entry: ApiProfileGuestbookEntry }> {
+  return fetchJson<{ ok: boolean; entry: ApiProfileGuestbookEntry }>(`/api/profile/${encodeURIComponent(payload.name)}/guestbook`, {
+    method: "POST",
+    body: JSON.stringify({
+      authorName: payload.authorName,
+      message: payload.message
+    })
+  }, undefined, options);
 }
