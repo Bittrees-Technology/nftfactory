@@ -706,7 +706,21 @@ export async function hideProfileGuestbookEntry(payload: {
   entryId: string;
   currentOwnerAddress: string;
 }, options?: IndexerRequestOptions): Promise<{ ok: boolean; entry: ApiProfileGuestbookEntry }> {
-  return fetchJson<{ ok: boolean; entry: ApiProfileGuestbookEntry }>(`/api/profile/${encodeURIComponent(payload.name)}/guestbook/hide`, {
+  return fetchJson<{ ok: boolean; entry: ApiProfileGuestbookEntry }>("/api/profile/" + encodeURIComponent(payload.name) + "/guestbook/hide", {
+    method: "POST",
+    body: JSON.stringify({
+      entryId: payload.entryId,
+      currentOwnerAddress: payload.currentOwnerAddress
+    })
+  }, undefined, options);
+}
+
+export async function deleteProfileGuestbookEntry(payload: {
+  name: string;
+  entryId: string;
+  currentOwnerAddress: string;
+}, options?: IndexerRequestOptions): Promise<{ ok: boolean; deletedEntryId: string }> {
+  return fetchJson<{ ok: boolean; deletedEntryId: string }>("/api/profile/" + encodeURIComponent(payload.name) + "/guestbook/delete", {
     method: "POST",
     body: JSON.stringify({
       entryId: payload.entryId,

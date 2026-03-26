@@ -114,6 +114,13 @@ type ProfileGuestbookPayload = {
 type ProfileGuestbookHidePayload = {
   entryId: string;
   currentOwnerAddress: string;
+  actorAddress?: string;
+};
+
+type ProfileGuestbookDeletePayload = {
+  entryId: string;
+  currentOwnerAddress: string;
+  actorAddress?: string;
 };
 
 type ProfileCustomBox = {
@@ -238,6 +245,9 @@ const MARKETPLACE_ADDRESS = process.env.MARKETPLACE_ADDRESS || process.env.NEXT_
 const MODERATOR_FILE = process.env.INDEXER_MODERATOR_FILE || path.join(process.cwd(), "data", "moderators.json");
 const PROFILE_FILE = process.env.INDEXER_PROFILE_FILE || path.join(process.cwd(), "data", "profiles.json");
 const PROFILE_GUESTBOOK_FILE = process.env.INDEXER_PROFILE_GUESTBOOK_FILE || path.join(process.cwd(), "data", "profile-guestbook.json");
+const PROFILE_GUESTBOOK_WINDOW_MS = 10 * 60_000;
+const PROFILE_GUESTBOOK_MAX_POSTS_PER_WINDOW = 3;
+const PROFILE_GUESTBOOK_COOLDOWN_MS = 30_000;
 const PAYMENT_TOKEN_FILE = process.env.INDEXER_PAYMENT_TOKEN_FILE || path.join(process.cwd(), "data", "payment-tokens.json");
 const TOKEN_PRESENTATION_FILE =
   process.env.INDEXER_TOKEN_PRESENTATION_FILE || path.join(process.cwd(), "data", "token-presentation.json");
@@ -320,6 +330,31 @@ function createPrismaClient(): PrismaClient {
 const prisma = createPrismaClient();
 const RESOLVE_ACTIONS = new Set(["hide", "restore", "dismiss"]);
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+const guestbookPostRateLimitMap = new Map<string, number[]>();
+
+function guestbookPostRateLimitKey(params: { slug: string; ip: string; authorAddress?: string | null; authorName?: string | null }): string {
+  const addressKey = isAddress(String(params.authorAddress || "").toLowerCase()) ? String(params.authorAddress).toLowerCase() : "anon";
+  const nameKey = String(params.authorName || "").trim().toLowerCase().slice(0, 48) || "guest";
+  return [params.slug.toLowerCase(), String(params.ip || "unknown"), addressKey, nameKey].join(":");
+}
+
+function isGuestbookPostRateLimited(params: { slug: string; ip: string; authorAddress?: string | null; authorName?: string | null; now?: number }): boolean {
+  const now = params.now ?? Date.now();
+  const key = guestbookPostRateLimitKey(params);
+  const recent = (guestbookPostRateLimitMap.get(key) || []).filter((timestamp) => now - timestamp < PROFILE_GUESTBOOK_WINDOW_MS);
+  const lastTimestamp = recent[recent.length - 1] || 0;
+  if (lastTimestamp && now - lastTimestamp < PROFILE_GUESTBOOK_COOLDOWN_MS) {
+    guestbookPostRateLimitMap.set(key, recent);
+    return true;
+  }
+  if (recent.length >= PROFILE_GUESTBOOK_MAX_POSTS_PER_WINDOW) {
+    guestbookPostRateLimitMap.set(key, recent);
+    return true;
+  }
+  recent.push(now);
+  guestbookPostRateLimitMap.set(key, recent);
+  return false;
+}
 
 class BadRequestError extends Error {}
 type RequestHandlerConfig = {
@@ -6168,6 +6203,7 @@ async function handleRequest(
     const payload = await readJsonBody<ProfileGuestbookHidePayload>(req);
     const entryId = String(payload.entryId || "").trim();
     const currentOwnerAddress = String(payload.currentOwnerAddress || "").trim().toLowerCase();
+    const actorAddress = String(payload.actorAddress || payload.currentOwnerAddress || "").trim().toLowerCase();
     if (!entryId) {
       sendJson(res, 400, { error: "Invalid entryId" });
       return;
@@ -6176,11 +6212,17 @@ async function handleRequest(
       sendJson(res, 400, { error: "Invalid currentOwnerAddress" });
       return;
     }
+    if (!isAddress(actorAddress)) {
+      sendJson(res, 400, { error: "Invalid actorAddress" });
+      return;
+    }
 
     const profileRecords = await readProfileRecords();
-    const canModerate = profileRecords.some((item) => item.slug === slug && item.ownerAddress === currentOwnerAddress);
+    const moderators = await readEffectiveModeratorRecords(config);
+    const canModerate = profileRecords.some((item) => item.slug === slug && item.ownerAddress === currentOwnerAddress && currentOwnerAddress === actorAddress)
+      || moderators.some((item) => item.address === actorAddress);
     if (!canModerate) {
-      sendJson(res, 403, { error: "Only the profile owner can moderate guestbook entries." });
+      sendJson(res, 403, { error: "Only the profile owner or a moderator can moderate guestbook entries." });
       return;
     }
 
@@ -6192,9 +6234,9 @@ async function handleRequest(
     }
 
     const hiddenAt = new Date().toISOString();
-    const next = current.map((item) => item.id === entryId ? { ...item, hiddenAt, hiddenBy: currentOwnerAddress } : item);
+    const next = current.map((item) => item.id === entryId ? { ...item, hiddenAt, hiddenBy: actorAddress } : item);
     await writeProfileGuestbookEntries(next);
-    sendJson(res, 200, { ok: true, entry: { ...target, hiddenAt } });
+    sendJson(res, 200, { ok: true, entry: { ...target, hiddenAt, hiddenBy: actorAddress } });
     return;
   }
 

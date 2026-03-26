@@ -53,6 +53,7 @@ import {
   fetchProfileGuestbook,
   createProfileGuestbookEntry,
   hideProfileGuestbookEntry,
+  deleteProfileGuestbookEntry,
   type ApiActiveListingItem,
   type ApiProfileRecord,
   type ApiOfferSummary,
