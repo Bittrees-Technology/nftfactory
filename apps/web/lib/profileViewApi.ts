@@ -5,6 +5,10 @@ import type {
   ApiProfileResolution
 } from "./indexerApi";
 import type { ChainFailure } from "./profileMultiChain";
+import {
+  fetchProfileViewSnapshot,
+  hasProfileSnapshotFallbackConfigured
+} from "./profileSnapshotApi";
 
 export type ApiProfileViewResponse = {
   name: string;
@@ -80,7 +84,22 @@ export async function fetchProfileView(
     }
     return (await response.json()) as ApiProfileViewResponse;
   } catch (error) {
-    throw new Error(parseErrorMessage(error, "Failed to load profile view."));
+    const primaryErrorMessage = parseErrorMessage(error, "Failed to load profile view.");
+    if (!hasProfileSnapshotFallbackConfigured()) {
+      throw new Error(primaryErrorMessage);
+    }
+
+    try {
+      const snapshot = await fetchProfileViewSnapshot(name);
+      if (snapshot) {
+        return snapshot;
+      }
+    } catch (snapshotError) {
+      const snapshotMessage = parseErrorMessage(snapshotError, "Failed to load profile snapshot.");
+      throw new Error(`${primaryErrorMessage} Snapshot fallback failed: ${snapshotMessage}`);
+    }
+
+    throw new Error(primaryErrorMessage);
   } finally {
     cleanup();
   }

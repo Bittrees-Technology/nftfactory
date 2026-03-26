@@ -79,6 +79,8 @@ Example:
 
 This gives the project a portable, publishable profile artifact without trying to use IPFS as the live indexer backend.
 
+For frontend fallback, set either `NEXT_PUBLIC_PROFILE_SNAPSHOT_URL_TEMPLATE` with a `{name}` placeholder or `NEXT_PUBLIC_PROFILE_SNAPSHOT_MANIFEST_URL` that maps profile names to published snapshot URLs.
+
 ## Backend routes
 
 - `GET /api/profiles?owner=<address>`
