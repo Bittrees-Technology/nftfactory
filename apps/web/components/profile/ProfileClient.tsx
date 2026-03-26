@@ -204,6 +204,44 @@ function formatRetroBlocksInput(blocks: ApiProfileRetroBlock[] | null | undefine
     .join("\n\n");
 }
 
+const MYSPACE_STARTER_RETRO_BLOCKS: ApiProfileRetroBlock[] = [
+  {
+    kind: "text",
+    title: "Latest Bulletin",
+    content: "Rebuilding this page like it still takes 30 seconds to load on purpose.",
+    imageUrl: null,
+    embedUrl: null,
+    links: []
+  },
+  {
+    kind: "list",
+    title: "Current Rotation",
+    content: null,
+    imageUrl: null,
+    embedUrl: null,
+    links: ["Glitter graphics", "Late-night CSS edits", "Top 8 politics"]
+  },
+  {
+    kind: "links",
+    title: "Daily Clicks",
+    content: null,
+    imageUrl: null,
+    embedUrl: null,
+    links: ["https://forum.example.com", "https://playlist.example.com"]
+  }
+];
+
+const MYSPACE_STARTER_CUSTOM_BOXES = [
+  { title: "Shoutouts", content: "The friends keeping this page weird and alive." },
+  { title: "Latest Obsession", content: "Collecting old web aesthetics and rebuilding them onchain." }
+];
+
+const MYSPACE_STARTER_SIDEBAR_FACTS = [
+  { label: "Mood", value: "Chronically online" },
+  { label: "Location", value: "Top 8 HQ" },
+  { label: "Occupation", value: "Profile tinkerer" }
+];
+
 type ProfileMediaEmbedView = {
   title: string;
   url: string;
@@ -960,6 +998,14 @@ export default function ProfileClient({ name }: { name: string }) {
     }),
     [editCustomBoxesText, editCustomCss, editCustomHtml, editMediaEmbedsText, editProfileSongUrl, editRetroBlocksText, editTestimonialsText, editTopFriendsText]
   );
+  const hasStructuredRetroContent = useMemo(
+    () =>
+      parseRetroBlocksInput(editRetroBlocksText).length > 0 ||
+      parseCustomBoxesInput(editCustomBoxesText).length > 0 ||
+      parseMediaEmbedsInput(editMediaEmbedsText).length > 0,
+    [editCustomBoxesText, editMediaEmbedsText, editRetroBlocksText]
+  );
+  const hasCustomHtmlModule = useMemo(() => Boolean(editCustomHtml.trim() || editCustomCss.trim()), [editCustomCss, editCustomHtml]);
 
   useEffect(() => {
     void loadGuestbookEntries();
@@ -988,6 +1034,7 @@ export default function ProfileClient({ name }: { name: string }) {
     setEditMediaEmbedsText(formatMediaEmbedsInput(primaryProfile.mediaEmbeds));
     setEditRetroBlocksText(formatRetroBlocksInput(primaryProfile.retroBlocks));
     setEditModuleOrder(normalizeMyspaceModuleOrder(primaryProfile.moduleOrder));
+    setEditSidebarModules(normalizeMyspaceSidebarModules(primaryProfile.sidebarModules));
     setEditStampsText((primaryProfile.stamps || []).join("\n"));
     setEditCustomBoxesText(formatCustomBoxesInput(primaryProfile.customBoxes));
     setEditLinksText((primaryProfile.links || []).join("\n"));
@@ -1036,6 +1083,7 @@ export default function ProfileClient({ name }: { name: string }) {
         mediaEmbeds: parseMediaEmbedsInput(editMediaEmbedsText),
         retroBlocks: parseRetroBlocksInput(editRetroBlocksText),
         moduleOrder: editModuleOrder,
+        sidebarModules: editSidebarModules,
         stamps: editStampsText.split("\n").map((item) => item.trim()).filter(Boolean),
         customBoxes: parseCustomBoxesInput(editCustomBoxesText),
         links: editLinksText.split("\n").map((item) => item.trim()).filter(Boolean)
@@ -2253,6 +2301,39 @@ export default function ProfileClient({ name }: { name: string }) {
                     <p className="hint">
                       Update the public-facing profile details for {primaryProfile.fullName}. Identity creation stays in setup; presentation details live here.
                     </p>
+                    <div className="profileStudioStarterBar">
+                      <div>
+                        <strong>Myspace Starter Pack</strong>
+                        <p className="hint">Load a structured retro baseline before reaching for raw custom HTML.</p>
+                      </div>
+                      <div className="row">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditLayoutMode("myspace");
+                            setEditStatusHeadline((current) => current.trim() || "tuning this page like it's 2006");
+                            setEditSidebarFactsText((current) => current.trim() || formatSidebarFactsInput(MYSPACE_STARTER_SIDEBAR_FACTS));
+                            setEditTopFriendsText((current) => current.trim() || "Tom\nBestie\nFavorite collector");
+                            setEditRetroBlocksText((current) => current.trim() || formatRetroBlocksInput(MYSPACE_STARTER_RETRO_BLOCKS));
+                            setEditCustomBoxesText((current) => current.trim() || formatCustomBoxesInput(MYSPACE_STARTER_CUSTOM_BOXES));
+                            setEditModuleOrder(["social", "retro", "media", "boxes", "guestbook", "custom"]);
+                            setEditSidebarModules(["media", "boxes"]);
+                          }}
+                        >
+                          Load Starter Pack
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditCustomHtml("");
+                            setEditCustomCss("");
+                          }}
+                          disabled={!hasCustomHtmlModule}
+                        >
+                          Turn Off Custom HTML
+                        </button>
+                      </div>
+                    </div>
                     <div className="gridMini">
                       <label>
                         Display name
@@ -2318,6 +2399,7 @@ Occupation: Pixel archivist" />
                       <label>
                         Custom HTML
                         <textarea value={editCustomHtml} onChange={(e) => setEditCustomHtml(e.target.value)} placeholder="<div><marquee>Welcome to my page</marquee></div>" />
+                        <span className="hint">Use this only for edge-case decoration. Text, image, links, list, embed, and box modules are safer and easier to maintain.</span>
                       </label>
                       <label>
                         Top Friends (one per line)
@@ -2440,6 +2522,9 @@ collector core" />
                         <textarea value={editLinksText} onChange={(e) => setEditLinksText(e.target.value)} />
                       </label>
                     </div>
+                    {hasCustomHtmlModule && hasStructuredRetroContent ? (
+                      <p className="hint profileStudioStructuredHint">Structured retro modules are already covering this page, so custom HTML can stay as a small accent instead of the main layout surface.</p>
+                    ) : null}
                     <div className="row">
                       <button type="button" onClick={() => void saveProfileDetails()} disabled={editState.status === "pending"}>
                         {editState.status === "pending" ? "Saving..." : "Save Profile"}

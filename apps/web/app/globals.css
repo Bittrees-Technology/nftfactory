@@ -1794,6 +1794,25 @@ button:disabled {
 }
 
 
+.profileStudioStarterBar {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  border: 1px solid rgba(15, 47, 119, 0.18);
+  background: linear-gradient(135deg, rgba(255, 242, 213, 0.96), rgba(223, 239, 255, 0.9));
+}
+
+.profileStudioStarterBar p {
+  margin: 4px 0 0;
+}
+
+.profileStudioStructuredHint {
+  margin: 16px 0 0;
+}
+
 .profileModuleOrderList {
   display: grid;
   gap: 10px;
@@ -1948,5 +1967,12 @@ button:disabled {
   .profileStudioPreviewColumns {
     grid-template-columns: minmax(0, 1.5fr) minmax(260px, 0.8fr);
     align-items: start;
+  }
+}
+
+@media (max-width: 820px) {
+  .profileStudioStarterBar {
+    flex-direction: column;
+    align-items: stretch;
   }
 }
