@@ -39,6 +39,8 @@ Production-grade monorepo scaffold for `nftfactory.eth`.
 ## Current status
 This repo includes build-ready scaffolding and first-pass contract/backend code. Dependency install and deployment credentials are intentionally not included.
 
+Profile pages can now be snapshotted from the public web route and published through the shared IPFS project tooling with `npm run ipfs:publish:profile-snapshot -- <profile-name> --source <public-web-origin>`. Use `--skip-publish` to export the JSON locally first. For password-protected deployments, pass `--basic-auth-user` and `--basic-auth-password` or set `PROFILE_SNAPSHOT_BASIC_AUTH_USERNAME` and `PROFILE_SNAPSHOT_BASIC_AUTH_PASSWORD`.
+
 Before a production web build or release check, validate the required public build env set with `npm run check:web-env`.
 For deployed-network verification, run `npm run check:deployments` with a real chain RPC. If no contract env values are set, the command falls back to `docs/deployments.sepolia-app-wired.json`. Use `npm run print:deployment-env -- web` or `npm run print:deployment-env -- indexer` to emit the checked-in Sepolia address snapshot as env exports.
 

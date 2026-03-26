@@ -68,6 +68,17 @@ Profile data is sourced in this order:
 
 The browser should not chain-scan to discover profile state.
 
+## IPFS snapshot path
+
+The live profile page remains indexer-backed, but the repo now supports publishing a static profile snapshot JSON through the shared IPFS project tooling. The snapshot source is the public web route `/api/profile/view/:name`, which already composes the indexer-backed public profile view.
+
+Example:
+
+- `npm run ipfs:publish:profile-snapshot -- demo --source https://nftfactory.org --basic-auth-user viewer --basic-auth-password <password> --skip-publish`
+- `npm run ipfs:publish:profile-snapshot -- demo --source https://nftfactory.org --basic-auth-user viewer --basic-auth-password <password>`
+
+This gives the project a portable, publishable profile artifact without trying to use IPFS as the live indexer backend.
+
 ## Backend routes
 
 - `GET /api/profiles?owner=<address>`

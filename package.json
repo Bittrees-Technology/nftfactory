@@ -31,6 +31,7 @@
     "test:all": "npm run test:web && npm run test:indexer && npm run test:contracts",
     "check:all": "npm run typecheck:all && npm run test:all",
     "ipfs:publish": "node scripts/publish-artifact.mjs",
-    "ipfs:publish:metadata": "node scripts/publish-metadata-json.mjs"
+    "ipfs:publish:metadata": "node scripts/publish-metadata-json.mjs",
+    "ipfs:publish:profile-snapshot": "node scripts/publish-profile-snapshot.mjs"
   }
 }
