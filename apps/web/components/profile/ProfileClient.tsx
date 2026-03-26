@@ -322,6 +322,15 @@ function normalizeIdentityLabelForSetup(value: string | null | undefined, mode: 
 
 const MYSPACE_ORDERABLE_MODULE_IDS = ["social", "media", "retro", "boxes", "guestbook", "custom"] as const;
 
+const MYSPACE_MODULE_LABELS: Record<(typeof MYSPACE_ORDERABLE_MODULE_IDS)[number], string> = {
+  social: "Social",
+  media: "Media",
+  retro: "Retro Blocks",
+  boxes: "Custom Boxes",
+  guestbook: "Guestbook",
+  custom: "Custom HTML"
+};
+
 type MyspaceOrderableModuleId = (typeof MYSPACE_ORDERABLE_MODULE_IDS)[number];
 
 function normalizeMyspaceModuleOrder(order: string[] | null | undefined): MyspaceOrderableModuleId[] {
@@ -334,12 +343,20 @@ function normalizeMyspaceModuleOrder(order: string[] | null | undefined): Myspac
   return deduped;
 }
 
-function parseMyspaceModuleOrderInput(value: string): MyspaceOrderableModuleId[] {
-  return normalizeMyspaceModuleOrder(String(value || "").split("\n"));
-}
-
-function formatMyspaceModuleOrderInput(order: string[] | null | undefined): string {
-  return normalizeMyspaceModuleOrder(order).join("\n");
+function moveMyspaceModuleOrder(
+  order: MyspaceOrderableModuleId[],
+  moduleId: MyspaceOrderableModuleId,
+  direction: -1 | 1
+): MyspaceOrderableModuleId[] {
+  const normalized = normalizeMyspaceModuleOrder(order);
+  const currentIndex = normalized.indexOf(moduleId);
+  if (currentIndex < 0) return normalized;
+  const nextIndex = currentIndex + direction;
+  if (nextIndex < 0 || nextIndex >= normalized.length) return normalized;
+  const next = [...normalized];
+  const [moved] = next.splice(currentIndex, 1);
+  next.splice(nextIndex, 0, moved);
+  return next;
 }
 
 function getMyspaceModuleOrderStyle(order: MyspaceOrderableModuleId[], moduleId: MyspaceOrderableModuleId): CSSProperties {
@@ -412,7 +429,7 @@ export default function ProfileClient({ name }: { name: string }) {
   const [editStampsText, setEditStampsText] = useState("");
   const [editMediaEmbedsText, setEditMediaEmbedsText] = useState("");
   const [editRetroBlocksText, setEditRetroBlocksText] = useState("");
-  const [editModuleOrderText, setEditModuleOrderText] = useState("");
+  const [editModuleOrder, setEditModuleOrder] = useState<MyspaceOrderableModuleId[]>(normalizeMyspaceModuleOrder(undefined));
   const [editCustomBoxesText, setEditCustomBoxesText] = useState("");
   const [editLinksText, setEditLinksText] = useState("");
   const [transferAddress, setTransferAddress] = useState("");
@@ -910,7 +927,7 @@ export default function ProfileClient({ name }: { name: string }) {
     setEditProfileSongUrl(primaryProfile.profileSongUrl || "");
     setEditMediaEmbedsText(formatMediaEmbedsInput(primaryProfile.mediaEmbeds));
     setEditRetroBlocksText(formatRetroBlocksInput(primaryProfile.retroBlocks));
-    setEditModuleOrderText(formatMyspaceModuleOrderInput(primaryProfile.moduleOrder));
+    setEditModuleOrder(normalizeMyspaceModuleOrder(primaryProfile.moduleOrder));
     setEditStampsText((primaryProfile.stamps || []).join("\n"));
     setEditCustomBoxesText(formatCustomBoxesInput(primaryProfile.customBoxes));
     setEditLinksText((primaryProfile.links || []).join("\n"));
@@ -956,7 +973,7 @@ export default function ProfileClient({ name }: { name: string }) {
         profileSongUrl: editProfileSongUrl,
         mediaEmbeds: parseMediaEmbedsInput(editMediaEmbedsText),
         retroBlocks: parseRetroBlocksInput(editRetroBlocksText),
-        moduleOrder: parseMyspaceModuleOrderInput(editModuleOrderText),
+        moduleOrder: editModuleOrder,
         stamps: editStampsText.split("\n").map((item) => item.trim()).filter(Boolean),
         customBoxes: parseCustomBoxesInput(editCustomBoxesText),
         links: editLinksText.split("\n").map((item) => item.trim()).filter(Boolean)
@@ -2178,15 +2195,36 @@ Playlist | https://open.spotify.com/playlist/..." />
 scene kid
 collector core" />
                       </label>
-                      <label>
-                        Module order (one per line: social, media, retro, boxes, guestbook, custom)
-                        <textarea value={editModuleOrderText} onChange={(e) => setEditModuleOrderText(e.target.value)} placeholder="social
-media
-retro
-boxes
-guestbook
-custom" />
-                      </label>
+                      <div>
+                        <span>Module order</span>
+                        <p className="hint">Rearrange the retro page modules directly instead of editing raw IDs.</p>
+                        <div className="profileModuleOrderList">
+                          {editModuleOrder.map((moduleId, index) => (
+                            <div key={moduleId} className="profileModuleOrderItem">
+                              <div>
+                                <strong>{index + 1}. {MYSPACE_MODULE_LABELS[moduleId]}</strong>
+                                <p className="hint mono">{moduleId}</p>
+                              </div>
+                              <div className="row">
+                                <button
+                                  type="button"
+                                  onClick={() => setEditModuleOrder((current) => moveMyspaceModuleOrder(current, moduleId, -1))}
+                                  disabled={index === 0}
+                                >
+                                  Move Up
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setEditModuleOrder((current) => moveMyspaceModuleOrder(current, moduleId, 1))}
+                                  disabled={index === editModuleOrder.length - 1}
+                                >
+                                  Move Down
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                       <label>
                         Custom boxes
                         <textarea
