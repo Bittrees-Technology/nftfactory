@@ -347,6 +347,7 @@ function createLocalProfileRecord(args: {
     mediaEmbeds: [],
     retroBlocks: [],
     moduleOrder: ["social", "media", "retro", "boxes", "guestbook", "custom"],
+    sidebarModules: [],
     topFriends: [],
     stamps: [],
     testimonials: [],

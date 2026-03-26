@@ -1840,3 +1840,47 @@ button:disabled {
   letter-spacing: 0.08em;
   user-select: none;
 }
+
+
+.profileMyspaceModuleLayout {
+  display: grid;
+  gap: 16px;
+}
+
+.profileMyspaceModuleMain,
+.profileMyspaceModuleSidebar {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+
+.profileMyspaceEmbedsGrid--sidebar,
+.profileMyspaceRetroGrid--sidebar,
+.profileMyspaceBoxesGrid--sidebar {
+  grid-template-columns: 1fr;
+}
+
+.profileMyspaceCustomCard--sidebar {
+  margin: 0;
+}
+
+.profileSidebarToggleList {
+  display: grid;
+  gap: 8px;
+}
+
+.profileSidebarToggleItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid rgba(15, 47, 119, 0.16);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+@media (min-width: 980px) {
+  .profileMyspaceModuleLayout {
+    grid-template-columns: minmax(0, 1.5fr) minmax(260px, 0.8fr);
+    align-items: start;
+  }
+}

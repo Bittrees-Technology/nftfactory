@@ -331,7 +331,10 @@ const MYSPACE_MODULE_LABELS: Record<(typeof MYSPACE_ORDERABLE_MODULE_IDS)[number
   custom: "Custom HTML"
 };
 
+const MYSPACE_SIDEBAR_MODULE_IDS = ["media", "retro", "boxes", "guestbook", "custom"] as const;
+
 type MyspaceOrderableModuleId = (typeof MYSPACE_ORDERABLE_MODULE_IDS)[number];
+type MyspaceSidebarModuleId = (typeof MYSPACE_SIDEBAR_MODULE_IDS)[number];
 
 function normalizeMyspaceModuleOrder(order: string[] | null | undefined): MyspaceOrderableModuleId[] {
   const allowed = new Set<string>(MYSPACE_ORDERABLE_MODULE_IDS);
@@ -357,6 +360,21 @@ function moveMyspaceModuleOrder(
   const [moved] = next.splice(currentIndex, 1);
   next.splice(nextIndex, 0, moved);
   return next;
+}
+
+function normalizeMyspaceSidebarModules(value: string[] | null | undefined): MyspaceSidebarModuleId[] {
+  const allowed = new Set<string>(MYSPACE_SIDEBAR_MODULE_IDS);
+  const normalized = Array.isArray(value)
+    ? value.map((item) => String(item || "").trim().toLowerCase()).filter((item): item is MyspaceSidebarModuleId => allowed.has(item))
+    : [];
+  return Array.from(new Set(normalized));
+}
+
+function toggleMyspaceSidebarModule(
+  current: MyspaceSidebarModuleId[],
+  moduleId: MyspaceSidebarModuleId
+): MyspaceSidebarModuleId[] {
+  return current.includes(moduleId) ? current.filter((item) => item !== moduleId) : [...current, moduleId];
 }
 
 function reorderMyspaceModuleOrder(
@@ -445,6 +463,7 @@ export default function ProfileClient({ name }: { name: string }) {
   const [editMediaEmbedsText, setEditMediaEmbedsText] = useState("");
   const [editRetroBlocksText, setEditRetroBlocksText] = useState("");
   const [editModuleOrder, setEditModuleOrder] = useState<MyspaceOrderableModuleId[]>(normalizeMyspaceModuleOrder(undefined));
+  const [editSidebarModules, setEditSidebarModules] = useState<MyspaceSidebarModuleId[]>(normalizeMyspaceSidebarModules(undefined));
   const [draggingModuleId, setDraggingModuleId] = useState<MyspaceOrderableModuleId | null>(null);
   const [dragOverModuleId, setDragOverModuleId] = useState<MyspaceOrderableModuleId | null>(null);
   const [editCustomBoxesText, setEditCustomBoxesText] = useState("");
@@ -917,6 +936,7 @@ export default function ProfileClient({ name }: { name: string }) {
     [primaryProfile]
   );
   const myspaceModuleOrder = useMemo(() => normalizeMyspaceModuleOrder(primaryProfile?.moduleOrder), [primaryProfile]);
+  const myspaceSidebarModules = useMemo(() => normalizeMyspaceSidebarModules(primaryProfile?.sidebarModules), [primaryProfile]);
 
   useEffect(() => {
     void loadGuestbookEntries();
@@ -1486,7 +1506,9 @@ export default function ProfileClient({ name }: { name: string }) {
                 )}
               </section>
             </div>
-            <div className="profileMyspaceEmbedsGrid" style={getMyspaceModuleOrderStyle(myspaceModuleOrder, "media")}>
+            <div className="profileMyspaceModuleLayout">
+              <div className="profileMyspaceModuleMain">
+                {!myspaceSidebarModules.includes("media") ? <div className="profileMyspaceEmbedsGrid" style={getMyspaceModuleOrderStyle(myspaceModuleOrder, "media")}>
               {mediaEmbedCards.length ? mediaEmbedCards.map((embed) => (
                 <section key={embed.title + ":" + embed.url} className="profileMyspaceEmbedCard">
                   <h4>{embed.title}</h4>
@@ -1509,8 +1531,8 @@ export default function ProfileClient({ name }: { name: string }) {
                   <p>No structured embeds pinned yet.</p>
                 </section>
               )}
-            </div>
-            <div className="profileMyspaceRetroGrid" style={getMyspaceModuleOrderStyle(myspaceModuleOrder, "retro")}>
+                </div> : null}
+                {!myspaceSidebarModules.includes("retro") ? <div className="profileMyspaceRetroGrid" style={getMyspaceModuleOrderStyle(myspaceModuleOrder, "retro")}>
               {retroBlocks.length ? retroBlocks.map((block, index) => (
                 <section key={`${block.kind}:${block.title}:${index}`} className="profileMyspaceRetroCard">
                   <h4>{block.title}</h4>
@@ -1563,8 +1585,8 @@ export default function ProfileClient({ name }: { name: string }) {
                   <p>No structured retro blocks pinned yet.</p>
                 </section>
               )}
-            </div>
-            <div className="profileMyspaceBoxesGrid" style={getMyspaceModuleOrderStyle(myspaceModuleOrder, "boxes")}>
+                </div> : null}
+                {!myspaceSidebarModules.includes("boxes") ? <div className="profileMyspaceBoxesGrid" style={getMyspaceModuleOrderStyle(myspaceModuleOrder, "boxes")}>
               {primaryProfile?.customBoxes?.length ? primaryProfile.customBoxes.map((box) => (
                 <section key={`${box.title}:${box.content}`} className="profileMyspaceBoxCard">
                   <h4>{box.title}</h4>
@@ -1576,10 +1598,8 @@ export default function ProfileClient({ name }: { name: string }) {
                   <p>No extra custom boxes pinned yet.</p>
                 </section>
               )}
-            </div>
-          </section>
-
-          <section className="card formCard profileMyspaceCustomCard" style={getMyspaceModuleOrderStyle(myspaceModuleOrder, "guestbook")}>
+                </div> : null}
+                {!myspaceSidebarModules.includes("guestbook") ? <section className="card formCard profileMyspaceCustomCard" style={getMyspaceModuleOrderStyle(myspaceModuleOrder, "guestbook")}>
             <div className="profileMyspaceCustomHeader">
               <div>
                 <p className="eyebrow">Guestbook</p>
@@ -1672,10 +1692,10 @@ export default function ProfileClient({ name }: { name: string }) {
                 ))}
               </div>
             ) : null}
-          </section>
+                </section> : null}
 
-          {(primaryProfile?.customHtml || primaryProfile?.customCss) ? (
-            <section className="card formCard profileMyspaceCustomCard" style={getMyspaceModuleOrderStyle(myspaceModuleOrder, "custom")}>
+                {!myspaceSidebarModules.includes("custom") && (primaryProfile?.customHtml || primaryProfile?.customCss) ? (
+                  <section className="card formCard profileMyspaceCustomCard" style={getMyspaceModuleOrderStyle(myspaceModuleOrder, "custom")}>
               <div className="profileMyspaceCustomHeader">
                 <div>
                   <p className="eyebrow">Custom Module</p>
@@ -1693,8 +1713,60 @@ export default function ProfileClient({ name }: { name: string }) {
                 sandbox="allow-popups"
                 className="profileCustomModuleFrame"
               />
-            </section>
-          ) : null}
+                  </section>
+                ) : null}
+              </div>
+              {myspaceSidebarModules.length > 0 ? (
+                <aside className="profileMyspaceModuleSidebar">
+                  {myspaceSidebarModules.includes("media") ? <div className="profileMyspaceEmbedsGrid profileMyspaceEmbedsGrid--sidebar" style={getMyspaceModuleOrderStyle(myspaceModuleOrder, "media")}>
+                    {mediaEmbedCards.length ? mediaEmbedCards.map((embed) => (
+                      <section key={embed.title + ":" + embed.url} className="profileMyspaceEmbedCard">
+                        <h4>{embed.title}</h4>
+                        {embed.embedUrl ? (
+                          <iframe
+                            title={embed.title}
+                            src={embed.embedUrl}
+                            loading="lazy"
+                            allow={embed.kind === "youtube" ? "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" : "autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"}
+                            allowFullScreen={embed.kind === "youtube"}
+                            referrerPolicy="strict-origin-when-cross-origin"
+                          />
+                        ) : (
+                          <a href={embed.url} target="_blank" rel="noreferrer" className="mono">{embed.url}</a>
+                        )}
+                      </section>
+                    )) : (
+                      <section className="profileMyspaceEmbedCard"><h4>Media</h4><p>No structured embeds pinned yet.</p></section>
+                    )}
+                  </div> : null}
+                  {myspaceSidebarModules.includes("retro") ? <div className="profileMyspaceRetroGrid profileMyspaceRetroGrid--sidebar" style={getMyspaceModuleOrderStyle(myspaceModuleOrder, "retro")}>
+                    {retroBlocks.length ? retroBlocks.map((block, index) => (
+                      <section key={`${block.kind}:${block.title}:${index}`} className="profileMyspaceRetroCard">
+                        <h4>{block.title}</h4>
+                        <span className="profileMyspaceRetroType">{block.kind}</span>
+                        {block.kind === "text" ? <p>{block.content || ""}</p> : null}
+                        {block.kind === "image" ? <>{block.imageUrl ? <img src={block.imageUrl} alt={block.title} /> : null}{block.content ? <p>{block.content}</p> : null}</> : null}
+                        {block.kind === "embed" ? <>{block.embedView?.embedUrl ? <iframe title={block.title} src={block.embedView.embedUrl} loading="lazy" allow={block.embedView.kind === "youtube" ? "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" : "autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"} allowFullScreen={block.embedView.kind === "youtube"} referrerPolicy="strict-origin-when-cross-origin" className="profileMyspaceRetroEmbedFrame" /> : block.embedUrl ? <a href={block.embedUrl} target="_blank" rel="noreferrer" className="mono">{block.embedUrl}</a> : null}{block.content ? <p>{block.content}</p> : null}</> : null}
+                        {block.kind === "links" ? <ul className="profileMyspaceRetroLinks">{block.links.map((link) => (<li key={link}><a href={link} target="_blank" rel="noreferrer" className="mono">{link}</a></li>))}</ul> : null}
+                        {block.kind === "list" ? <ol className="profileMyspaceRetroListItems">{block.links.map((item) => (<li key={item}>{item}</li>))}</ol> : null}
+                      </section>
+                    )) : <section className="profileMyspaceRetroCard"><h4>Retro Blocks</h4><p>No structured retro blocks pinned yet.</p></section>}
+                  </div> : null}
+                  {myspaceSidebarModules.includes("boxes") ? <div className="profileMyspaceBoxesGrid profileMyspaceBoxesGrid--sidebar" style={getMyspaceModuleOrderStyle(myspaceModuleOrder, "boxes")}>
+                    {primaryProfile?.customBoxes?.length ? primaryProfile.customBoxes.map((box) => (<section key={`${box.title}:${box.content}`} className="profileMyspaceBoxCard"><h4>{box.title}</h4><p>{box.content}</p></section>)) : <section className="profileMyspaceBoxCard"><h4>Custom Boxes</h4><p>No extra custom boxes pinned yet.</p></section>}
+                  </div> : null}
+                  {myspaceSidebarModules.includes("guestbook") ? <section className="card formCard profileMyspaceCustomCard profileMyspaceCustomCard--sidebar" style={getMyspaceModuleOrderStyle(myspaceModuleOrder, "guestbook")}>
+                    <div className="profileMyspaceCustomHeader"><div><p className="eyebrow">Guestbook</p><h3>Comments + Guestbook</h3></div><span className="profileChip">{canEditProfile ? "Public posts + history" : "Public posts"}</span></div>
+                    <StatusStack items={buildSectionLoadStatusItems({ keyPrefix: "guestbook", loadState: guestbookLoadState, loadingMessage: "Loading guestbook..." })} />
+                    <div className="profileMyspaceGuestbookComposer"><label>Your display name<input value={guestbookName} onChange={(e) => setGuestbookName(e.target.value)} placeholder="space friend" /></label><label>Guestbook message<textarea value={guestbookMessage} onChange={(e) => setGuestbookMessage(e.target.value)} placeholder="leave a comment for this page" /></label><div className="row"><button type="button" onClick={() => void submitGuestbookEntry()} disabled={guestbookState.status === "pending"}>{guestbookState.status === "pending" ? "Posting..." : "Sign Guestbook"}</button></div><StatusStack items={[actionStateStatusItem(guestbookState, "guestbook-action")]} /></div>
+                    {publicGuestbookEntries.length > 0 ? <div className="profileMyspaceGuestbookList">{publicGuestbookEntries.map((entry) => (<article key={entry.id} className="profileMyspaceGuestbookEntry"><div className="profileMyspaceGuestbookMeta"><strong>{entry.authorName}</strong>{entry.authorAddress ? <span className="mono">{truncateAddress(entry.authorAddress as Address)}</span> : null}<span className="hint">{new Date(entry.createdAt).toLocaleString()}</span></div><p>{entry.message}</p>{canEditProfile ? <div className="row"><button type="button" onClick={() => void hideGuestbookEntry(entry.id)} disabled={moderatingGuestbookEntryId === entry.id}>{moderatingGuestbookEntryId === entry.id ? "Working..." : "Hide Entry"}</button><button type="button" onClick={() => void deleteGuestbookEntry(entry.id)} disabled={moderatingGuestbookEntryId === entry.id}>{moderatingGuestbookEntryId === entry.id ? "Working..." : "Delete Entry"}</button></div> : null}</article>))}</div> : <p className="hint">No public guestbook entries yet. Be the first to sign this page.</p>}
+                    {canEditProfile && moderatedGuestbookEntries.length > 0 ? <div className="profileMyspaceGuestbookList">{moderatedGuestbookEntries.map((entry) => (<article key={entry.id} className="profileMyspaceGuestbookEntry"><div className="profileMyspaceGuestbookMeta"><strong>{entry.authorName}</strong>{entry.authorAddress ? <span className="mono">{truncateAddress(entry.authorAddress as Address)}</span> : null}<span className="hint">{entry.deletedAt ? "Deleted" : "Hidden"}</span></div><p>{entry.message}</p><p className="hint">Posted {new Date(entry.createdAt).toLocaleString()}{entry.hiddenAt ? " | Hidden " + new Date(entry.hiddenAt).toLocaleString() + " by " + getModerationActorLabel(entry.hiddenBy, primaryProfile?.ownerAddress) : ""}{entry.deletedAt ? " | Deleted " + new Date(entry.deletedAt).toLocaleString() + " by " + getModerationActorLabel(entry.deletedBy, primaryProfile?.ownerAddress) : ""}</p><div className="row"><button type="button" onClick={() => void restoreGuestbookEntry(entry.id)} disabled={moderatingGuestbookEntryId === entry.id}>{moderatingGuestbookEntryId === entry.id ? "Working..." : "Restore Entry"}</button></div></article>))}</div> : null}
+                  </section> : null}
+                  {myspaceSidebarModules.includes("custom") && (primaryProfile?.customHtml || primaryProfile?.customCss) ? <section className="card formCard profileMyspaceCustomCard profileMyspaceCustomCard--sidebar" style={getMyspaceModuleOrderStyle(myspaceModuleOrder, "custom")}><div className="profileMyspaceCustomHeader"><div><p className="eyebrow">Custom Module</p><h3>Independent HTML + CSS Block</h3></div><span className="profileChip">Sandboxed preview</span></div><p className="hint">Custom HTML is sanitized and rendered inside an isolated iframe so creators can style a personal module without taking over the rest of the app shell.</p><iframe key={customPreviewId} title={`${creatorDisplayName} custom profile module`} srcDoc={customProfilePreview} sandbox="allow-popups" className="profileCustomModuleFrame" /></section> : null}
+                </aside>
+              ) : null}
+            </div>
+          </section>
         </div>
       ) : null}
 
@@ -2268,6 +2340,22 @@ collector core" />
                                 </button>
                               </div>
                             </div>
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <span>Sidebar placement</span>
+                        <p className="hint">Pin selected retro modules into the narrow sidebar column.</p>
+                        <div className="profileSidebarToggleList">
+                          {MYSPACE_SIDEBAR_MODULE_IDS.map((moduleId) => (
+                            <label key={moduleId} className="profileSidebarToggleItem">
+                              <input
+                                type="checkbox"
+                                checked={editSidebarModules.includes(moduleId)}
+                                onChange={() => setEditSidebarModules((current) => toggleMyspaceSidebarModule(current, moduleId))}
+                              />
+                              <span>{MYSPACE_MODULE_LABELS[moduleId]}</span>
+                            </label>
                           ))}
                         </div>
                       </div>
