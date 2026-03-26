@@ -151,7 +151,16 @@ fi
 echo "Environment reachability check passed."
 
 echo ""
-echo "5) Manual release checklist"
+echo "5) Deployment verification"
+if [[ -n "${RPC_URL:-}" || -n "${SEPOLIA_RPC_URL:-}" || -n "${NEXT_PUBLIC_RPC_URL:-}" || -n "${NEXT_PUBLIC_RPC_URL_${primary_chain_id}:-}" ]]; then
+  npm run check:deployments
+else
+  echo "Skipping npm run check:deployments because no chain RPC env is set."
+  echo "Set RPC_URL, SEPOLIA_RPC_URL, NEXT_PUBLIC_RPC_URL, or NEXT_PUBLIC_RPC_URL_${primary_chain_id} to enable on-chain verification."
+fi
+
+echo ""
+echo "6) Manual release checklist"
 echo "- Validate /, /mint, /profile, /profile/setup, and /profile/<name> in browser."
 echo "- Validate the Mint workspace tabs: Mint and publish, View collection, and Manage collection."
 echo "- Run local indexer + Postgres and verify /health plus profile/listing-management API responses."
