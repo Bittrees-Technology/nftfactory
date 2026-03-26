@@ -85,6 +85,7 @@ type ProfileLinkPayload = {
   testimonials?: string[];
   profileSongUrl?: string;
   statusHeadline?: string;
+  sidebarFacts?: ProfileSidebarFact[];
   stamps?: string[];
   customBoxes?: ProfileCustomBox[];
   bannerUrl?: string;
@@ -117,6 +118,11 @@ type ProfileCustomBox = {
   content: string;
 };
 
+type ProfileSidebarFact = {
+  label: string;
+  value: string;
+};
+
 type ProfileRecord = {
   slug: string;
   fullName: string;
@@ -134,6 +140,7 @@ type ProfileRecord = {
   testimonials: string[];
   profileSongUrl: string | null;
   statusHeadline: string | null;
+  sidebarFacts: ProfileSidebarFact[];
   stamps: string[];
   customBoxes: ProfileCustomBox[];
   bannerUrl: string | null;
@@ -1338,6 +1345,17 @@ function sanitizeProfileBoxes(value: ProfileCustomBox[] | undefined, maxItems = 
     .slice(0, maxItems);
 }
 
+function sanitizeProfileSidebarFacts(value: ProfileSidebarFact[] | undefined, maxItems = 10): ProfileSidebarFact[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => ({
+      label: sanitizeProfileText(item?.label, 40),
+      value: sanitizeProfileText(item?.value, 120)
+    }))
+    .filter((item): item is { label: string; value: string } => Boolean(item.label && item.value))
+    .slice(0, maxItems);
+}
+
 async function readProfileRecords(): Promise<ProfileRecord[]> {
   try {
     const raw = await readFile(PROFILE_FILE, "utf8");
@@ -1365,6 +1383,7 @@ async function readProfileRecords(): Promise<ProfileRecord[]> {
           interests: sanitizeProfileText(item.interests || undefined, 1200),
           whoIdLikeToMeet: sanitizeProfileText(item.whoIdLikeToMeet || undefined, 1200),
           statusHeadline: sanitizeProfileText(item.statusHeadline || undefined, 160),
+          sidebarFacts: sanitizeProfileSidebarFacts(item.sidebarFacts),
           topFriends: sanitizeProfileList(item.topFriends, 8, 80),
           stamps: sanitizeProfileList(item.stamps, 24, 48),
           testimonials: sanitizeProfileList(item.testimonials, 12, 280),
@@ -5917,6 +5936,7 @@ async function handleRequest(
       interests: sanitizeProfileText(payload.interests, 1200) || existingIdentity?.interests || null,
       whoIdLikeToMeet: sanitizeProfileText(payload.whoIdLikeToMeet, 1200) || existingIdentity?.whoIdLikeToMeet || null,
       statusHeadline: sanitizeProfileText(payload.statusHeadline, 160) || existingIdentity?.statusHeadline || null,
+      sidebarFacts: payload.sidebarFacts !== undefined ? sanitizeProfileSidebarFacts(payload.sidebarFacts) : existingIdentity?.sidebarFacts || [],
       topFriends: sanitizeProfileList(payload.topFriends, 8, 80).length > 0 ? sanitizeProfileList(payload.topFriends, 8, 80) : existingIdentity?.topFriends || [],
       testimonials: sanitizeProfileList(payload.testimonials, 12, 280).length > 0 ? sanitizeProfileList(payload.testimonials, 12, 280) : existingIdentity?.testimonials || [],
       profileSongUrl: sanitizeProfileUrl(payload.profileSongUrl) || existingIdentity?.profileSongUrl || null,
@@ -5951,6 +5971,7 @@ async function handleRequest(
         interests: sanitizeProfileText(payload.interests, 1200) || existingIdentity?.interests || null,
         whoIdLikeToMeet: sanitizeProfileText(payload.whoIdLikeToMeet, 1200) || existingIdentity?.whoIdLikeToMeet || null,
         statusHeadline: sanitizeProfileText(payload.statusHeadline, 160) || existingIdentity?.statusHeadline || null,
+        sidebarFacts: payload.sidebarFacts !== undefined ? sanitizeProfileSidebarFacts(payload.sidebarFacts) : existingIdentity?.sidebarFacts || [],
         topFriends: sanitizeProfileList(payload.topFriends, 8, 80).length > 0 ? sanitizeProfileList(payload.topFriends, 8, 80) : existingIdentity?.topFriends || [],
         testimonials: sanitizeProfileList(payload.testimonials, 12, 280).length > 0 ? sanitizeProfileList(payload.testimonials, 12, 280) : existingIdentity?.testimonials || [],
         profileSongUrl: sanitizeProfileUrl(payload.profileSongUrl) || existingIdentity?.profileSongUrl || null,
@@ -6044,6 +6065,7 @@ async function handleRequest(
           testimonials: target.testimonials,
           profileSongUrl: target.profileSongUrl,
           statusHeadline: target.statusHeadline,
+          sidebarFacts: target.sidebarFacts,
           stamps: target.stamps,
           customBoxes: target.customBoxes,
           bannerUrl: target.bannerUrl,

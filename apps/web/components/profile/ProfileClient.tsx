@@ -94,6 +94,26 @@ function formatCustomBoxesInput(boxes: Array<{ title: string; content: string }>
   return boxes.map((box) => ["Title: " + box.title, box.content].join("\n")).join("\n\n");
 }
 
+function parseSidebarFactsInput(value: string): Array<{ label: string; value: string }> {
+  return String(value || "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const separatorIndex = line.indexOf(":");
+      if (separatorIndex <= 0) return null;
+      const label = line.slice(0, separatorIndex).trim();
+      const factValue = line.slice(separatorIndex + 1).trim();
+      return label && factValue ? { label, value: factValue } : null;
+    })
+    .filter((item): item is { label: string; value: string } => Boolean(item));
+}
+
+function formatSidebarFactsInput(facts: Array<{ label: string; value: string }> | null | undefined): string {
+  if (!Array.isArray(facts) || facts.length === 0) return "";
+  return facts.map((fact) => fact.label + ": " + fact.value).join("\n");
+}
+
 function getFeaturedMediaKind(url: string | null | undefined): "image" | "audio" | "video" | "link" | null {
   if (!url) return null;
   const normalized = url.trim().toLowerCase();
@@ -228,6 +248,7 @@ export default function ProfileClient({ name }: { name: string }) {
   const [editInterests, setEditInterests] = useState("");
   const [editWhoIdLikeToMeet, setEditWhoIdLikeToMeet] = useState("");
   const [editStatusHeadline, setEditStatusHeadline] = useState("");
+  const [editSidebarFactsText, setEditSidebarFactsText] = useState("");
   const [editBannerUrl, setEditBannerUrl] = useState("");
   const [editAvatarUrl, setEditAvatarUrl] = useState("");
   const [editFeaturedUrl, setEditFeaturedUrl] = useState("");
@@ -711,6 +732,7 @@ export default function ProfileClient({ name }: { name: string }) {
     setEditInterests(primaryProfile.interests || "");
     setEditWhoIdLikeToMeet(primaryProfile.whoIdLikeToMeet || "");
     setEditStatusHeadline(primaryProfile.statusHeadline || "");
+    setEditSidebarFactsText(formatSidebarFactsInput(primaryProfile.sidebarFacts));
     setEditBannerUrl(primaryProfile.bannerUrl || "");
     setEditAvatarUrl(primaryProfile.avatarUrl || "");
     setEditFeaturedUrl(primaryProfile.featuredUrl || "");
@@ -753,6 +775,7 @@ export default function ProfileClient({ name }: { name: string }) {
         interests: editInterests,
         whoIdLikeToMeet: editWhoIdLikeToMeet,
         statusHeadline: editStatusHeadline,
+        sidebarFacts: parseSidebarFactsInput(editSidebarFactsText),
         bannerUrl: editBannerUrl,
         avatarUrl: editAvatarUrl,
         featuredUrl: editFeaturedUrl,
@@ -1126,7 +1149,23 @@ export default function ProfileClient({ name }: { name: string }) {
               <span className="profileMyspaceStatusLabel">Currently</span>
               <strong>{primaryProfile?.statusHeadline?.trim() || "offline, coding the perfect profile"}</strong>
             </div>
-            <div className="profileMyspaceBlurbGrid">
+            <div className="profileMyspaceSidebarLayout">
+              <section className="profileMyspaceSidebarCard">
+                <h4>Details</h4>
+                {primaryProfile?.sidebarFacts?.length ? (
+                  <dl className="profileMyspaceFactList">
+                    {primaryProfile.sidebarFacts.map((fact) => (
+                      <div key={fact.label + ":" + fact.value} className="profileMyspaceFactRow">
+                        <dt>{fact.label}</dt>
+                        <dd>{fact.value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                ) : (
+                  <p>No profile details pinned yet.</p>
+                )}
+              </section>
+              <div className="profileMyspaceBlurbGrid">
               <div className="profileMyspaceBlurbCard">
                 <h4>About Me</h4>
                 <p>{primaryProfile?.aboutMe?.trim() || "No About Me blurb yet."}</p>
@@ -1151,6 +1190,7 @@ export default function ProfileClient({ name }: { name: string }) {
                   <p>No Top Friends picked yet.</p>
                 )}
               </div>
+            </div>
             </div>
             <div className="profileMyspaceSocialGrid">
               <section className="profileMyspaceSocialCard">
@@ -1754,6 +1794,12 @@ export default function ProfileClient({ name }: { name: string }) {
                       <label>
                         Status headline
                         <input value={editStatusHeadline} onChange={(e) => setEditStatusHeadline(e.target.value)} placeholder="currently obsessing over weird internet relics" />
+                      </label>
+                      <label>
+                        Sidebar facts (one per line as Label: Value)
+                        <textarea value={editSidebarFactsText} onChange={(e) => setEditSidebarFactsText(e.target.value)} placeholder="Mood: Chronically online
+Location: Terminal tab
+Occupation: Pixel archivist" />
                       </label>
                       <label>
                         Custom CSS

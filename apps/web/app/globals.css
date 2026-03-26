@@ -1588,6 +1588,51 @@ button:disabled {
   color: #0f2f77;
 }
 
+.profileMyspaceSidebarLayout {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(220px, 0.8fr) minmax(0, 1.6fr);
+  margin-bottom: 12px;
+}
+
+.profileMyspaceSidebarCard {
+  padding: 12px;
+  border: 2px solid #0f2f77;
+  background: rgba(255, 249, 228, 0.95);
+  box-shadow: 4px 4px 0 rgba(15, 47, 119, 0.14);
+}
+
+.profileMyspaceSidebarCard h4 {
+  margin: 0 0 10px;
+  color: #0f2f77;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.78rem;
+}
+
+.profileMyspaceFactList {
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.profileMyspaceFactRow {
+  display: grid;
+  gap: 4px;
+}
+
+.profileMyspaceFactRow dt {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #8b1e3f;
+}
+
+.profileMyspaceFactRow dd {
+  margin: 0;
+  color: #10244e;
+}
+
 .profileMyspaceStampGrid {
   display: flex;
   flex-wrap: wrap;

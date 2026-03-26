@@ -343,6 +343,7 @@ function createLocalProfileRecord(args: {
     interests: null,
     whoIdLikeToMeet: null,
     statusHeadline: null,
+    sidebarFacts: [],
     topFriends: [],
     stamps: [],
     testimonials: [],
