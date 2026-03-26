@@ -742,3 +742,17 @@ export async function deleteProfileGuestbookEntry(payload: {
     })
   }, undefined, options);
 }
+
+export async function restoreProfileGuestbookEntry(payload: {
+  name: string;
+  entryId: string;
+  currentOwnerAddress: string;
+}, options?: IndexerRequestOptions): Promise<{ ok: boolean; entry: ApiProfileGuestbookEntry }> {
+  return fetchJson<{ ok: boolean; entry: ApiProfileGuestbookEntry }>("/api/profile/" + encodeURIComponent(payload.name) + "/guestbook/restore", {
+    method: "POST",
+    body: JSON.stringify({
+      entryId: payload.entryId,
+      currentOwnerAddress: payload.currentOwnerAddress
+    })
+  }, undefined, options);
+}

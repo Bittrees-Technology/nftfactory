@@ -6244,6 +6244,67 @@ async function handleRequest(
     return;
   }
 
+  if (req.method === "POST" && /^\/api\/profile\/[^/]+\/guestbook\/restore$/.test(path)) {
+    const rawName = String(decodeURIComponent(path.split("/")[3] || "")).trim().toLowerCase();
+    const lookup = resolveProfileLookup(rawName);
+    const slug = lookup?.slugCandidates[0] || "";
+
+    if (!rawName || !slug || !lookup) {
+      sendJson(res, 400, { error: "Invalid profile name" });
+      return;
+    }
+
+    if (deps.isRateLimitedImpl(deps.getClientIpImpl(req, config.trustProxy))) {
+      sendJson(res, 429, { error: "Too many requests" });
+      return;
+    }
+
+    const payload = await readJsonBody<ProfileGuestbookHidePayload>(req);
+    const entryId = String(payload.entryId || "").trim();
+    const currentOwnerAddress = String(payload.currentOwnerAddress || "").trim().toLowerCase();
+    const actorAddress = String(payload.actorAddress || payload.currentOwnerAddress || "").trim().toLowerCase();
+    if (!entryId) {
+      sendJson(res, 400, { error: "Invalid entryId" });
+      return;
+    }
+    if (!isAddress(currentOwnerAddress)) {
+      sendJson(res, 400, { error: "Invalid currentOwnerAddress" });
+      return;
+    }
+    if (!isAddress(actorAddress)) {
+      sendJson(res, 400, { error: "Invalid actorAddress" });
+      return;
+    }
+
+    const profileRecords = await readProfileRecords();
+    const moderators = await readEffectiveModeratorRecords(config);
+    const canModerate = profileRecords.some((item) => item.slug === slug && item.ownerAddress === currentOwnerAddress && currentOwnerAddress === actorAddress)
+      || moderators.some((item) => item.address === actorAddress);
+    if (!canModerate) {
+      sendJson(res, 403, { error: "Only the profile owner or a moderator can moderate guestbook entries." });
+      return;
+    }
+
+    const current = await readProfileGuestbookEntries();
+    const target = current.find((item) => item.id === entryId && item.profileSlug === slug);
+    if (!target) {
+      sendJson(res, 404, { error: "Guestbook entry not found." });
+      return;
+    }
+
+    const restoredEntry = {
+      ...target,
+      hiddenAt: null,
+      hiddenBy: null,
+      deletedAt: null,
+      deletedBy: null
+    };
+    const next = current.map((item) => item.id === entryId ? restoredEntry : item);
+    await writeProfileGuestbookEntries(next);
+    sendJson(res, 200, { ok: true, entry: restoredEntry });
+    return;
+  }
+
   if (req.method === "POST" && /^\/api\/profile\/[^/]+\/guestbook\/delete$/.test(path)) {
     const rawName = String(decodeURIComponent(path.split("/")[3] || "")).trim().toLowerCase();
     const lookup = resolveProfileLookup(rawName);

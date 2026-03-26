@@ -1,3 +1,5 @@
+import { rm, writeFile } from "node:fs/promises";
+import path from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { Readable } from "node:stream";
 import { describe, expect, it, vi } from "vitest";
@@ -166,5 +168,103 @@ describe("indexer handler", () => {
     expect(response.status).toBe(429);
     expect(response.body.error).toContain("Too many requests");
     expect(seen).toEqual([false]);
+  });
+  it("restores hidden guestbook entries for the profile owner", async () => {
+    const guestbookFile = path.join(process.cwd(), "data", "profile-guestbook.json");
+    const profileFile = path.join(process.cwd(), "data", "profiles.json");
+    await writeFile(profileFile, JSON.stringify([
+      {
+        slug: "demo",
+        fullName: "demo.nftfactory.eth",
+        source: "nftfactory-subname",
+        ownerAddress: "0x00000000000000000000000000000000000000aa",
+        collectionAddress: null,
+        tagline: null,
+        displayName: null,
+        bio: null,
+        layoutMode: "myspace",
+        aboutMe: null,
+        interests: null,
+        whoIdLikeToMeet: null,
+        topFriends: [],
+        testimonials: [],
+        profileSongUrl: null,
+        statusHeadline: null,
+        sidebarFacts: [],
+        mediaEmbeds: [],
+        moduleOrder: [],
+        stamps: [],
+        customBoxes: [],
+        bannerUrl: null,
+        avatarUrl: null,
+        featuredUrl: null,
+        accentColor: null,
+        customCss: null,
+        customHtml: null,
+        links: [],
+        createdAt: "2024-01-01T00:00:00.000Z",
+        updatedAt: "2024-01-01T00:00:00.000Z"
+      }
+    ]), "utf8");
+    await writeFile(guestbookFile, JSON.stringify([
+      {
+        id: "entry_1",
+        profileSlug: "demo",
+        authorName: "Guest",
+        authorAddress: null,
+        message: "hello world",
+        createdAt: "2024-01-01T00:00:00.000Z",
+        hiddenAt: "2024-01-02T00:00:00.000Z",
+        hiddenBy: "0x00000000000000000000000000000000000000aa",
+        deletedAt: null,
+        deletedBy: null
+      }
+    ]), "utf8");
+
+    const handler = createRequestHandler(
+      {
+        prisma: createMockPrisma(),
+        getClientIpImpl: () => "127.0.0.1",
+        isRateLimitedImpl: () => false
+      },
+      {
+        chainId: 11155111,
+        adminToken: "",
+        adminAllowlist: new Set(),
+        trustProxy: false
+      }
+    );
+
+    const restoreResponse = await runHandler(
+      handler,
+      createReq({
+        method: "POST",
+        url: "/api/profile/demo/guestbook/restore",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          entryId: "entry_1",
+          currentOwnerAddress: "0x00000000000000000000000000000000000000aa"
+        })
+      })
+    );
+
+    expect(restoreResponse.status).toBe(200);
+    expect(restoreResponse.body.entry.hiddenAt).toBeNull();
+    expect(restoreResponse.body.entry.deletedAt).toBeNull();
+
+    const historyResponse = await runHandler(
+      handler,
+      createReq({
+        method: "GET",
+        url: "/api/profile/demo/guestbook?includeHidden=true&actorAddress=0x00000000000000000000000000000000000000aa"
+      })
+    );
+
+    expect(historyResponse.status).toBe(200);
+    expect(historyResponse.body.entries).toHaveLength(1);
+    expect(historyResponse.body.entries[0].hiddenAt).toBeNull();
+
+    await rm(guestbookFile, { force: true });
+    await rm(profileFile, { force: true });
   });
 });

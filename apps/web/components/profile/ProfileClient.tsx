@@ -54,6 +54,7 @@ import {
   createProfileGuestbookEntry,
   hideProfileGuestbookEntry,
   deleteProfileGuestbookEntry,
+  restoreProfileGuestbookEntry,
   type ApiActiveListingItem,
   type ApiProfileRecord,
   type ApiOfferSummary,
@@ -1034,6 +1035,28 @@ export default function ProfileClient({ name }: { name: string }) {
     }
   }
 
+  async function restoreGuestbookEntry(entryId: string): Promise<void> {
+    if (!primaryProfile || !canEditProfile) {
+      setGuestbookState(errorActionState("Connect the profile owner wallet to moderate guestbook entries."));
+      return;
+    }
+    try {
+      setModeratingGuestbookEntryId(entryId);
+      setGuestbookState(pendingActionState("Restoring guestbook entry..."));
+      const response = await restoreProfileGuestbookEntry({
+        name,
+        entryId,
+        currentOwnerAddress: primaryProfile.ownerAddress
+      });
+      setGuestbookEntries((current) => current.map((entry) => (entry.id === entryId ? { ...entry, hiddenAt: response.entry.hiddenAt || null, hiddenBy: response.entry.hiddenBy || null, deletedAt: response.entry.deletedAt || null, deletedBy: response.entry.deletedBy || null } : entry)));
+      setGuestbookState(successActionState("Guestbook entry restored."));
+    } catch (err) {
+      setGuestbookState(errorActionState(err instanceof Error ? err.message : "Failed to restore guestbook entry."));
+    } finally {
+      setModeratingGuestbookEntryId(null);
+    }
+  }
+
   async function deleteGuestbookEntry(entryId: string): Promise<void> {
     if (!primaryProfile || !canEditProfile) {
       setGuestbookState(errorActionState("Connect the profile owner wallet to moderate guestbook entries."));
@@ -1466,6 +1489,15 @@ export default function ProfileClient({ name }: { name: string }) {
                       {entry.hiddenAt ? " | Hidden " + new Date(entry.hiddenAt).toLocaleString() : ""}
                       {entry.deletedAt ? " | Deleted " + new Date(entry.deletedAt).toLocaleString() : ""}
                     </p>
+                    <div className="row">
+                      <button
+                        type="button"
+                        onClick={() => void restoreGuestbookEntry(entry.id)}
+                        disabled={moderatingGuestbookEntryId === entry.id}
+                      >
+                        {moderatingGuestbookEntryId === entry.id ? "Working..." : "Restore Entry"}
+                      </button>
+                    </div>
                   </article>
                 ))}
               </div>

@@ -6,6 +6,7 @@ import {
   deleteProfileGuestbookEntry,
   fetchProfileGuestbook,
   hideProfileGuestbookEntry,
+  restoreProfileGuestbookEntry,
   type ApiProfileGuestbookEntry
 } from "../../lib/indexerApi";
 import {
@@ -98,6 +99,40 @@ export default function ProfileModerationClient() {
     }
   }
 
+  async function restoreEntry(entryId: string) {
+    if (!normalizedProfileName || !isAddress(normalizedActorAddress)) {
+      setMutationState(errorActionState("A valid actor wallet address is required."));
+      return;
+    }
+    setActiveEntryId(entryId);
+    setMutationState(pendingActionState("Restoring guestbook entry..."));
+    try {
+      const response = await restoreProfileGuestbookEntry({
+        name: normalizedProfileName,
+        entryId,
+        currentOwnerAddress: normalizedActorAddress
+      });
+      setEntries((current) =>
+        current.map((entry) =>
+          entry.id === entryId
+            ? {
+                ...entry,
+                hiddenAt: response.entry.hiddenAt || null,
+                hiddenBy: response.entry.hiddenBy || null,
+                deletedAt: response.entry.deletedAt || null,
+                deletedBy: response.entry.deletedBy || null
+              }
+            : entry
+        )
+      );
+      setMutationState(successActionState("Guestbook entry restored."));
+    } catch (error) {
+      setMutationState(errorActionState(error instanceof Error ? error.message : "Failed to restore guestbook entry."));
+    } finally {
+      setActiveEntryId(null);
+    }
+  }
+
   async function deleteEntry(entryId: string) {
     if (!normalizedProfileName || !isAddress(normalizedActorAddress)) {
       setMutationState(errorActionState("A valid actor wallet address is required."));
@@ -182,6 +217,11 @@ export default function ProfileModerationClient() {
                     {!entry.hiddenAt && !entry.deletedAt ? (
                       <button type="button" disabled={isBusy} onClick={() => void hideEntry(entry.id)}>
                         Hide Entry
+                      </button>
+                    ) : null}
+                    {entry.hiddenAt || entry.deletedAt ? (
+                      <button type="button" disabled={isBusy} onClick={() => void restoreEntry(entry.id)}>
+                        Restore Entry
                       </button>
                     ) : null}
                     {!entry.deletedAt ? (
