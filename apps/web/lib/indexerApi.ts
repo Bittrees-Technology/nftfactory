@@ -141,10 +141,16 @@ export type ApiProfileRecord = {
   tagline: string | null;
   displayName: string | null;
   bio: string | null;
+  layoutMode: "default" | "myspace" | null;
+  aboutMe: string | null;
+  interests: string | null;
+  whoIdLikeToMeet: string | null;
   bannerUrl: string | null;
   avatarUrl: string | null;
   featuredUrl: string | null;
   accentColor: string | null;
+  customCss: string | null;
+  customHtml: string | null;
   links: string[];
   createdAt: string;
   updatedAt: string;
@@ -596,10 +602,16 @@ export async function linkProfileIdentity(payload: {
   tagline?: string;
   displayName?: string;
   bio?: string;
+  layoutMode?: "default" | "myspace";
+  aboutMe?: string;
+  interests?: string;
+  whoIdLikeToMeet?: string;
   bannerUrl?: string;
   avatarUrl?: string;
   featuredUrl?: string;
   accentColor?: string;
+  customCss?: string;
+  customHtml?: string;
   links?: string[];
 }): Promise<{ ok: boolean; profile: ApiProfileRecord }> {
   return fetchJson<{ ok: boolean; profile: ApiProfileRecord }>("/api/profiles/link", {

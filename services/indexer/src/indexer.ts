@@ -77,10 +77,16 @@ type ProfileLinkPayload = {
   tagline?: string;
   displayName?: string;
   bio?: string;
+  layoutMode?: "default" | "myspace";
+  aboutMe?: string;
+  interests?: string;
+  whoIdLikeToMeet?: string;
   bannerUrl?: string;
   avatarUrl?: string;
   featuredUrl?: string;
   accentColor?: string;
+  customCss?: string;
+  customHtml?: string;
   links?: string[];
 };
 
@@ -99,10 +105,16 @@ type ProfileRecord = {
   tagline: string | null;
   displayName: string | null;
   bio: string | null;
+  layoutMode: "default" | "myspace" | null;
+  aboutMe: string | null;
+  interests: string | null;
+  whoIdLikeToMeet: string | null;
   bannerUrl: string | null;
   avatarUrl: string | null;
   featuredUrl: string | null;
   accentColor: string | null;
+  customCss: string | null;
+  customHtml: string | null;
   links: string[];
   createdAt: string;
   updatedAt: string;
@@ -1214,6 +1226,38 @@ function sanitizeProfileText(value: string | undefined, max = 280): string | nul
   return trimmed.slice(0, max);
 }
 
+function sanitizeProfileLayoutMode(value: string | undefined): "default" | "myspace" | null {
+  const trimmed = String(value || "").trim().toLowerCase();
+  if (!trimmed) return null;
+  return trimmed === "myspace" ? "myspace" : "default";
+}
+
+function sanitizeProfileCss(value: string | undefined, max = 12000): string | null {
+  const trimmed = String(value || "").trim();
+  if (!trimmed) return null;
+  return trimmed
+    .replace(/<\/?style[^>]*>/gi, "")
+    .replace(/@import/gi, "")
+    .replace(/expression\s*\(/gi, "")
+    .replace(/javascript\s*:/gi, "")
+    .slice(0, max)
+    .trim() || null;
+}
+
+function sanitizeProfileHtml(value: string | undefined, max = 12000): string | null {
+  const trimmed = String(value || "").trim();
+  if (!trimmed) return null;
+  return trimmed
+    .replace(/<\s*script[\s\S]*?<\s*\/\s*script\s*>/gi, "")
+    .replace(/<\s*(iframe|object|embed|form|meta|link|base)[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, "")
+    .replace(/<\s*(iframe|object|embed|form|meta|link|base)\b[^>]*\/?\s*>/gi, "")
+    .replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+    .replace(/\s(href|src)\s*=\s*("|')\s*javascript:[\s\S]*?\2/gi, "")
+    .replace(/\sstyle\s*=\s*("[^"]*"|'[^']*')/gi, "")
+    .slice(0, max)
+    .trim() || null;
+}
+
 function sanitizeProfileUrl(value: string | undefined): string | null {
   const trimmed = String(value || "").trim();
   if (!trimmed) return null;
@@ -1259,10 +1303,16 @@ async function readProfileRecords(): Promise<ProfileRecord[]> {
           tagline: sanitizeProfileText(item.tagline || undefined, 120),
           displayName: sanitizeProfileText(item.displayName || undefined, 80),
           bio: sanitizeProfileText(item.bio || undefined, 1200),
+          layoutMode: sanitizeProfileLayoutMode(item.layoutMode || undefined),
+          aboutMe: sanitizeProfileText(item.aboutMe || undefined, 1200),
+          interests: sanitizeProfileText(item.interests || undefined, 1200),
+          whoIdLikeToMeet: sanitizeProfileText(item.whoIdLikeToMeet || undefined, 1200),
           bannerUrl: sanitizeProfileUrl(item.bannerUrl || undefined),
           avatarUrl: sanitizeProfileUrl(item.avatarUrl || undefined),
           featuredUrl: sanitizeProfileUrl(item.featuredUrl || undefined),
           accentColor: sanitizeAccentColor(item.accentColor || undefined),
+          customCss: sanitizeProfileCss(item.customCss || undefined),
+          customHtml: sanitizeProfileHtml(item.customHtml || undefined),
           links: sanitizeProfileLinks(item.links),
           createdAt: item.createdAt || new Date().toISOString(),
           updatedAt: item.updatedAt || new Date().toISOString()
@@ -5770,10 +5820,16 @@ async function handleRequest(
       tagline: sanitizeProfileText(payload.tagline, 120) || existingIdentity?.tagline || null,
       displayName: sanitizeProfileText(payload.displayName, 80) || existingIdentity?.displayName || null,
       bio: sanitizeProfileText(payload.bio, 1200) || existingIdentity?.bio || null,
+      layoutMode: sanitizeProfileLayoutMode(payload.layoutMode) || existingIdentity?.layoutMode || "default",
+      aboutMe: sanitizeProfileText(payload.aboutMe, 1200) || existingIdentity?.aboutMe || null,
+      interests: sanitizeProfileText(payload.interests, 1200) || existingIdentity?.interests || null,
+      whoIdLikeToMeet: sanitizeProfileText(payload.whoIdLikeToMeet, 1200) || existingIdentity?.whoIdLikeToMeet || null,
       bannerUrl: sanitizeProfileUrl(payload.bannerUrl) || existingIdentity?.bannerUrl || null,
       avatarUrl: sanitizeProfileUrl(payload.avatarUrl) || existingIdentity?.avatarUrl || null,
       featuredUrl: sanitizeProfileUrl(payload.featuredUrl) || existingIdentity?.featuredUrl || null,
       accentColor: sanitizeAccentColor(payload.accentColor) || existingIdentity?.accentColor || null,
+      customCss: sanitizeProfileCss(payload.customCss) || existingIdentity?.customCss || null,
+      customHtml: sanitizeProfileHtml(payload.customHtml) || existingIdentity?.customHtml || null,
       links: sanitizeProfileLinks(payload.links).length > 0 ? sanitizeProfileLinks(payload.links) : existingIdentity?.links || [],
       createdAt: existingIdentity?.createdAt || now,
       updatedAt: now
@@ -5792,10 +5848,16 @@ async function handleRequest(
         tagline: sanitizeProfileText(payload.tagline, 120) || existingIdentity?.tagline || null,
         displayName: sanitizeProfileText(payload.displayName, 80) || existingIdentity?.displayName || null,
         bio: sanitizeProfileText(payload.bio, 1200) || existingIdentity?.bio || null,
+        layoutMode: sanitizeProfileLayoutMode(payload.layoutMode) || existingIdentity?.layoutMode || "default",
+        aboutMe: sanitizeProfileText(payload.aboutMe, 1200) || existingIdentity?.aboutMe || null,
+        interests: sanitizeProfileText(payload.interests, 1200) || existingIdentity?.interests || null,
+        whoIdLikeToMeet: sanitizeProfileText(payload.whoIdLikeToMeet, 1200) || existingIdentity?.whoIdLikeToMeet || null,
         bannerUrl: sanitizeProfileUrl(payload.bannerUrl) || existingIdentity?.bannerUrl || null,
         avatarUrl: sanitizeProfileUrl(payload.avatarUrl) || existingIdentity?.avatarUrl || null,
         featuredUrl: sanitizeProfileUrl(payload.featuredUrl) || existingIdentity?.featuredUrl || null,
         accentColor: sanitizeAccentColor(payload.accentColor) || existingIdentity?.accentColor || null,
+        customCss: sanitizeProfileCss(payload.customCss) || existingIdentity?.customCss || null,
+        customHtml: sanitizeProfileHtml(payload.customHtml) || existingIdentity?.customHtml || null,
         links: sanitizeProfileLinks(payload.links).length > 0 ? sanitizeProfileLinks(payload.links) : existingIdentity?.links || [],
         createdAt: existingIdentity?.createdAt || now,
         updatedAt: now
@@ -5870,10 +5932,16 @@ async function handleRequest(
           tagline: target.tagline,
           displayName: target.displayName,
           bio: target.bio,
+          layoutMode: target.layoutMode,
+          aboutMe: target.aboutMe,
+          interests: target.interests,
+          whoIdLikeToMeet: target.whoIdLikeToMeet,
           bannerUrl: target.bannerUrl,
           avatarUrl: target.avatarUrl,
           featuredUrl: target.featuredUrl,
           accentColor: target.accentColor,
+          customCss: target.customCss,
+          customHtml: target.customHtml,
           links: target.links,
           updatedAt: now
         }

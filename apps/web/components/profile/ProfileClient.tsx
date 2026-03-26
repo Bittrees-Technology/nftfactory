@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import type { Address, Hex } from "viem";
 import { useAccount, useChainId, usePublicClient, useSwitchChain, useWalletClient } from "wagmi";
@@ -199,16 +199,23 @@ export default function ProfileClient({ name }: { name: string }) {
   const [editTagline, setEditTagline] = useState("");
   const [editDisplayName, setEditDisplayName] = useState("");
   const [editBio, setEditBio] = useState("");
+  const [editLayoutMode, setEditLayoutMode] = useState<"default" | "myspace">("default");
+  const [editAboutMe, setEditAboutMe] = useState("");
+  const [editInterests, setEditInterests] = useState("");
+  const [editWhoIdLikeToMeet, setEditWhoIdLikeToMeet] = useState("");
   const [editBannerUrl, setEditBannerUrl] = useState("");
   const [editAvatarUrl, setEditAvatarUrl] = useState("");
   const [editFeaturedUrl, setEditFeaturedUrl] = useState("");
   const [editAccentColor, setEditAccentColor] = useState("#c53a1f");
+  const [editCustomCss, setEditCustomCss] = useState("");
+  const [editCustomHtml, setEditCustomHtml] = useState("");
   const [editLinksText, setEditLinksText] = useState("");
   const [transferAddress, setTransferAddress] = useState("");
   const [editState, setEditState] = useState<ActionState>(idleActionState());
   const [transferState, setTransferState] = useState<ActionState>(idleActionState());
   const profileViewRequestIdRef = useRef(0);
   const manualSellerAddress = useMemo(() => (isAddress(sellerAddress) ? sellerAddress : null), [sellerAddress]);
+  const customPreviewId = useId();
 
   const loadProfileViewData = useCallback(async (): Promise<void> => {
     const requestId = profileViewRequestIdRef.current + 1;
@@ -659,10 +666,16 @@ export default function ProfileClient({ name }: { name: string }) {
     setEditTagline(primaryProfile.tagline || "");
     setEditDisplayName(primaryProfile.displayName || "");
     setEditBio(primaryProfile.bio || "");
+    setEditLayoutMode(primaryProfile.layoutMode === "myspace" ? "myspace" : "default");
+    setEditAboutMe(primaryProfile.aboutMe || "");
+    setEditInterests(primaryProfile.interests || "");
+    setEditWhoIdLikeToMeet(primaryProfile.whoIdLikeToMeet || "");
     setEditBannerUrl(primaryProfile.bannerUrl || "");
     setEditAvatarUrl(primaryProfile.avatarUrl || "");
     setEditFeaturedUrl(primaryProfile.featuredUrl || "");
     setEditAccentColor(primaryProfile.accentColor || "#c53a1f");
+    setEditCustomCss(primaryProfile.customCss || "");
+    setEditCustomHtml(primaryProfile.customHtml || "");
     setEditLinksText((primaryProfile.links || []).join("\n"));
     setEditState(idleActionState());
     setTransferAddress("");
@@ -689,10 +702,16 @@ export default function ProfileClient({ name }: { name: string }) {
         tagline: editTagline,
         displayName: editDisplayName,
         bio: editBio,
+        layoutMode: editLayoutMode,
+        aboutMe: editAboutMe,
+        interests: editInterests,
+        whoIdLikeToMeet: editWhoIdLikeToMeet,
         bannerUrl: editBannerUrl,
         avatarUrl: editAvatarUrl,
         featuredUrl: editFeaturedUrl,
         accentColor: editAccentColor,
+        customCss: editCustomCss,
+        customHtml: editCustomHtml,
         links: editLinksText.split("\n").map((item) => item.trim()).filter(Boolean)
       });
 
@@ -706,6 +725,77 @@ export default function ProfileClient({ name }: { name: string }) {
       setEditState(errorActionState(err instanceof Error ? err.message : "Failed to save profile details"));
     }
   }
+
+  const isMyspaceProfile = primaryProfile?.layoutMode === "myspace";
+  const retroAccentStyle = useMemo(
+    () => ({ "--profile-accent": primaryProfile?.accentColor || "#ff6a00" } as CSSProperties),
+    [primaryProfile?.accentColor]
+  );
+  const customProfilePreview = useMemo(() => {
+    if (!primaryProfile?.customHtml && !primaryProfile?.customCss) return "";
+    const title = (creatorDisplayName || primaryProfileName)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+    const escapeText = (value: string) =>
+      value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const buildPanel = (label: string, value: string | null | undefined) => {
+      const trimmed = String(value || "").trim();
+      if (!trimmed) return "";
+      return `<section class="myspace-panel"><h2>${escapeText(label)}</h2><div class="content"><p>${escapeText(trimmed)}</p></div></section>`;
+    };
+    return `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>${title}</title>
+    <style>
+      :root { color-scheme: light; }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        padding: 16px;
+        font-family: Verdana, Geneva, sans-serif;
+        background: linear-gradient(180deg, #fff3da 0%, #ffd6f3 100%);
+        color: #22170f;
+      }
+      .myspace-shell {
+        display: grid;
+        gap: 12px;
+      }
+      .myspace-panel {
+        border: 2px solid #1f3c88;
+        background: rgba(255, 255, 255, 0.92);
+        box-shadow: 6px 6px 0 rgba(31, 60, 136, 0.18);
+      }
+      .myspace-panel h2 {
+        margin: 0;
+        padding: 8px 10px;
+        background: linear-gradient(180deg, #2b65d9 0%, #0f2f77 100%);
+        color: #fff;
+        font-size: 14px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+      .myspace-panel .content {
+        padding: 12px;
+        line-height: 1.5;
+      }
+      a { color: #0f43a9; }
+      img { max-width: 100%; height: auto; }
+      ${primaryProfile.customCss || ""}
+    </style>
+  </head>
+  <body>
+    <div class="myspace-shell">
+      ${buildPanel("About Me", primaryProfile.aboutMe)}
+      ${buildPanel("Interests", primaryProfile.interests)}
+      ${buildPanel("Who I'd Like To Meet", primaryProfile.whoIdLikeToMeet)}
+      ${primaryProfile.customHtml ? `<section class="myspace-panel"><h2>Custom HTML</h2><div class="content">${primaryProfile.customHtml}</div></section>` : ""}
+    </div>
+  </body>
+</html>`;
+  }, [creatorDisplayName, primaryProfile, primaryProfileName]);
 
   async function submitProfileTransfer(): Promise<void> {
     if (!primaryProfile) {
@@ -883,7 +973,7 @@ export default function ProfileClient({ name }: { name: string }) {
   }
 
   return (
-    <section className="wizard">
+    <section className={`wizard profilePage ${isMyspaceProfile ? "profilePage--myspace" : ""}`.trim()} style={isMyspaceProfile ? retroAccentStyle : undefined}>
       <ProfileHeroSections
         name={name}
         mintProfileParam={mintProfileParam}
@@ -904,6 +994,63 @@ export default function ProfileClient({ name }: { name: string }) {
         pinnedCollection={pinnedCollection}
         configChainId={config.chainId}
       />
+
+      {isMyspaceProfile ? (
+        <div className="profileMyspaceShell">
+          <section className="card formCard profileMyspaceIntroCard">
+            <p className="eyebrow">Classic Mode</p>
+            <h3>{creatorDisplayName}'s Retro Page</h3>
+            <p className="sectionLead">
+              This profile is using the Myspace-style layout mode: expressive blurbs, loud colors, and a custom HTML block that can evolve independently from the marketplace sections below.
+            </p>
+            <div className="profileMyspaceBlurbGrid">
+              <div className="profileMyspaceBlurbCard">
+                <h4>About Me</h4>
+                <p>{primaryProfile?.aboutMe?.trim() || "No About Me blurb yet."}</p>
+              </div>
+              <div className="profileMyspaceBlurbCard">
+                <h4>Interests</h4>
+                <p>{primaryProfile?.interests?.trim() || "No Interests blurb yet."}</p>
+              </div>
+              <div className="profileMyspaceBlurbCard">
+                <h4>Who I'd Like To Meet</h4>
+                <p>{primaryProfile?.whoIdLikeToMeet?.trim() || "No dream collabs or friend list notes yet."}</p>
+              </div>
+              <div className="profileMyspaceTopCard">
+                <h4>Top 4</h4>
+                <ol>
+                  <li>{creatorDisplayName}</li>
+                  <li>{primaryProfileName}</li>
+                  <li>{stats.uniqueCollections} collections</li>
+                  <li>{stats.listings} live listings</li>
+                </ol>
+              </div>
+            </div>
+          </section>
+
+          {(primaryProfile?.customHtml || primaryProfile?.customCss) ? (
+            <section className="card formCard profileMyspaceCustomCard">
+              <div className="profileMyspaceCustomHeader">
+                <div>
+                  <p className="eyebrow">Custom Module</p>
+                  <h3>Independent HTML + CSS Block</h3>
+                </div>
+                <span className="profileChip">Sandboxed preview</span>
+              </div>
+              <p className="hint">
+                Custom HTML is sanitized and rendered inside an isolated iframe so creators can style a personal module without taking over the rest of the app shell.
+              </p>
+              <iframe
+                key={customPreviewId}
+                title={`${creatorDisplayName} custom profile module`}
+                srcDoc={customProfilePreview}
+                sandbox="allow-popups"
+                className="profileCustomModuleFrame"
+              />
+            </section>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="card formCard">
         <SectionCardHeader
@@ -1330,6 +1477,13 @@ export default function ProfileClient({ name }: { name: string }) {
                         <input value={editTagline} onChange={(e) => setEditTagline(e.target.value)} />
                       </label>
                       <label>
+                        Layout mode
+                        <select value={editLayoutMode} onChange={(e) => setEditLayoutMode(e.target.value === "myspace" ? "myspace" : "default")}>
+                          <option value="default">Default storefront</option>
+                          <option value="myspace">Myspace classic</option>
+                        </select>
+                      </label>
+                      <label>
                         Accent color
                         <input value={editAccentColor} onChange={(e) => setEditAccentColor(e.target.value)} />
                       </label>
@@ -1348,6 +1502,26 @@ export default function ProfileClient({ name }: { name: string }) {
                       <label>
                         Bio
                         <textarea value={editBio} onChange={(e) => setEditBio(e.target.value)} />
+                      </label>
+                      <label>
+                        About Me
+                        <textarea value={editAboutMe} onChange={(e) => setEditAboutMe(e.target.value)} />
+                      </label>
+                      <label>
+                        Interests
+                        <textarea value={editInterests} onChange={(e) => setEditInterests(e.target.value)} />
+                      </label>
+                      <label>
+                        Who I'd Like To Meet
+                        <textarea value={editWhoIdLikeToMeet} onChange={(e) => setEditWhoIdLikeToMeet(e.target.value)} />
+                      </label>
+                      <label>
+                        Custom CSS
+                        <textarea value={editCustomCss} onChange={(e) => setEditCustomCss(e.target.value)} placeholder=".myspace-panel { transform: rotate(-1deg); }" />
+                      </label>
+                      <label>
+                        Custom HTML
+                        <textarea value={editCustomHtml} onChange={(e) => setEditCustomHtml(e.target.value)} placeholder="<div><marquee>Welcome to my page</marquee></div>" />
                       </label>
                       <label>
                         Links (one per line)

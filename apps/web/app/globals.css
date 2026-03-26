@@ -1417,3 +1417,93 @@ button:disabled {
     grid-template-columns: 1fr;
   }
 }
+
+
+.profilePage--myspace {
+  --profile-accent: #ff6a00;
+}
+
+.profilePage--myspace .profileIdentityCard,
+.profilePage--myspace .profileFeatureCard,
+.profilePage--myspace .profileLinksCard,
+.profilePage--myspace .profilePinnedCollectionCard,
+.profilePage--myspace .profileDirectoryCard,
+.profilePage--myspace .profileStorefrontCard,
+.profilePage--myspace .profileWalletCard,
+.profilePage--myspace .profileStudioCard,
+.profilePage--myspace .profileMetricCard {
+  border: 2px solid #0f2f77;
+  border-radius: 6px;
+  box-shadow: 6px 6px 0 rgba(15, 47, 119, 0.14);
+}
+
+.profilePage--myspace .profileBannerShell {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.82), rgba(255, 255, 255, 0.92)),
+    repeating-linear-gradient(45deg, rgba(255, 106, 0, 0.14), rgba(255, 106, 0, 0.14) 10px, rgba(255, 211, 122, 0.18) 10px, rgba(255, 211, 122, 0.18) 20px);
+  border: 2px solid var(--profile-accent);
+}
+
+.profilePage--myspace .profileChip,
+.profilePage--myspace .eyebrow {
+  color: #0f2f77;
+}
+
+.profileMyspaceShell {
+  display: grid;
+  gap: 16px;
+}
+
+.profileMyspaceIntroCard,
+.profileMyspaceCustomCard {
+  background: linear-gradient(180deg, #fff5df 0%, #ffe6f6 100%);
+}
+
+.profileMyspaceBlurbGrid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+.profileMyspaceBlurbCard,
+.profileMyspaceTopCard {
+  padding: 12px;
+  border: 2px solid #0f2f77;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 4px 4px 0 rgba(15, 47, 119, 0.14);
+}
+
+.profileMyspaceBlurbCard h4,
+.profileMyspaceTopCard h4 {
+  margin: 0 0 8px;
+  color: #0f2f77;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.76rem;
+}
+
+.profileMyspaceBlurbCard p,
+.profileMyspaceTopCard ol {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.profileMyspaceTopCard ol {
+  padding-left: 18px;
+}
+
+.profileMyspaceCustomHeader {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.profileCustomModuleFrame {
+  width: 100%;
+  min-height: 420px;
+  border: 2px solid #0f2f77;
+  border-radius: 6px;
+  background: #fff;
+}
