@@ -154,7 +154,7 @@ function parseRetroBlocksInput(value: string): ApiProfileRetroBlock[] {
     const kind = String(lines[0] || "").replace(/^Type:\s*/i, "").trim().toLowerCase();
     const title = String(lines[1] || "").replace(/^Title:\s*/i, "").trim();
     const bodyLines = lines.slice(2).map((line) => line.trim()).filter(Boolean);
-    if (!title || (kind !== "text" && kind !== "image" && kind !== "links")) continue;
+    if (!title || (kind !== "text" && kind !== "image" && kind !== "links" && kind !== "list")) continue;
     if (kind === "text") {
       const content = bodyLines.join("\n").trim();
       if (content) blocks.push({ kind: "text", title, content, imageUrl: null, links: [] });
@@ -166,8 +166,12 @@ function parseRetroBlocksInput(value: string): ApiProfileRetroBlock[] {
       if (imageUrl) blocks.push({ kind: "image", title, content: content || null, imageUrl, links: [] });
       continue;
     }
-    if (bodyLines.length > 0) {
+    if (kind === "links" && bodyLines.length > 0) {
       blocks.push({ kind: "links", title, content: null, imageUrl: null, links: bodyLines });
+      continue;
+    }
+    if (kind === "list" && bodyLines.length > 0) {
+      blocks.push({ kind: "list", title, content: null, imageUrl: null, links: bodyLines });
     }
   }
   return blocks;
@@ -183,7 +187,7 @@ function formatRetroBlocksInput(blocks: ApiProfileRetroBlock[] | null | undefine
       } else if (block.kind === "image") {
         if (block.imageUrl) lines.push(block.imageUrl);
         if (block.content) lines.push(block.content);
-      } else if (block.kind === "links" && block.links.length > 0) {
+      } else if ((block.kind === "links" || block.kind === "list") && block.links.length > 0) {
         lines.push(...block.links);
       }
       return lines.join("\n");
@@ -1475,6 +1479,13 @@ export default function ProfileClient({ name }: { name: string }) {
                       ))}
                     </ul>
                   ) : null}
+                  {block.kind === "list" ? (
+                    <ol className="profileMyspaceRetroListItems">
+                      {block.links.map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ol>
+                  ) : null}
                 </section>
               )) : (
                 <section className="profileMyspaceRetroCard">
@@ -2120,11 +2131,11 @@ instant follow" />
 Playlist | https://open.spotify.com/playlist/..." />
                       </label>
                       <label>
-                        Retro blocks (blank-line separated; Type: text|image|links, then Title:, then body)
+                        Retro blocks (blank-line separated; Type: text|image|links|list, then Title:, then body)
                         <textarea
                           value={editRetroBlocksText}
                           onChange={(e) => setEditRetroBlocksText(e.target.value)}
-                          placeholder={"Type: text\nTitle: Latest Bulletin\nReworking this profile to feel like 2006 again.\n\nType: image\nTitle: Moodboard\nhttps://images.example.com/moodboard.jpg\nGlitter assets only.\n\nType: links\nTitle: Daily Clicks\nhttps://forum.example.com\nhttps://playlist.example.com"}
+                          placeholder={"Type: text\nTitle: Latest Bulletin\nReworking this profile to feel like 2006 again.\n\nType: image\nTitle: Moodboard\nhttps://images.example.com/moodboard.jpg\nGlitter assets only.\n\nType: links\nTitle: Daily Clicks\nhttps://forum.example.com\nhttps://playlist.example.com\n\nType: list\nTitle: Weekend Agenda\nBurn CDs\nEdit glitter GIFs\nRank top 8 again"}
                         />
                       </label>
                       <label>

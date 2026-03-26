@@ -148,7 +148,7 @@ export type ApiProfileMediaEmbed = {
 };
 
 export type ApiProfileRetroBlock = {
-  kind: "text" | "image" | "links";
+  kind: "text" | "image" | "links" | "list";
   title: string;
   content: string | null;
   imageUrl: string | null;
