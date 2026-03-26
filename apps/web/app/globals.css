@@ -1751,6 +1751,14 @@ button:disabled {
   background: #f8f4e8;
 }
 
+.profileMyspaceRetroEmbedFrame {
+  width: 100%;
+  min-height: 220px;
+  margin-bottom: 10px;
+  border: 1px solid rgba(15, 47, 119, 0.18);
+  background: #f8f4e8;
+}
+
 .profileMyspaceRetroType {
   display: inline-flex;
   margin-bottom: 10px;

@@ -140,10 +140,11 @@ type ProfileMediaEmbed = {
 };
 
 type ProfileRetroBlock = {
-  kind: "text" | "image" | "links" | "list";
+  kind: "text" | "image" | "links" | "list" | "embed";
   title: string;
   content: string | null;
   imageUrl: string | null;
+  embedUrl: string | null;
   links: string[];
 };
 
@@ -1430,12 +1431,13 @@ function sanitizeProfileRetroBlocks(value: ProfileRetroBlock[] | undefined, maxI
   return value
     .map((item) => {
       const kind = String(item?.kind || "").trim().toLowerCase();
-      if (kind !== "text" && kind !== "image" && kind !== "links" && kind !== "list") return null;
+      if (kind !== "text" && kind !== "image" && kind !== "links" && kind !== "list" && kind !== "embed") return null;
       return {
         kind,
         title: sanitizeProfileText(item?.title, 80) || "",
         content: sanitizeProfileText(item?.content || undefined, 1200) || null,
         imageUrl: sanitizeProfileUrl(item?.imageUrl || undefined) || null,
+        embedUrl: sanitizeProfileUrl(item?.embedUrl || undefined) || null,
         links: kind === "links" ? sanitizeProfileLinks(item?.links) : sanitizeProfileList(item?.links, 12, 120)
       } satisfies ProfileRetroBlock;
     })
@@ -1443,6 +1445,7 @@ function sanitizeProfileRetroBlocks(value: ProfileRetroBlock[] | undefined, maxI
       if (!item || !item.title) return false;
       if (item.kind === "text") return Boolean(item.content);
       if (item.kind === "image") return Boolean(item.imageUrl);
+      if (item.kind === "embed") return Boolean(item.embedUrl);
       if (item.kind === "list") return item.links.length > 0;
       return item.links.length > 0;
     })

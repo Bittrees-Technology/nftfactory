@@ -154,24 +154,30 @@ function parseRetroBlocksInput(value: string): ApiProfileRetroBlock[] {
     const kind = String(lines[0] || "").replace(/^Type:\s*/i, "").trim().toLowerCase();
     const title = String(lines[1] || "").replace(/^Title:\s*/i, "").trim();
     const bodyLines = lines.slice(2).map((line) => line.trim()).filter(Boolean);
-    if (!title || (kind !== "text" && kind !== "image" && kind !== "links" && kind !== "list")) continue;
+    if (!title || (kind !== "text" && kind !== "image" && kind !== "links" && kind !== "list" && kind !== "embed")) continue;
     if (kind === "text") {
       const content = bodyLines.join("\n").trim();
-      if (content) blocks.push({ kind: "text", title, content, imageUrl: null, links: [] });
+      if (content) blocks.push({ kind: "text", title, content, imageUrl: null, embedUrl: null, links: [] });
       continue;
     }
     if (kind === "image") {
       const imageUrl = bodyLines[0] || "";
       const content = bodyLines.slice(1).join("\n").trim();
-      if (imageUrl) blocks.push({ kind: "image", title, content: content || null, imageUrl, links: [] });
+      if (imageUrl) blocks.push({ kind: "image", title, content: content || null, imageUrl, embedUrl: null, links: [] });
       continue;
     }
     if (kind === "links" && bodyLines.length > 0) {
-      blocks.push({ kind: "links", title, content: null, imageUrl: null, links: bodyLines });
+      blocks.push({ kind: "links", title, content: null, imageUrl: null, embedUrl: null, links: bodyLines });
       continue;
     }
     if (kind === "list" && bodyLines.length > 0) {
-      blocks.push({ kind: "list", title, content: null, imageUrl: null, links: bodyLines });
+      blocks.push({ kind: "list", title, content: null, imageUrl: null, embedUrl: null, links: bodyLines });
+      continue;
+    }
+    if (kind === "embed") {
+      const embedUrl = bodyLines[0] || "";
+      const content = bodyLines.slice(1).join("\n").trim();
+      if (embedUrl) blocks.push({ kind: "embed", title, content: content || null, imageUrl: null, embedUrl, links: [] });
     }
   }
   return blocks;
@@ -186,6 +192,9 @@ function formatRetroBlocksInput(blocks: ApiProfileRetroBlock[] | null | undefine
         lines.push(block.content);
       } else if (block.kind === "image") {
         if (block.imageUrl) lines.push(block.imageUrl);
+        if (block.content) lines.push(block.content);
+      } else if (block.kind === "embed" && block.embedUrl) {
+        lines.push(block.embedUrl);
         if (block.content) lines.push(block.content);
       } else if ((block.kind === "links" || block.kind === "list") && block.links.length > 0) {
         lines.push(...block.links);
@@ -865,7 +874,14 @@ export default function ProfileClient({ name }: { name: string }) {
   const hasProfileData = hasResolvedIdentity || hasManualWallet;
   const featuredMediaKind = useMemo(() => getFeaturedMediaKind(primaryProfile?.featuredUrl), [primaryProfile]);
   const mediaEmbedCards = useMemo(() => (primaryProfile?.mediaEmbeds || []).map((item) => toProfileMediaEmbedView(item)), [primaryProfile]);
-  const retroBlocks = useMemo(() => primaryProfile?.retroBlocks || [], [primaryProfile]);
+  const retroBlocks = useMemo(
+    () =>
+      (primaryProfile?.retroBlocks || []).map((block) => ({
+        ...block,
+        embedView: block.kind === "embed" && block.embedUrl ? toProfileMediaEmbedView({ title: block.title, url: block.embedUrl }) : null
+      })),
+    [primaryProfile]
+  );
   const myspaceModuleOrder = useMemo(() => normalizeMyspaceModuleOrder(primaryProfile?.moduleOrder), [primaryProfile]);
 
   useEffect(() => {
@@ -1467,6 +1483,24 @@ export default function ProfileClient({ name }: { name: string }) {
                   {block.kind === "image" ? (
                     <>
                       {block.imageUrl ? <img src={block.imageUrl} alt={block.title} /> : null}
+                      {block.content ? <p>{block.content}</p> : null}
+                    </>
+                  ) : null}
+                  {block.kind === "embed" ? (
+                    <>
+                      {block.embedView?.embedUrl ? (
+                        <iframe
+                          title={block.title}
+                          src={block.embedView.embedUrl}
+                          loading="lazy"
+                          allow={block.embedView.kind === "youtube" ? "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" : "autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"}
+                          allowFullScreen={block.embedView.kind === "youtube"}
+                          referrerPolicy="strict-origin-when-cross-origin"
+                          className="profileMyspaceRetroEmbedFrame"
+                        />
+                      ) : block.embedUrl ? (
+                        <a href={block.embedUrl} target="_blank" rel="noreferrer" className="mono">{block.embedUrl}</a>
+                      ) : null}
                       {block.content ? <p>{block.content}</p> : null}
                     </>
                   ) : null}
@@ -2131,7 +2165,7 @@ instant follow" />
 Playlist | https://open.spotify.com/playlist/..." />
                       </label>
                       <label>
-                        Retro blocks (blank-line separated; Type: text|image|links|list, then Title:, then body)
+                        Retro blocks (blank-line separated; Type: text|image|links|list|embed, then Title:, then body)
                         <textarea
                           value={editRetroBlocksText}
                           onChange={(e) => setEditRetroBlocksText(e.target.value)}
