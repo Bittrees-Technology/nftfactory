@@ -211,6 +211,9 @@ export type ApiProfileGuestbookEntry = {
   message: string;
   createdAt: string;
   hiddenAt?: string | null;
+  hiddenBy?: string | null;
+  deletedAt?: string | null;
+  deletedBy?: string | null;
 };
 
 export type ApiProfileGuestbookResponse = {
@@ -680,8 +683,19 @@ export async function transferProfileOwnership(payload: {
 }
 
 
-export async function fetchProfileGuestbook(name: string, options?: IndexerRequestOptions): Promise<ApiProfileGuestbookResponse> {
-  return fetchJson<ApiProfileGuestbookResponse>("/api/profile/" + encodeURIComponent(name) + "/guestbook", undefined, undefined, options);
+export async function fetchProfileGuestbook(
+  name: string,
+  options?: IndexerRequestOptions & { includeHidden?: boolean; actorAddress?: string }
+): Promise<ApiProfileGuestbookResponse> {
+  const params = new URLSearchParams();
+  if (options?.includeHidden) {
+    params.set("includeHidden", "true");
+  }
+  if (options?.actorAddress) {
+    params.set("actorAddress", options.actorAddress);
+  }
+  const suffix = params.size > 0 ? "?" + params.toString() : "";
+  return fetchJson<ApiProfileGuestbookResponse>("/api/profile/" + encodeURIComponent(name) + "/guestbook" + suffix, undefined, undefined, options);
 }
 
 export async function createProfileGuestbookEntry(payload: {

@@ -23,30 +23,47 @@ function isAddress(value: string): boolean {
   return /^0x[a-fA-F0-9]{40}$/.test(value);
 }
 
+function getEntryStatus(entry: ApiProfileGuestbookEntry): "Visible" | "Hidden" | "Deleted" {
+  if (entry.deletedAt) return "Deleted";
+  if (entry.hiddenAt) return "Hidden";
+  return "Visible";
+}
+
 export default function ProfileModerationClient() {
   const [profileName, setProfileName] = useState("");
   const [actorAddress, setActorAddress] = useState("");
   const [entries, setEntries] = useState<ApiProfileGuestbookEntry[]>([]);
-  const [visibleCount, setVisibleCount] = useState(0);
-  const [hiddenCount, setHiddenCount] = useState(0);
   const [activeEntryId, setActiveEntryId] = useState<string | null>(null);
   const [loadState, setLoadState] = useState<ActionState>(idleActionState());
   const [mutationState, setMutationState] = useState<ActionState>(idleActionState());
 
   const normalizedProfileName = useMemo(() => profileName.trim(), [profileName]);
   const normalizedActorAddress = useMemo(() => actorAddress.trim().toLowerCase(), [actorAddress]);
+  const counts = useMemo(
+    () => ({
+      visible: entries.filter((entry) => !entry.hiddenAt && !entry.deletedAt).length,
+      hidden: entries.filter((entry) => entry.hiddenAt && !entry.deletedAt).length,
+      deleted: entries.filter((entry) => entry.deletedAt).length
+    }),
+    [entries]
+  );
 
   async function loadEntries() {
     if (!normalizedProfileName) {
       setLoadState(errorActionState("Profile name is required."));
       return;
     }
+    if (!isAddress(normalizedActorAddress)) {
+      setLoadState(errorActionState("A valid actor wallet address is required to load moderation history."));
+      return;
+    }
     setLoadState(pendingActionState("Loading guestbook moderation view..."));
     try {
-      const response = await fetchProfileGuestbook(normalizedProfileName);
+      const response = await fetchProfileGuestbook(normalizedProfileName, {
+        includeHidden: true,
+        actorAddress: normalizedActorAddress
+      });
       setEntries(response.entries || []);
-      setVisibleCount((response.entries || []).length);
-      setHiddenCount(0);
       setLoadState(successActionState("Guestbook moderation data loaded."));
     } catch (error) {
       setLoadState(errorActionState(error instanceof Error ? error.message : "Failed to load guestbook moderation data."));
@@ -66,9 +83,13 @@ export default function ProfileModerationClient() {
         entryId,
         currentOwnerAddress: normalizedActorAddress
       });
-      setEntries((current) => current.map((entry) => (entry.id === entryId ? { ...entry, hiddenAt: response.entry.hiddenAt || new Date().toISOString() } : entry)));
-      setVisibleCount((current) => Math.max(0, current - 1));
-      setHiddenCount((current) => current + 1);
+      setEntries((current) =>
+        current.map((entry) =>
+          entry.id === entryId
+            ? { ...entry, hiddenAt: response.entry.hiddenAt || new Date().toISOString(), hiddenBy: response.entry.hiddenBy || normalizedActorAddress }
+            : entry
+        )
+      );
       setMutationState(successActionState("Guestbook entry hidden."));
     } catch (error) {
       setMutationState(errorActionState(error instanceof Error ? error.message : "Failed to hide guestbook entry."));
@@ -90,7 +111,11 @@ export default function ProfileModerationClient() {
         entryId,
         currentOwnerAddress: normalizedActorAddress
       });
-      setEntries((current) => current.filter((entry) => entry.id !== entryId));
+      setEntries((current) =>
+        current.map((entry) =>
+          entry.id === entryId ? { ...entry, deletedAt: new Date().toISOString(), deletedBy: normalizedActorAddress } : entry
+        )
+      );
       setMutationState(successActionState("Guestbook entry deleted."));
     } catch (error) {
       setMutationState(errorActionState(error instanceof Error ? error.message : "Failed to delete guestbook entry."));
@@ -104,7 +129,7 @@ export default function ProfileModerationClient() {
       <div className="card formCard profileStudioCard">
         <h2>Profile Moderation</h2>
         <p className="sectionLead">
-          Owner and moderator tools for Myspace-style guestbook entries. Use this to triage the current public guestbook queue without opening each profile manually.
+          Owner and moderator tools for Myspace-style guestbook entries. This workspace now loads the public queue plus hidden and deleted history for the actor wallet.
         </p>
         <div className="gridMini">
           <label>
@@ -121,7 +146,7 @@ export default function ProfileModerationClient() {
             {loadState.status === "pending" ? "Loading..." : "Load Guestbook"}
           </button>
           {normalizedProfileName ? (
-            <Link href={`/profile/${encodeURIComponent(normalizedProfileName)}`} className="ctaLink secondaryLink">
+            <Link href={"/profile/" + encodeURIComponent(normalizedProfileName)} className="ctaLink secondaryLink">
               Open profile
             </Link>
           ) : null}
@@ -131,12 +156,13 @@ export default function ProfileModerationClient() {
 
       <div className="card formCard profileStudioCard">
         <h3>Guestbook Queue</h3>
-        <p className="hint">Visible: {visibleCount} | Hidden: {hiddenCount}</p>
+        <p className="hint">Visible: {counts.visible} | Hidden: {counts.hidden} | Deleted: {counts.deleted}</p>
         {entries.length === 0 ? <p className="hint">No guestbook entries loaded yet.</p> : null}
         {entries.length > 0 ? (
           <div className="listTable">
             {entries.map((entry) => {
               const isBusy = activeEntryId === entry.id;
+              const status = getEntryStatus(entry);
               return (
                 <div key={entry.id} className="listRow profileDirectoryRow">
                   <span>
@@ -147,18 +173,22 @@ export default function ProfileModerationClient() {
                     <strong>Posted</strong> {new Date(entry.createdAt).toLocaleString()}
                   </span>
                   <span>
-                    <strong>Status</strong> {entry.hiddenAt ? "Hidden" : "Visible"}
+                    <strong>Status</strong> {status}
                   </span>
                   <span>{entry.message}</span>
+                  {entry.hiddenAt ? <span className="hint">Hidden {new Date(entry.hiddenAt).toLocaleString()}</span> : null}
+                  {entry.deletedAt ? <span className="hint">Deleted {new Date(entry.deletedAt).toLocaleString()}</span> : null}
                   <div className="row">
-                    {!entry.hiddenAt ? (
+                    {!entry.hiddenAt && !entry.deletedAt ? (
                       <button type="button" disabled={isBusy} onClick={() => void hideEntry(entry.id)}>
                         Hide Entry
                       </button>
                     ) : null}
-                    <button type="button" disabled={isBusy} onClick={() => void deleteEntry(entry.id)}>
-                      Delete Entry
-                    </button>
+                    {!entry.deletedAt ? (
+                      <button type="button" disabled={isBusy} onClick={() => void deleteEntry(entry.id)}>
+                        Delete Entry
+                      </button>
+                    ) : null}
                   </div>
                 </div>
               );

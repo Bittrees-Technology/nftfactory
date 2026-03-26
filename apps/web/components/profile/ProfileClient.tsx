@@ -357,6 +357,8 @@ export default function ProfileClient({ name }: { name: string }) {
   const profileViewRequestIdRef = useRef(0);
   const manualSellerAddress = useMemo(() => (isAddress(sellerAddress) ? sellerAddress : null), [sellerAddress]);
   const customPreviewId = useId();
+  const publicGuestbookEntries = useMemo(() => guestbookEntries.filter((entry) => !entry.hiddenAt && !entry.deletedAt), [guestbookEntries]);
+  const moderatedGuestbookEntries = useMemo(() => guestbookEntries.filter((entry) => entry.hiddenAt || entry.deletedAt), [guestbookEntries]);
 
   const loadProfileViewData = useCallback(async (): Promise<void> => {
     const requestId = profileViewRequestIdRef.current + 1;
@@ -806,7 +808,7 @@ export default function ProfileClient({ name }: { name: string }) {
 
   useEffect(() => {
     void loadGuestbookEntries();
-  }, [name]);
+  }, [canEditProfile, name, primaryProfile?.ownerAddress]);
 
   useEffect(() => {
     if (!primaryProfile) return;
@@ -977,7 +979,10 @@ export default function ProfileClient({ name }: { name: string }) {
   async function loadGuestbookEntries(): Promise<void> {
     try {
       setGuestbookLoadState(loadingLoadState());
-      const response = await fetchProfileGuestbook(name);
+      const response = await fetchProfileGuestbook(name, canEditProfile && primaryProfile ? {
+        includeHidden: true,
+        actorAddress: primaryProfile.ownerAddress
+      } : undefined);
       setGuestbookEntries(response.entries || []);
       setGuestbookLoadState(readyLoadState());
     } catch (err) {
@@ -999,7 +1004,7 @@ export default function ProfileClient({ name }: { name: string }) {
         authorAddress: connectedAddress || undefined,
         message: guestbookMessage
       });
-      setGuestbookEntries((current) => [response.entry, ...current].slice(0, 25));
+      setGuestbookEntries((current) => [response.entry, ...current.filter((entry) => entry.id != response.entry.id)].slice(0, 50));
       setGuestbookMessage("");
       setGuestbookState(successActionState("Guestbook entry posted."));
     } catch (err) {
@@ -1015,15 +1020,37 @@ export default function ProfileClient({ name }: { name: string }) {
     try {
       setModeratingGuestbookEntryId(entryId);
       setGuestbookState(pendingActionState("Hiding guestbook entry..."));
-      await hideProfileGuestbookEntry({
+      const response = await hideProfileGuestbookEntry({
         name,
         entryId,
         currentOwnerAddress: primaryProfile.ownerAddress
       });
-      setGuestbookEntries((current) => current.filter((entry) => entry.id !== entryId));
+      setGuestbookEntries((current) => current.map((entry) => (entry.id === entryId ? { ...entry, hiddenAt: response.entry.hiddenAt || new Date().toISOString(), hiddenBy: response.entry.hiddenBy || primaryProfile.ownerAddress } : entry)));
       setGuestbookState(successActionState("Guestbook entry hidden."));
     } catch (err) {
       setGuestbookState(errorActionState(err instanceof Error ? err.message : "Failed to hide guestbook entry."));
+    } finally {
+      setModeratingGuestbookEntryId(null);
+    }
+  }
+
+  async function deleteGuestbookEntry(entryId: string): Promise<void> {
+    if (!primaryProfile || !canEditProfile) {
+      setGuestbookState(errorActionState("Connect the profile owner wallet to moderate guestbook entries."));
+      return;
+    }
+    try {
+      setModeratingGuestbookEntryId(entryId);
+      setGuestbookState(pendingActionState("Deleting guestbook entry..."));
+      await deleteProfileGuestbookEntry({
+        name,
+        entryId,
+        currentOwnerAddress: primaryProfile.ownerAddress
+      });
+      setGuestbookEntries((current) => current.map((entry) => (entry.id === entryId ? { ...entry, deletedAt: new Date().toISOString(), deletedBy: primaryProfile.ownerAddress } : entry)));
+      setGuestbookState(successActionState("Guestbook entry deleted."));
+    } catch (err) {
+      setGuestbookState(errorActionState(err instanceof Error ? err.message : "Failed to delete guestbook entry."));
     } finally {
       setModeratingGuestbookEntryId(null);
     }
@@ -1365,7 +1392,7 @@ export default function ProfileClient({ name }: { name: string }) {
                 <p className="eyebrow">Guestbook</p>
                 <h3>Comments + Guestbook</h3>
               </div>
-              <span className="profileChip">Public posts</span>
+              <span className="profileChip">{canEditProfile ? "Public posts + history" : "Public posts"}</span>
             </div>
             <StatusStack
               items={buildSectionLoadStatusItems({
@@ -1390,9 +1417,9 @@ export default function ProfileClient({ name }: { name: string }) {
               </div>
               <StatusStack items={[actionStateStatusItem(guestbookState, "guestbook-action")]} />
             </div>
-            {guestbookEntries.length > 0 ? (
+            {publicGuestbookEntries.length > 0 ? (
               <div className="profileMyspaceGuestbookList">
-                {guestbookEntries.map((entry) => (
+                {publicGuestbookEntries.map((entry) => (
                   <article key={entry.id} className="profileMyspaceGuestbookEntry">
                     <div className="profileMyspaceGuestbookMeta">
                       <strong>{entry.authorName}</strong>
@@ -1407,7 +1434,14 @@ export default function ProfileClient({ name }: { name: string }) {
                           onClick={() => void hideGuestbookEntry(entry.id)}
                           disabled={moderatingGuestbookEntryId === entry.id}
                         >
-                          {moderatingGuestbookEntryId === entry.id ? "Hiding..." : "Hide Entry"}
+                          {moderatingGuestbookEntryId === entry.id ? "Working..." : "Hide Entry"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void deleteGuestbookEntry(entry.id)}
+                          disabled={moderatingGuestbookEntryId === entry.id}
+                        >
+                          {moderatingGuestbookEntryId === entry.id ? "Working..." : "Delete Entry"}
                         </button>
                       </div>
                     ) : null}
@@ -1415,8 +1449,27 @@ export default function ProfileClient({ name }: { name: string }) {
                 ))}
               </div>
             ) : (
-              <p className="hint">No guestbook entries yet. Be the first to sign this page.</p>
+              <p className="hint">No public guestbook entries yet. Be the first to sign this page.</p>
             )}
+            {canEditProfile && moderatedGuestbookEntries.length > 0 ? (
+              <div className="profileMyspaceGuestbookList">
+                {moderatedGuestbookEntries.map((entry) => (
+                  <article key={entry.id} className="profileMyspaceGuestbookEntry">
+                    <div className="profileMyspaceGuestbookMeta">
+                      <strong>{entry.authorName}</strong>
+                      {entry.authorAddress ? <span className="mono">{truncateAddress(entry.authorAddress as Address)}</span> : null}
+                      <span className="hint">{entry.deletedAt ? "Deleted" : "Hidden"}</span>
+                    </div>
+                    <p>{entry.message}</p>
+                    <p className="hint">
+                      Posted {new Date(entry.createdAt).toLocaleString()}
+                      {entry.hiddenAt ? " | Hidden " + new Date(entry.hiddenAt).toLocaleString() : ""}
+                      {entry.deletedAt ? " | Deleted " + new Date(entry.deletedAt).toLocaleString() : ""}
+                    </p>
+                  </article>
+                ))}
+              </div>
+            ) : null}
           </section>
 
           {(primaryProfile?.customHtml || primaryProfile?.customCss) ? (
