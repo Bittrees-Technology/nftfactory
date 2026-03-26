@@ -937,6 +937,29 @@ export default function ProfileClient({ name }: { name: string }) {
   );
   const myspaceModuleOrder = useMemo(() => normalizeMyspaceModuleOrder(primaryProfile?.moduleOrder), [primaryProfile]);
   const myspaceSidebarModules = useMemo(() => normalizeMyspaceSidebarModules(primaryProfile?.sidebarModules), [primaryProfile]);
+  const studioPreviewModuleOrder = useMemo(() => normalizeMyspaceModuleOrder(editModuleOrder), [editModuleOrder]);
+  const studioPreviewSidebarModules = useMemo(() => normalizeMyspaceSidebarModules(editSidebarModules), [editSidebarModules]);
+  const studioPreviewDisplayName = useMemo(() => editDisplayName.trim() || creatorDisplayName, [creatorDisplayName, editDisplayName]);
+  const studioPreviewStatusHeadline = useMemo(
+    () => editStatusHeadline.trim() || "offline, coding the perfect profile",
+    [editStatusHeadline]
+  );
+  const studioPreviewSidebarFacts = useMemo(() => parseSidebarFactsInput(editSidebarFactsText), [editSidebarFactsText]);
+  const studioPreviewModuleSummaries = useMemo(
+    () => ({
+      social: [
+        editTopFriendsText.split("\n").map((item) => item.trim()).filter(Boolean).length + " top friends",
+        editTestimonialsText.split("\n\n").map((item) => item.trim()).filter(Boolean).length + " testimonials",
+        (editProfileSongUrl.trim() ? "profile song set" : "no profile song")
+      ].join(" | "),
+      media: parseMediaEmbedsInput(editMediaEmbedsText).length + " media embeds",
+      retro: parseRetroBlocksInput(editRetroBlocksText).length + " retro blocks",
+      boxes: parseCustomBoxesInput(editCustomBoxesText).length + " custom boxes",
+      guestbook: "public guestbook module",
+      custom: editCustomHtml.trim() || editCustomCss.trim() ? "custom HTML/CSS active" : "custom HTML/CSS off"
+    }),
+    [editCustomBoxesText, editCustomCss, editCustomHtml, editMediaEmbedsText, editProfileSongUrl, editRetroBlocksText, editTestimonialsText, editTopFriendsText]
+  );
 
   useEffect(() => {
     void loadGuestbookEntries();
@@ -2180,6 +2203,51 @@ export default function ProfileClient({ name }: { name: string }) {
 
               {canEditProfile ? (
                 <>
+                  <div className="inset profileStudioPreviewInset">
+                    <div className="profileStudioPreviewHeader">
+                      <div>
+                        <h3>Live Retro Preview</h3>
+                        <p className="hint">Unsaved layout preview driven by the current studio fields.</p>
+                      </div>
+                      <span className="profileChip">{editLayoutMode === "myspace" ? "Myspace preview" : "Default layout selected"}</span>
+                    </div>
+                    {editLayoutMode === "myspace" ? (
+                      <div className="profileStudioPreviewShell">
+                        <div className="profileStudioPreviewHero">
+                          <strong>{studioPreviewDisplayName}</strong>
+                          <span>{studioPreviewStatusHeadline}</span>
+                        </div>
+                        <div className="profileStudioPreviewColumns">
+                          <div className="profileStudioPreviewMain">
+                            {studioPreviewModuleOrder.filter((moduleId) => !studioPreviewSidebarModules.includes(moduleId as MyspaceSidebarModuleId)).map((moduleId) => (
+                              <div key={moduleId} className="profileStudioPreviewModuleCard">
+                                <strong>{MYSPACE_MODULE_LABELS[moduleId]}</strong>
+                                <span className="mono">main column</span>
+                                <p>{studioPreviewModuleSummaries[moduleId]}</p>
+                              </div>
+                            ))}
+                          </div>
+                          <aside className="profileStudioPreviewSidebar">
+                            <div className="profileStudioPreviewModuleCard profileStudioPreviewModuleCard--details">
+                              <strong>Details Sidebar</strong>
+                              <span className="mono">always pinned</span>
+                              <p>{studioPreviewSidebarFacts.length > 0 ? studioPreviewSidebarFacts.map((fact) => fact.label + ": " + fact.value).join(" | ") : "no sidebar facts yet"}</p>
+                            </div>
+                            {studioPreviewModuleOrder.filter((moduleId) => studioPreviewSidebarModules.includes(moduleId as MyspaceSidebarModuleId)).map((moduleId) => (
+                              <div key={moduleId} className="profileStudioPreviewModuleCard">
+                                <strong>{MYSPACE_MODULE_LABELS[moduleId]}</strong>
+                                <span className="mono">sidebar</span>
+                                <p>{studioPreviewModuleSummaries[moduleId]}</p>
+                              </div>
+                            ))}
+                          </aside>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="hint">Switch layout mode to Myspace classic to preview retro module composition live.</p>
+                    )}
+                  </div>
+
                   <div className="inset">
                     <h3>Edit Presentation</h3>
                     <p className="hint">

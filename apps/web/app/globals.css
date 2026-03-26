@@ -1884,3 +1884,69 @@ button:disabled {
     align-items: start;
   }
 }
+
+
+.profileStudioPreviewInset {
+  background: linear-gradient(180deg, rgba(255, 245, 223, 0.9), rgba(255, 230, 246, 0.92));
+}
+
+.profileStudioPreviewHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.profileStudioPreviewShell {
+  display: grid;
+  gap: 12px;
+}
+
+.profileStudioPreviewHero {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border: 2px solid #0f2f77;
+  background: linear-gradient(90deg, rgba(255, 233, 173, 0.95), rgba(255, 255, 255, 0.96));
+}
+
+.profileStudioPreviewColumns {
+  display: grid;
+  gap: 12px;
+}
+
+.profileStudioPreviewMain,
+.profileStudioPreviewSidebar {
+  display: grid;
+  gap: 10px;
+}
+
+.profileStudioPreviewModuleCard {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 2px solid #0f2f77;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 4px 4px 0 rgba(15, 47, 119, 0.12);
+}
+
+.profileStudioPreviewModuleCard p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.profileStudioPreviewModuleCard--details {
+  background: rgba(255, 249, 228, 0.95);
+}
+
+@media (min-width: 980px) {
+  .profileStudioPreviewColumns {
+    grid-template-columns: minmax(0, 1.5fr) minmax(260px, 0.8fr);
+    align-items: start;
+  }
+}
