@@ -153,6 +153,8 @@ export type ApiProfileRecord = {
   topFriends: string[];
   testimonials: string[];
   profileSongUrl: string | null;
+  statusHeadline: string | null;
+  stamps: string[];
   customBoxes: ApiProfileCustomBox[];
   bannerUrl: string | null;
   avatarUrl: string | null;
@@ -632,6 +634,8 @@ export async function linkProfileIdentity(payload: {
   topFriends?: string[];
   testimonials?: string[];
   profileSongUrl?: string;
+  statusHeadline?: string;
+  stamps?: string[];
   customBoxes?: ApiProfileCustomBox[];
   bannerUrl?: string;
   avatarUrl?: string;

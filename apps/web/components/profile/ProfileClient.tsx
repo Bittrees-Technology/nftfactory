@@ -227,6 +227,7 @@ export default function ProfileClient({ name }: { name: string }) {
   const [editAboutMe, setEditAboutMe] = useState("");
   const [editInterests, setEditInterests] = useState("");
   const [editWhoIdLikeToMeet, setEditWhoIdLikeToMeet] = useState("");
+  const [editStatusHeadline, setEditStatusHeadline] = useState("");
   const [editBannerUrl, setEditBannerUrl] = useState("");
   const [editAvatarUrl, setEditAvatarUrl] = useState("");
   const [editFeaturedUrl, setEditFeaturedUrl] = useState("");
@@ -236,6 +237,7 @@ export default function ProfileClient({ name }: { name: string }) {
   const [editTopFriendsText, setEditTopFriendsText] = useState("");
   const [editTestimonialsText, setEditTestimonialsText] = useState("");
   const [editProfileSongUrl, setEditProfileSongUrl] = useState("");
+  const [editStampsText, setEditStampsText] = useState("");
   const [editCustomBoxesText, setEditCustomBoxesText] = useState("");
   const [editLinksText, setEditLinksText] = useState("");
   const [transferAddress, setTransferAddress] = useState("");
@@ -708,6 +710,7 @@ export default function ProfileClient({ name }: { name: string }) {
     setEditAboutMe(primaryProfile.aboutMe || "");
     setEditInterests(primaryProfile.interests || "");
     setEditWhoIdLikeToMeet(primaryProfile.whoIdLikeToMeet || "");
+    setEditStatusHeadline(primaryProfile.statusHeadline || "");
     setEditBannerUrl(primaryProfile.bannerUrl || "");
     setEditAvatarUrl(primaryProfile.avatarUrl || "");
     setEditFeaturedUrl(primaryProfile.featuredUrl || "");
@@ -717,6 +720,7 @@ export default function ProfileClient({ name }: { name: string }) {
     setEditTopFriendsText((primaryProfile.topFriends || []).join("\n"));
     setEditTestimonialsText((primaryProfile.testimonials || []).join("\n\n"));
     setEditProfileSongUrl(primaryProfile.profileSongUrl || "");
+    setEditStampsText((primaryProfile.stamps || []).join("\n"));
     setEditCustomBoxesText(formatCustomBoxesInput(primaryProfile.customBoxes));
     setEditLinksText((primaryProfile.links || []).join("\n"));
     setEditState(idleActionState());
@@ -748,6 +752,7 @@ export default function ProfileClient({ name }: { name: string }) {
         aboutMe: editAboutMe,
         interests: editInterests,
         whoIdLikeToMeet: editWhoIdLikeToMeet,
+        statusHeadline: editStatusHeadline,
         bannerUrl: editBannerUrl,
         avatarUrl: editAvatarUrl,
         featuredUrl: editFeaturedUrl,
@@ -757,6 +762,7 @@ export default function ProfileClient({ name }: { name: string }) {
         topFriends: editTopFriendsText.split("\n").map((item) => item.trim()).filter(Boolean),
         testimonials: editTestimonialsText.split("\n\n").map((item) => item.trim()).filter(Boolean),
         profileSongUrl: editProfileSongUrl,
+        stamps: editStampsText.split("\n").map((item) => item.trim()).filter(Boolean),
         customBoxes: parseCustomBoxesInput(editCustomBoxesText),
         links: editLinksText.split("\n").map((item) => item.trim()).filter(Boolean)
       });
@@ -844,7 +850,9 @@ export default function ProfileClient({ name }: { name: string }) {
       ${buildPanel("About Me", primaryProfile.aboutMe)}
       ${buildPanel("Interests", primaryProfile.interests)}
       ${buildPanel("Who I'd Like To Meet", primaryProfile.whoIdLikeToMeet)}
+      ${buildPanel("Current Status", primaryProfile.statusHeadline)}
       ${buildListPanel("Top Friends", primaryProfile.topFriends)}
+      ${buildListPanel("Stamps", primaryProfile.stamps)}
       ${buildListPanel("Testimonials", primaryProfile.testimonials)}
       ${(primaryProfile.customBoxes || []).map((box) => `<section class="myspace-panel"><h2>${escapeText(box.title)}</h2><div class="content"><p>${escapeText(box.content)}</p></div></section>`).join("")}
       ${primaryProfile.profileSongUrl ? `<section class="myspace-panel"><h2>Profile Song</h2><div class="content"><audio controls preload="none"><source src="${primaryProfile.profileSongUrl}" /></audio></div></section>` : ""}
@@ -1114,6 +1122,10 @@ export default function ProfileClient({ name }: { name: string }) {
             <p className="sectionLead">
               This profile is using the Myspace-style layout mode: expressive blurbs, loud colors, and a custom HTML block that can evolve independently from the marketplace sections below.
             </p>
+            <div className="profileMyspaceStatusStrip">
+              <span className="profileMyspaceStatusLabel">Currently</span>
+              <strong>{primaryProfile?.statusHeadline?.trim() || "offline, coding the perfect profile"}</strong>
+            </div>
             <div className="profileMyspaceBlurbGrid">
               <div className="profileMyspaceBlurbCard">
                 <h4>About Me</h4>
@@ -1141,6 +1153,18 @@ export default function ProfileClient({ name }: { name: string }) {
               </div>
             </div>
             <div className="profileMyspaceSocialGrid">
+              <section className="profileMyspaceSocialCard">
+                <h4>Stamps</h4>
+                {primaryProfile?.stamps?.length ? (
+                  <div className="profileMyspaceStampGrid">
+                    {primaryProfile.stamps.map((stamp) => (
+                      <span key={stamp} className="profileMyspaceStamp">{stamp}</span>
+                    ))}
+                  </div>
+                ) : (
+                  <p>No stamps pinned yet.</p>
+                )}
+              </section>
               <section className="profileMyspaceSocialCard">
                 <h4>Testimonials</h4>
                 {primaryProfile?.testimonials?.length ? (
@@ -1728,6 +1752,10 @@ export default function ProfileClient({ name }: { name: string }) {
                         <textarea value={editWhoIdLikeToMeet} onChange={(e) => setEditWhoIdLikeToMeet(e.target.value)} />
                       </label>
                       <label>
+                        Status headline
+                        <input value={editStatusHeadline} onChange={(e) => setEditStatusHeadline(e.target.value)} placeholder="currently obsessing over weird internet relics" />
+                      </label>
+                      <label>
                         Custom CSS
                         <textarea value={editCustomCss} onChange={(e) => setEditCustomCss(e.target.value)} placeholder=".myspace-panel { transform: rotate(-1deg); }" />
                       </label>
@@ -1750,6 +1778,12 @@ instant follow" />
                       <label>
                         Profile song URL
                         <input value={editProfileSongUrl} onChange={(e) => setEditProfileSongUrl(e.target.value)} placeholder="https://.../song.mp3" />
+                      </label>
+                      <label>
+                        Stamps (one per line)
+                        <textarea value={editStampsText} onChange={(e) => setEditStampsText(e.target.value)} placeholder="online now
+scene kid
+collector core" />
                       </label>
                       <label>
                         Custom boxes

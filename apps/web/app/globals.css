@@ -1571,6 +1571,43 @@ button:disabled {
 }
 
 
+.profileMyspaceStatusStrip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  border: 2px solid #0f2f77;
+  background: linear-gradient(90deg, rgba(255, 233, 173, 0.95), rgba(255, 255, 255, 0.96));
+}
+
+.profileMyspaceStatusLabel {
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #0f2f77;
+}
+
+.profileMyspaceStampGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.profileMyspaceStamp {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 10px;
+  border: 1px solid #0f2f77;
+  background: #fff3c4;
+  color: #8b1e3f;
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  box-shadow: 2px 2px 0 rgba(15, 47, 119, 0.12);
+}
+
 .profileMyspaceBoxesGrid {
   display: grid;
   gap: 12px;
