@@ -104,6 +104,11 @@ type ProfileGuestbookPayload = {
   message: string;
 };
 
+type ProfileGuestbookHidePayload = {
+  entryId: string;
+  currentOwnerAddress: string;
+};
+
 type ProfileRecord = {
   slug: string;
   fullName: string;
@@ -137,6 +142,8 @@ type ProfileGuestbookEntry = {
   authorName: string;
   message: string;
   createdAt: string;
+  hiddenAt?: string | null;
+  hiddenBy?: string | null;
 };
 
 type PaymentTokenLogPayload = {
@@ -1373,7 +1380,9 @@ async function readProfileGuestbookEntries(): Promise<ProfileGuestbookEntry[]> {
         profileSlug: normalizeRouteSlug(String(item.profileSlug || "")) || "",
         authorName: sanitizeProfileText(item.authorName || undefined, 80) || "Anonymous",
         message: sanitizeProfileText(item.message || undefined, 600) || "",
-        createdAt: item.createdAt || new Date().toISOString()
+        createdAt: item.createdAt || new Date().toISOString(),
+        hiddenAt: item.hiddenAt || null,
+        hiddenBy: isAddress(String(item.hiddenBy || "").toLowerCase()) ? String(item.hiddenBy).toLowerCase() : null
       }))
       .filter((item) => item.profileSlug && item.message)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -6044,6 +6053,54 @@ async function handleRequest(
     return;
   }
 
+  if (req.method === "POST" && /^\/api\/profile\/[^/]+\/guestbook\/hide$/.test(path)) {
+    const rawName = String(decodeURIComponent(path.split("/")[3] || "")).trim().toLowerCase();
+    const lookup = resolveProfileLookup(rawName);
+    const slug = lookup?.slugCandidates[0] || "";
+
+    if (!rawName || !slug || !lookup) {
+      sendJson(res, 400, { error: "Invalid profile name" });
+      return;
+    }
+
+    if (deps.isRateLimitedImpl(deps.getClientIpImpl(req, config.trustProxy))) {
+      sendJson(res, 429, { error: "Too many requests" });
+      return;
+    }
+
+    const payload = await readJsonBody<ProfileGuestbookHidePayload>(req);
+    const entryId = String(payload.entryId || "").trim();
+    const currentOwnerAddress = String(payload.currentOwnerAddress || "").trim().toLowerCase();
+    if (!entryId) {
+      sendJson(res, 400, { error: "Invalid entryId" });
+      return;
+    }
+    if (!isAddress(currentOwnerAddress)) {
+      sendJson(res, 400, { error: "Invalid currentOwnerAddress" });
+      return;
+    }
+
+    const profileRecords = await readProfileRecords();
+    const canModerate = profileRecords.some((item) => item.slug === slug && item.ownerAddress === currentOwnerAddress);
+    if (!canModerate) {
+      sendJson(res, 403, { error: "Only the profile owner can moderate guestbook entries." });
+      return;
+    }
+
+    const current = await readProfileGuestbookEntries();
+    const target = current.find((item) => item.id === entryId && item.profileSlug === slug);
+    if (!target) {
+      sendJson(res, 404, { error: "Guestbook entry not found." });
+      return;
+    }
+
+    const hiddenAt = new Date().toISOString();
+    const next = current.map((item) => item.id === entryId ? { ...item, hiddenAt, hiddenBy: currentOwnerAddress } : item);
+    await writeProfileGuestbookEntries(next);
+    sendJson(res, 200, { ok: true, entry: { ...target, hiddenAt } });
+    return;
+  }
+
   if ((req.method === "GET" || req.method === "POST") && /^\/api\/profile\/[^/]+\/guestbook$/.test(path)) {
     const rawName = String(decodeURIComponent(path.split("/")[3] || "")).trim().toLowerCase();
     const lookup = resolveProfileLookup(rawName);
@@ -6056,7 +6113,7 @@ async function handleRequest(
 
     if (req.method === "GET") {
       const entries = (await readProfileGuestbookEntries())
-        .filter((item) => item.profileSlug === slug)
+        .filter((item) => item.profileSlug === slug && !item.hiddenAt)
         .slice(0, 25);
       sendJson(res, 200, {
         profileSlug: slug,

@@ -52,6 +52,7 @@ import {
   transferProfileOwnership,
   fetchProfileGuestbook,
   createProfileGuestbookEntry,
+  hideProfileGuestbookEntry,
   type ApiActiveListingItem,
   type ApiProfileRecord,
   type ApiOfferSummary,
@@ -222,6 +223,7 @@ export default function ProfileClient({ name }: { name: string }) {
   const [guestbookMessage, setGuestbookMessage] = useState("");
   const [guestbookState, setGuestbookState] = useState<ActionState>(idleActionState());
   const [guestbookLoadState, setGuestbookLoadState] = useState<LoadState>(idleLoadState());
+  const [moderatingGuestbookEntryId, setModeratingGuestbookEntryId] = useState<string | null>(null);
   const [editState, setEditState] = useState<ActionState>(idleActionState());
   const [transferState, setTransferState] = useState<ActionState>(idleActionState());
   const profileViewRequestIdRef = useRef(0);
@@ -860,6 +862,28 @@ export default function ProfileClient({ name }: { name: string }) {
     }
   }
 
+  async function hideGuestbookEntry(entryId: string): Promise<void> {
+    if (!primaryProfile || !canEditProfile) {
+      setGuestbookState(errorActionState("Connect the profile owner wallet to moderate guestbook entries."));
+      return;
+    }
+    try {
+      setModeratingGuestbookEntryId(entryId);
+      setGuestbookState(pendingActionState("Hiding guestbook entry..."));
+      await hideProfileGuestbookEntry({
+        name,
+        entryId,
+        currentOwnerAddress: primaryProfile.ownerAddress
+      });
+      setGuestbookEntries((current) => current.filter((entry) => entry.id !== entryId));
+      setGuestbookState(successActionState("Guestbook entry hidden."));
+    } catch (err) {
+      setGuestbookState(errorActionState(err instanceof Error ? err.message : "Failed to hide guestbook entry."));
+    } finally {
+      setModeratingGuestbookEntryId(null);
+    }
+  }
+
   async function submitProfileTransfer(): Promise<void> {
     if (!primaryProfile) {
       setTransferState(errorActionState("No linked profile is available to transfer."));
@@ -1160,6 +1184,17 @@ export default function ProfileClient({ name }: { name: string }) {
                       <span className="hint">{new Date(entry.createdAt).toLocaleString()}</span>
                     </div>
                     <p>{entry.message}</p>
+                    {canEditProfile ? (
+                      <div className="row">
+                        <button
+                          type="button"
+                          onClick={() => void hideGuestbookEntry(entry.id)}
+                          disabled={moderatingGuestbookEntryId === entry.id}
+                        >
+                          {moderatingGuestbookEntryId === entry.id ? "Hiding..." : "Hide Entry"}
+                        </button>
+                      </div>
+                    ) : null}
                   </article>
                 ))}
               </div>

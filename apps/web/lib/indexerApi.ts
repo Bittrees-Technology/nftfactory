@@ -188,6 +188,7 @@ export type ApiProfileGuestbookEntry = {
   authorName: string;
   message: string;
   createdAt: string;
+  hiddenAt?: string | null;
 };
 
 export type ApiProfileGuestbookResponse = {
@@ -665,6 +666,21 @@ export async function createProfileGuestbookEntry(payload: {
     body: JSON.stringify({
       authorName: payload.authorName,
       message: payload.message
+    })
+  }, undefined, options);
+}
+
+
+export async function hideProfileGuestbookEntry(payload: {
+  name: string;
+  entryId: string;
+  currentOwnerAddress: string;
+}, options?: IndexerRequestOptions): Promise<{ ok: boolean; entry: ApiProfileGuestbookEntry }> {
+  return fetchJson<{ ok: boolean; entry: ApiProfileGuestbookEntry }>(`/api/profile/${encodeURIComponent(payload.name)}/guestbook/hide`, {
+    method: "POST",
+    body: JSON.stringify({
+      entryId: payload.entryId,
+      currentOwnerAddress: payload.currentOwnerAddress
     })
   }, undefined, options);
 }
