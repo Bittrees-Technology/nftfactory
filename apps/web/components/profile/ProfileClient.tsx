@@ -242,6 +242,69 @@ const MYSPACE_STARTER_SIDEBAR_FACTS = [
   { label: "Occupation", value: "Profile tinkerer" }
 ];
 
+const MYSPACE_RETRO_BLOCK_TEMPLATES: Array<{ label: string; block: ApiProfileRetroBlock }> = [
+  {
+    label: "Bulletin",
+    block: {
+      kind: "text",
+      title: "Latest Bulletin",
+      content: "Spending the night rebuilding this page until it feels like peak internet again.",
+      imageUrl: null,
+      embedUrl: null,
+      links: []
+    }
+  },
+  {
+    label: "Moodboard",
+    block: {
+      kind: "image",
+      title: "Moodboard",
+      content: "Glitter graphics only.",
+      imageUrl: "https://images.example.com/moodboard.jpg",
+      embedUrl: null,
+      links: []
+    }
+  },
+  {
+    label: "Daily Clicks",
+    block: {
+      kind: "links",
+      title: "Daily Clicks",
+      content: null,
+      imageUrl: null,
+      embedUrl: null,
+      links: ["https://forum.example.com", "https://playlist.example.com"]
+    }
+  },
+  {
+    label: "Checklist",
+    block: {
+      kind: "list",
+      title: "Weekend Agenda",
+      content: null,
+      imageUrl: null,
+      embedUrl: null,
+      links: ["Burn CDs", "Edit glitter GIFs", "Re-rank the top 8"]
+    }
+  },
+  {
+    label: "Embed",
+    block: {
+      kind: "embed",
+      title: "Profile Anthem",
+      content: "Autoplay not included, unfortunately.",
+      imageUrl: null,
+      embedUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      links: []
+    }
+  }
+];
+
+function appendRetroBlockTemplate(value: string, block: ApiProfileRetroBlock): string {
+  const next = [...parseRetroBlocksInput(value), block];
+  return formatRetroBlocksInput(next);
+}
+
 type ProfileMediaEmbedView = {
   title: string;
   url: string;
@@ -2424,6 +2487,20 @@ Playlist | https://open.spotify.com/playlist/..." />
                       </label>
                       <label>
                         Retro blocks (blank-line separated; Type: text|image|links|list|embed, then Title:, then body)
+                        <div className="profileStudioTemplateGroup">
+                          <span className="hint">Quick insert templates</span>
+                          <div className="profileStudioTemplateButtons">
+                            {MYSPACE_RETRO_BLOCK_TEMPLATES.map((template) => (
+                              <button
+                                key={template.label}
+                                type="button"
+                                onClick={() => setEditRetroBlocksText((current) => appendRetroBlockTemplate(current, template.block))}
+                              >
+                                Add {template.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
                         <textarea
                           value={editRetroBlocksText}
                           onChange={(e) => setEditRetroBlocksText(e.target.value)}

@@ -1813,6 +1813,23 @@ button:disabled {
   margin: 16px 0 0;
 }
 
+.profileStudioTemplateGroup {
+  display: grid;
+  gap: 10px;
+  margin: 10px 0;
+}
+
+.profileStudioTemplateButtons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.profileStudioTemplateButtons button {
+  border: 1px solid rgba(15, 47, 119, 0.22);
+  background: rgba(255, 255, 255, 0.88);
+}
+
 .profileModuleOrderList {
   display: grid;
   gap: 10px;
