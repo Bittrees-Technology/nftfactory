@@ -471,6 +471,7 @@ const MYSPACE_MAIN_SPLITTABLE_MODULE_IDS = ["media", "retro", "boxes", "guestboo
 type MyspaceOrderableModuleId = (typeof MYSPACE_ORDERABLE_MODULE_IDS)[number];
 type MyspaceSidebarModuleId = (typeof MYSPACE_SIDEBAR_MODULE_IDS)[number];
 type MyspaceMainSplittableModuleId = (typeof MYSPACE_MAIN_SPLITTABLE_MODULE_IDS)[number];
+type MyspaceMainColumnWidth = "wide" | "split" | "compact";
 
 function normalizeMyspaceModuleOrder(order: string[] | null | undefined): MyspaceOrderableModuleId[] {
   const allowed = new Set<string>(MYSPACE_ORDERABLE_MODULE_IDS);
@@ -526,6 +527,55 @@ function toggleMyspaceMainColumnSplitModule(
   moduleId: MyspaceMainSplittableModuleId
 ): MyspaceMainSplittableModuleId[] {
   return current.includes(moduleId) ? current.filter((item) => item !== moduleId) : [...current, moduleId];
+}
+
+function normalizeMyspaceMainColumnCompactModules(value: string[] | null | undefined): MyspaceMainSplittableModuleId[] {
+  const allowed = new Set<string>(MYSPACE_MAIN_SPLITTABLE_MODULE_IDS);
+  const normalized = Array.isArray(value)
+    ? value.map((item) => String(item || "").trim().toLowerCase()).filter((item): item is MyspaceMainSplittableModuleId => allowed.has(item))
+    : [];
+  return Array.from(new Set(normalized));
+}
+
+function getMyspaceMainColumnWidth(
+  moduleId: MyspaceMainSplittableModuleId,
+  splitModules: MyspaceMainSplittableModuleId[],
+  compactModules: MyspaceMainSplittableModuleId[]
+): MyspaceMainColumnWidth {
+  if (compactModules.includes(moduleId)) return "compact";
+  if (splitModules.includes(moduleId)) return "split";
+  return "wide";
+}
+
+function setMyspaceMainColumnWidth(
+  moduleId: MyspaceMainSplittableModuleId,
+  width: MyspaceMainColumnWidth,
+  splitModules: MyspaceMainSplittableModuleId[],
+  compactModules: MyspaceMainSplittableModuleId[]
+): { splitModules: MyspaceMainSplittableModuleId[]; compactModules: MyspaceMainSplittableModuleId[] } {
+  const nextSplit = splitModules.filter((item) => item !== moduleId);
+  const nextCompact = compactModules.filter((item) => item !== moduleId);
+  if (width === "split") nextSplit.push(moduleId);
+  if (width === "compact") {
+    nextSplit.push(moduleId);
+    nextCompact.push(moduleId);
+  }
+  return {
+    splitModules: normalizeMyspaceMainColumnSplitModules(nextSplit),
+    compactModules: normalizeMyspaceMainColumnCompactModules(nextCompact)
+  };
+}
+
+function getMyspaceMainColumnWidthClass(width: MyspaceMainColumnWidth): string {
+  if (width === "compact") return "profileMyspaceModuleCard--compact";
+  if (width === "split") return "profileMyspaceModuleCard--split";
+  return "profileMyspaceModuleCard--wide";
+}
+
+function getMyspaceMainColumnWidthLabel(width: MyspaceMainColumnWidth): string {
+  if (width === "compact") return "main compact";
+  if (width === "split") return "main split";
+  return "main wide";
 }
 
 function reorderMyspaceModuleOrder(
@@ -616,6 +666,7 @@ export default function ProfileClient({ name }: { name: string }) {
   const [editModuleOrder, setEditModuleOrder] = useState<MyspaceOrderableModuleId[]>(normalizeMyspaceModuleOrder(undefined));
   const [editSidebarModules, setEditSidebarModules] = useState<MyspaceSidebarModuleId[]>(normalizeMyspaceSidebarModules(undefined));
   const [editMainColumnSplitModules, setEditMainColumnSplitModules] = useState<MyspaceMainSplittableModuleId[]>(normalizeMyspaceMainColumnSplitModules(undefined));
+  const [editMainColumnCompactModules, setEditMainColumnCompactModules] = useState<MyspaceMainSplittableModuleId[]>(normalizeMyspaceMainColumnCompactModules(undefined));
   const [draggingModuleId, setDraggingModuleId] = useState<MyspaceOrderableModuleId | null>(null);
   const [dragOverModuleId, setDragOverModuleId] = useState<MyspaceOrderableModuleId | null>(null);
   const [editCustomBoxesText, setEditCustomBoxesText] = useState("");
@@ -1090,9 +1141,11 @@ export default function ProfileClient({ name }: { name: string }) {
   const myspaceModuleOrder = useMemo(() => normalizeMyspaceModuleOrder(primaryProfile?.moduleOrder), [primaryProfile]);
   const myspaceSidebarModules = useMemo(() => normalizeMyspaceSidebarModules(primaryProfile?.sidebarModules), [primaryProfile]);
   const myspaceMainColumnSplitModules = useMemo(() => normalizeMyspaceMainColumnSplitModules(primaryProfile?.mainColumnSplitModules), [primaryProfile]);
+  const myspaceMainColumnCompactModules = useMemo(() => normalizeMyspaceMainColumnCompactModules(primaryProfile?.mainColumnCompactModules), [primaryProfile]);
   const studioPreviewModuleOrder = useMemo(() => normalizeMyspaceModuleOrder(editModuleOrder), [editModuleOrder]);
   const studioPreviewSidebarModules = useMemo(() => normalizeMyspaceSidebarModules(editSidebarModules), [editSidebarModules]);
   const studioPreviewMainColumnSplitModules = useMemo(() => normalizeMyspaceMainColumnSplitModules(editMainColumnSplitModules), [editMainColumnSplitModules]);
+  const studioPreviewMainColumnCompactModules = useMemo(() => normalizeMyspaceMainColumnCompactModules(editMainColumnCompactModules), [editMainColumnCompactModules]);
   const studioPreviewDisplayName = useMemo(() => editDisplayName.trim() || creatorDisplayName, [creatorDisplayName, editDisplayName]);
   const studioPreviewStatusHeadline = useMemo(
     () => editStatusHeadline.trim() || "offline, coding the perfect profile",
@@ -1152,6 +1205,7 @@ export default function ProfileClient({ name }: { name: string }) {
     setEditModuleOrder(normalizeMyspaceModuleOrder(primaryProfile.moduleOrder));
     setEditSidebarModules(normalizeMyspaceSidebarModules(primaryProfile.sidebarModules));
     setEditMainColumnSplitModules(normalizeMyspaceMainColumnSplitModules(primaryProfile.mainColumnSplitModules));
+    setEditMainColumnCompactModules(normalizeMyspaceMainColumnCompactModules(primaryProfile.mainColumnCompactModules));
     setEditStampsText((primaryProfile.stamps || []).join("\n"));
     setEditCustomBoxesText(formatCustomBoxesInput(primaryProfile.customBoxes));
     setEditLinksText((primaryProfile.links || []).join("\n"));
@@ -1202,6 +1256,7 @@ export default function ProfileClient({ name }: { name: string }) {
         moduleOrder: editModuleOrder,
         sidebarModules: editSidebarModules,
         mainColumnSplitModules: editMainColumnSplitModules.filter((moduleId) => !editSidebarModules.includes(moduleId as MyspaceSidebarModuleId)),
+        mainColumnCompactModules: editMainColumnCompactModules.filter((moduleId) => !editSidebarModules.includes(moduleId as MyspaceSidebarModuleId)),
         stamps: editStampsText.split("\n").map((item) => item.trim()).filter(Boolean),
         customBoxes: parseCustomBoxesInput(editCustomBoxesText),
         links: editLinksText.split("\n").map((item) => item.trim()).filter(Boolean)
@@ -1697,7 +1752,7 @@ export default function ProfileClient({ name }: { name: string }) {
             </div>
             <div className="profileMyspaceModuleLayout">
               <div className="profileMyspaceModuleMain">
-                {!myspaceSidebarModules.includes("media") ? <div className={`profileMyspaceEmbedsGrid ${myspaceMainColumnSplitModules.includes("media") ? "profileMyspaceModuleCard--split" : "profileMyspaceModuleCard--wide"}`.trim()} style={getMyspaceModuleOrderStyle(myspaceModuleOrder, "media")}>
+                {!myspaceSidebarModules.includes("media") ? <div className={`profileMyspaceEmbedsGrid ${getMyspaceMainColumnWidthClass(getMyspaceMainColumnWidth("media", myspaceMainColumnSplitModules, myspaceMainColumnCompactModules))}`.trim()} style={getMyspaceModuleOrderStyle(myspaceModuleOrder, "media")}>
               {mediaEmbedCards.length ? mediaEmbedCards.map((embed) => (
                 <section key={embed.title + ":" + embed.url} className="profileMyspaceEmbedCard">
                   <h4>{embed.title}</h4>
@@ -1721,7 +1776,7 @@ export default function ProfileClient({ name }: { name: string }) {
                 </section>
               )}
                 </div> : null}
-                {!myspaceSidebarModules.includes("retro") ? <div className={`profileMyspaceRetroGrid ${myspaceMainColumnSplitModules.includes("retro") ? "profileMyspaceModuleCard--split" : "profileMyspaceModuleCard--wide"}`.trim()} style={getMyspaceModuleOrderStyle(myspaceModuleOrder, "retro")}>
+                {!myspaceSidebarModules.includes("retro") ? <div className={`profileMyspaceRetroGrid ${getMyspaceMainColumnWidthClass(getMyspaceMainColumnWidth("retro", myspaceMainColumnSplitModules, myspaceMainColumnCompactModules))}`.trim()} style={getMyspaceModuleOrderStyle(myspaceModuleOrder, "retro")}>
               {retroBlocks.length ? retroBlocks.map((block, index) => (
                 <section key={`${block.kind}:${block.title}:${index}`} className="profileMyspaceRetroCard">
                   <h4>{block.title}</h4>
@@ -1775,7 +1830,7 @@ export default function ProfileClient({ name }: { name: string }) {
                 </section>
               )}
                 </div> : null}
-                {!myspaceSidebarModules.includes("boxes") ? <div className={`profileMyspaceBoxesGrid ${myspaceMainColumnSplitModules.includes("boxes") ? "profileMyspaceModuleCard--split" : "profileMyspaceModuleCard--wide"}`.trim()} style={getMyspaceModuleOrderStyle(myspaceModuleOrder, "boxes")}>
+                {!myspaceSidebarModules.includes("boxes") ? <div className={`profileMyspaceBoxesGrid ${getMyspaceMainColumnWidthClass(getMyspaceMainColumnWidth("boxes", myspaceMainColumnSplitModules, myspaceMainColumnCompactModules))}`.trim()} style={getMyspaceModuleOrderStyle(myspaceModuleOrder, "boxes")}>
               {primaryProfile?.customBoxes?.length ? primaryProfile.customBoxes.map((box) => (
                 <section key={`${box.title}:${box.content}`} className="profileMyspaceBoxCard">
                   <h4>{box.title}</h4>
@@ -1788,7 +1843,7 @@ export default function ProfileClient({ name }: { name: string }) {
                 </section>
               )}
                 </div> : null}
-                {!myspaceSidebarModules.includes("guestbook") ? <section className={`card formCard profileMyspaceCustomCard ${myspaceMainColumnSplitModules.includes("guestbook") ? "profileMyspaceModuleCard--split" : "profileMyspaceModuleCard--wide"}`.trim()} style={getMyspaceModuleOrderStyle(myspaceModuleOrder, "guestbook")}>
+                {!myspaceSidebarModules.includes("guestbook") ? <section className={`card formCard profileMyspaceCustomCard ${getMyspaceMainColumnWidthClass(getMyspaceMainColumnWidth("guestbook", myspaceMainColumnSplitModules, myspaceMainColumnCompactModules))}`.trim()} style={getMyspaceModuleOrderStyle(myspaceModuleOrder, "guestbook")}>
             <div className="profileMyspaceCustomHeader">
               <div>
                 <p className="eyebrow">Guestbook</p>
@@ -1884,7 +1939,7 @@ export default function ProfileClient({ name }: { name: string }) {
                 </section> : null}
 
                 {!myspaceSidebarModules.includes("custom") && (primaryProfile?.customHtml || primaryProfile?.customCss) ? (
-                  <section className={`card formCard profileMyspaceCustomCard ${myspaceMainColumnSplitModules.includes("custom") ? "profileMyspaceModuleCard--split" : "profileMyspaceModuleCard--wide"}`.trim()} style={getMyspaceModuleOrderStyle(myspaceModuleOrder, "custom")}>
+                  <section className={`card formCard profileMyspaceCustomCard ${getMyspaceMainColumnWidthClass(getMyspaceMainColumnWidth("custom", myspaceMainColumnSplitModules, myspaceMainColumnCompactModules))}`.trim()} style={getMyspaceModuleOrderStyle(myspaceModuleOrder, "custom")}>
               <div className="profileMyspaceCustomHeader">
                 <div>
                   <p className="eyebrow">Custom Module</p>
@@ -2386,9 +2441,9 @@ export default function ProfileClient({ name }: { name: string }) {
                         <div className="profileStudioPreviewColumns">
                           <div className="profileStudioPreviewMain">
                             {studioPreviewModuleOrder.filter((moduleId) => !studioPreviewSidebarModules.includes(moduleId as MyspaceSidebarModuleId)).map((moduleId) => (
-                              <div key={moduleId} className={`profileStudioPreviewModuleCard ${studioPreviewMainColumnSplitModules.includes(moduleId as MyspaceMainSplittableModuleId) ? "profileStudioPreviewModuleCard--split" : ""}`.trim()}>
+                              <div key={moduleId} className={`profileStudioPreviewModuleCard profileStudioPreviewModuleCard--${getMyspaceMainColumnWidth(moduleId as MyspaceMainSplittableModuleId, studioPreviewMainColumnSplitModules, studioPreviewMainColumnCompactModules)}`.trim()}>
                                 <strong>{MYSPACE_MODULE_LABELS[moduleId]}</strong>
-                                <span className="mono">{studioPreviewMainColumnSplitModules.includes(moduleId as MyspaceMainSplittableModuleId) ? "main split" : "main wide"}</span>
+                                <span className="mono">{getMyspaceMainColumnWidthLabel(getMyspaceMainColumnWidth(moduleId as MyspaceMainSplittableModuleId, studioPreviewMainColumnSplitModules, studioPreviewMainColumnCompactModules))}</span>
                                 <p>{studioPreviewModuleSummaries[moduleId]}</p>
                               </div>
                             ))}
@@ -2437,6 +2492,7 @@ export default function ProfileClient({ name }: { name: string }) {
                             setEditModuleOrder(["social", "retro", "media", "boxes", "guestbook", "custom"]);
                             setEditSidebarModules(["media", "boxes"]);
                             setEditMainColumnSplitModules(["retro", "guestbook"]);
+                            setEditMainColumnCompactModules(["guestbook"]);
                           }}
                         >
                           Load Starter Pack
@@ -2671,22 +2727,36 @@ collector core" />
                         </div>
                       </div>
                       <div>
-                        <span>Main column split cards</span>
-                        <p className="hint">Turn selected modules into half-width cards inside the desktop main column.</p>
+                        <span>Main column widths</span>
+                        <p className="hint">Choose whether each desktop main-column module renders wide, split, or compact.</p>
                         <div className="profileSidebarToggleList">
-                          {MYSPACE_MAIN_SPLITTABLE_MODULE_IDS.map((moduleId) => (
-                            <label key={moduleId} className="profileSidebarToggleItem">
-                              <input
-                                type="checkbox"
-                                checked={editMainColumnSplitModules.includes(moduleId)}
-                                onChange={() => setEditMainColumnSplitModules((current) => toggleMyspaceMainColumnSplitModule(current, moduleId))}
-                                disabled={editSidebarModules.includes(moduleId as MyspaceSidebarModuleId)}
-                              />
-                              <span>{MYSPACE_MODULE_LABELS[moduleId]}</span>
-                            </label>
-                          ))}
+                          {MYSPACE_MAIN_SPLITTABLE_MODULE_IDS.map((moduleId) => {
+                            const width = getMyspaceMainColumnWidth(moduleId, editMainColumnSplitModules, editMainColumnCompactModules);
+                            const inSidebar = editSidebarModules.includes(moduleId as MyspaceSidebarModuleId);
+                            return (
+                              <label key={moduleId} className="profileSidebarToggleItem profileSidebarToggleItem--stacked">
+                                <span>{MYSPACE_MODULE_LABELS[moduleId]}</span>
+                                <select
+                                  value={inSidebar ? "sidebar" : width}
+                                  onChange={(event) => {
+                                    const nextWidth = event.target.value as MyspaceMainColumnWidth | "sidebar";
+                                    if (nextWidth === "sidebar") return;
+                                    const next = setMyspaceMainColumnWidth(moduleId, nextWidth, editMainColumnSplitModules, editMainColumnCompactModules);
+                                    setEditMainColumnSplitModules(next.splitModules);
+                                    setEditMainColumnCompactModules(next.compactModules);
+                                  }}
+                                  disabled={inSidebar}
+                                >
+                                  <option value="wide">Wide</option>
+                                  <option value="split">Split</option>
+                                  <option value="compact">Compact</option>
+                                  {inSidebar ? <option value="sidebar">Pinned to sidebar</option> : null}
+                                </select>
+                              </label>
+                            );
+                          })}
                         </div>
-                        <p className="hint">Sidebar modules stay stacked in the narrow rail and cannot also render as split cards.</p>
+                        <p className="hint">Sidebar modules stay stacked in the narrow rail; move a module back to the main column before assigning a width.</p>
                       </div>
                       <label>
                         Custom boxes

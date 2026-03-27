@@ -1898,6 +1898,10 @@ button:disabled {
   grid-column: span 1;
 }
 
+.profileMyspaceModuleCard--compact {
+  grid-column: span 1;
+}
+
 .profileMyspaceEmbedsGrid--sidebar,
 .profileMyspaceRetroGrid--sidebar,
 .profileMyspaceBoxesGrid--sidebar {
@@ -1920,6 +1924,15 @@ button:disabled {
   padding: 8px 10px;
   border: 1px solid rgba(15, 47, 119, 0.16);
   background: rgba(255, 255, 255, 0.72);
+}
+
+.profileSidebarToggleItem--stacked {
+  align-items: flex-start;
+  flex-direction: column;
+}
+
+.profileSidebarToggleItem--stacked select {
+  width: 100%;
 }
 
 @media (min-width: 980px) {
@@ -1987,6 +2000,23 @@ button:disabled {
   background: rgba(244, 249, 255, 0.96);
 }
 
+.profileStudioPreviewModuleCard--compact {
+  background: rgba(255, 247, 230, 0.98);
+}
+
+.profileMyspaceEmbedsGrid.profileMyspaceModuleCard--compact,
+.profileMyspaceRetroGrid.profileMyspaceModuleCard--compact,
+.profileMyspaceBoxesGrid.profileMyspaceModuleCard--compact {
+  gap: 8px;
+}
+
+.profileMyspaceEmbedsGrid.profileMyspaceModuleCard--compact .profileMyspaceEmbedCard,
+.profileMyspaceRetroGrid.profileMyspaceModuleCard--compact .profileMyspaceRetroCard,
+.profileMyspaceBoxesGrid.profileMyspaceModuleCard--compact .profileMyspaceBoxCard,
+.profileMyspaceCustomCard.profileMyspaceModuleCard--compact {
+  padding: 10px 12px;
+}
+
 .profileStudioPreviewModuleCard p {
   margin: 0;
   line-height: 1.5;
@@ -2010,7 +2040,12 @@ button:disabled {
     grid-column: span 1;
   }
 
-  .profileStudioPreviewModuleCard:not(.profileStudioPreviewModuleCard--split) {
+  .profileStudioPreviewModuleCard--compact {
+    grid-column: span 1;
+  }
+
+  .profileStudioPreviewModuleCard--wide,
+  .profileStudioPreviewModuleCard:not(.profileStudioPreviewModuleCard--split):not(.profileStudioPreviewModuleCard--compact) {
     grid-column: 1 / -1;
   }
 }
