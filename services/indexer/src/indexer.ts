@@ -90,7 +90,9 @@ type ProfileLinkPayload = {
   retroBlocks?: ProfileRetroBlock[];
   moduleOrder?: string[];
   heroModules?: string[];
+  heroCompactModules?: string[];
   sidebarModules?: string[];
+  sidebarCompactModules?: string[];
   mainColumnSplitModules?: string[];
   mainColumnCompactModules?: string[];
   stamps?: string[];
@@ -174,7 +176,9 @@ type ProfileRecord = {
   retroBlocks: ProfileRetroBlock[];
   moduleOrder: string[];
   heroModules: string[];
+  heroCompactModules: string[];
   sidebarModules: string[];
+  sidebarCompactModules: string[];
   mainColumnSplitModules: string[];
   mainColumnCompactModules: string[];
   stamps: string[];
@@ -1476,7 +1480,19 @@ function sanitizeProfileHeroModules(value: string[] | undefined): string[] {
   return Array.from(new Set(normalized));
 }
 
+function sanitizeProfileHeroCompactModules(value: string[] | undefined): string[] {
+  const allowed = new Set(["social", "media", "retro", "boxes", "guestbook", "custom"]);
+  const normalized = Array.isArray(value) ? value.map((item) => String(item || "").trim().toLowerCase()).filter((item) => allowed.has(item)) : [];
+  return Array.from(new Set(normalized));
+}
+
 function sanitizeProfileSidebarModules(value: string[] | undefined): string[] {
+  const allowed = new Set(["media", "retro", "boxes", "guestbook", "custom"]);
+  const normalized = Array.isArray(value) ? value.map((item) => String(item || "").trim().toLowerCase()).filter((item) => allowed.has(item)) : [];
+  return Array.from(new Set(normalized));
+}
+
+function sanitizeProfileSidebarCompactModules(value: string[] | undefined): string[] {
   const allowed = new Set(["media", "retro", "boxes", "guestbook", "custom"]);
   const normalized = Array.isArray(value) ? value.map((item) => String(item || "").trim().toLowerCase()).filter((item) => allowed.has(item)) : [];
   return Array.from(new Set(normalized));
@@ -1526,7 +1542,9 @@ async function readProfileRecords(): Promise<ProfileRecord[]> {
           retroBlocks: sanitizeProfileRetroBlocks(item.retroBlocks),
           moduleOrder: sanitizeProfileModuleOrder(item.moduleOrder),
           heroModules: sanitizeProfileHeroModules(item.heroModules),
+          heroCompactModules: sanitizeProfileHeroCompactModules(item.heroCompactModules),
           sidebarModules: sanitizeProfileSidebarModules(item.sidebarModules),
+          sidebarCompactModules: sanitizeProfileSidebarCompactModules(item.sidebarCompactModules),
           mainColumnSplitModules: sanitizeProfileMainColumnSplitModules(item.mainColumnSplitModules),
           mainColumnCompactModules: sanitizeProfileMainColumnCompactModules(item.mainColumnCompactModules),
           topFriends: sanitizeProfileList(item.topFriends, 8, 80),
@@ -6088,8 +6106,10 @@ async function handleRequest(
       mediaEmbeds: payload.mediaEmbeds !== undefined ? sanitizeProfileMediaEmbeds(payload.mediaEmbeds) : existingIdentity?.mediaEmbeds || [],
       retroBlocks: payload.retroBlocks !== undefined ? sanitizeProfileRetroBlocks(payload.retroBlocks) : existingIdentity?.retroBlocks || [],
       moduleOrder: payload.moduleOrder !== undefined ? sanitizeProfileModuleOrder(payload.moduleOrder) : existingIdentity?.moduleOrder || sanitizeProfileModuleOrder(undefined),
-        heroModules: payload.heroModules !== undefined ? sanitizeProfileHeroModules(payload.heroModules) : existingIdentity?.heroModules || [],
+      heroModules: payload.heroModules !== undefined ? sanitizeProfileHeroModules(payload.heroModules) : existingIdentity?.heroModules || [],
+      heroCompactModules: payload.heroCompactModules !== undefined ? sanitizeProfileHeroCompactModules(payload.heroCompactModules) : existingIdentity?.heroCompactModules || [],
       sidebarModules: payload.sidebarModules !== undefined ? sanitizeProfileSidebarModules(payload.sidebarModules) : existingIdentity?.sidebarModules || [],
+      sidebarCompactModules: payload.sidebarCompactModules !== undefined ? sanitizeProfileSidebarCompactModules(payload.sidebarCompactModules) : existingIdentity?.sidebarCompactModules || [],
       mainColumnSplitModules: payload.mainColumnSplitModules !== undefined ? sanitizeProfileMainColumnSplitModules(payload.mainColumnSplitModules) : existingIdentity?.mainColumnSplitModules || [],
       mainColumnCompactModules: payload.mainColumnCompactModules !== undefined ? sanitizeProfileMainColumnCompactModules(payload.mainColumnCompactModules) : existingIdentity?.mainColumnCompactModules || [],
       topFriends: sanitizeProfileList(payload.topFriends, 8, 80).length > 0 ? sanitizeProfileList(payload.topFriends, 8, 80) : existingIdentity?.topFriends || [],
@@ -6131,7 +6151,9 @@ async function handleRequest(
         retroBlocks: payload.retroBlocks !== undefined ? sanitizeProfileRetroBlocks(payload.retroBlocks) : existingIdentity?.retroBlocks || [],
         moduleOrder: payload.moduleOrder !== undefined ? sanitizeProfileModuleOrder(payload.moduleOrder) : existingIdentity?.moduleOrder || sanitizeProfileModuleOrder(undefined),
         heroModules: payload.heroModules !== undefined ? sanitizeProfileHeroModules(payload.heroModules) : existingIdentity?.heroModules || [],
+        heroCompactModules: payload.heroCompactModules !== undefined ? sanitizeProfileHeroCompactModules(payload.heroCompactModules) : existingIdentity?.heroCompactModules || [],
         sidebarModules: payload.sidebarModules !== undefined ? sanitizeProfileSidebarModules(payload.sidebarModules) : existingIdentity?.sidebarModules || [],
+        sidebarCompactModules: payload.sidebarCompactModules !== undefined ? sanitizeProfileSidebarCompactModules(payload.sidebarCompactModules) : existingIdentity?.sidebarCompactModules || [],
         mainColumnSplitModules: payload.mainColumnSplitModules !== undefined ? sanitizeProfileMainColumnSplitModules(payload.mainColumnSplitModules) : existingIdentity?.mainColumnSplitModules || [],
         mainColumnCompactModules: payload.mainColumnCompactModules !== undefined ? sanitizeProfileMainColumnCompactModules(payload.mainColumnCompactModules) : existingIdentity?.mainColumnCompactModules || [],
         topFriends: sanitizeProfileList(payload.topFriends, 8, 80).length > 0 ? sanitizeProfileList(payload.topFriends, 8, 80) : existingIdentity?.topFriends || [],
@@ -6232,7 +6254,9 @@ async function handleRequest(
           retroBlocks: target.retroBlocks,
           moduleOrder: target.moduleOrder,
           heroModules: target.heroModules,
+          heroCompactModules: target.heroCompactModules,
           sidebarModules: target.sidebarModules,
+          sidebarCompactModules: target.sidebarCompactModules,
           mainColumnSplitModules: target.mainColumnSplitModules,
           mainColumnCompactModules: target.mainColumnCompactModules,
           stamps: target.stamps,

@@ -178,7 +178,9 @@ export type ApiProfileRecord = {
   retroBlocks: ApiProfileRetroBlock[];
   moduleOrder: string[];
   heroModules: string[];
+  heroCompactModules: string[];
   sidebarModules: string[];
+  sidebarCompactModules: string[];
   mainColumnSplitModules: string[];
   mainColumnCompactModules: string[];
   stamps: string[];
@@ -671,7 +673,9 @@ export async function linkProfileIdentity(payload: {
   retroBlocks?: ApiProfileRetroBlock[];
   moduleOrder?: string[];
   heroModules?: string[];
+  heroCompactModules?: string[];
   sidebarModules?: string[];
+  sidebarCompactModules?: string[];
   mainColumnSplitModules?: string[];
   mainColumnCompactModules?: string[];
   stamps?: string[];

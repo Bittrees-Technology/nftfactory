@@ -514,6 +514,10 @@ function toggleMyspaceHeroModule(
   return current.includes(moduleId) ? current.filter((item) => item !== moduleId) : [...current, moduleId];
 }
 
+function normalizeMyspaceHeroCompactModules(value: string[] | null | undefined): MyspaceOrderableModuleId[] {
+  return normalizeMyspaceHeroModules(value);
+}
+
 function normalizeMyspaceSidebarModules(value: string[] | null | undefined): MyspaceSidebarModuleId[] {
   const allowed = new Set<string>(MYSPACE_SIDEBAR_MODULE_IDS);
   const normalized = Array.isArray(value)
@@ -527,6 +531,10 @@ function toggleMyspaceSidebarModule(
   moduleId: MyspaceSidebarModuleId
 ): MyspaceSidebarModuleId[] {
   return current.includes(moduleId) ? current.filter((item) => item !== moduleId) : [...current, moduleId];
+}
+
+function normalizeMyspaceSidebarCompactModules(value: string[] | null | undefined): MyspaceSidebarModuleId[] {
+  return normalizeMyspaceSidebarModules(value);
 }
 
 function normalizeMyspaceMainColumnSplitModules(value: string[] | null | undefined): MyspaceMainSplittableModuleId[] {
@@ -591,6 +599,10 @@ function getMyspaceMainColumnWidthLabel(width: MyspaceMainColumnWidth): string {
   if (width === "compact") return "main compact";
   if (width === "split") return "main split";
   return "main wide";
+}
+
+function getMyspaceDensityLabel(isCompact: boolean, placement: "hero" | "sidebar"): string {
+  return placement + (isCompact ? " compact" : " default");
 }
 
 function reorderMyspaceModuleOrder(
@@ -680,7 +692,9 @@ export default function ProfileClient({ name }: { name: string }) {
   const [editRetroBlocksText, setEditRetroBlocksText] = useState("");
   const [editModuleOrder, setEditModuleOrder] = useState<MyspaceOrderableModuleId[]>(normalizeMyspaceModuleOrder(undefined));
   const [editHeroModules, setEditHeroModules] = useState<MyspaceOrderableModuleId[]>(normalizeMyspaceHeroModules(undefined));
+  const [editHeroCompactModules, setEditHeroCompactModules] = useState<MyspaceOrderableModuleId[]>(normalizeMyspaceHeroCompactModules(undefined));
   const [editSidebarModules, setEditSidebarModules] = useState<MyspaceSidebarModuleId[]>(normalizeMyspaceSidebarModules(undefined));
+  const [editSidebarCompactModules, setEditSidebarCompactModules] = useState<MyspaceSidebarModuleId[]>(normalizeMyspaceSidebarCompactModules(undefined));
   const [editMainColumnSplitModules, setEditMainColumnSplitModules] = useState<MyspaceMainSplittableModuleId[]>(normalizeMyspaceMainColumnSplitModules(undefined));
   const [editMainColumnCompactModules, setEditMainColumnCompactModules] = useState<MyspaceMainSplittableModuleId[]>(normalizeMyspaceMainColumnCompactModules(undefined));
   const [draggingModuleId, setDraggingModuleId] = useState<MyspaceOrderableModuleId | null>(null);
@@ -1156,12 +1170,16 @@ export default function ProfileClient({ name }: { name: string }) {
   );
   const myspaceModuleOrder = useMemo(() => normalizeMyspaceModuleOrder(primaryProfile?.moduleOrder), [primaryProfile]);
   const myspaceHeroModules = useMemo(() => normalizeMyspaceHeroModules(primaryProfile?.heroModules), [primaryProfile]);
+  const myspaceHeroCompactModules = useMemo(() => normalizeMyspaceHeroCompactModules(primaryProfile?.heroCompactModules), [primaryProfile]);
   const myspaceSidebarModules = useMemo(() => normalizeMyspaceSidebarModules(primaryProfile?.sidebarModules), [primaryProfile]);
+  const myspaceSidebarCompactModules = useMemo(() => normalizeMyspaceSidebarCompactModules(primaryProfile?.sidebarCompactModules), [primaryProfile]);
   const myspaceMainColumnSplitModules = useMemo(() => normalizeMyspaceMainColumnSplitModules(primaryProfile?.mainColumnSplitModules), [primaryProfile]);
   const myspaceMainColumnCompactModules = useMemo(() => normalizeMyspaceMainColumnCompactModules(primaryProfile?.mainColumnCompactModules), [primaryProfile]);
   const studioPreviewModuleOrder = useMemo(() => normalizeMyspaceModuleOrder(editModuleOrder), [editModuleOrder]);
   const studioPreviewHeroModules = useMemo(() => normalizeMyspaceHeroModules(editHeroModules), [editHeroModules]);
+  const studioPreviewHeroCompactModules = useMemo(() => normalizeMyspaceHeroCompactModules(editHeroCompactModules), [editHeroCompactModules]);
   const studioPreviewSidebarModules = useMemo(() => normalizeMyspaceSidebarModules(editSidebarModules), [editSidebarModules]);
+  const studioPreviewSidebarCompactModules = useMemo(() => normalizeMyspaceSidebarCompactModules(editSidebarCompactModules), [editSidebarCompactModules]);
   const studioPreviewMainColumnSplitModules = useMemo(() => normalizeMyspaceMainColumnSplitModules(editMainColumnSplitModules), [editMainColumnSplitModules]);
   const studioPreviewMainColumnCompactModules = useMemo(() => normalizeMyspaceMainColumnCompactModules(editMainColumnCompactModules), [editMainColumnCompactModules]);
   const studioPreviewDisplayName = useMemo(() => editDisplayName.trim() || creatorDisplayName, [creatorDisplayName, editDisplayName]);
@@ -1238,7 +1256,9 @@ export default function ProfileClient({ name }: { name: string }) {
     setEditRetroBlocksText(formatRetroBlocksInput(primaryProfile.retroBlocks));
     setEditModuleOrder(normalizeMyspaceModuleOrder(primaryProfile.moduleOrder));
     setEditHeroModules(normalizeMyspaceHeroModules(primaryProfile.heroModules));
+    setEditHeroCompactModules(normalizeMyspaceHeroCompactModules(primaryProfile.heroCompactModules));
     setEditSidebarModules(normalizeMyspaceSidebarModules(primaryProfile.sidebarModules));
+    setEditSidebarCompactModules(normalizeMyspaceSidebarCompactModules(primaryProfile.sidebarCompactModules));
     setEditMainColumnSplitModules(normalizeMyspaceMainColumnSplitModules(primaryProfile.mainColumnSplitModules));
     setEditMainColumnCompactModules(normalizeMyspaceMainColumnCompactModules(primaryProfile.mainColumnCompactModules));
     setEditStampsText((primaryProfile.stamps || []).join("\n"));
@@ -1290,7 +1310,9 @@ export default function ProfileClient({ name }: { name: string }) {
         retroBlocks: parseRetroBlocksInput(editRetroBlocksText),
         moduleOrder: editModuleOrder,
         heroModules: editHeroModules,
+        heroCompactModules: editHeroCompactModules.filter((moduleId) => editHeroModules.includes(moduleId)),
         sidebarModules: editSidebarModules,
+        sidebarCompactModules: editSidebarCompactModules.filter((moduleId) => editSidebarModules.includes(moduleId)),
         mainColumnSplitModules: editMainColumnSplitModules.filter((moduleId) => !editSidebarModules.includes(moduleId as MyspaceSidebarModuleId)),
         mainColumnCompactModules: editMainColumnCompactModules.filter((moduleId) => !editSidebarModules.includes(moduleId as MyspaceSidebarModuleId)),
         stamps: editStampsText.split("\n").map((item) => item.trim()).filter(Boolean),
@@ -1708,7 +1730,7 @@ export default function ProfileClient({ name }: { name: string }) {
             {myspaceModuleOrder.filter((moduleId) => myspaceHeroModules.includes(moduleId)).length > 0 ? (
               <div className="profileMyspaceHeroModules">
                 {myspaceModuleOrder.filter((moduleId) => myspaceHeroModules.includes(moduleId)).map((moduleId) => (
-                  <section key={moduleId} className="profileMyspaceHeroCallout">
+                  <section key={moduleId} className={`profileMyspaceHeroCallout ${myspaceHeroCompactModules.includes(moduleId) ? "profileMyspaceHeroCallout--compact" : ""}`.trim()}>
                     <p className="eyebrow">Hero Module</p>
                     <h4>{MYSPACE_MODULE_LABELS[moduleId]}</h4>
                     <p>{publicHeroModuleSummaries[moduleId]}</p>
@@ -2009,7 +2031,7 @@ export default function ProfileClient({ name }: { name: string }) {
               </div>
               {myspaceSidebarModules.length > 0 ? (
                 <aside className="profileMyspaceModuleSidebar">
-                  {myspaceSidebarModules.includes("media") ? <div className="profileMyspaceEmbedsGrid profileMyspaceEmbedsGrid--sidebar" style={getMyspaceModuleOrderStyle(myspaceModuleOrder, "media")}>
+                  {myspaceSidebarModules.includes("media") ? <div className={`profileMyspaceEmbedsGrid profileMyspaceEmbedsGrid--sidebar ${myspaceSidebarCompactModules.includes("media") ? "profileMyspaceSidebarModule--compact" : ""}`.trim()} style={getMyspaceModuleOrderStyle(myspaceModuleOrder, "media")}> 
                     {mediaEmbedCards.length ? mediaEmbedCards.map((embed) => (
                       <section key={embed.title + ":" + embed.url} className="profileMyspaceEmbedCard">
                         <h4>{embed.title}</h4>
@@ -2030,7 +2052,7 @@ export default function ProfileClient({ name }: { name: string }) {
                       <section className="profileMyspaceEmbedCard"><h4>Media</h4><p>No structured embeds pinned yet.</p></section>
                     )}
                   </div> : null}
-                  {myspaceSidebarModules.includes("retro") ? <div className="profileMyspaceRetroGrid profileMyspaceRetroGrid--sidebar" style={getMyspaceModuleOrderStyle(myspaceModuleOrder, "retro")}>
+                  {myspaceSidebarModules.includes("retro") ? <div className={`profileMyspaceRetroGrid profileMyspaceRetroGrid--sidebar ${myspaceSidebarCompactModules.includes("retro") ? "profileMyspaceSidebarModule--compact" : ""}`.trim()} style={getMyspaceModuleOrderStyle(myspaceModuleOrder, "retro")}> 
                     {retroBlocks.length ? retroBlocks.map((block, index) => (
                       <section key={`${block.kind}:${block.title}:${index}`} className="profileMyspaceRetroCard">
                         <h4>{block.title}</h4>
@@ -2043,17 +2065,17 @@ export default function ProfileClient({ name }: { name: string }) {
                       </section>
                     )) : <section className="profileMyspaceRetroCard"><h4>Retro Blocks</h4><p>No structured retro blocks pinned yet.</p></section>}
                   </div> : null}
-                  {myspaceSidebarModules.includes("boxes") ? <div className="profileMyspaceBoxesGrid profileMyspaceBoxesGrid--sidebar" style={getMyspaceModuleOrderStyle(myspaceModuleOrder, "boxes")}>
+                  {myspaceSidebarModules.includes("boxes") ? <div className={`profileMyspaceBoxesGrid profileMyspaceBoxesGrid--sidebar ${myspaceSidebarCompactModules.includes("boxes") ? "profileMyspaceSidebarModule--compact" : ""}`.trim()} style={getMyspaceModuleOrderStyle(myspaceModuleOrder, "boxes")}> 
                     {primaryProfile?.customBoxes?.length ? primaryProfile.customBoxes.map((box) => (<section key={`${box.title}:${box.content}`} className="profileMyspaceBoxCard"><h4>{box.title}</h4><p>{box.content}</p></section>)) : <section className="profileMyspaceBoxCard"><h4>Custom Boxes</h4><p>No extra custom boxes pinned yet.</p></section>}
                   </div> : null}
-                  {myspaceSidebarModules.includes("guestbook") ? <section className="card formCard profileMyspaceCustomCard profileMyspaceCustomCard--sidebar" style={getMyspaceModuleOrderStyle(myspaceModuleOrder, "guestbook")}>
+                  {myspaceSidebarModules.includes("guestbook") ? <section className={`card formCard profileMyspaceCustomCard profileMyspaceCustomCard--sidebar ${myspaceSidebarCompactModules.includes("guestbook") ? "profileMyspaceSidebarModule--compact" : ""}`.trim()} style={getMyspaceModuleOrderStyle(myspaceModuleOrder, "guestbook")}> 
                     <div className="profileMyspaceCustomHeader"><div><p className="eyebrow">Guestbook</p><h3>Comments + Guestbook</h3></div><span className="profileChip">{canEditProfile ? "Public posts + history" : "Public posts"}</span></div>
                     <StatusStack items={buildSectionLoadStatusItems({ keyPrefix: "guestbook", loadState: guestbookLoadState, loadingMessage: "Loading guestbook..." })} />
                     <div className="profileMyspaceGuestbookComposer"><label>Your display name<input value={guestbookName} onChange={(e) => setGuestbookName(e.target.value)} placeholder="space friend" /></label><label>Guestbook message<textarea value={guestbookMessage} onChange={(e) => setGuestbookMessage(e.target.value)} placeholder="leave a comment for this page" /></label><div className="row"><button type="button" onClick={() => void submitGuestbookEntry()} disabled={guestbookState.status === "pending"}>{guestbookState.status === "pending" ? "Posting..." : "Sign Guestbook"}</button></div><StatusStack items={[actionStateStatusItem(guestbookState, "guestbook-action")]} /></div>
                     {publicGuestbookEntries.length > 0 ? <div className="profileMyspaceGuestbookList">{publicGuestbookEntries.map((entry) => (<article key={entry.id} className="profileMyspaceGuestbookEntry"><div className="profileMyspaceGuestbookMeta"><strong>{entry.authorName}</strong>{entry.authorAddress ? <span className="mono">{truncateAddress(entry.authorAddress as Address)}</span> : null}<span className="hint">{new Date(entry.createdAt).toLocaleString()}</span></div><p>{entry.message}</p>{canEditProfile ? <div className="row"><button type="button" onClick={() => void hideGuestbookEntry(entry.id)} disabled={moderatingGuestbookEntryId === entry.id}>{moderatingGuestbookEntryId === entry.id ? "Working..." : "Hide Entry"}</button><button type="button" onClick={() => void deleteGuestbookEntry(entry.id)} disabled={moderatingGuestbookEntryId === entry.id}>{moderatingGuestbookEntryId === entry.id ? "Working..." : "Delete Entry"}</button></div> : null}</article>))}</div> : <p className="hint">No public guestbook entries yet. Be the first to sign this page.</p>}
                     {canEditProfile && moderatedGuestbookEntries.length > 0 ? <div className="profileMyspaceGuestbookList">{moderatedGuestbookEntries.map((entry) => (<article key={entry.id} className="profileMyspaceGuestbookEntry"><div className="profileMyspaceGuestbookMeta"><strong>{entry.authorName}</strong>{entry.authorAddress ? <span className="mono">{truncateAddress(entry.authorAddress as Address)}</span> : null}<span className="hint">{entry.deletedAt ? "Deleted" : "Hidden"}</span></div><p>{entry.message}</p><p className="hint">Posted {new Date(entry.createdAt).toLocaleString()}{entry.hiddenAt ? " | Hidden " + new Date(entry.hiddenAt).toLocaleString() + " by " + getModerationActorLabel(entry.hiddenBy, primaryProfile?.ownerAddress) : ""}{entry.deletedAt ? " | Deleted " + new Date(entry.deletedAt).toLocaleString() + " by " + getModerationActorLabel(entry.deletedBy, primaryProfile?.ownerAddress) : ""}</p><div className="row"><button type="button" onClick={() => void restoreGuestbookEntry(entry.id)} disabled={moderatingGuestbookEntryId === entry.id}>{moderatingGuestbookEntryId === entry.id ? "Working..." : "Restore Entry"}</button></div></article>))}</div> : null}
                   </section> : null}
-                  {myspaceSidebarModules.includes("custom") && (primaryProfile?.customHtml || primaryProfile?.customCss) ? <section className="card formCard profileMyspaceCustomCard profileMyspaceCustomCard--sidebar" style={getMyspaceModuleOrderStyle(myspaceModuleOrder, "custom")}><div className="profileMyspaceCustomHeader"><div><p className="eyebrow">Custom Module</p><h3>Independent HTML + CSS Block</h3></div><span className="profileChip">Sandboxed preview</span></div><p className="hint">Custom HTML is sanitized and rendered inside an isolated iframe so creators can style a personal module without taking over the rest of the app shell.</p><iframe key={customPreviewId} title={`${creatorDisplayName} custom profile module`} srcDoc={customProfilePreview} sandbox="allow-popups" className="profileCustomModuleFrame" /></section> : null}
+                  {myspaceSidebarModules.includes("custom") && (primaryProfile?.customHtml || primaryProfile?.customCss) ? <section className={`card formCard profileMyspaceCustomCard profileMyspaceCustomCard--sidebar ${myspaceSidebarCompactModules.includes("custom") ? "profileMyspaceSidebarModule--compact" : ""}`.trim()} style={getMyspaceModuleOrderStyle(myspaceModuleOrder, "custom")}> <div className="profileMyspaceCustomHeader"><div><p className="eyebrow">Custom Module</p><h3>Independent HTML + CSS Block</h3></div><span className="profileChip">Sandboxed preview</span></div><p className="hint">Custom HTML is sanitized and rendered inside an isolated iframe so creators can style a personal module without taking over the rest of the app shell.</p><iframe key={customPreviewId} title={`${creatorDisplayName} custom profile module`} srcDoc={customProfilePreview} sandbox="allow-popups" className="profileCustomModuleFrame" /></section> : null}
                 </aside>
               ) : null}
             </div>
@@ -2488,9 +2510,9 @@ export default function ProfileClient({ name }: { name: string }) {
                         {studioPreviewModuleOrder.filter((moduleId) => studioPreviewHeroModules.includes(moduleId)).length > 0 ? (
                           <div className="profileStudioPreviewHeroModules">
                             {studioPreviewModuleOrder.filter((moduleId) => studioPreviewHeroModules.includes(moduleId)).map((moduleId) => (
-                              <div key={moduleId} className="profileStudioPreviewModuleCard profileStudioPreviewModuleCard--hero">
+                              <div key={moduleId} className={`profileStudioPreviewModuleCard profileStudioPreviewModuleCard--hero ${studioPreviewHeroCompactModules.includes(moduleId) ? "profileStudioPreviewModuleCard--compact" : ""}`.trim()}>
                                 <strong>{MYSPACE_MODULE_LABELS[moduleId]}</strong>
-                                <span className="mono">hero callout</span>
+                                <span className="mono">{getMyspaceDensityLabel(studioPreviewHeroCompactModules.includes(moduleId), "hero")}</span>
                                 <p>{studioPreviewModuleSummaries[moduleId]}</p>
                               </div>
                             ))}
@@ -2513,9 +2535,9 @@ export default function ProfileClient({ name }: { name: string }) {
                               <p>{studioPreviewSidebarFacts.length > 0 ? studioPreviewSidebarFacts.map((fact) => fact.label + ": " + fact.value).join(" | ") : "no sidebar facts yet"}</p>
                             </div>
                             {studioPreviewModuleOrder.filter((moduleId) => studioPreviewSidebarModules.includes(moduleId as MyspaceSidebarModuleId)).map((moduleId) => (
-                              <div key={moduleId} className="profileStudioPreviewModuleCard">
+                              <div key={moduleId} className={`profileStudioPreviewModuleCard ${studioPreviewSidebarCompactModules.includes(moduleId as MyspaceSidebarModuleId) ? "profileStudioPreviewModuleCard--compact" : ""}`.trim()}>
                                 <strong>{MYSPACE_MODULE_LABELS[moduleId]}</strong>
-                                <span className="mono">sidebar</span>
+                                <span className="mono">{getMyspaceDensityLabel(studioPreviewSidebarCompactModules.includes(moduleId as MyspaceSidebarModuleId), "sidebar")}</span>
                                 <p>{studioPreviewModuleSummaries[moduleId]}</p>
                               </div>
                             ))}
@@ -2549,7 +2571,9 @@ export default function ProfileClient({ name }: { name: string }) {
                             setEditCustomBoxesText((current) => current.trim() || formatCustomBoxesInput(MYSPACE_STARTER_CUSTOM_BOXES));
                             setEditModuleOrder(["social", "retro", "media", "boxes", "guestbook", "custom"]);
                             setEditHeroModules(["social", "guestbook"]);
+                            setEditHeroCompactModules(["guestbook"]);
                             setEditSidebarModules(["media", "boxes"]);
+                            setEditSidebarCompactModules(["boxes"]);
                             setEditMainColumnSplitModules(["retro", "guestbook"]);
                             setEditMainColumnCompactModules(["guestbook"]);
                           }}
@@ -2785,6 +2809,33 @@ collector core" />
                           ))}
                         </div>
                       </div>
+                      <div>
+                        <span>Hero density</span>
+                        <p className="hint">Choose whether featured hero callouts render at the default size or a tighter compact size.</p>
+                        <div className="profileSidebarToggleList">
+                          {MYSPACE_ORDERABLE_MODULE_IDS.map((moduleId) => {
+                            const featured = editHeroModules.includes(moduleId);
+                            return (
+                              <label key={moduleId} className="profileSidebarToggleItem profileSidebarToggleItem--stacked">
+                                <span>{MYSPACE_MODULE_LABELS[moduleId]}</span>
+                                <select
+                                  value={featured && editHeroCompactModules.includes(moduleId) ? "compact" : featured ? "default" : "off"}
+                                  onChange={(event) => {
+                                    const nextValue = event.target.value;
+                                    if (nextValue === "off") return;
+                                    setEditHeroCompactModules((current) => nextValue === "compact" ? normalizeMyspaceHeroCompactModules([...current.filter((item) => item !== moduleId), moduleId]) : current.filter((item) => item !== moduleId));
+                                  }}
+                                  disabled={!featured}
+                                >
+                                  <option value="default">Default</option>
+                                  <option value="compact">Compact</option>
+                                  {!featured ? <option value="off">Not featured</option> : null}
+                                </select>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
 
                       <div>
                         <span>Sidebar placement</span>
@@ -2800,6 +2851,33 @@ collector core" />
                               <span>{MYSPACE_MODULE_LABELS[moduleId]}</span>
                             </label>
                           ))}
+                        </div>
+                      </div>
+                      <div>
+                        <span>Sidebar density</span>
+                        <p className="hint">Choose whether pinned sidebar modules stay roomy or switch to a tighter compact card style.</p>
+                        <div className="profileSidebarToggleList">
+                          {MYSPACE_SIDEBAR_MODULE_IDS.map((moduleId) => {
+                            const pinned = editSidebarModules.includes(moduleId);
+                            return (
+                              <label key={moduleId} className="profileSidebarToggleItem profileSidebarToggleItem--stacked">
+                                <span>{MYSPACE_MODULE_LABELS[moduleId]}</span>
+                                <select
+                                  value={pinned && editSidebarCompactModules.includes(moduleId) ? "compact" : pinned ? "default" : "off"}
+                                  onChange={(event) => {
+                                    const nextValue = event.target.value;
+                                    if (nextValue === "off") return;
+                                    setEditSidebarCompactModules((current) => nextValue === "compact" ? normalizeMyspaceSidebarCompactModules([...current.filter((item) => item !== moduleId), moduleId]) : current.filter((item) => item !== moduleId));
+                                  }}
+                                  disabled={!pinned}
+                                >
+                                  <option value="default">Default</option>
+                                  <option value="compact">Compact</option>
+                                  {!pinned ? <option value="off">Not in sidebar</option> : null}
+                                </select>
+                              </label>
+                            );
+                          })}
                         </div>
                       </div>
                       <div>

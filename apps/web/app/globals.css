@@ -1519,6 +1519,15 @@ button:disabled {
   line-height: 1.5;
 }
 
+.profileMyspaceHeroCallout--compact {
+  padding: 10px;
+}
+
+.profileMyspaceHeroCallout--compact h4 {
+  margin-bottom: 6px;
+  font-size: 0.75rem;
+}
+
 .profileMyspaceCustomHeader {
   display: flex;
   gap: 12px;
@@ -1937,6 +1946,30 @@ button:disabled {
 
 .profileMyspaceCustomCard--sidebar {
   margin: 0;
+}
+
+.profileMyspaceSidebarModule--compact {
+  gap: 8px;
+}
+
+.profileMyspaceSidebarModule--compact .profileMyspaceEmbedCard,
+.profileMyspaceSidebarModule--compact .profileMyspaceRetroCard,
+.profileMyspaceSidebarModule--compact .profileMyspaceBoxCard,
+.profileMyspaceCustomCard.profileMyspaceSidebarModule--compact {
+  padding: 10px;
+}
+
+.profileMyspaceSidebarModule--compact .profileMyspaceEmbedCard h4,
+.profileMyspaceSidebarModule--compact .profileMyspaceRetroCard h4,
+.profileMyspaceSidebarModule--compact .profileMyspaceBoxCard h4,
+.profileMyspaceCustomCard.profileMyspaceSidebarModule--compact h3 {
+  margin-bottom: 6px;
+}
+
+.profileMyspaceSidebarModule--compact .profileMyspaceEmbedCard iframe,
+.profileMyspaceSidebarModule--compact .profileMyspaceRetroEmbedFrame,
+.profileMyspaceSidebarModule--compact .profileCustomModuleFrame {
+  min-height: 180px;
 }
 
 .profileSidebarToggleList {
