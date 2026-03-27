@@ -1874,6 +1874,21 @@ button:disabled {
   box-shadow: 2px 2px 0 rgba(15, 47, 119, 0.1);
 }
 
+.profileMyspaceRetroStickerWall {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.profileMyspaceRetroSticker {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border: 1px solid rgba(15, 47, 119, 0.22);
+  background: #fff8e8;
+  box-shadow: 2px 2px 0 rgba(15, 47, 119, 0.1);
+}
+
 @keyframes profile-retro-marquee {
   from { transform: translateX(0); }
   to { transform: translateX(-100%); }
