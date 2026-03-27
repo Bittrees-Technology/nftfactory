@@ -89,6 +89,7 @@ type ProfileLinkPayload = {
   mediaEmbeds?: ProfileMediaEmbed[];
   retroBlocks?: ProfileRetroBlock[];
   moduleOrder?: string[];
+  heroModules?: string[];
   sidebarModules?: string[];
   mainColumnSplitModules?: string[];
   mainColumnCompactModules?: string[];
@@ -172,6 +173,7 @@ type ProfileRecord = {
   mediaEmbeds: ProfileMediaEmbed[];
   retroBlocks: ProfileRetroBlock[];
   moduleOrder: string[];
+  heroModules: string[];
   sidebarModules: string[];
   mainColumnSplitModules: string[];
   mainColumnCompactModules: string[];
@@ -1468,6 +1470,12 @@ function sanitizeProfileModuleOrder(value: string[] | undefined): string[] {
   return deduped;
 }
 
+function sanitizeProfileHeroModules(value: string[] | undefined): string[] {
+  const allowed = new Set(["social", "media", "retro", "boxes", "guestbook", "custom"]);
+  const normalized = Array.isArray(value) ? value.map((item) => String(item || "").trim().toLowerCase()).filter((item) => allowed.has(item)) : [];
+  return Array.from(new Set(normalized));
+}
+
 function sanitizeProfileSidebarModules(value: string[] | undefined): string[] {
   const allowed = new Set(["media", "retro", "boxes", "guestbook", "custom"]);
   const normalized = Array.isArray(value) ? value.map((item) => String(item || "").trim().toLowerCase()).filter((item) => allowed.has(item)) : [];
@@ -1517,6 +1525,7 @@ async function readProfileRecords(): Promise<ProfileRecord[]> {
           mediaEmbeds: sanitizeProfileMediaEmbeds(item.mediaEmbeds),
           retroBlocks: sanitizeProfileRetroBlocks(item.retroBlocks),
           moduleOrder: sanitizeProfileModuleOrder(item.moduleOrder),
+          heroModules: sanitizeProfileHeroModules(item.heroModules),
           sidebarModules: sanitizeProfileSidebarModules(item.sidebarModules),
           mainColumnSplitModules: sanitizeProfileMainColumnSplitModules(item.mainColumnSplitModules),
           mainColumnCompactModules: sanitizeProfileMainColumnCompactModules(item.mainColumnCompactModules),
@@ -6079,6 +6088,7 @@ async function handleRequest(
       mediaEmbeds: payload.mediaEmbeds !== undefined ? sanitizeProfileMediaEmbeds(payload.mediaEmbeds) : existingIdentity?.mediaEmbeds || [],
       retroBlocks: payload.retroBlocks !== undefined ? sanitizeProfileRetroBlocks(payload.retroBlocks) : existingIdentity?.retroBlocks || [],
       moduleOrder: payload.moduleOrder !== undefined ? sanitizeProfileModuleOrder(payload.moduleOrder) : existingIdentity?.moduleOrder || sanitizeProfileModuleOrder(undefined),
+        heroModules: payload.heroModules !== undefined ? sanitizeProfileHeroModules(payload.heroModules) : existingIdentity?.heroModules || [],
       sidebarModules: payload.sidebarModules !== undefined ? sanitizeProfileSidebarModules(payload.sidebarModules) : existingIdentity?.sidebarModules || [],
       mainColumnSplitModules: payload.mainColumnSplitModules !== undefined ? sanitizeProfileMainColumnSplitModules(payload.mainColumnSplitModules) : existingIdentity?.mainColumnSplitModules || [],
       mainColumnCompactModules: payload.mainColumnCompactModules !== undefined ? sanitizeProfileMainColumnCompactModules(payload.mainColumnCompactModules) : existingIdentity?.mainColumnCompactModules || [],
@@ -6120,6 +6130,7 @@ async function handleRequest(
         mediaEmbeds: payload.mediaEmbeds !== undefined ? sanitizeProfileMediaEmbeds(payload.mediaEmbeds) : existingIdentity?.mediaEmbeds || [],
         retroBlocks: payload.retroBlocks !== undefined ? sanitizeProfileRetroBlocks(payload.retroBlocks) : existingIdentity?.retroBlocks || [],
         moduleOrder: payload.moduleOrder !== undefined ? sanitizeProfileModuleOrder(payload.moduleOrder) : existingIdentity?.moduleOrder || sanitizeProfileModuleOrder(undefined),
+        heroModules: payload.heroModules !== undefined ? sanitizeProfileHeroModules(payload.heroModules) : existingIdentity?.heroModules || [],
         sidebarModules: payload.sidebarModules !== undefined ? sanitizeProfileSidebarModules(payload.sidebarModules) : existingIdentity?.sidebarModules || [],
         mainColumnSplitModules: payload.mainColumnSplitModules !== undefined ? sanitizeProfileMainColumnSplitModules(payload.mainColumnSplitModules) : existingIdentity?.mainColumnSplitModules || [],
         mainColumnCompactModules: payload.mainColumnCompactModules !== undefined ? sanitizeProfileMainColumnCompactModules(payload.mainColumnCompactModules) : existingIdentity?.mainColumnCompactModules || [],
@@ -6220,6 +6231,7 @@ async function handleRequest(
           mediaEmbeds: target.mediaEmbeds,
           retroBlocks: target.retroBlocks,
           moduleOrder: target.moduleOrder,
+          heroModules: target.heroModules,
           sidebarModules: target.sidebarModules,
           mainColumnSplitModules: target.mainColumnSplitModules,
           mainColumnCompactModules: target.mainColumnCompactModules,

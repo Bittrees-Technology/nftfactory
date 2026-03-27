@@ -1492,6 +1492,33 @@ button:disabled {
   padding-left: 18px;
 }
 
+.profileMyspaceHeroModules {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  margin-bottom: 12px;
+}
+
+.profileMyspaceHeroCallout {
+  padding: 12px;
+  border: 2px solid #0f2f77;
+  background: linear-gradient(180deg, rgba(255, 239, 184, 0.96), rgba(255, 255, 255, 0.95));
+  box-shadow: 4px 4px 0 rgba(15, 47, 119, 0.14);
+}
+
+.profileMyspaceHeroCallout h4 {
+  margin: 0 0 8px;
+  color: #0f2f77;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.8rem;
+}
+
+.profileMyspaceHeroCallout p {
+  margin: 0;
+  line-height: 1.5;
+}
+
 .profileMyspaceCustomHeader {
   display: flex;
   gap: 12px;
@@ -1965,6 +1992,12 @@ button:disabled {
   gap: 12px;
 }
 
+.profileStudioPreviewHeroModules {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
 .profileStudioPreviewHero {
   display: flex;
   justify-content: space-between;
@@ -2002,6 +2035,10 @@ button:disabled {
 
 .profileStudioPreviewModuleCard--compact {
   background: rgba(255, 247, 230, 0.98);
+}
+
+.profileStudioPreviewModuleCard--hero {
+  background: linear-gradient(180deg, rgba(255, 239, 184, 0.98), rgba(255, 255, 255, 0.96));
 }
 
 .profileMyspaceEmbedsGrid.profileMyspaceModuleCard--compact,
