@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
-import { buildIpfsAuthHeaders, buildIpfsVersionUrl, isPrivateOrLocalUrl } from "../../../../lib/ipfsUpload";
+import {
+  buildIpfsAuthHeaders,
+  buildIpfsVersionUrl,
+  getIpfsApiAuthMode,
+  isPrivateOrLocalUrl
+} from "../../../../lib/ipfsUpload";
 import { getLegacyChainPublicEnv, getRootPublicEnv, getScopedChainPublicEnv } from "../../../../lib/publicEnv";
 
 export const dynamic = "force-dynamic";
@@ -121,13 +126,15 @@ async function checkIpfs(): Promise<ServiceCheck> {
     };
   }
 
+  const authMode = getIpfsApiAuthMode(process.env);
+
   if (isPrivateOrLocalUrl(configuredUrl)) {
     return {
       label: "ipfs",
       url: maskUrl(configuredUrl),
       ok: false,
       status: null,
-      message: "Configured IPFS API URL is private/local and not reachable from a public deployment."
+      message: `Configured IPFS API URL is private/local and not reachable from a public deployment. (auth: ${authMode})`
     };
   }
 
@@ -144,7 +151,7 @@ async function checkIpfs(): Promise<ServiceCheck> {
       url: maskUrl(versionUrl),
       ok: response.ok,
       status: response.status,
-      message: response.ok ? "OK" : text || `HTTP ${response.status}`
+      message: response.ok ? `OK (auth: ${authMode})` : text || `HTTP ${response.status} (auth: ${authMode})`
     };
   } catch (error) {
     return {
@@ -152,7 +159,7 @@ async function checkIpfs(): Promise<ServiceCheck> {
       url: maskUrl(versionUrl),
       ok: false,
       status: null,
-      message: error instanceof Error ? error.message : "IPFS request failed."
+      message: error instanceof Error ? `${error.message} (auth: ${authMode})` : `IPFS request failed. (auth: ${authMode})`
     };
   }
 }

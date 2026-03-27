@@ -1,5 +1,10 @@
 type EnvLike = Record<string, string | undefined>;
 
+function isTruthyEnvFlag(value: string | undefined): boolean {
+  const normalized = String(value || "").trim().toLowerCase();
+  return normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on";
+}
+
 function isPrivateOrLocalHostname(hostname: string): boolean {
   const normalized = hostname.trim().toLowerCase();
   if (!normalized) {
@@ -70,12 +75,35 @@ export function hasIpfsApiAuthConfigured(env: EnvLike = process.env): boolean {
   return Boolean(username && password);
 }
 
+export function allowsUnauthenticatedPublicIpfsApi(env: EnvLike = process.env): boolean {
+  return isTruthyEnvFlag(env.ALLOW_PUBLIC_IPFS_API_WITHOUT_AUTH);
+}
+
+export function getIpfsApiAuthMode(env: EnvLike = process.env): "bearer" | "basic" | "public-override" | "none" {
+  const bearerToken = String(env.IPFS_API_BEARER_TOKEN || "").trim();
+  if (bearerToken) {
+    return "bearer";
+  }
+
+  const username = String(env.IPFS_API_BASIC_AUTH_USERNAME || "").trim();
+  const password = String(env.IPFS_API_BASIC_AUTH_PASSWORD || "").trim();
+  if (username && password) {
+    return "basic";
+  }
+
+  if (allowsUnauthenticatedPublicIpfsApi(env)) {
+    return "public-override";
+  }
+
+  return "none";
+}
+
 export function buildIpfsAuthRequirementError(urlLike: string): string {
   try {
     const url = new URL(urlLike);
-    return `Public IPFS API endpoint ${url.host} must be protected. Set IPFS_API_BEARER_TOKEN or both IPFS_API_BASIC_AUTH_USERNAME and IPFS_API_BASIC_AUTH_PASSWORD.`;
+    return `Public IPFS API endpoint ${url.host} must be protected. Prefer IPFS_API_BEARER_TOKEN, or set both IPFS_API_BASIC_AUTH_USERNAME and IPFS_API_BASIC_AUTH_PASSWORD. Use ALLOW_PUBLIC_IPFS_API_WITHOUT_AUTH=1 only if the endpoint is intentionally public.`;
   } catch {
-    return "Public IPFS API endpoint must be protected. Set IPFS_API_BEARER_TOKEN or both IPFS_API_BASIC_AUTH_USERNAME and IPFS_API_BASIC_AUTH_PASSWORD.";
+    return "Public IPFS API endpoint must be protected. Prefer IPFS_API_BEARER_TOKEN, or set both IPFS_API_BASIC_AUTH_USERNAME and IPFS_API_BASIC_AUTH_PASSWORD. Use ALLOW_PUBLIC_IPFS_API_WITHOUT_AUTH=1 only if the endpoint is intentionally public.";
   }
 }
 

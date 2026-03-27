@@ -15,6 +15,7 @@ Current live path:
 The deployment is healthy when all of the following are true:
 
 - `https://nftfactory.org/api/deploy/health` returns `ok: true`
+- the IPFS check message in that payload should include `auth: bearer` for a protected writable API, or `auth: public-override` when the deployment intentionally uses `ALLOW_PUBLIC_IPFS_API_WITHOUT_AUTH=1`
 - `https://ipfs.nftfactory.org/api/v0/version` returns `200`
 - local `http://127.0.0.1:5001/api/v0/version` returns `200`
 - the `cloudflared` user service is running

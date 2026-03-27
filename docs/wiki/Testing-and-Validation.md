@@ -117,6 +117,19 @@ Use this as the acceptance path:
 7. create or link a creator profile
 8. open the public profile route
 
+## 7. Post-deploy verification
+
+After Vercel finishes a production deploy, verify in this order:
+
+1. open `https://nftfactory.org/api/deploy/health`
+2. confirm the top-level payload returns `ok: true`
+3. confirm the `ipfs` check message includes `auth: bearer` when the writable API is protected, or `auth: public-override` when the deployment intentionally uses `ALLOW_PUBLIC_IPFS_API_WITHOUT_AUTH=1`
+4. confirm each configured indexer check reports `OK`
+5. open `/`, `/mint`, `/profile`, and one real `/profile/[name]` route in the browser
+6. if IPFS uploads are part of the deploy scope, perform one small mint-media upload through the live UI
+
+If step 3 is wrong, stop and fix env wiring before spending time debugging the frontend.
+
 ## Validation rhythm
 
 The intended order is:

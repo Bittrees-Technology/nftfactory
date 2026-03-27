@@ -8,6 +8,34 @@ NEXT_CONFIG="$WEB_DIR/next.config.ts"
 
 BLOCKERS=0
 
+has_rg() {
+  command -v rg >/dev/null 2>&1
+}
+
+search_ts_matches() {
+  local pattern="$1"
+  shift
+
+  if has_rg; then
+    rg -n "$pattern" "$@"
+    return
+  fi
+
+  grep -RInE --include='*.ts' --include='*.tsx' "$pattern" "$@"
+}
+
+search_file_matches() {
+  local pattern="$1"
+  local file_path="$2"
+
+  if has_rg; then
+    rg -n "$pattern" "$file_path"
+    return
+  fi
+
+  grep -nE "$pattern" "$file_path"
+}
+
 print_blocker() {
   local message="$1"
   echo "BLOCKER: $message"
@@ -34,7 +62,7 @@ if [ -n "$dynamic_route_matches" ]; then
   echo
 fi
 
-force_dynamic_matches="$(rg -n 'export const dynamic = \"force-dynamic\"' "$APP_DIR" -g '*.ts' -g '*.tsx' || true)"
+force_dynamic_matches="$(search_ts_matches 'export const dynamic = "force-dynamic"' "$APP_DIR" || true)"
 if [ -n "$force_dynamic_matches" ]; then
   echo "Force-dynamic pages/routes:"
   echo "$force_dynamic_matches" | sed "s#^$ROOT_DIR/##" | sed 's/^/  - /'
@@ -43,14 +71,14 @@ if [ -n "$force_dynamic_matches" ]; then
   echo
 fi
 
-if ! rg -n 'output:\s*"export"' "$NEXT_CONFIG" >/dev/null 2>&1; then
+if ! search_file_matches 'output:\s*"export"' "$NEXT_CONFIG" >/dev/null 2>&1; then
   print_blocker "next.config.ts does not enable static export output."
   echo
 fi
 
-if rg -n '/api/ipfs/metadata' "$WEB_DIR" >/dev/null 2>&1; then
+if grep -RIn --exclude-dir='.next-build' --exclude-dir='node_modules' '/api/ipfs/metadata' "$WEB_DIR" >/dev/null 2>&1; then
   echo "Detected IPFS upload dependency:"
-  rg -n '/api/ipfs/metadata' "$WEB_DIR" | sed "s#^$ROOT_DIR/##" | sed 's/^/  - /'
+  grep -RIn --exclude-dir='.next-build' --exclude-dir='node_modules' '/api/ipfs/metadata' "$WEB_DIR" | sed "s#^$ROOT_DIR/##" | sed 's/^/  - /'
   echo
   print_blocker "Mint flow depends on a server-side IPFS upload route. IPFS-hosted frontends cannot keep upload credentials private."
   echo

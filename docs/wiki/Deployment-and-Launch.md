@@ -34,7 +34,8 @@ Operational notes:
 
 - Vercel auto-deploys on push to `main`
 - `https://nftfactory.org/api/deploy/health` should be the first external health check
-- public `IPFS_API_URL` must stay authenticated
+- public `IPFS_API_URL` should stay bearer-protected by default
+- if the IPFS API endpoint is intentionally public, set `ALLOW_PUBLIC_IPFS_API_WITHOUT_AUTH=1` in Vercel so the production build and release checks allow it explicitly
 
 Current Sepolia split-registry deployment:
 
@@ -84,7 +85,7 @@ After deployment:
 - authorize shared mint contracts in `SubnameRegistrar` if they should record attribution
 - seed the moderator set in `ModeratorRegistry` if using the on-chain moderator path
 - update web and indexer env files to the exact deployed addresses
-- use `npm run print:deployment-env -- web` and `npm run print:deployment-env -- indexer` to scaffold the current app-wired Sepolia address set before filling RPC and indexer URL values
+- use `npm run print:deployment-env -- web` and `npm run print:deployment-env -- indexer` to scaffold the current app-wired Sepolia env blocks before filling RPC, indexer, and IPFS values
 
 ## Current service wiring
 
@@ -116,7 +117,7 @@ Before deployment or release validation:
 - [ ] `REGISTRY_ADDRESS` and `MARKETPLACE_ADDRESS` are set in the indexer env
 - [ ] `MODERATOR_REGISTRY_ADDRESS` is set if using on-chain moderator reads
 - [ ] `NEXT_PUBLIC_INDEXER_API_URL` points to a reachable host
-- [ ] IPFS upload service is configured (`IPFS_API_URL`, plus API auth for public endpoints)
+- [ ] IPFS upload service is configured (`IPFS_API_URL`, plus bearer auth for public endpoints, or `ALLOW_PUBLIC_IPFS_API_WITHOUT_AUTH=1` if the public endpoint is intentionally unauthenticated)
 - [ ] `https://nftfactory.org/api/deploy/health` returns `ok: true`
 
 ## Operational launch gates

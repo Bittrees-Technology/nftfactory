@@ -107,7 +107,9 @@ Practical ceiling today:
 Important caveat:
 
 - if the public `IPFS_API_URL` is exposed through a reverse proxy, tunnel, or gateway layer outside Kubo, that ingress may impose a lower upload/body-size or timeout limit than Kubo itself
-- if `IPFS_API_URL` is public, protect it with bearer auth or basic auth; do not expose the Kubo API unauthenticated
+- if `IPFS_API_URL` is public, protect it with a bearer token by default, using basic auth only as a fallback
+- if the endpoint is intentionally public, set `ALLOW_PUBLIC_IPFS_API_WITHOUT_AUTH=1` in the web deployment so build-time and release-time checks treat that exposure as deliberate rather than accidental
+- do not expose the raw Kubo API publicly unless that write surface is an intentional operational choice
 
 ## Upload failure triage
 

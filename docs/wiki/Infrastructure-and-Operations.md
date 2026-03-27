@@ -63,7 +63,7 @@ Run these from the project root:
 | `npm run typecheck:indexer` | Typecheck the indexer |
 | `npm run test:indexer` | Run indexer tests |
 | `npm run test:contracts` | Run contract tests |
-| `npm run print:deployment-env -- web` | Print web env exports from the checked-in deployment snapshot |
+| `npm run print:deployment-env -- web` | Print web env exports from the checked-in deployment snapshot, including IPFS placeholders |
 | `npm run print:deployment-env -- indexer` | Print indexer env exports from the checked-in deployment snapshot |
 | `npm run check:deployments` | Verify deployed code, ownership, and contract wiring against the current env or snapshot |
 | `npm run docs:contracts-deps` | Regenerate archived contract dependency output |
@@ -88,7 +88,9 @@ The web app currently reads these keys:
 - `NEXT_PUBLIC_ENS_NAME_WRAPPER_ADDRESS` (optional)
 - `NEXT_PUBLIC_ENS_ETH_REGISTRAR_CONTROLLER_ADDRESS` (needed for the real `.eth` registration flow)
 - `IPFS_API_URL` (server-side IPFS add endpoint for mint uploads)
-- `IPFS_API_BEARER_TOKEN` or `IPFS_API_BASIC_AUTH_USERNAME` + `IPFS_API_BASIC_AUTH_PASSWORD` (required when `IPFS_API_URL` is public)
+- `IPFS_API_BEARER_TOKEN` (recommended for the web -> IPFS service connection when `IPFS_API_URL` is public)
+- `IPFS_API_BASIC_AUTH_USERNAME` + `IPFS_API_BASIC_AUTH_PASSWORD` (fallback only when bearer auth is unavailable)
+- `ALLOW_PUBLIC_IPFS_API_WITHOUT_AUTH` (set to `1` only when the public IPFS API is intentionally unauthenticated)
 
 Note: `apps/web/.env.example` is not a complete list of every variable the current app can use.
 

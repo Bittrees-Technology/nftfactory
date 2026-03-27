@@ -5,7 +5,8 @@ import {
   buildIpfsAuthRequirementError,
   buildIpfsReachabilityError,
   hasIpfsApiAuthConfigured,
-  isPrivateOrLocalUrl
+  isPrivateOrLocalUrl,
+  allowsUnauthenticatedPublicIpfsApi
 } from "./lib/ipfsUpload";
 
 const primaryChainId = process.env.NEXT_PUBLIC_PRIMARY_CHAIN_ID || process.env.NEXT_PUBLIC_CHAIN_ID || "1";
@@ -64,7 +65,7 @@ if (process.env.NODE_ENV === "production") {
       throw new Error("Missing required env var for production build: IPFS_API_URL");
     }
 
-    if (!isPrivateOrLocalUrl(ipfsApiUrl) && !hasIpfsApiAuthConfigured(process.env)) {
+    if (!isPrivateOrLocalUrl(ipfsApiUrl) && !hasIpfsApiAuthConfigured(process.env) && !allowsUnauthenticatedPublicIpfsApi(process.env)) {
       throw new Error(buildIpfsAuthRequirementError(ipfsApiUrl));
     }
 

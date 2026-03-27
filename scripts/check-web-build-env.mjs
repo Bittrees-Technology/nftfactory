@@ -22,6 +22,10 @@ function isPrivateOrLocalUrl(value) {
     || /^https?:\/\/172\.([1][6-9]|2[0-9]|3[0-1])\.[0-9]+\.[0-9]+(:|\/|$)/.test(value);
 }
 
+function isTruthyEnvFlag(value) {
+  return ["1", "true", "yes", "on"].includes(String(value || "").trim().toLowerCase());
+}
+
 function parseEnabledChainIds() {
   const raw = String(process.env.NEXT_PUBLIC_ENABLED_CHAIN_IDS || "").trim();
   if (!raw) return [PRIMARY_CHAIN_ID].filter(Boolean);
@@ -67,6 +71,11 @@ function validate() {
       missing.push("IPFS_API_URL");
     } else if (isPrivateOrLocalUrl(ipfsApiUrl)) {
       warnings.push(`IPFS_API_URL is private/local: ${ipfsApiUrl}`);
+    } else if (!isTruthyEnvFlag(process.env.ALLOW_PUBLIC_IPFS_API_WITHOUT_AUTH)
+      && !String(process.env.IPFS_API_BEARER_TOKEN || "").trim()
+      && !(String(process.env.IPFS_API_BASIC_AUTH_USERNAME || "").trim()
+        && String(process.env.IPFS_API_BASIC_AUTH_PASSWORD || "").trim())) {
+      warnings.push("Public IPFS_API_URL is unauthenticated. Set IPFS_API_BEARER_TOKEN, both IPFS_API_BASIC_AUTH variables, or ALLOW_PUBLIC_IPFS_API_WITHOUT_AUTH=1.");
     }
   }
 

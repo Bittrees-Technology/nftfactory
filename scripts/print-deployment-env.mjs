@@ -35,7 +35,12 @@ const webEntries = [
   [`NEXT_PUBLIC_SUBNAME_REGISTRAR_ADDRESS_${chainId}`, contracts.subnameRegistrar || ''],
   [`NEXT_PUBLIC_FACTORY_ADDRESS_${chainId}`, contracts.factory || ''],
   [`NEXT_PUBLIC_RPC_URL_${chainId}`, ''],
-  [`NEXT_PUBLIC_INDEXER_API_URL_${chainId}`, '']
+  [`NEXT_PUBLIC_INDEXER_API_URL_${chainId}`, ''],
+  ['IPFS_API_URL', ''],
+  ['IPFS_API_BEARER_TOKEN', ''],
+  ['IPFS_API_BASIC_AUTH_USERNAME', ''],
+  ['IPFS_API_BASIC_AUTH_PASSWORD', ''],
+  ['ALLOW_PUBLIC_IPFS_API_WITHOUT_AUTH', '']
 ];
 
 const indexerEntries = [

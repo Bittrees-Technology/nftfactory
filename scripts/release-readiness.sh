@@ -93,6 +93,20 @@ fi
 
 echo "Environment presence check passed."
 
+normalize_truthy_env_flag() {
+  local value="$(echo "${1:-}" | tr "[:upper:]" "[:lower:]")"
+  [[ "$value" == "1" || "$value" == "true" || "$value" == "yes" || "$value" == "on" ]]
+}
+
+ipfs_auth_mode="none"
+if [[ -n "${IPFS_API_BEARER_TOKEN:-}" ]]; then
+  ipfs_auth_mode="bearer"
+elif [[ -n "${IPFS_API_BASIC_AUTH_USERNAME:-}" && -n "${IPFS_API_BASIC_AUTH_PASSWORD:-}" ]]; then
+  ipfs_auth_mode="basic"
+elif normalize_truthy_env_flag "${ALLOW_PUBLIC_IPFS_API_WITHOUT_AUTH:-}"; then
+  ipfs_auth_mode="public-override"
+fi
+
 is_private_or_local_url() {
   local value="$1"
   [[ -z "$value" ]] && return 1
@@ -112,6 +126,7 @@ is_private_or_local_url() {
 }
 
 echo "Environment reachability sanity"
+echo "IPFS auth mode: ${ipfs_auth_mode}"
 reachability_failed=0
 
 if is_private_or_local_url "${IPFS_API_URL:-}"; then
@@ -120,8 +135,9 @@ if is_private_or_local_url "${IPFS_API_URL:-}"; then
 fi
 
 if [[ -n "${IPFS_API_URL:-}" ]] && ! is_private_or_local_url "${IPFS_API_URL:-}"; then
-  if [[ -z "${IPFS_API_BEARER_TOKEN:-}" && ( -z "${IPFS_API_BASIC_AUTH_USERNAME:-}" || -z "${IPFS_API_BASIC_AUTH_PASSWORD:-}" ) ]]; then
-    echo "Public IPFS_API_URL requires IPFS_API_BEARER_TOKEN or both IPFS_API_BASIC_AUTH_USERNAME and IPFS_API_BASIC_AUTH_PASSWORD"
+  allow_public_ipfs_without_auth="$(echo "${ALLOW_PUBLIC_IPFS_API_WITHOUT_AUTH:-}" | tr "[:upper:]" "[:lower:]")"
+  if [[ "$allow_public_ipfs_without_auth" != "1" && "$allow_public_ipfs_without_auth" != "true" && "$allow_public_ipfs_without_auth" != "yes" && "$allow_public_ipfs_without_auth" != "on" ]]     && [[ -z "${IPFS_API_BEARER_TOKEN:-}" && ( -z "${IPFS_API_BASIC_AUTH_USERNAME:-}" || -z "${IPFS_API_BASIC_AUTH_PASSWORD:-}" ) ]]; then
+    echo "Public IPFS_API_URL requires IPFS_API_BEARER_TOKEN, both IPFS_API_BASIC_AUTH variables, or ALLOW_PUBLIC_IPFS_API_WITHOUT_AUTH=1"
     reachability_failed=1
   fi
 fi

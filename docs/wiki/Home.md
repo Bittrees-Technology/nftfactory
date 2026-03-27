@@ -17,7 +17,7 @@ The current live product is a Sepolia-first creator flow with these active surfa
    - render the public creator page at `/profile/[name]`
 4. **Operations**
    - the indexer mirrors chain state and serves read APIs
-   - deploy health is exposed through `/api/deploy/health`
+   - deploy health is exposed through `/api/deploy/health` and reports the live IPFS auth posture
    - wiki docs are maintained in `docs/wiki/`
 
 ## Release focus
@@ -52,7 +52,7 @@ Active work:
 | [Marketplace Indexer and API Plan](./Marketplace-V2-Indexer-and-API-Plan.md) | Backend-first schema, sync, and API plan for marketplace listings and offers |
 | [UI Lockdown Plan](./UI-Lockdown-Plan.md) | Page-level lock criteria for Mint, List, Discover, and Profile |
 | [Upgrade Runbook](./Upgrade-Runbook.md) | UUPS upgrade path for creator-owned collections |
-| [Testing and Validation](./Testing-and-Validation.md) | Practical validation order for contracts, web, and indexer |
+| [Testing and Validation](./Testing-and-Validation.md) | Practical validation order for contracts, web, indexer, and post-deploy checks |
 
 ## Reference
 

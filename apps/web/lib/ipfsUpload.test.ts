@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   buildIpfsAddUrl,
+  allowsUnauthenticatedPublicIpfsApi,
   buildIpfsAuthRequirementError,
+  getIpfsApiAuthMode,
   buildIpfsAuthHeaders,
   buildIpfsReachabilityError,
   buildIpfsTerminatedError,
@@ -62,6 +64,19 @@ describe("ipfsUpload", () => {
     );
   });
 
+  it("detects whether public IPFS auth can be intentionally bypassed", () => {
+    expect(allowsUnauthenticatedPublicIpfsApi({ ALLOW_PUBLIC_IPFS_API_WITHOUT_AUTH: "1" })).toBe(true);
+    expect(allowsUnauthenticatedPublicIpfsApi({ ALLOW_PUBLIC_IPFS_API_WITHOUT_AUTH: "true" })).toBe(true);
+    expect(allowsUnauthenticatedPublicIpfsApi({})).toBe(false);
+  });
+
+  it("reports the effective IPFS API auth mode", () => {
+    expect(getIpfsApiAuthMode({ IPFS_API_BEARER_TOKEN: "token" })).toBe("bearer");
+    expect(getIpfsApiAuthMode({ IPFS_API_BASIC_AUTH_USERNAME: "admin", IPFS_API_BASIC_AUTH_PASSWORD: "secret" })).toBe("basic");
+    expect(getIpfsApiAuthMode({ ALLOW_PUBLIC_IPFS_API_WITHOUT_AUTH: "1" })).toBe("public-override");
+    expect(getIpfsApiAuthMode({})).toBe("none");
+  });
+
   it("detects whether IPFS API auth is configured", () => {
     expect(hasIpfsApiAuthConfigured({ IPFS_API_BEARER_TOKEN: "token" })).toBe(true);
     expect(
@@ -101,6 +116,8 @@ describe("ipfsUpload", () => {
   it("builds a clear auth requirement error", () => {
     expect(buildIpfsAuthRequirementError("https://ipfs.example.com/api/v0")).toContain("ipfs.example.com");
     expect(buildIpfsAuthRequirementError("https://ipfs.example.com/api/v0")).toContain("IPFS_API_BEARER_TOKEN");
+    expect(buildIpfsAuthRequirementError("https://ipfs.example.com/api/v0")).toContain("Prefer IPFS_API_BEARER_TOKEN");
+    expect(buildIpfsAuthRequirementError("https://ipfs.example.com/api/v0")).toContain("ALLOW_PUBLIC_IPFS_API_WITHOUT_AUTH=1");
   });
 
   it("builds a clear terminated error", () => {
