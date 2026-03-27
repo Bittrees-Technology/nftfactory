@@ -146,7 +146,7 @@ type ProfileMediaEmbed = {
 };
 
 type ProfileRetroBlock = {
-  kind: "text" | "image" | "links" | "list" | "embed";
+  kind: "text" | "image" | "links" | "list" | "embed" | "marquee" | "badges" | "divider";
   title: string;
   content: string | null;
   imageUrl: string | null;
@@ -1443,7 +1443,7 @@ function sanitizeProfileRetroBlocks(value: ProfileRetroBlock[] | undefined, maxI
   return value
     .map((item) => {
       const kind = String(item?.kind || "").trim().toLowerCase();
-      if (kind !== "text" && kind !== "image" && kind !== "links" && kind !== "list" && kind !== "embed") return null;
+      if (kind !== "text" && kind !== "image" && kind !== "links" && kind !== "list" && kind !== "embed" && kind !== "marquee" && kind !== "badges" && kind !== "divider") return null;
       return {
         kind,
         title: sanitizeProfileText(item?.title, 80) || "",
@@ -1455,10 +1455,11 @@ function sanitizeProfileRetroBlocks(value: ProfileRetroBlock[] | undefined, maxI
     })
     .filter((item): item is ProfileRetroBlock => {
       if (!item || !item.title) return false;
-      if (item.kind === "text") return Boolean(item.content);
+      if (item.kind === "text" || item.kind === "marquee") return Boolean(item.content);
+      if (item.kind === "divider") return true;
       if (item.kind === "image") return Boolean(item.imageUrl);
       if (item.kind === "embed") return Boolean(item.embedUrl);
-      if (item.kind === "list") return item.links.length > 0;
+      if (item.kind === "list" || item.kind === "badges") return item.links.length > 0;
       return item.links.length > 0;
     })
     .slice(0, maxItems);

@@ -154,10 +154,10 @@ function parseRetroBlocksInput(value: string): ApiProfileRetroBlock[] {
     const kind = String(lines[0] || "").replace(/^Type:\s*/i, "").trim().toLowerCase();
     const title = String(lines[1] || "").replace(/^Title:\s*/i, "").trim();
     const bodyLines = lines.slice(2).map((line) => line.trim()).filter(Boolean);
-    if (!title || (kind !== "text" && kind !== "image" && kind !== "links" && kind !== "list" && kind !== "embed")) continue;
-    if (kind === "text") {
+    if (!title || (kind !== "text" && kind !== "image" && kind !== "links" && kind !== "list" && kind !== "embed" && kind !== "marquee" && kind !== "badges" && kind !== "divider")) continue;
+    if (kind === "text" || kind === "marquee") {
       const content = bodyLines.join("\n").trim();
-      if (content) blocks.push({ kind: "text", title, content, imageUrl: null, embedUrl: null, links: [] });
+      if (content) blocks.push({ kind, title, content, imageUrl: null, embedUrl: null, links: [] });
       continue;
     }
     if (kind === "image") {
@@ -170,8 +170,12 @@ function parseRetroBlocksInput(value: string): ApiProfileRetroBlock[] {
       blocks.push({ kind: "links", title, content: null, imageUrl: null, embedUrl: null, links: bodyLines });
       continue;
     }
-    if (kind === "list" && bodyLines.length > 0) {
-      blocks.push({ kind: "list", title, content: null, imageUrl: null, embedUrl: null, links: bodyLines });
+    if ((kind === "list" || kind === "badges") && bodyLines.length > 0) {
+      blocks.push({ kind, title, content: null, imageUrl: null, embedUrl: null, links: bodyLines });
+      continue;
+    }
+    if (kind === "divider") {
+      blocks.push({ kind: "divider", title, content: bodyLines.join("\n").trim() || null, imageUrl: null, embedUrl: null, links: [] });
       continue;
     }
     if (kind === "embed") {
@@ -188,15 +192,17 @@ function formatRetroBlocksInput(blocks: ApiProfileRetroBlock[] | null | undefine
   return blocks
     .map((block) => {
       const lines = ["Type: " + block.kind, "Title: " + block.title];
-      if (block.kind === "text" && block.content) {
+      if ((block.kind === "text" || block.kind === "marquee") && block.content) {
         lines.push(block.content);
+      } else if (block.kind === "divider") {
+        if (block.content) lines.push(block.content);
       } else if (block.kind === "image") {
         if (block.imageUrl) lines.push(block.imageUrl);
         if (block.content) lines.push(block.content);
       } else if (block.kind === "embed" && block.embedUrl) {
         lines.push(block.embedUrl);
         if (block.content) lines.push(block.content);
-      } else if ((block.kind === "links" || block.kind === "list") && block.links.length > 0) {
+      } else if ((block.kind === "links" || block.kind === "list" || block.kind === "badges") && block.links.length > 0) {
         lines.push(...block.links);
       }
       return lines.join("\n");
@@ -228,6 +234,14 @@ const MYSPACE_STARTER_RETRO_BLOCKS: ApiProfileRetroBlock[] = [
     imageUrl: null,
     embedUrl: null,
     links: ["https://forum.example.com", "https://playlist.example.com"]
+  },
+  {
+    kind: "badges",
+    title: "Blinkies",
+    content: null,
+    imageUrl: null,
+    embedUrl: null,
+    links: ["online now", "glitter approved", "top 8 survivor"]
   }
 ];
 
@@ -295,6 +309,39 @@ const MYSPACE_RETRO_BLOCK_TEMPLATES: Array<{ label: string; block: ApiProfileRet
       content: "Autoplay not included, unfortunately.",
       imageUrl: null,
       embedUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      links: []
+    }
+  },
+  {
+    label: "Marquee",
+    block: {
+      kind: "marquee",
+      title: "Scrolling Note",
+      content: "welcome 2 my page :: leave a comment :: glitter forever",
+      imageUrl: null,
+      embedUrl: null,
+      links: []
+    }
+  },
+  {
+    label: "Badges",
+    block: {
+      kind: "badges",
+      title: "Blinkies",
+      content: null,
+      imageUrl: null,
+      embedUrl: null,
+      links: ["online now", "scene archive", "web revivalist"]
+    }
+  },
+  {
+    label: "Divider",
+    block: {
+      kind: "divider",
+      title: "Glitter Break",
+      content: "***************",
+      imageUrl: null,
+      embedUrl: null,
       links: []
     }
   }
@@ -1851,6 +1898,8 @@ export default function ProfileClient({ name }: { name: string }) {
                   <h4>{block.title}</h4>
                   <span className="profileMyspaceRetroType">{block.kind}</span>
                   {block.kind === "text" ? <p>{block.content || ""}</p> : null}
+                  {block.kind === "marquee" ? <div className="profileMyspaceRetroMarquee"><span>{block.content || ""}</span></div> : null}
+                  {block.kind === "divider" ? <div className="profileMyspaceRetroDivider"><span>{block.content || "* * *"}</span></div> : null}
                   {block.kind === "image" ? (
                     <>
                       {block.imageUrl ? <img src={block.imageUrl} alt={block.title} /> : null}
@@ -1890,6 +1939,13 @@ export default function ProfileClient({ name }: { name: string }) {
                         <li key={item}>{item}</li>
                       ))}
                     </ol>
+                  ) : null}
+                  {block.kind === "badges" ? (
+                    <div className="profileMyspaceRetroBadgeRow">
+                      {block.links.map((item) => (
+                        <span key={item} className="profileMyspaceRetroBadge">{item}</span>
+                      ))}
+                    </div>
                   ) : null}
                 </section>
               )) : (
@@ -2057,11 +2113,11 @@ export default function ProfileClient({ name }: { name: string }) {
                       <section key={`${block.kind}:${block.title}:${index}`} className="profileMyspaceRetroCard">
                         <h4>{block.title}</h4>
                         <span className="profileMyspaceRetroType">{block.kind}</span>
-                        {block.kind === "text" ? <p>{block.content || ""}</p> : null}
+                        {block.kind === "text" ? <p>{block.content || ""}</p> : null}{block.kind === "marquee" ? <div className="profileMyspaceRetroMarquee"><span>{block.content || ""}</span></div> : null}{block.kind === "divider" ? <div className="profileMyspaceRetroDivider"><span>{block.content || "* * *"}</span></div> : null}
                         {block.kind === "image" ? <>{block.imageUrl ? <img src={block.imageUrl} alt={block.title} /> : null}{block.content ? <p>{block.content}</p> : null}</> : null}
                         {block.kind === "embed" ? <>{block.embedView?.embedUrl ? <iframe title={block.title} src={block.embedView.embedUrl} loading="lazy" allow={block.embedView.kind === "youtube" ? "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" : "autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"} allowFullScreen={block.embedView.kind === "youtube"} referrerPolicy="strict-origin-when-cross-origin" className="profileMyspaceRetroEmbedFrame" /> : block.embedUrl ? <a href={block.embedUrl} target="_blank" rel="noreferrer" className="mono">{block.embedUrl}</a> : null}{block.content ? <p>{block.content}</p> : null}</> : null}
                         {block.kind === "links" ? <ul className="profileMyspaceRetroLinks">{block.links.map((link) => (<li key={link}><a href={link} target="_blank" rel="noreferrer" className="mono">{link}</a></li>))}</ul> : null}
-                        {block.kind === "list" ? <ol className="profileMyspaceRetroListItems">{block.links.map((item) => (<li key={item}>{item}</li>))}</ol> : null}
+                        {block.kind === "list" ? <ol className="profileMyspaceRetroListItems">{block.links.map((item) => (<li key={item}>{item}</li>))}</ol> : null}{block.kind === "badges" ? <div className="profileMyspaceRetroBadgeRow">{block.links.map((item) => (<span key={item} className="profileMyspaceRetroBadge">{item}</span>))}</div> : null}
                       </section>
                     )) : <section className="profileMyspaceRetroCard"><h4>Retro Blocks</h4><p>No structured retro blocks pinned yet.</p></section>}
                   </div> : null}
@@ -2727,7 +2783,7 @@ Playlist | https://open.spotify.com/playlist/..." />
                         <textarea
                           value={editRetroBlocksText}
                           onChange={(e) => setEditRetroBlocksText(e.target.value)}
-                          placeholder={"Type: text\nTitle: Latest Bulletin\nReworking this profile to feel like 2006 again.\n\nType: image\nTitle: Moodboard\nhttps://images.example.com/moodboard.jpg\nGlitter assets only.\n\nType: links\nTitle: Daily Clicks\nhttps://forum.example.com\nhttps://playlist.example.com\n\nType: list\nTitle: Weekend Agenda\nBurn CDs\nEdit glitter GIFs\nRank top 8 again"}
+                          placeholder={"Type: text\nTitle: Latest Bulletin\nReworking this profile to feel like 2006 again.\n\nType: marquee\nTitle: Scrolling Note\nwelcome 2 my page :: leave a comment :: glitter forever\n\nType: badges\nTitle: Blinkies\nonline now\nscene archive\nweb revivalist\n\nType: divider\nTitle: Glitter Break\n***************"}
                         />
                       </label>
                       <label>

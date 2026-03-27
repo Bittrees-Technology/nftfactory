@@ -1829,6 +1829,56 @@ button:disabled {
   margin-top: 6px;
 }
 
+.profileMyspaceRetroMarquee {
+  overflow: hidden;
+  border: 1px dashed rgba(15, 47, 119, 0.24);
+  background: linear-gradient(90deg, rgba(255, 243, 196, 0.95), rgba(255, 255, 255, 0.9));
+  padding: 8px 10px;
+  white-space: nowrap;
+}
+
+.profileMyspaceRetroMarquee span {
+  display: inline-block;
+  padding-left: 100%;
+  animation: profile-retro-marquee 14s linear infinite;
+}
+
+.profileMyspaceRetroDivider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 0 2px;
+  color: #8b1e3f;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  font-size: 0.72rem;
+}
+
+.profileMyspaceRetroBadgeRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.profileMyspaceRetroBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 8px;
+  border: 1px solid #0f2f77;
+  background: linear-gradient(180deg, #fff3c4, #ffd9ef);
+  color: #8b1e3f;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  box-shadow: 2px 2px 0 rgba(15, 47, 119, 0.1);
+}
+
+@keyframes profile-retro-marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-100%); }
+}
+
 
 .profileStudioStarterBar {
   display: flex;
