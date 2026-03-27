@@ -300,9 +300,42 @@ const MYSPACE_RETRO_BLOCK_TEMPLATES: Array<{ label: string; block: ApiProfileRet
   }
 ];
 
+const MYSPACE_SIDEBAR_FACT_TEMPLATES = [
+  { label: "Mood", value: { label: "Mood", value: "Chronically online" } },
+  { label: "Location", value: { label: "Location", value: "Top 8 HQ" } },
+  { label: "Status", value: { label: "Status", value: "Rebuilding this page live" } }
+];
+
+const MYSPACE_MEDIA_EMBED_TEMPLATES = [
+  { label: "YouTube", value: { title: "Favorite Video", url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ" } },
+  { label: "Spotify", value: { title: "Profile Playlist", url: "https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M" } },
+  { label: "Reference Link", value: { title: "Daily Site", url: "https://forum.example.com" } }
+];
+
+const MYSPACE_CUSTOM_BOX_TEMPLATES = [
+  { label: "Shoutouts", value: { title: "Shoutouts", content: "The friends keeping this page weird and alive." } },
+  { label: "Favorites", value: { title: "Favorite Movies", content: "Hackers, Ghost World, Blade Runner" } },
+  { label: "Now", value: { title: "Latest Obsession", content: "Collecting weird internet relics." } }
+];
+
 function appendRetroBlockTemplate(value: string, block: ApiProfileRetroBlock): string {
   const next = [...parseRetroBlocksInput(value), block];
   return formatRetroBlocksInput(next);
+}
+
+function appendSidebarFactTemplate(value: string, fact: { label: string; value: string }): string {
+  const next = [...parseSidebarFactsInput(value), fact];
+  return formatSidebarFactsInput(next);
+}
+
+function appendMediaEmbedTemplate(value: string, embed: { title: string; url: string }): string {
+  const next = [...parseMediaEmbedsInput(value), embed];
+  return formatMediaEmbedsInput(next);
+}
+
+function appendCustomBoxTemplate(value: string, box: { title: string; content: string }): string {
+  const next = [...parseCustomBoxesInput(value), box];
+  return formatCustomBoxesInput(next);
 }
 
 type ProfileMediaEmbedView = {
@@ -2451,6 +2484,20 @@ export default function ProfileClient({ name }: { name: string }) {
                       </label>
                       <label>
                         Sidebar facts (one per line as Label: Value)
+                        <div className="profileStudioTemplateGroup">
+                          <span className="hint">Quick insert templates</span>
+                          <div className="profileStudioTemplateButtons">
+                            {MYSPACE_SIDEBAR_FACT_TEMPLATES.map((template) => (
+                              <button
+                                key={template.label}
+                                type="button"
+                                onClick={() => setEditSidebarFactsText((current) => appendSidebarFactTemplate(current, template.value))}
+                              >
+                                Add {template.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
                         <textarea value={editSidebarFactsText} onChange={(e) => setEditSidebarFactsText(e.target.value)} placeholder="Mood: Chronically online
 Location: Terminal tab
 Occupation: Pixel archivist" />
@@ -2482,6 +2529,20 @@ instant follow" />
                       </label>
                       <label>
                         Media embeds (one per line as Title | URL)
+                        <div className="profileStudioTemplateGroup">
+                          <span className="hint">Quick insert templates</span>
+                          <div className="profileStudioTemplateButtons">
+                            {MYSPACE_MEDIA_EMBED_TEMPLATES.map((template) => (
+                              <button
+                                key={template.label}
+                                type="button"
+                                onClick={() => setEditMediaEmbedsText((current) => appendMediaEmbedTemplate(current, template.value))}
+                              >
+                                Add {template.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
                         <textarea value={editMediaEmbedsText} onChange={(e) => setEditMediaEmbedsText(e.target.value)} placeholder="Favorite Video | https://www.youtube.com/watch?v=dQw4w9WgXcQ
 Playlist | https://open.spotify.com/playlist/..." />
                       </label>
@@ -2588,6 +2649,20 @@ collector core" />
                       </div>
                       <label>
                         Custom boxes
+                        <div className="profileStudioTemplateGroup">
+                          <span className="hint">Quick insert templates</span>
+                          <div className="profileStudioTemplateButtons">
+                            {MYSPACE_CUSTOM_BOX_TEMPLATES.map((template) => (
+                              <button
+                                key={template.label}
+                                type="button"
+                                onClick={() => setEditCustomBoxesText((current) => appendCustomBoxTemplate(current, template.value))}
+                              >
+                                Add {template.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
                         <textarea
                           value={editCustomBoxesText}
                           onChange={(e) => setEditCustomBoxesText(e.target.value)}
