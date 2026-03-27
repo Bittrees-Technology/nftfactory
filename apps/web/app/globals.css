@@ -1890,6 +1890,14 @@ button:disabled {
   align-content: start;
 }
 
+.profileMyspaceModuleCard--wide {
+  grid-column: 1 / -1;
+}
+
+.profileMyspaceModuleCard--split {
+  grid-column: span 1;
+}
+
 .profileMyspaceEmbedsGrid--sidebar,
 .profileMyspaceRetroGrid--sidebar,
 .profileMyspaceBoxesGrid--sidebar {
@@ -1918,6 +1926,10 @@ button:disabled {
   .profileMyspaceModuleLayout {
     grid-template-columns: minmax(0, 1.5fr) minmax(260px, 0.8fr);
     align-items: start;
+  }
+
+  .profileMyspaceModuleMain {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -1971,6 +1983,10 @@ button:disabled {
   box-shadow: 4px 4px 0 rgba(15, 47, 119, 0.12);
 }
 
+.profileStudioPreviewModuleCard--split {
+  background: rgba(244, 249, 255, 0.96);
+}
+
 .profileStudioPreviewModuleCard p {
   margin: 0;
   line-height: 1.5;
@@ -1984,6 +2000,18 @@ button:disabled {
   .profileStudioPreviewColumns {
     grid-template-columns: minmax(0, 1.5fr) minmax(260px, 0.8fr);
     align-items: start;
+  }
+
+  .profileStudioPreviewMain {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .profileStudioPreviewModuleCard--split {
+    grid-column: span 1;
+  }
+
+  .profileStudioPreviewModuleCard:not(.profileStudioPreviewModuleCard--split) {
+    grid-column: 1 / -1;
   }
 }
 

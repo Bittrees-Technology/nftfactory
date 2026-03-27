@@ -90,6 +90,7 @@ type ProfileLinkPayload = {
   retroBlocks?: ProfileRetroBlock[];
   moduleOrder?: string[];
   sidebarModules?: string[];
+  mainColumnSplitModules?: string[];
   stamps?: string[];
   customBoxes?: ProfileCustomBox[];
   bannerUrl?: string;
@@ -171,6 +172,7 @@ type ProfileRecord = {
   retroBlocks: ProfileRetroBlock[];
   moduleOrder: string[];
   sidebarModules: string[];
+  mainColumnSplitModules: string[];
   stamps: string[];
   customBoxes: ProfileCustomBox[];
   bannerUrl: string | null;
@@ -1470,6 +1472,12 @@ function sanitizeProfileSidebarModules(value: string[] | undefined): string[] {
   return Array.from(new Set(normalized));
 }
 
+function sanitizeProfileMainColumnSplitModules(value: string[] | undefined): string[] {
+  const allowed = new Set(["media", "retro", "boxes", "guestbook", "custom"]);
+  const normalized = Array.isArray(value) ? value.map((item) => String(item || "").trim().toLowerCase()).filter((item) => allowed.has(item)) : [];
+  return Array.from(new Set(normalized));
+}
+
 async function readProfileRecords(): Promise<ProfileRecord[]> {
   try {
     const raw = await readFile(PROFILE_FILE, "utf8");
@@ -1502,6 +1510,7 @@ async function readProfileRecords(): Promise<ProfileRecord[]> {
           retroBlocks: sanitizeProfileRetroBlocks(item.retroBlocks),
           moduleOrder: sanitizeProfileModuleOrder(item.moduleOrder),
           sidebarModules: sanitizeProfileSidebarModules(item.sidebarModules),
+          mainColumnSplitModules: sanitizeProfileMainColumnSplitModules(item.mainColumnSplitModules),
           topFriends: sanitizeProfileList(item.topFriends, 8, 80),
           stamps: sanitizeProfileList(item.stamps, 24, 48),
           testimonials: sanitizeProfileList(item.testimonials, 12, 280),
@@ -6062,6 +6071,7 @@ async function handleRequest(
       retroBlocks: payload.retroBlocks !== undefined ? sanitizeProfileRetroBlocks(payload.retroBlocks) : existingIdentity?.retroBlocks || [],
       moduleOrder: payload.moduleOrder !== undefined ? sanitizeProfileModuleOrder(payload.moduleOrder) : existingIdentity?.moduleOrder || sanitizeProfileModuleOrder(undefined),
       sidebarModules: payload.sidebarModules !== undefined ? sanitizeProfileSidebarModules(payload.sidebarModules) : existingIdentity?.sidebarModules || [],
+      mainColumnSplitModules: payload.mainColumnSplitModules !== undefined ? sanitizeProfileMainColumnSplitModules(payload.mainColumnSplitModules) : existingIdentity?.mainColumnSplitModules || [],
       topFriends: sanitizeProfileList(payload.topFriends, 8, 80).length > 0 ? sanitizeProfileList(payload.topFriends, 8, 80) : existingIdentity?.topFriends || [],
       testimonials: sanitizeProfileList(payload.testimonials, 12, 280).length > 0 ? sanitizeProfileList(payload.testimonials, 12, 280) : existingIdentity?.testimonials || [],
       profileSongUrl: sanitizeProfileUrl(payload.profileSongUrl) || existingIdentity?.profileSongUrl || null,
@@ -6101,6 +6111,7 @@ async function handleRequest(
         retroBlocks: payload.retroBlocks !== undefined ? sanitizeProfileRetroBlocks(payload.retroBlocks) : existingIdentity?.retroBlocks || [],
         moduleOrder: payload.moduleOrder !== undefined ? sanitizeProfileModuleOrder(payload.moduleOrder) : existingIdentity?.moduleOrder || sanitizeProfileModuleOrder(undefined),
         sidebarModules: payload.sidebarModules !== undefined ? sanitizeProfileSidebarModules(payload.sidebarModules) : existingIdentity?.sidebarModules || [],
+        mainColumnSplitModules: payload.mainColumnSplitModules !== undefined ? sanitizeProfileMainColumnSplitModules(payload.mainColumnSplitModules) : existingIdentity?.mainColumnSplitModules || [],
         topFriends: sanitizeProfileList(payload.topFriends, 8, 80).length > 0 ? sanitizeProfileList(payload.topFriends, 8, 80) : existingIdentity?.topFriends || [],
         testimonials: sanitizeProfileList(payload.testimonials, 12, 280).length > 0 ? sanitizeProfileList(payload.testimonials, 12, 280) : existingIdentity?.testimonials || [],
         profileSongUrl: sanitizeProfileUrl(payload.profileSongUrl) || existingIdentity?.profileSongUrl || null,
@@ -6199,6 +6210,7 @@ async function handleRequest(
           retroBlocks: target.retroBlocks,
           moduleOrder: target.moduleOrder,
           sidebarModules: target.sidebarModules,
+          mainColumnSplitModules: target.mainColumnSplitModules,
           stamps: target.stamps,
           customBoxes: target.customBoxes,
           bannerUrl: target.bannerUrl,
