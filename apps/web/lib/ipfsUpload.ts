@@ -1,5 +1,21 @@
 type EnvLike = Record<string, string | undefined>;
 
+export function normalizeIpfsCid(value: string): string {
+  return String(value || "")
+    .trim()
+    .replace(/^ipfs:\/\//, "")
+    .replace(/^\/+/, "")
+    .replace(/^ipfs\/+/, "")
+    .trim();
+}
+
+export function buildGatewayUrl(input: { gatewayBaseUrl: string; cid: string; path?: string }): string {
+  const normalizedCid = normalizeIpfsCid(input.cid);
+  const normalizedBaseUrl = input.gatewayBaseUrl.replace(/\/+$/, "");
+  const suffix = input.path ? `/${input.path.replace(/^\/+/, "")}` : "";
+  return `${normalizedBaseUrl}/ipfs/${normalizedCid}${suffix}`;
+}
+
 function isTruthyEnvFlag(value: string | undefined): boolean {
   const normalized = String(value || "").trim().toLowerCase();
   return normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on";

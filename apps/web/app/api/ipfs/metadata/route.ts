@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { buildGatewayUrl } from "../../../../../../ipfs-evm-system/src/gateway.js";
 import {
   buildIpfsAddUrl,
   buildIpfsAuthRequirementError,
   buildIpfsAuthHeaders,
+  buildGatewayUrl,
   buildIpfsReachabilityError,
   buildIpfsTerminatedError,
   hasIpfsApiAuthConfigured,
