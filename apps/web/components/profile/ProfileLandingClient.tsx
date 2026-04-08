@@ -24,6 +24,7 @@ import {
   type ApiOwnedCollections,
   type ApiProfileRecord
 } from "../../lib/indexerApi";
+import { discoverOnchainWalletIdentity } from "../../lib/onchainIdentity";
 import { verifyOwnedCollectionsOnChain } from "../../lib/onchainCollections";
 
 const SUBNAME_FEE_ETH = "0.001";
@@ -308,6 +309,16 @@ function dedupeProfiles(items: ApiProfileRecord[]): ApiProfileRecord[] {
   return Array.from(map.values()).sort((a, b) => a.fullName.localeCompare(b.fullName));
 }
 
+function dedupeCollections(items: ApiOwnedCollections["collections"]): ApiOwnedCollections["collections"] {
+  const map = new Map<string, ApiOwnedCollections["collections"][number]>();
+  for (const item of items) {
+    const contractAddress = String(item.contractAddress || "").toLowerCase();
+    if (!contractAddress || map.has(contractAddress)) continue;
+    map.set(contractAddress, item);
+  }
+  return [...map.values()];
+}
+
 function createEnsPendingKey(address: string): string {
   return `nftfactory:ens-registration:${address.toLowerCase()}`;
 }
@@ -383,7 +394,7 @@ export default function ProfileLandingClient({
   const appChain = useMemo(() => getAppChain(config.chainId), [config.chainId]);
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
-  const publicClient = usePublicClient();
+  const publicClient = usePublicClient({ chainId: config.chainId });
   const { data: walletClient } = useWalletClient();
 
   const normalizedInitialIdentityMode = useMemo<
@@ -415,6 +426,7 @@ export default function ProfileLandingClient({
   const [profiles, setProfiles] = useState<ApiProfileRecord[]>([]);
   const [collections, setCollections] = useState<ApiOwnedCollections["collections"]>([]);
   const [verifiedCollections, setVerifiedCollections] = useState<ApiOwnedCollections["collections"]>([]);
+  const [discoveredEnsNames, setDiscoveredEnsNames] = useState<string[]>([]);
   const [selectedCollection, setSelectedCollection] = useState("");
   const [identityMode, setIdentityMode] = useState<
     "register-eth" | "register-eth-subname" | "ens" | "external-subname" | "nftfactory-subname"
@@ -439,24 +451,37 @@ export default function ProfileLandingClient({
   const normalizedFullName = normalizeIdentityFullName(effectiveIdentityValue, identityMode);
   const derivedRouteSlug = deriveProfileRoute(effectiveIdentityValue, identityMode);
   const ensParentCandidates = useMemo(
-    () => collectEnsParentCandidates([...profiles.map((profile) => profile.fullName), ...verifiedCollections.map((collection) => collection.ensSubname)]),
-    [profiles, verifiedCollections]
+    () =>
+      collectEnsParentCandidates([
+        ...profiles.map((profile) => profile.fullName),
+        ...verifiedCollections.map((collection) => collection.ensSubname),
+        ...discoveredEnsNames
+      ]),
+    [discoveredEnsNames, profiles, verifiedCollections]
   );
   const existingEnsOptions = useMemo(
     () =>
       collectExistingEnsIdentityOptions(
-        [...profiles.map((profile) => profile.fullName), ...verifiedCollections.map((collection) => collection.ensSubname)],
+        [
+          ...profiles.map((profile) => profile.fullName),
+          ...verifiedCollections.map((collection) => collection.ensSubname),
+          ...discoveredEnsNames
+        ],
         "ens"
       ),
-    [profiles, verifiedCollections]
+    [discoveredEnsNames, profiles, verifiedCollections]
   );
   const existingSubnameOptions = useMemo(
     () =>
       collectExistingEnsIdentityOptions(
-        [...profiles.map((profile) => profile.fullName), ...verifiedCollections.map((collection) => collection.ensSubname)],
+        [
+          ...profiles.map((profile) => profile.fullName),
+          ...verifiedCollections.map((collection) => collection.ensSubname),
+          ...discoveredEnsNames
+        ],
         "external-subname"
       ),
-    [profiles, verifiedCollections]
+    [discoveredEnsNames, profiles, verifiedCollections]
   );
   const selectedSubnameParentOption = useMemo(() => {
     const normalized = String(subnameParent || "").trim().toLowerCase();
@@ -467,12 +492,22 @@ export default function ProfileLandingClient({
     if (!address || !isConnected) {
       setProfiles([]);
       setCollections([]);
+      setDiscoveredEnsNames([]);
       setSelectedCollection("");
       return;
     }
 
     let cancelled = false;
-    void Promise.allSettled([fetchProfilesByOwner(address), fetchCollectionsByOwner(address)])
+    void Promise.allSettled([
+      fetchProfilesByOwner(address),
+      fetchCollectionsByOwner(address),
+      discoverOnchainWalletIdentity({
+        publicClient,
+        chainId: config.chainId,
+        ownerAddress: address,
+        registryAddress: config.registry
+      })
+    ])
       .then((results) => {
         if (cancelled) return;
 
@@ -485,8 +520,17 @@ export default function ProfileLandingClient({
         }
 
         const collectionResult = results[1];
-        if (collectionResult.status === "fulfilled") {
-          const nextCollections = collectionResult.value.collections || [];
+        const onchainResult = results[2];
+        if (onchainResult.status === "fulfilled") {
+          setDiscoveredEnsNames(onchainResult.value.ensNames || []);
+        } else {
+          setDiscoveredEnsNames([]);
+        }
+        if (collectionResult.status === "fulfilled" || onchainResult.status === "fulfilled") {
+          const nextCollections = dedupeCollections([
+            ...(collectionResult.status === "fulfilled" ? collectionResult.value.collections || [] : []),
+            ...(onchainResult.status === "fulfilled" ? onchainResult.value.collections || [] : [])
+          ]);
           setCollections(nextCollections);
           setSelectedCollection((current) => {
             if (current) return current;
@@ -501,6 +545,7 @@ export default function ProfileLandingClient({
           });
         } else {
           setCollections([]);
+          setDiscoveredEnsNames([]);
           setSelectedCollection("");
         }
       })
@@ -508,13 +553,14 @@ export default function ProfileLandingClient({
         if (!cancelled) {
           setProfiles([]);
           setCollections([]);
+          setDiscoveredEnsNames([]);
         }
       });
 
     return () => {
       cancelled = true;
     };
-  }, [address, initialCollectionAddress, isConnected]);
+  }, [address, config.chainId, config.registry, initialCollectionAddress, isConnected, publicClient]);
 
   useEffect(() => {
     if (!address) {
@@ -1404,6 +1450,11 @@ export default function ProfileLandingClient({
         <h3>Wallet</h3>
         <p className="hint">{address || "Connect a wallet from the header to link a creator profile."}</p>
         <p className="hint">Network: {appChain.name}</p>
+        {isConnected && discoveredEnsNames.length > 0 ? (
+          <p className="hint">
+            Onchain identities found for this wallet: {discoveredEnsNames.join(", ")}.
+          </p>
+        ) : null}
         {wrongNetwork ? (
           <p className="hint">
             Use the header wallet button to select {appChain.name} before registering a .eth name or creating an ENS

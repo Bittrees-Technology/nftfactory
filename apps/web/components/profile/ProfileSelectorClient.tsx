@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useAccount } from "wagmi";
+import { useAccount, usePublicClient } from "wagmi";
 import {
   fetchCollectionsByOwner,
   fetchProfileDirectory,
@@ -11,6 +11,8 @@ import {
   type ApiOwnedCollections,
   type ApiProfileRecord
 } from "../../lib/indexerApi";
+import { getContractsConfig } from "../../lib/contracts";
+import { discoverOnchainWalletIdentity } from "../../lib/onchainIdentity";
 
 function deriveProfileRouteFromName(fullName: string): string {
   const normalized = String(fullName || "")
@@ -98,6 +100,8 @@ function usePrevious<T>(value: T): T | undefined {
 export default function ProfileSelectorClient() {
   const router = useRouter();
   const { address, isConnected } = useAccount();
+  const config = useMemo(() => getContractsConfig(), []);
+  const publicClient = usePublicClient({ chainId: config.chainId });
   const [profiles, setProfiles] = useState<ApiProfileRecord[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [note, setNote] = useState("");
@@ -126,21 +130,30 @@ export default function ProfileSelectorClient() {
     let cancelled = false;
     setIsLoading(true);
     setNote("");
-    void Promise.allSettled([fetchProfilesByOwner(address), fetchCollectionsByOwner(address)])
+    void Promise.allSettled([
+      fetchProfilesByOwner(address),
+      fetchCollectionsByOwner(address),
+      discoverOnchainWalletIdentity({
+        publicClient,
+        chainId: config.chainId,
+        ownerAddress: address,
+        registryAddress: config.registry
+      })
+    ])
       .then((results) => {
         if (cancelled) return;
 
         const profileResult = results[0];
         const collectionResult = results[1];
+        const onchainResult = results[2];
 
         const linkedProfiles =
           profileResult.status === "fulfilled" ? profileResult.value.profiles || [] : [];
-        const derivedProfiles =
-          collectionResult.status === "fulfilled"
-            ? (collectionResult.value.collections || [])
-                .map(normalizeDerivedProfile)
-                .filter((item): item is ApiProfileRecord => !!item)
-            : [];
+        const indexedCollections = collectionResult.status === "fulfilled" ? collectionResult.value.collections || [] : [];
+        const onchainCollections = onchainResult.status === "fulfilled" ? onchainResult.value.collections || [] : [];
+        const mergedCollections = dedupeCollections([...indexedCollections, ...onchainCollections]);
+        const derivedProfiles = mergedCollections.map(normalizeDerivedProfile).filter((item): item is ApiProfileRecord => !!item);
+        const discoveredEnsNames = onchainResult.status === "fulfilled" ? onchainResult.value.ensNames || [] : [];
 
         let cachedProfiles: ApiProfileRecord[] = [];
         try {
@@ -159,7 +172,11 @@ export default function ProfileSelectorClient() {
         setProfiles(nextProfiles);
 
         if (nextProfiles.length === 0) {
-          if (profileResult.status === "rejected" && collectionResult.status === "rejected") {
+          if (
+            profileResult.status === "rejected" &&
+            collectionResult.status === "rejected" &&
+            onchainResult.status === "rejected"
+          ) {
             const reason =
               profileResult.reason instanceof Error
                 ? profileResult.reason.message
@@ -169,14 +186,23 @@ export default function ProfileSelectorClient() {
             setNote(`Profile lookup is unavailable right now (${reason}). Open setup to continue with manual creator onboarding.`);
             return;
           }
+          if (discoveredEnsNames.length > 0) {
+            setNote(
+              `No linked profile is indexed for this wallet yet. Onchain discovery found ${discoveredEnsNames.join(", ")}. Open setup to link it.`
+            );
+            return;
+          }
           setNote("No creator profile is linked to this wallet yet. Open setup to link an ENS identity or create an nftfactory.eth subname.");
           return;
         }
 
-        if (profileResult.status === "rejected" && collectionResult.status === "fulfilled") {
+        if (
+          profileResult.status === "rejected" &&
+          (collectionResult.status === "fulfilled" || onchainResult.status === "fulfilled")
+        ) {
           const reason =
             profileResult.reason instanceof Error ? profileResult.reason.message : "Direct profile lookup failed";
-          setNote(`Loaded the profile from owned collection data because direct profile lookup failed (${reason}).`);
+          setNote(`Loaded the profile from collection ownership data because direct profile lookup failed (${reason}).`);
           return;
         }
 
@@ -207,7 +233,7 @@ export default function ProfileSelectorClient() {
     return () => {
       cancelled = true;
     };
-  }, [address, isConnected]);
+  }, [address, config.chainId, config.registry, isConnected, publicClient]);
 
   useEffect(() => {
     if (!isConnected || isLoading || profiles.length === 0) return;
@@ -440,4 +466,16 @@ export default function ProfileSelectorClient() {
       ) : null}
     </section>
   );
+}
+
+function dedupeCollections(items: ApiOwnedCollections["collections"]): ApiOwnedCollections["collections"] {
+  const map = new Map<string, ApiOwnedCollections["collections"][number]>();
+  for (const item of items) {
+    const contractAddress = String(item.contractAddress || "").toLowerCase();
+    if (!contractAddress) continue;
+    if (!map.has(contractAddress)) {
+      map.set(contractAddress, item);
+    }
+  }
+  return [...map.values()];
 }
