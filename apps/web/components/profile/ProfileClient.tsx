@@ -21,6 +21,7 @@ import {
 import SummaryStatCard from "../SummaryStatCard";
 import { getAppChain } from "../../lib/chains";
 import { getContractsConfig } from "../../lib/contracts";
+import { resolveIpfsGatewayBaseUrl } from "../../lib/ipfsUpload";
 import {
   actionStateStatusItem,
   errorActionState,
@@ -2419,7 +2420,7 @@ export default function ProfileClient({ name }: { name: string }) {
                   key={listing.key}
                   item={listing}
                   chainId={listing.chainId}
-                  ipfsGateway={process.env.NEXT_PUBLIC_IPFS_GATEWAY || "https://dweb.link/ipfs"}
+                  ipfsGateway={resolveIpfsGatewayBaseUrl(process.env)}
                 />
               ))}
             </div>

@@ -17,6 +17,7 @@ import {
   type ApiActiveListingItem
 } from "../../lib/indexerApi";
 import { getAppChain, getEnabledAppChainIds } from "../../lib/chains";
+import { resolveIpfsGatewayBaseUrl } from "../../lib/ipfsUpload";
 import {
   errorActionState,
   idleActionState,
@@ -418,7 +419,7 @@ export default function ListingManagementClient({
   const [mintInventoryLoading, setMintInventoryLoading] = useState(false);
   const [mintInventoryError, setMintInventoryError] = useState("");
   const inventoryOwnerAddress = ownerAddress || address || "";
-  const ipfsGateway = process.env.NEXT_PUBLIC_IPFS_GATEWAY || "https://dweb.link/ipfs";
+  const ipfsGateway = resolveIpfsGatewayBaseUrl(process.env);
   const effectiveChainFilter = chainFilter ?? selectedChainFilter;
   const visibleChainIds = useMemo(() => getTargetChainIds(effectiveChainFilter, enabledChainIds), [effectiveChainFilter, enabledChainIds]);
 
