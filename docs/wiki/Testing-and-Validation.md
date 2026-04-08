@@ -2,6 +2,8 @@
 
 Run these steps in order to validate the full stack before a deployment or release candidate.
 
+For the current env-backed Sepolia execution order, use [Operator Sepolia Runbook](./Operator-Sepolia-Runbook.md).
+
 ## 1. Contract validation
 
 Run the contract checks first:
@@ -36,10 +38,12 @@ npm run test:web
 
 Then manually validate:
 
+- `/api/deploy/health`
 - `/mint`
 - `/profile`
 - `/profile/setup`
 - `/profile/[name]`
+- `/profile/moderation` when owner/moderator controls are part of the release scope
 
 Notes:
 
@@ -106,16 +110,20 @@ Most "the app is broken" failures are env mismatches.
 
 ## 6. Manual Sepolia flow matrix
 
-Use this as the acceptance path:
+Use this as the acceptance path for the current app surface and record results in [Sepolia Acceptance Log](./Sepolia-Acceptance-Log.md):
 
-1. connect wallet on Sepolia
-2. publish through shared mint
-3. deploy or select a creator collection
-4. verify the creator implementation contracts on the explorer
-5. open `Manage Collection -> Verification` and verify a fresh collection proxy
-6. mint into the creator collection
-7. create or link a creator profile
-8. open the public profile route
+1. open `/api/deploy/health` on the deployed site and confirm `ok: true`
+2. connect wallet on Sepolia
+3. publish through the shared mint flow in `/mint`
+4. deploy a creator collection from `/mint`
+5. open `/mint?view=manage&address=<collection>` and run `Manage Collection -> Verification`
+6. mint into the creator collection from `/mint`
+7. confirm the collection state, verification state, and indexed token visibility from the same management workspace
+8. create or link a creator profile at `/profile/setup`
+9. open `/profile` and confirm wallet resolution and redirect behavior
+10. open the public profile route and confirm storefront rendering
+11. if listing management is in release scope, exercise it from the profile-linked management flow
+12. if guestbook moderation is in release scope, exercise `/profile/moderation` with the intended owner or moderator actor
 
 ## 7. Post-deploy verification
 
@@ -125,7 +133,7 @@ After Vercel finishes a production deploy, verify in this order:
 2. confirm the top-level payload returns `ok: true`
 3. confirm the `ipfs` check message includes `auth: bearer` when the writable API is protected, or `auth: public-override` when the deployment intentionally uses `ALLOW_PUBLIC_IPFS_API_WITHOUT_AUTH=1`
 4. confirm each configured indexer check reports `OK`
-5. open `/`, `/mint`, `/profile`, and one real `/profile/[name]` route in the browser
+5. open `/`, `/mint`, `/profile`, `/profile/setup`, and one real `/profile/[name]` route in the browser
 6. if IPFS uploads are part of the deploy scope, perform one small mint-media upload through the live UI
 
 If step 3 is wrong, stop and fix env wiring before spending time debugging the frontend.

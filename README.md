@@ -43,11 +43,23 @@ Profile pages can now be snapshotted from the public web route and published thr
 
 Before a production web build or release check, validate the required public build env set with `npm run check:web-env`.
 For deployed-network verification, run `npm run check:deployments` with a real chain RPC. If no contract env values are set, the command falls back to `docs/deployments.sepolia-app-wired.json`. Use `npm run print:deployment-env -- web` or `npm run print:deployment-env -- indexer` to emit the checked-in Sepolia address snapshot as env exports.
+The repo-root `.env.example` now includes the current Sepolia-wired address set plus the remaining blanks for RPC, indexer, wallet, explorer, and IPFS values so the root-level checks can be filled from one place.
 
 ## Local development
+
+Shared IPFS publishing commands in this repo use `projects/ipfs-evm-system`. Configure `IPFS_API_BASE_URL`, `IPFS_GATEWAY_BASE_URL`, and either `IPFS_API_BEARER_TOKEN` or both `IPFS_API_BASIC_AUTH_USERNAME` and `IPFS_API_BASIC_AUTH_PASSWORD` in the root environment for `npm run ipfs:publish`, `npm run ipfs:publish:metadata`, and `npm run ipfs:publish:profile-snapshot`.
 1. `npm install`
 2. Start indexer API: `npm run dev:indexer`
 3. Start web app: `npm run dev:web`
+
+### Root env workflow
+1. Copy `.env.example` to `.env` at the repo root.
+2. Fill `NEXT_PUBLIC_RPC_URL_11155111`, `NEXT_PUBLIC_INDEXER_API_URL_11155111`, `RPC_URL` or `SEPOLIA_RPC_URL`, `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID`, `ETHERSCAN_API_KEY`, and the IPFS auth values.
+3. Export the root env into your shell before running root-level checks:
+   - `set -a; source .env; set +a`
+4. Run:
+   - `npm run check:web-env`
+   - `npm run check:deployments`
 
 ### Required env vars
 - `services/indexer/.env`

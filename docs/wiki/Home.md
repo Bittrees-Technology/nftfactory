@@ -48,9 +48,10 @@ Active work:
 | [Operations and Governance](./Operations-and-Governance.md) | Ownership boundaries, auth model, moderator flow, and admin controls |
 | [Deployment and Launch](./Deployment-and-Launch.md) | Current local, Sepolia, and mainnet rollout posture |
 | [Infrastructure and Operations](./Infrastructure-and-Operations.md) | Real env wiring, process model, and troubleshooting |
+| [Operator Sepolia Runbook](./Operator-Sepolia-Runbook.md) | Single-path operator flow for root env setup, deployment verification, and Sepolia acceptance |
 | [IPFS Upload Failure Triage](./IPFS-Upload-Failure-Triage.md) | Exact steps for diagnosing Vercel -> Cloudflare Tunnel -> Kubo upload failures |
 | [Marketplace Indexer and API Plan](./Marketplace-V2-Indexer-and-API-Plan.md) | Backend-first schema, sync, and API plan for marketplace listings and offers |
-| [UI Lockdown Plan](./UI-Lockdown-Plan.md) | Page-level lock criteria for Mint, List, Discover, and Profile |
+| [UI Lockdown Plan](./UI-Lockdown-Plan.md) | Route-group lock criteria for Mint, profile setup, public profile, and moderation/profile-linked operations |
 | [Upgrade Runbook](./Upgrade-Runbook.md) | UUPS upgrade path for creator-owned collections |
 | [Testing and Validation](./Testing-and-Validation.md) | Practical validation order for contracts, web, indexer, and post-deploy checks |
 

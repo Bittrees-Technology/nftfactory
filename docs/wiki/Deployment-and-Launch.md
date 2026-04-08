@@ -52,19 +52,28 @@ Local work should validate:
 
 ## Sepolia validation
 
-Before calling a release candidate stable, validate on Sepolia:
+Before calling a release candidate stable, validate on Sepolia against the current route surface:
+
+- `https://nftfactory.org/api/deploy/health`
+- `/mint`
+- `/profile`
+- `/profile/setup`
+- `/profile/[name]`
+- `/profile/moderation` when moderation tooling is in release scope
+
+Core acceptance flow:
 
 - wallet connection
 - shared mint publish
 - creator collection deploy and mint
 - creator collection implementation verification
 - creator collection proxy verification from `Manage Collection -> Verification`
-- collection management actions
-- collection royalty split policy writes and reloads
+- collection management actions and royalty split policy writes
 - profile setup and public profile resolution
-- listing create/cancel/buy paths
-- moderation report and visibility flows
-- indexer-backed discovery and collection lookup
+- profile-linked listing management behavior
+- moderation visibility and guestbook controls when those controls are in release scope
+
+Record each run in `docs/wiki/Sepolia-Acceptance-Log.md`.
 
 ## Contract deployment order
 
@@ -139,7 +148,7 @@ Before deployment or release validation:
 ## Mainnet go criteria
 
 - [ ] Sepolia flows are stable with the exact wired env
-- [ ] Mint, List, Discover, and Profile are behaviorally locked
+- [ ] Mint, profile setup, public profile, and moderation/profile-linked operations are behaviorally locked
 - [ ] no critical indexer recovery path is still manual-only or undocumented
 - [ ] ownership/admin posture is deliberate and documented
 - [ ] the wiki matches the real build, not historical assumptions

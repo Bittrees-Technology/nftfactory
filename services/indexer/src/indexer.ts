@@ -5182,21 +5182,78 @@ async function handleRequest(
   }
 
   if (req.method === "GET" && path === "/api/profiles") {
+    const includeListingV2 = await hasListingV2Columns(deps);
     const owner = String(url.searchParams.get("owner") || "").trim().toLowerCase();
-    if (!owner || !isAddress(owner)) {
+    const q = String(url.searchParams.get("q") || "").trim().toLowerCase();
+    const source = String(url.searchParams.get("source") || "").trim().toLowerCase();
+    const layoutMode = String(url.searchParams.get("layoutMode") || "").trim().toLowerCase();
+    const hasCollectionRaw = String(url.searchParams.get("hasCollection") || "").trim().toLowerCase();
+    const sort = String(url.searchParams.get("sort") || "popular").trim().toLowerCase();
+    const requestedCursor = Number.parseInt(String(url.searchParams.get("cursor") || "0"), 10);
+    const cursor = Number.isFinite(requestedCursor) ? Math.max(requestedCursor, 0) : 0;
+    const requestedLimit = Number.parseInt(String(url.searchParams.get("limit") || "50"), 10);
+    const limit = Number.isFinite(requestedLimit) ? Math.min(Math.max(requestedLimit, 1), 200) : 50;
+
+    if (owner && !isAddress(owner)) {
       sendJson(res, 400, { error: "Valid owner query param is required" });
       return;
     }
 
+    if (source && source !== "ens" && source !== "external-subname" && source !== "nftfactory-subname") {
+      sendJson(res, 400, { error: "Invalid source query param" });
+      return;
+    }
+
+    if (layoutMode && layoutMode !== "default" && layoutMode !== "myspace") {
+      sendJson(res, 400, { error: "Invalid layoutMode query param" });
+      return;
+    }
+
+    if (hasCollectionRaw && hasCollectionRaw !== "true" && hasCollectionRaw !== "false") {
+      sendJson(res, 400, { error: "Invalid hasCollection query param" });
+      return;
+    }
+
+    const hasCollection =
+      hasCollectionRaw === "true" ? true : hasCollectionRaw === "false" ? false : null;
+
     const linkedProfiles = (await readProfileRecords())
-      .filter((item) => item.ownerAddress === owner)
+      .filter((item) => !owner || item.ownerAddress === owner)
       .map(toProfileResponse);
 
     const collections = await deps.prisma.collection.findMany({
-      where: { ownerAddress: owner },
-      select: { ownerAddress: true, ensSubname: true, contractAddress: true },
-      orderBy: { createdAt: "desc" }
+      where: owner ? { ownerAddress: owner } : undefined,
+      select: {
+        ownerAddress: true,
+        ensSubname: true,
+        contractAddress: true,
+        createdAt: true,
+        updatedAt: true,
+        _count: {
+          select: {
+            tokens: true
+          }
+        }
+      },
+      orderBy: { updatedAt: "desc" }
     });
+    const contractAddresses = collections
+      .map((item: any) => String(item.contractAddress || "").trim().toLowerCase())
+      .filter(Boolean);
+    const activeListings = contractAddresses.length
+      ? await deps.prisma.listing.findMany({
+          where: {
+            ...getPublicActiveListingWhere(includeListingV2, config),
+            collectionAddress: { in: contractAddresses }
+          },
+          select: { collectionAddress: true }
+        })
+      : [];
+    const activeListingCounts = new Map<string, number>();
+    for (const item of activeListings as Array<{ collectionAddress: string }>) {
+      const key = item.collectionAddress.toLowerCase();
+      activeListingCounts.set(key, (activeListingCounts.get(key) || 0) + 1);
+    }
 
     const derivedProfiles = collections
       .map((item: any) => {
@@ -5213,13 +5270,35 @@ async function handleRequest(
           tagline: null,
           displayName: null,
           bio: null,
+          layoutMode: "default" as const,
+          aboutMe: null,
+          interests: null,
+          whoIdLikeToMeet: null,
+          topFriends: [],
+          testimonials: [],
+          profileSongUrl: null,
+          statusHeadline: null,
+          sidebarFacts: [],
+          mediaEmbeds: [],
+          retroBlocks: [],
+          moduleOrder: ["social", "media", "retro", "boxes", "guestbook", "custom"],
+          heroModules: [],
+          heroCompactModules: [],
+          sidebarModules: [],
+          sidebarCompactModules: [],
+          mainColumnSplitModules: [],
+          mainColumnCompactModules: [],
+          stamps: [],
+          customBoxes: [],
           bannerUrl: null,
           avatarUrl: null,
           featuredUrl: null,
           accentColor: null,
+          customCss: null,
+          customHtml: null,
           links: [],
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
+          createdAt: item.createdAt instanceof Date ? item.createdAt.toISOString() : new Date().toISOString(),
+          updatedAt: item.updatedAt instanceof Date ? item.updatedAt.toISOString() : new Date().toISOString()
         };
       })
       .filter((item: ProfileRecord | null): item is ProfileRecord => Boolean(item));
@@ -5233,9 +5312,82 @@ async function handleRequest(
       if (!merged.has(key)) merged.set(key, item);
     }
 
+    const collectionStats = new Map<string, { tokenCount: number; activeListingCount: number }>();
+    for (const item of collections as Array<any>) {
+      const key = String(item.contractAddress || "").trim().toLowerCase();
+      if (!key) continue;
+      collectionStats.set(key, {
+        tokenCount: item._count?.tokens || 0,
+        activeListingCount: activeListingCounts.get(key) || 0
+      });
+    }
+
+    function getPopularityScore(item: ProfileRecord): number {
+      const key = String(item.collectionAddress || "").trim().toLowerCase();
+      const stats = collectionStats.get(key);
+      const tokenCount = stats?.tokenCount || 0;
+      const activeListingCount = stats?.activeListingCount || 0;
+      const richnessScore =
+        (item.displayName ? 1 : 0)
+        + (item.tagline ? 1 : 0)
+        + (item.bio ? 1 : 0)
+        + (item.avatarUrl ? 1 : 0)
+        + (item.bannerUrl ? 1 : 0)
+        + ((item.layoutMode || "default") === "myspace" ? 1 : 0);
+      return activeListingCount * 1000 + tokenCount * 100 + richnessScore * 10;
+    }
+
+    const filtered = Array.from(merged.values())
+      .filter((item) => {
+        if (source && item.source !== source) return false;
+        if (layoutMode && (item.layoutMode || "default") !== layoutMode) return false;
+        if (hasCollection !== null && Boolean(item.collectionAddress) !== hasCollection) return false;
+        if (!q) return true;
+        const haystack = [
+          item.slug,
+          item.fullName,
+          item.displayName,
+          item.tagline,
+          item.bio,
+          item.ownerAddress,
+          item.collectionAddress
+        ]
+          .map((value) => String(value || "").trim().toLowerCase())
+          .filter(Boolean)
+          .join("\n");
+        return haystack.includes(q);
+      })
+      .sort((a, b) => {
+        if (sort === "popular") {
+          const scoreDiff = getPopularityScore(b) - getPopularityScore(a);
+          if (scoreDiff !== 0) return scoreDiff;
+          return String(b.updatedAt || "").localeCompare(String(a.updatedAt || ""));
+        }
+        if (sort === "updated-desc") {
+          return String(b.updatedAt || "").localeCompare(String(a.updatedAt || ""));
+        }
+        if (sort === "created-desc") {
+          return String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
+        }
+        return a.fullName.localeCompare(b.fullName);
+      });
+    const pagedProfiles = filtered.slice(cursor, cursor + limit);
+
     sendJson(res, 200, {
-      ownerAddress: owner,
-      profiles: Array.from(merged.values()).sort((a, b) => a.fullName.localeCompare(b.fullName))
+      ownerAddress: owner || null,
+      total: filtered.length,
+      nextCursor: cursor + pagedProfiles.length,
+      canLoadMore: cursor + pagedProfiles.length < filtered.length,
+      profiles: pagedProfiles,
+      filters: {
+        q,
+        source: source || null,
+        layoutMode: layoutMode || null,
+        hasCollection,
+        sort,
+        limit,
+        cursor
+      }
     });
     return;
   }

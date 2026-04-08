@@ -219,6 +219,23 @@ export type ApiOwnedProfiles = {
   profiles: ApiProfileRecord[];
 };
 
+export type ApiProfileDirectoryResponse = {
+  ownerAddress: string | null;
+  total: number;
+  nextCursor: number;
+  canLoadMore: boolean;
+  profiles: ApiProfileRecord[];
+  filters: {
+    q: string;
+    source: ApiProfileRecord["source"] | null;
+    layoutMode: "default" | "myspace" | null;
+    hasCollection: boolean | null;
+    sort: "popular" | "name-asc" | "updated-desc" | "created-desc" | string;
+    limit: number;
+    cursor: number;
+  };
+};
+
 export type ApiProfileGuestbookEntry = {
   id: string;
   profileSlug: string;
@@ -519,6 +536,30 @@ export async function fetchCollectionsByOwner(ownerAddress: string, options?: In
 
 export async function fetchProfilesByOwner(ownerAddress: string, options?: IndexerRequestOptions): Promise<ApiOwnedProfiles> {
   return fetchJson<ApiOwnedProfiles>(`/api/profiles?owner=${encodeURIComponent(ownerAddress)}`, undefined, undefined, options);
+}
+
+export async function fetchProfileDirectory(
+  params?: {
+    cursor?: number;
+    q?: string;
+    source?: ApiProfileRecord["source"] | "all" | "";
+    layoutMode?: "default" | "myspace" | "all" | "";
+    hasCollection?: boolean | null;
+    sort?: "popular" | "name-asc" | "updated-desc" | "created-desc";
+    limit?: number;
+  },
+  options?: IndexerRequestOptions
+): Promise<ApiProfileDirectoryResponse> {
+  const query = new URLSearchParams();
+  if (typeof params?.cursor === "number" && Number.isFinite(params.cursor)) query.set("cursor", String(params.cursor));
+  if (params?.q?.trim()) query.set("q", params.q.trim());
+  if (params?.source && params.source !== "all") query.set("source", params.source);
+  if (params?.layoutMode && params.layoutMode !== "all") query.set("layoutMode", params.layoutMode);
+  if (typeof params?.hasCollection === "boolean") query.set("hasCollection", String(params.hasCollection));
+  if (params?.sort) query.set("sort", params.sort);
+  if (typeof params?.limit === "number" && Number.isFinite(params.limit)) query.set("limit", String(params.limit));
+  const suffix = query.size > 0 ? `?${query.toString()}` : "";
+  return fetchJson<ApiProfileDirectoryResponse>(`/api/profiles${suffix}`, undefined, undefined, options);
 }
 
 export async function fetchMintFeed(

@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAccount } from "wagmi";
 import {
   fetchCollectionsByOwner,
+  fetchProfileDirectory,
   fetchProfilesByOwner,
   type ApiOwnedCollections,
   type ApiProfileRecord
@@ -86,12 +87,34 @@ function createPrimaryProfileKey(address: string): string {
   return `nftfactory:primary-profile:${address.toLowerCase()}`;
 }
 
+function usePrevious<T>(value: T): T | undefined {
+  const ref = useRef<T | undefined>(undefined);
+  useEffect(() => {
+    ref.current = value;
+  }, [value]);
+  return ref.current;
+}
+
 export default function ProfileSelectorClient() {
   const router = useRouter();
   const { address, isConnected } = useAccount();
   const [profiles, setProfiles] = useState<ApiProfileRecord[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [note, setNote] = useState("");
+
+  const [directoryProfiles, setDirectoryProfiles] = useState<ApiProfileRecord[]>([]);
+  const [directoryTotal, setDirectoryTotal] = useState(0);
+  const [directoryLoading, setDirectoryLoading] = useState(false);
+  const [directoryError, setDirectoryError] = useState("");
+  const [directoryCanLoadMore, setDirectoryCanLoadMore] = useState(false);
+  const [nextCursor, setNextCursor] = useState(0);
+  const [requestCursor, setRequestCursor] = useState(0);
+  const [searchValue, setSearchValue] = useState("");
+  const [sourceFilter, setSourceFilter] = useState<"all" | ApiProfileRecord["source"]>("all");
+  const [layoutFilter, setLayoutFilter] = useState<"all" | "default" | "myspace">("all");
+  const [collectionFilter, setCollectionFilter] = useState<"all" | "with-collection" | "without-collection">("all");
+  const [sortFilter, setSortFilter] = useState<"popular" | "name-asc" | "updated-desc" | "created-desc">("popular");
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!address || !isConnected) {
@@ -167,7 +190,7 @@ export default function ProfileSelectorClient() {
         }
 
         if (nextProfiles.length > 1) {
-          setNote("Multiple legacy profile records were found for this wallet. Showing the primary profile.");
+          setNote("Multiple creator profiles are linked to this wallet. Redirecting to the primary profile.");
         }
       })
       .catch((err) => {
@@ -186,16 +209,92 @@ export default function ProfileSelectorClient() {
     };
   }, [address, isConnected]);
 
-  function openProfile(slug: string): void {
-    router.push(`/profile/${encodeURIComponent(slug)}`);
-  }
+  useEffect(() => {
+    if (!isConnected || isLoading || profiles.length === 0) return;
+    router.replace(`/profile/${encodeURIComponent(profiles[0].slug)}`);
+  }, [isConnected, isLoading, profiles, router]);
 
-  const primaryProfile = profiles[0] || null;
+  const previousFilters = usePrevious(
+    `${searchValue}::${sourceFilter}::${layoutFilter}::${collectionFilter}::${sortFilter}`
+  );
 
   useEffect(() => {
-    if (!isConnected || isLoading || !primaryProfile?.slug) return;
-    router.replace(`/profile/${encodeURIComponent(primaryProfile.slug)}`);
-  }, [isConnected, isLoading, primaryProfile, router]);
+    const currentFilters = `${searchValue}::${sourceFilter}::${layoutFilter}::${collectionFilter}::${sortFilter}`;
+    if (previousFilters === undefined || previousFilters === currentFilters) return;
+    setDirectoryProfiles([]);
+    setDirectoryTotal(0);
+    setDirectoryCanLoadMore(false);
+    setNextCursor(0);
+    setRequestCursor(0);
+  }, [searchValue, sourceFilter, layoutFilter, collectionFilter, sortFilter, previousFilters]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const timeout = setTimeout(() => {
+      setDirectoryLoading(true);
+      setDirectoryError("");
+      void fetchProfileDirectory({
+        cursor: requestCursor,
+        q: searchValue,
+        source: sourceFilter,
+        layoutMode: layoutFilter,
+        hasCollection:
+          collectionFilter === "with-collection"
+            ? true
+            : collectionFilter === "without-collection"
+              ? false
+              : null,
+        sort: sortFilter,
+        limit: 24
+      })
+        .then((response) => {
+          if (cancelled) return;
+          setDirectoryProfiles((current) => (
+            requestCursor === 0 ? response.profiles || [] : [...current, ...(response.profiles || [])]
+          ));
+          setDirectoryTotal(response.total || 0);
+          setDirectoryCanLoadMore(Boolean(response.canLoadMore));
+          setNextCursor(response.nextCursor || 0);
+        })
+        .catch((error) => {
+          if (cancelled) return;
+          if (requestCursor === 0) {
+            setDirectoryProfiles([]);
+            setDirectoryTotal(0);
+          }
+          setDirectoryCanLoadMore(false);
+          setDirectoryError(error instanceof Error ? error.message : "Failed to load the public profile directory.");
+        })
+        .finally(() => {
+          if (!cancelled) setDirectoryLoading(false);
+        });
+    }, requestCursor === 0 ? 250 : 0);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timeout);
+    };
+  }, [requestCursor, searchValue, sourceFilter, layoutFilter, collectionFilter, sortFilter]);
+
+  useEffect(() => {
+    const target = loadMoreRef.current;
+    if (!target || !directoryCanLoadMore || directoryLoading) return;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0]?.isIntersecting) {
+        setRequestCursor((current) => (current === nextCursor ? current : nextCursor));
+      }
+    }, { rootMargin: "320px 0px" });
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [directoryCanLoadMore, directoryLoading, nextCursor]);
+
+  function loadMoreProfiles(): void {
+    if (directoryLoading || !directoryCanLoadMore) return;
+    setRequestCursor((current) => (current === nextCursor ? current : nextCursor));
+  }
+
+  const linkedProfiles = useMemo(() => profiles.slice(0, 12), [profiles]);
+  const shouldShowDirectory = !isConnected || (!isLoading && profiles.length === 0);
 
   return (
     <section className="wizard">
@@ -205,27 +304,140 @@ export default function ProfileSelectorClient() {
           <p className="hint">Connect a wallet from the header to load linked creator profiles.</p>
         ) : isLoading ? (
           <p className="hint">Loading linked profiles...</p>
-        ) : primaryProfile ? (
+        ) : linkedProfiles.length > 0 ? (
           <div className="stack">
-            <p className="hint">Linked profile</p>
-            <strong>{primaryProfile.fullName}</strong>
-            <p className="hint">
-              Route: <span className="mono">/profile/{primaryProfile.slug}</span>
-            </p>
-            <p className="hint">Redirecting now...</p>
-            <div className="row">
-              <button type="button" onClick={() => openProfile(primaryProfile.slug)}>
-                Open /profile/{primaryProfile.slug}
-              </button>
-            </div>
+            <p className="hint">Linked profiles found. Redirecting to the primary profile now.</p>
+            {linkedProfiles.map((profile) => (
+              <div key={`${profile.slug}:${profile.ownerAddress}:${profile.collectionAddress || ""}`} className="card">
+                <strong>{profile.displayName || profile.fullName}</strong>
+                <p className="hint">{profile.tagline || profile.fullName}</p>
+                <p className="hint">
+                  Route: <span className="mono">/profile/{profile.slug}</span>
+                </p>
+                <div className="row">
+                  <Link href={`/profile/${encodeURIComponent(profile.slug)}`} className="ctaLink">
+                    Open profile now
+                  </Link>
+                  {profile.collectionAddress ? (
+                    <Link
+                      href={`/mint?view=manage&address=${encodeURIComponent(profile.collectionAddress)}`}
+                      className="ctaLink secondaryLink"
+                    >
+                      Manage collection
+                    </Link>
+                  ) : null}
+                </div>
+              </div>
+            ))}
           </div>
         ) : (
-          <div className="row">
-            <Link href="/profile/setup" className="ctaLink">Open creator setup</Link>
+          <div className="stack">
+            <p className="hint">No creator profile is linked to this wallet yet.</p>
+            <div className="row">
+              <Link href="/profile/setup" className="ctaLink">Create or link profile</Link>
+            </div>
           </div>
         )}
         {note ? <p className="hint">{note}</p> : null}
       </div>
+      {shouldShowDirectory ? (
+        <div className="card formCard">
+          <h3>Popular Profiles</h3>
+          <p className="hint">
+            Browse creator pages directly. The default ordering prioritizes profiles with live collection and storefront activity.
+          </p>
+          <div className="row">
+            <label>
+              Search
+              <input
+                value={searchValue}
+                onChange={(event) => setSearchValue(event.target.value)}
+                placeholder="name, slug, tagline, wallet"
+              />
+            </label>
+            <label>
+              Source
+              <select value={sourceFilter} onChange={(event) => setSourceFilter(event.target.value as "all" | ApiProfileRecord["source"])}>
+                <option value="all">All sources</option>
+                <option value="nftfactory-subname">NFTFactory subnames</option>
+                <option value="ens">ENS names</option>
+                <option value="external-subname">External subnames</option>
+              </select>
+            </label>
+            <label>
+              Layout
+              <select value={layoutFilter} onChange={(event) => setLayoutFilter(event.target.value as "all" | "default" | "myspace")}>
+                <option value="all">All layouts</option>
+                <option value="default">Default</option>
+                <option value="myspace">Myspace</option>
+              </select>
+            </label>
+            <label>
+              Collection
+              <select value={collectionFilter} onChange={(event) => setCollectionFilter(event.target.value as "all" | "with-collection" | "without-collection")}>
+                <option value="all">All profiles</option>
+                <option value="with-collection">With collection</option>
+                <option value="without-collection">Without collection</option>
+              </select>
+            </label>
+            <label>
+              Order
+              <select value={sortFilter} onChange={(event) => setSortFilter(event.target.value as "popular" | "name-asc" | "updated-desc" | "created-desc")}>
+                <option value="popular">Popular</option>
+                <option value="updated-desc">Recently updated</option>
+                <option value="created-desc">Recently created</option>
+                <option value="name-asc">Name A-Z</option>
+              </select>
+            </label>
+          </div>
+          {directoryLoading && directoryProfiles.length === 0 ? <p className="hint">Loading popular profiles...</p> : null}
+          {directoryError ? <p className="hint">{directoryError}</p> : null}
+          {!directoryError ? (
+            <div className="stack">
+              <p className="hint">
+                {directoryTotal === 0
+                  ? "No profiles match the current filters."
+                  : `Showing ${directoryProfiles.length} of ${directoryTotal} matching profiles.`}
+              </p>
+              {directoryProfiles.map((profile) => (
+                <div key={`${profile.slug}:${profile.ownerAddress}:${profile.collectionAddress || ""}:${profile.source}`} className="card">
+                  <strong>{profile.displayName || profile.fullName}</strong>
+                  <p className="hint">{profile.tagline || profile.fullName}</p>
+                  <p className="hint">
+                    <span className="mono">/profile/{profile.slug}</span>
+                    {" · "}
+                    {profile.source}
+                    {profile.layoutMode ? ` · ${profile.layoutMode}` : ""}
+                  </p>
+                  <p className="hint">
+                    Owner <span className="mono">{profile.ownerAddress}</span>
+                  </p>
+                  <div className="row">
+                    <Link href={`/profile/${encodeURIComponent(profile.slug)}`} className="ctaLink">
+                      Open profile
+                    </Link>
+                    {profile.collectionAddress ? (
+                      <Link
+                        href={`/mint?view=manage&address=${encodeURIComponent(profile.collectionAddress)}`}
+                        className="ctaLink secondaryLink"
+                      >
+                        View collection
+                      </Link>
+                    ) : null}
+                  </div>
+                </div>
+              ))}
+              {directoryCanLoadMore ? (
+                <div ref={loadMoreRef} className="row">
+                  <button type="button" onClick={loadMoreProfiles} disabled={directoryLoading}>
+                    {directoryLoading ? "Loading more profiles..." : "Load more profiles"}
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
     </section>
   );
 }

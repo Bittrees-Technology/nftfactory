@@ -1,13 +1,13 @@
 # UI Lockdown Plan
 
-This page tracks the lock criteria for the four mainnet-critical routes. For overall direction and deferred scope, see [Roadmap](./Roadmap.md).
+This page tracks the lock criteria for the current mainnet-critical route groups. For overall direction and deferred scope, see [Roadmap](./Roadmap.md).
 
-## Mainnet-critical pages
+## Mainnet-critical route groups
 
 1. Mint
-2. List
-3. Discover
-4. Profile
+2. Profile Setup
+3. Public Profile
+4. Moderation and Profile-Linked Operations
 
 ## Lock criteria
 
@@ -29,28 +29,29 @@ A page is considered locked when:
 - [ ] remove remaining copy that still reads like tooling instead of product
 - [ ] make slow Sepolia confirmations feel predictable
 
-## List
-
-- [x] seller and marketplace actions are separated
-- [x] wrong-network handling is explicit
-- [ ] make create, refresh, and manage actions feel like one workflow
-- [ ] reduce operational-looking clutter
-
-## Discover
-
-- [x] public feed is separate from moderation
-- [x] indexed feed is the primary path
-- [ ] make backend-unavailable vs empty-index states clearer
-- [ ] improve filter and sorting ergonomics
-- [ ] keep the feed visually intentional instead of purely utilitarian
-
-## Profile
+## Profile Setup
 
 - [x] setup route is separate from the public profile route
 - [x] ENS-linked identity modes are exposed
+- [ ] keep the setup flow obvious for first-time creators
+- [ ] make identity linking, subname creation, and collection association read like one workflow
+- [ ] reduce operator-looking wording in setup, linking, and recovery states
+
+## Public Profile
+
 - [x] public creator pages support richer presentation fields
 - [ ] keep public pages feeling polished rather than diagnostic
+- [ ] make listing-management and collection identity sections feel intentional rather than bolted on
+- [ ] make backend-unavailable vs empty-profile states clearer
 - [ ] improve multi-profile wallet ergonomics
+
+## Moderation and Profile-Linked Operations
+
+- [x] owner and moderator guestbook actions exist
+- [x] collection management and verification live in the mint workspace
+- [ ] make moderation entry points and actor requirements easier to understand
+- [ ] make profile-linked listing-management actions coherent with the public creator workflow
+- [ ] reduce operational clutter while keeping recovery and admin actions explicit
 
 ## Release sequence
 

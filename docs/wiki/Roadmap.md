@@ -8,7 +8,7 @@ Live today:
 
 - [x] unified `/mint` flow for shared and creator-owned paths
 - [x] creator collection management inside the mint surface
-- [x] public `/discover` feed and separate `/mod` moderation surface
+- [x] profile landing, setup, public profile, and moderation surfaces
 - [x] profile setup and public profile routing
 - [x] admin tooling for payment tokens, moderators, listing sync, and collection/token backfills
 - [x] indexer and web test suites wired into the root workspace scripts
@@ -37,9 +37,9 @@ Notes:
 ### UX lock before mainnet
 
 - [ ] finish final polish for Mint
-- [ ] make List feel like one coherent seller workflow
-- [ ] tighten Discover state handling and messaging
+- [ ] make profile setup feel like one coherent creator onboarding workflow
 - [ ] keep public Profile pages polished and less diagnostic
+- [ ] make moderation and profile-linked listing management feel deliberate instead of operational
 
 ### Indexer reliability and recovery
 
@@ -61,7 +61,7 @@ Before expanding scope again, the current stack should be solid on:
 - [ ] address correctness (requires deployed-network verification)
 - [ ] Sepolia validation (manual matrix still required)
 - [ ] admin recovery paths (manual run-through still required)
-- [ ] visual and behavioral stability of Mint, List, Discover, and Profile (manual UX pass still required)
+- [ ] visual and behavioral stability of Mint, Profile Setup, Public Profile, and Moderation/Profile-linked operations (manual UX pass still required)
 
 ## Deferred scope
 
