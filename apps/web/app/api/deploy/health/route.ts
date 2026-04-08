@@ -3,7 +3,8 @@ import {
   buildIpfsAuthHeaders,
   buildIpfsVersionUrl,
   getIpfsApiAuthMode,
-  isPrivateOrLocalUrl
+  isPrivateOrLocalUrl,
+  resolveIpfsApiUrl
 } from "../../../../lib/ipfsUpload";
 import { getLegacyChainPublicEnv, getRootPublicEnv, getScopedChainPublicEnv } from "../../../../lib/publicEnv";
 
@@ -115,14 +116,14 @@ async function checkIndexer(chainId: number): Promise<ServiceCheck> {
 }
 
 async function checkIpfs(): Promise<ServiceCheck> {
-  const configuredUrl = String(process.env.IPFS_API_URL || "").trim();
+  const configuredUrl = resolveIpfsApiUrl(process.env);
   if (!configuredUrl) {
     return {
       label: "ipfs",
       url: null,
       ok: false,
       status: null,
-      message: "Missing IPFS_API_URL."
+      message: "Missing IPFS_API_URL or IPFS_API_BASE_URL."
     };
   }
 

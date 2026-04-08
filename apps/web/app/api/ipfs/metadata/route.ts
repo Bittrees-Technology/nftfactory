@@ -10,7 +10,9 @@ import {
   isRetryableIpfsUploadErrorMessage,
   isRetryableIpfsUploadStatus,
   isPrivateOrLocalUrl,
-  parseIpfsAddResponse
+  parseIpfsAddResponse,
+  resolveIpfsApiUrl,
+  resolveIpfsGatewayBaseUrl
 } from "../../../../lib/ipfsUpload";
 
 const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
@@ -91,12 +93,12 @@ async function pinFile(file: File, fileName: string, apiUrl: string, authHeaders
 
 export async function POST(request: Request) {
   try {
-    const apiUrl = buildIpfsAddUrl(requireEnv("IPFS_API_URL"));
+    const apiUrl = buildIpfsAddUrl(resolveIpfsApiUrl(process.env) || requireEnv("IPFS_API_URL"));
     if (!isPrivateOrLocalUrl(apiUrl) && !hasIpfsApiAuthConfigured(process.env)) {
       throw new Error(buildIpfsAuthRequirementError(apiUrl));
     }
     const authHeaders = buildIpfsAuthHeaders(process.env);
-    const gateway = process.env.NEXT_PUBLIC_IPFS_GATEWAY || "https://dweb.link/ipfs";
+    const gateway = resolveIpfsGatewayBaseUrl(process.env);
 
     const formData = await request.formData();
     const image = formData.get("image");

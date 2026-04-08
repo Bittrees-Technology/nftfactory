@@ -6,7 +6,8 @@ import {
   buildIpfsReachabilityError,
   hasIpfsApiAuthConfigured,
   isPrivateOrLocalUrl,
-  allowsUnauthenticatedPublicIpfsApi
+  allowsUnauthenticatedPublicIpfsApi,
+  resolveIpfsApiUrl
 } from "./lib/ipfsUpload";
 
 const primaryChainId = process.env.NEXT_PUBLIC_PRIMARY_CHAIN_ID || process.env.NEXT_PUBLIC_CHAIN_ID || "1";
@@ -50,8 +51,10 @@ if (process.env.NODE_ENV === "production") {
     throw new Error("SITE_BASIC_AUTH_ENABLED requires SITE_BASIC_AUTH_PASSWORD to be set.");
   }
 
-  if (process.env.VERCEL && process.env.IPFS_API_URL && isPrivateOrLocalUrl(process.env.IPFS_API_URL)) {
-    throw new Error(buildIpfsReachabilityError(process.env.IPFS_API_URL));
+  const resolvedIpfsApiUrl = resolveIpfsApiUrl(process.env);
+
+  if (process.env.VERCEL && resolvedIpfsApiUrl && isPrivateOrLocalUrl(resolvedIpfsApiUrl)) {
+    throw new Error(buildIpfsReachabilityError(resolvedIpfsApiUrl));
   }
 
   if (process.env.VERCEL) {
@@ -59,10 +62,10 @@ if (process.env.NODE_ENV === "production") {
     const badIndexerEnv: string[] = [];
     const missingIndexerEnv: string[] = [];
 
-    const ipfsApiUrl = String(process.env.IPFS_API_URL || "").trim();
+    const ipfsApiUrl = resolvedIpfsApiUrl;
 
     if (!ipfsApiUrl) {
-      throw new Error("Missing required env var for production build: IPFS_API_URL");
+      throw new Error("Missing required env var for production build: IPFS_API_URL or IPFS_API_BASE_URL");
     }
 
     if (!isPrivateOrLocalUrl(ipfsApiUrl) && !hasIpfsApiAuthConfigured(process.env) && !allowsUnauthenticatedPublicIpfsApi(process.env)) {

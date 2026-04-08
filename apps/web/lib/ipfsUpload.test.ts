@@ -5,6 +5,7 @@ import {
   buildIpfsAuthRequirementError,
   getIpfsApiAuthMode,
   buildIpfsAuthHeaders,
+  buildGatewayUrl,
   buildIpfsReachabilityError,
   buildIpfsTerminatedError,
   buildIpfsVersionUrl,
@@ -12,7 +13,9 @@ import {
   isRetryableIpfsUploadErrorMessage,
   isRetryableIpfsUploadStatus,
   isPrivateOrLocalUrl,
-  parseIpfsAddResponse
+  parseIpfsAddResponse,
+  resolveIpfsApiUrl,
+  resolveIpfsGatewayBaseUrl
 } from "./ipfsUpload";
 
 describe("ipfsUpload", () => {
@@ -20,6 +23,17 @@ describe("ipfsUpload", () => {
     expect(buildIpfsAddUrl("http://127.0.0.1:5001")).toBe(
       "http://127.0.0.1:5001/api/v0/add?pin=true&cid-version=1&wrap-with-directory=false&progress=false&stream-channels=false&quieter=true"
     );
+  });
+
+  it("resolves shared IPFS API config for the web app", () => {
+    expect(resolveIpfsApiUrl({ IPFS_API_URL: "https://ipfs.nftfactory.org" })).toBe("https://ipfs.nftfactory.org");
+    expect(resolveIpfsApiUrl({ IPFS_API_BASE_URL: "https://ipfs-shared.nftfactory.org" })).toBe("https://ipfs-shared.nftfactory.org");
+  });
+
+  it("normalizes gateway base URLs without duplicating /ipfs", () => {
+    expect(resolveIpfsGatewayBaseUrl({ NEXT_PUBLIC_IPFS_GATEWAY: "https://dweb.link/ipfs" })).toBe("https://dweb.link");
+    expect(resolveIpfsGatewayBaseUrl({ IPFS_GATEWAY_BASE_URL: "https://gateway.nftfactory.org" })).toBe("https://gateway.nftfactory.org");
+    expect(buildGatewayUrl({ gatewayBaseUrl: "https://dweb.link/ipfs", cid: "bafy123" })).toBe("https://dweb.link/ipfs/bafy123");
   });
 
   it("extends an api/v0 base path cleanly", () => {

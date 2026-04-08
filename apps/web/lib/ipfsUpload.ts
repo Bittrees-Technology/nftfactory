@@ -11,7 +11,7 @@ export function normalizeIpfsCid(value: string): string {
 
 export function buildGatewayUrl(input: { gatewayBaseUrl: string; cid: string; path?: string }): string {
   const normalizedCid = normalizeIpfsCid(input.cid);
-  const normalizedBaseUrl = input.gatewayBaseUrl.replace(/\/+$/, "");
+  const normalizedBaseUrl = input.gatewayBaseUrl.replace(/\/+$/, "").replace(/\/ipfs$/i, "");
   const suffix = input.path ? `/${input.path.replace(/^\/+/, "")}` : "";
   return `${normalizedBaseUrl}/ipfs/${normalizedCid}${suffix}`;
 }
@@ -78,6 +78,18 @@ export function buildIpfsReachabilityError(urlLike: string): string {
   } catch {
     return "IPFS upload backend is not reachable from this deployment. Set IPFS_API_URL to a public HTTP(S) endpoint reachable from the hosting platform.";
   }
+}
+
+export function resolveIpfsApiUrl(env: EnvLike = process.env): string {
+  return String(env.IPFS_API_URL || env.IPFS_API_BASE_URL || "").trim();
+}
+
+export function resolveIpfsGatewayBaseUrl(env: EnvLike = process.env): string {
+  const explicitGateway = String(env.NEXT_PUBLIC_IPFS_GATEWAY || "").trim();
+  if (explicitGateway) {
+    return explicitGateway.replace(/\/+$/, "").replace(/\/ipfs$/i, "");
+  }
+  return String(env.IPFS_GATEWAY_BASE_URL || "https://dweb.link").trim().replace(/\/+$/, "").replace(/\/ipfs$/i, "");
 }
 
 export function hasIpfsApiAuthConfigured(env: EnvLike = process.env): boolean {

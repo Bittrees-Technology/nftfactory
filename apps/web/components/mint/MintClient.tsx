@@ -558,7 +558,7 @@ function writeLocalMintFeedItem(chainId: number, nextItem: LocalMintFeedItem): v
   window.localStorage.setItem(localMintFeedKey(chainId), JSON.stringify(merged));
 }
 
-const DEFAULT_IPFS_GATEWAY = (process.env.NEXT_PUBLIC_IPFS_GATEWAY || "https://dweb.link/ipfs").replace(/\/$/, "");
+const DEFAULT_IPFS_GATEWAY = (process.env.NEXT_PUBLIC_IPFS_GATEWAY || "https://dweb.link").replace(/\/$/, "").replace(/\/ipfs$/i, "");
 
 type ViewCollectionToken = Awaited<ReturnType<typeof fetchCollectionTokens>>["tokens"][number];
 
