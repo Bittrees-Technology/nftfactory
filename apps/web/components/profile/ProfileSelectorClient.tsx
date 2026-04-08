@@ -12,7 +12,7 @@ import {
   type ApiProfileRecord
 } from "../../lib/indexerApi";
 import { getContractsConfig } from "../../lib/contracts";
-import { discoverOnchainWalletIdentity } from "../../lib/onchainIdentity";
+import { discoverOnchainWalletIdentity, type OnchainWalletIdentity } from "../../lib/onchainIdentity";
 
 function deriveProfileRouteFromName(fullName: string): string {
   const normalized = String(fullName || "")
@@ -103,6 +103,7 @@ export default function ProfileSelectorClient() {
   const config = useMemo(() => getContractsConfig(), []);
   const publicClient = usePublicClient({ chainId: config.chainId });
   const [profiles, setProfiles] = useState<ApiProfileRecord[]>([]);
+  const [onchainIdentity, setOnchainIdentity] = useState<OnchainWalletIdentity>({ ensNames: [], collections: [] });
   const [isLoading, setIsLoading] = useState(false);
   const [note, setNote] = useState("");
 
@@ -123,6 +124,7 @@ export default function ProfileSelectorClient() {
   useEffect(() => {
     if (!address || !isConnected) {
       setProfiles([]);
+      setOnchainIdentity({ ensNames: [], collections: [] });
       setNote("");
       return;
     }
@@ -151,9 +153,13 @@ export default function ProfileSelectorClient() {
           profileResult.status === "fulfilled" ? profileResult.value.profiles || [] : [];
         const indexedCollections = collectionResult.status === "fulfilled" ? collectionResult.value.collections || [] : [];
         const onchainCollections = onchainResult.status === "fulfilled" ? onchainResult.value.collections || [] : [];
+        const discoveredEnsNames = onchainResult.status === "fulfilled" ? onchainResult.value.ensNames || [] : [];
+        setOnchainIdentity({
+          ensNames: discoveredEnsNames,
+          collections: onchainCollections
+        });
         const mergedCollections = dedupeCollections([...indexedCollections, ...onchainCollections]);
         const derivedProfiles = mergedCollections.map(normalizeDerivedProfile).filter((item): item is ApiProfileRecord => !!item);
-        const discoveredEnsNames = onchainResult.status === "fulfilled" ? onchainResult.value.ensNames || [] : [];
 
         let cachedProfiles: ApiProfileRecord[] = [];
         try {
@@ -222,6 +228,7 @@ export default function ProfileSelectorClient() {
       .catch((err) => {
         if (!cancelled) {
           setProfiles([]);
+          setOnchainIdentity({ ensNames: [], collections: [] });
           const reason = err instanceof Error ? err.message : "Indexer request failed";
           setNote(`Profile lookup is unavailable right now (${reason}). Open setup to continue with manual creator onboarding.`);
         }
@@ -320,6 +327,28 @@ export default function ProfileSelectorClient() {
   }
 
   const linkedProfiles = useMemo(() => profiles.slice(0, 12), [profiles]);
+  const discoveredIdentityLinks = useMemo(
+    () =>
+      onchainIdentity.ensNames.map((fullName) => {
+        const label = fullName.endsWith(".eth") ? fullName.replace(/\.eth$/, "") : fullName;
+        const parts = fullName.split(".").filter(Boolean);
+        const identityMode = parts.length > 2 ? "external-subname" : "ens";
+        return {
+          fullName,
+          href: `/profile/setup?identityMode=${encodeURIComponent(identityMode)}&label=${encodeURIComponent(label)}`
+        };
+      }),
+    [onchainIdentity.ensNames]
+  );
+  const discoveredCollectionLinks = useMemo(
+    () =>
+      onchainIdentity.collections.slice(0, 8).map((collection) => ({
+        contractAddress: collection.contractAddress,
+        ensSubname: collection.ensSubname,
+        href: `/mint?view=manage&address=${encodeURIComponent(collection.contractAddress)}`
+      })),
+    [onchainIdentity.collections]
+  );
   const shouldShowDirectory = !isConnected || (!isLoading && profiles.length === 0);
 
   return (
@@ -362,6 +391,39 @@ export default function ProfileSelectorClient() {
             <div className="row">
               <Link href="/profile/setup" className="ctaLink">Create or link profile</Link>
             </div>
+            {discoveredIdentityLinks.length > 0 ? (
+              <div className="stack">
+                <p className="hint">Onchain ENS identities found for this wallet.</p>
+                {discoveredIdentityLinks.map((item) => (
+                  <div key={item.fullName} className="card">
+                    <strong>{item.fullName}</strong>
+                    <div className="row">
+                      <Link href={item.href} className="ctaLink">
+                        Link this identity
+                      </Link>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            {discoveredCollectionLinks.length > 0 ? (
+              <div className="stack">
+                <p className="hint">Creator collections already owned by this wallet.</p>
+                {discoveredCollectionLinks.map((item) => (
+                  <div key={item.contractAddress} className="card">
+                    <strong>{item.ensSubname || item.contractAddress}</strong>
+                    <p className="hint">
+                      <span className="mono">{item.contractAddress}</span>
+                    </p>
+                    <div className="row">
+                      <Link href={item.href} className="ctaLink secondaryLink">
+                        Manage collection
+                      </Link>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
           </div>
         )}
         {note ? <p className="hint">{note}</p> : null}
