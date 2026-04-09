@@ -5074,6 +5074,68 @@ async function syncOwnerCollectionsIfStale(
   );
 }
 
+async function syncParticipantContractsIfStale(
+  participantAddress: string,
+  deps: IndexerDeps,
+  config: RequestHandlerConfig,
+  options?: { force?: boolean }
+): Promise<void> {
+  const address = String(participantAddress || "").trim().toLowerCase();
+  if (!isAddress(address)) return;
+  if (!String(config.rpcUrl || "").trim()) return;
+
+  const collectionDelegate = (deps.prisma.collection as any);
+  if (!collectionDelegate || typeof collectionDelegate.findUnique !== "function") {
+    return;
+  }
+
+  const summary = await readParticipantSummary(address, config.chainId);
+  const contracts = summary.chains.flatMap((chain) => chain.contracts || []);
+  if (contracts.length === 0) return;
+
+  await Promise.all(
+    contracts.map(async (contract) => {
+      const contractAddress = String(contract.contractAddress || "").trim().toLowerCase();
+      if (!isAddress(contractAddress)) return;
+      const existingCollection = await collectionDelegate.findUnique({
+        where: { contractAddress },
+        select: {
+          ownerAddress: true,
+          ensSubname: true,
+          standard: true,
+          isFactoryCreated: true,
+          isUpgradeable: true
+        }
+      }).catch(() => null);
+
+      const inferredStandard = contract.standards.find((item) => item === "erc721" || item === "erc1155");
+      const inferredOrigin = contract.origins[0] || null;
+      try {
+        await syncCollectionTokensIfStale(
+          {
+            contractAddress,
+            ownerAddress: existingCollection?.ownerAddress || undefined,
+            standard:
+              existingCollection?.standard ||
+              (inferredStandard === "erc1155" ? "ERC1155" : inferredStandard === "erc721" ? "ERC721" : undefined),
+            ensSubname: existingCollection?.ensSubname ?? null,
+            isFactoryCreated:
+              typeof existingCollection?.isFactoryCreated === "boolean"
+                ? existingCollection.isFactoryCreated
+                : inferredOrigin === "factory",
+            isUpgradeable: existingCollection?.isUpgradeable ?? undefined
+          },
+          deps,
+          config,
+          options
+        );
+      } catch (err) {
+        log.warn({ err, participantAddress: address, contractAddress }, "participant_contract_sync_failed");
+      }
+    })
+  );
+}
+
 async function syncRegistryCollectionsIfStale(
   deps: IndexerDeps,
   config: RequestHandlerConfig,
@@ -6275,6 +6337,7 @@ async function handleRequest(
       return;
     }
     await syncOwnerCollectionsIfStale(address, deps, config);
+    await syncParticipantContractsIfStale(address, deps, config);
     await syncPreferredMarketplaceIfStale(deps, config, { includeOffers: true });
 
     const cursor = Math.max(0, Number.parseInt(String(url.searchParams.get("cursor") || "0"), 10) || 0);
@@ -6377,6 +6440,7 @@ async function handleRequest(
       return;
     }
     await syncOwnerCollectionsIfStale(address, deps, config);
+    await syncParticipantContractsIfStale(address, deps, config);
     await syncPreferredMarketplaceIfStale(deps, config, { includeOffers: true });
     const summary = await readParticipantSummary(address, config.chainId);
     sendJson(res, 200, summary);
@@ -6390,6 +6454,7 @@ async function handleRequest(
       sendJson(res, 400, { error: "Valid user address is required" });
       return;
     }
+    await syncParticipantContractsIfStale(address, deps, config);
 
     const cursor = Math.max(0, Number.parseInt(String(url.searchParams.get("cursor") || "0"), 10) || 0);
     const limit = Math.min(100, Math.max(1, Number.parseInt(String(url.searchParams.get("limit") || "50"), 10) || 50));
@@ -6422,6 +6487,7 @@ async function handleRequest(
       return;
     }
     await syncOwnerCollectionsIfStale(owner, deps, config);
+    await syncParticipantContractsIfStale(owner, deps, config);
     await syncPreferredMarketplaceIfStale(deps, config, { includeOffers: true });
     const [includeMintTxHash, includeTokenPresentation, includeListingV2, includeTokenHoldings, ownedTokenWhere] = await Promise.all([
       hasMintTxHashColumn(deps),
