@@ -1,4 +1,26 @@
+import { getIpfsStorageConfig } from "@workspace/ipfs-storage";
+
 type EnvLike = Record<string, string | undefined>;
+
+function hasConfiguredEnvValue(env: EnvLike, name: string): boolean {
+  return Boolean(String(env[name] || "").trim());
+}
+
+function resolveSharedIpfsStorageConfig(env: EnvLike = process.env) {
+  const sharedConfig = getIpfsStorageConfig(env as NodeJS.ProcessEnv);
+
+  return {
+    apiBaseUrl: hasConfiguredEnvValue(env, "IPFS_API_BASE_URL") ? sharedConfig.apiBaseUrl.trim() : "",
+    gatewayBaseUrl: hasConfiguredEnvValue(env, "IPFS_GATEWAY_BASE_URL") ? sharedConfig.gatewayBaseUrl.trim() : "",
+    apiBearerToken: hasConfiguredEnvValue(env, "IPFS_API_BEARER_TOKEN") ? String(sharedConfig.apiBearerToken || "").trim() : "",
+    apiBasicAuthUsername: hasConfiguredEnvValue(env, "IPFS_API_BASIC_AUTH_USERNAME")
+      ? String(sharedConfig.apiBasicAuthUsername || "").trim()
+      : "",
+    apiBasicAuthPassword: hasConfiguredEnvValue(env, "IPFS_API_BASIC_AUTH_PASSWORD")
+      ? String(sharedConfig.apiBasicAuthPassword || "").trim()
+      : ""
+  };
+}
 
 export function normalizeIpfsCid(value: string): string {
   return String(value || "")
@@ -81,7 +103,12 @@ export function buildIpfsReachabilityError(urlLike: string): string {
 }
 
 export function resolveIpfsApiUrl(env: EnvLike = process.env): string {
-  return String(env.IPFS_API_URL || env.IPFS_API_BASE_URL || "").trim();
+  const explicitApiUrl = String(env.IPFS_API_URL || "").trim();
+  if (explicitApiUrl) {
+    return explicitApiUrl;
+  }
+
+  return resolveSharedIpfsStorageConfig(env).apiBaseUrl;
 }
 
 export function resolveIpfsGatewayBaseUrl(env: EnvLike = process.env): string {
@@ -89,17 +116,24 @@ export function resolveIpfsGatewayBaseUrl(env: EnvLike = process.env): string {
   if (explicitGateway) {
     return explicitGateway.replace(/\/+$/, "").replace(/\/ipfs$/i, "");
   }
-  return String(env.IPFS_GATEWAY_BASE_URL || "https://dweb.link").trim().replace(/\/+$/, "").replace(/\/ipfs$/i, "");
+
+  const sharedGateway = resolveSharedIpfsStorageConfig(env).gatewayBaseUrl;
+  if (sharedGateway) {
+    return sharedGateway.replace(/\/+$/, "").replace(/\/ipfs$/i, "");
+  }
+
+  return "https://dweb.link";
 }
 
 export function hasIpfsApiAuthConfigured(env: EnvLike = process.env): boolean {
-  const bearerToken = String(env.IPFS_API_BEARER_TOKEN || "").trim();
+  const sharedConfig = resolveSharedIpfsStorageConfig(env);
+  const bearerToken = sharedConfig.apiBearerToken;
   if (bearerToken) {
     return true;
   }
 
-  const username = String(env.IPFS_API_BASIC_AUTH_USERNAME || "").trim();
-  const password = String(env.IPFS_API_BASIC_AUTH_PASSWORD || "").trim();
+  const username = sharedConfig.apiBasicAuthUsername;
+  const password = sharedConfig.apiBasicAuthPassword;
   return Boolean(username && password);
 }
 
@@ -108,13 +142,14 @@ export function allowsUnauthenticatedPublicIpfsApi(env: EnvLike = process.env): 
 }
 
 export function getIpfsApiAuthMode(env: EnvLike = process.env): "bearer" | "basic" | "public-override" | "none" {
-  const bearerToken = String(env.IPFS_API_BEARER_TOKEN || "").trim();
+  const sharedConfig = resolveSharedIpfsStorageConfig(env);
+  const bearerToken = sharedConfig.apiBearerToken;
   if (bearerToken) {
     return "bearer";
   }
 
-  const username = String(env.IPFS_API_BASIC_AUTH_USERNAME || "").trim();
-  const password = String(env.IPFS_API_BASIC_AUTH_PASSWORD || "").trim();
+  const username = sharedConfig.apiBasicAuthUsername;
+  const password = sharedConfig.apiBasicAuthPassword;
   if (username && password) {
     return "basic";
   }
@@ -227,13 +262,14 @@ export function buildIpfsVersionUrl(baseUrl: string): string {
 }
 
 export function buildIpfsAuthHeaders(env: EnvLike = process.env): HeadersInit {
-  const bearerToken = String(env.IPFS_API_BEARER_TOKEN || "").trim();
+  const sharedConfig = resolveSharedIpfsStorageConfig(env);
+  const bearerToken = sharedConfig.apiBearerToken;
   if (bearerToken) {
     return { Authorization: `Bearer ${bearerToken}` };
   }
 
-  const username = String(env.IPFS_API_BASIC_AUTH_USERNAME || "").trim();
-  const password = String(env.IPFS_API_BASIC_AUTH_PASSWORD || "").trim();
+  const username = sharedConfig.apiBasicAuthUsername;
+  const password = sharedConfig.apiBasicAuthPassword;
 
   if (!username && !password) {
     return {};

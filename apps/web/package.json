@@ -14,6 +14,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@workspace/ipfs-storage": "file:../../../ipfs-evm-system",
     "@rainbow-me/rainbowkit": "^2.2.10",
     "@tanstack/react-query": "^5.90.21",
     "next": "15.5.12",

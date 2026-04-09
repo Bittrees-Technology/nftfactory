@@ -1304,6 +1304,11 @@ function resolveProfileLookup(rawInput: string): {
     if (!normalized) return null;
     pushUnique(slugCandidates, normalized.slug);
     pushUnique(fullNameCandidates, normalized.fullName);
+    const routeCandidate = normalizeRouteSlug(normalized.slug);
+    if (routeCandidate?.includes(".")) {
+      const reversedRoute = routeCandidate.split(".").filter(Boolean).reverse().join(".");
+      pushUnique(fullNameCandidates, reversedRoute);
+    }
     pushUnique(collectionIdentityCandidates, normalized.fullName);
     return { slugCandidates, fullNameCandidates, collectionIdentityCandidates };
   }
@@ -1334,6 +1339,21 @@ function toProfileResponse(record: ProfileRecord): ProfileRecord {
     ownerAddress: record.ownerAddress.toLowerCase(),
     collectionAddress: record.collectionAddress?.toLowerCase() || null
   };
+}
+
+function pickResolvedProfileName(params: {
+  slug: string;
+  fullNameCandidates: string[];
+  linkedProfiles: ProfileRecord[];
+  collections: Array<{ ensSubname: string | null }>;
+}): string {
+  const profileFullName = params.linkedProfiles.find((item) => item.fullName.trim())?.fullName.trim().toLowerCase();
+  if (profileFullName) return profileFullName;
+
+  const collectionName = params.collections.find((item) => String(item.ensSubname || "").trim())?.ensSubname?.trim().toLowerCase();
+  if (collectionName) return collectionName;
+
+  return params.fullNameCandidates[0] || params.slug;
 }
 
 function sanitizeProfileText(value: string | undefined, max = 280): string | null {
@@ -6735,6 +6755,12 @@ async function handleRequest(
     }
 
     const collections = Array.from(collectionMap.values());
+    const resolvedName = pickResolvedProfileName({
+      slug,
+      fullNameCandidates: lookup.fullNameCandidates,
+      linkedProfiles,
+      collections
+    });
 
     const sellers = Array.from(
       new Set([
@@ -6743,7 +6769,7 @@ async function handleRequest(
       ])
     );
     sendJson(res, 200, {
-      name: slug,
+      name: resolvedName,
       sellers,
       profiles: linkedProfiles.map(toProfileResponse),
       collections: collections.map((item: any) => ({

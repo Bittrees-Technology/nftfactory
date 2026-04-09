@@ -47,7 +47,7 @@ The repo-root `.env.example` now includes the current Sepolia-wired address set 
 
 ## Local development
 
-Shared IPFS publishing commands in this repo use `projects/ipfs-evm-system`. Configure `IPFS_API_BASE_URL`, `IPFS_GATEWAY_BASE_URL`, and either `IPFS_API_BEARER_TOKEN` or both `IPFS_API_BASIC_AUTH_USERNAME` and `IPFS_API_BASIC_AUTH_PASSWORD` in the root environment for `npm run ipfs:publish`, `npm run ipfs:publish:metadata`, and `npm run ipfs:publish:profile-snapshot`. The web mint upload route now accepts that same shared config directly; `IPFS_API_URL` is optional if `IPFS_API_BASE_URL` is already set.
+Shared IPFS publishing commands in this repo use `projects/ipfs-evm-system`. Configure `IPFS_API_BASE_URL`, `IPFS_GATEWAY_BASE_URL`, and either `IPFS_API_BEARER_TOKEN` or both `IPFS_API_BASIC_AUTH_USERNAME` and `IPFS_API_BASIC_AUTH_PASSWORD` in the root environment for `npm run ipfs:publish`, `npm run ipfs:publish:metadata`, and `npm run ipfs:publish:profile-snapshot`. The web backend now resolves that same shared config through `@workspace/ipfs-storage`, so `IPFS_API_URL` is only needed when the deployed web app should override the shared IPFS API base URL. If `IPFS_API_URL` points at a public endpoint like `https://ipfs.nftfactory.org`, protect it with `IPFS_API_BEARER_TOKEN` or full basic auth unless the endpoint is intentionally public.
 1. `npm install`
 2. Start indexer API: `npm run dev:indexer`
 3. Start web app: `npm run dev:web`

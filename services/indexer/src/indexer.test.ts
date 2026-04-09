@@ -169,6 +169,42 @@ describe("indexer handler", () => {
     expect(response.body.error).toContain("Too many requests");
     expect(seen).toEqual([false]);
   });
+
+  it("returns the resolved full ENS name for profile lookups", async () => {
+    const prisma = createMockPrisma();
+    prisma.collection.findMany = vi.fn(async ({ where }: any) => {
+      if (where?.OR) {
+        return [
+          {
+            ownerAddress: "0x00000000000000000000000000000000000000aa",
+            ensSubname: "demo.eth",
+            contractAddress: "0x00000000000000000000000000000000000000bb"
+          }
+        ];
+      }
+      return [];
+    });
+
+    const handler = createRequestHandler(
+      {
+        prisma,
+        getClientIpImpl: () => "127.0.0.1",
+        isRateLimitedImpl: () => false
+      },
+      {
+        chainId: 11155111,
+        adminToken: "",
+        adminAllowlist: new Set(),
+        trustProxy: false
+      }
+    );
+
+    const response = await runHandler(handler, createReq({ method: "GET", url: "/api/profile/demo.eth" }));
+    expect(response.status).toBe(200);
+    expect(response.body.name).toBe("demo.eth");
+    expect(response.body.sellers).toEqual(["0x00000000000000000000000000000000000000aa"]);
+  });
+
   it("restores hidden guestbook entries for the profile owner", async () => {
     const guestbookFile = path.join(process.cwd(), "data", "profile-guestbook.json");
     const profileFile = path.join(process.cwd(), "data", "profiles.json");

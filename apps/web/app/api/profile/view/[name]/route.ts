@@ -40,6 +40,11 @@ function pickActiveSellerAddresses(
     return [primaryOwner];
   }
 
+  const collectionOwner = resolution?.collections?.find((item) => isAddress(item.ownerAddress))?.ownerAddress;
+  if (isAddress(collectionOwner)) {
+    return [collectionOwner];
+  }
+
   const resolvedSeller = (resolution?.sellers || []).find((item) => isAddress(item));
   if (resolvedSeller) {
     return [resolvedSeller];

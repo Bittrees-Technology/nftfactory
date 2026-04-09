@@ -2801,7 +2801,7 @@ describe("indexer consistency hardening", () => {
 
     expect(response.status).toBe(200);
     expect(response.body).toMatchObject({
-      name: "eth.artist",
+      name: "artist.eth",
       sellers: ["0x1111111111111111111111111111111111111111"]
     });
     expect(response.body.profiles).toHaveLength(1);

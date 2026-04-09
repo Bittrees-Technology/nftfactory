@@ -921,6 +921,10 @@ export default function ProfileClient({ name }: { name: string }) {
   const primaryProfileName = useMemo(() => {
     const linked = primaryProfile?.fullName?.trim();
     if (linked) return linked;
+    const resolvedName = profileResolution?.name?.trim();
+    if (resolvedName) {
+      return resolvedName.includes(".") ? resolvedName : `${resolvedName}.nftfactory.eth`;
+    }
     const collectionName = profileResolution?.collections?.find((item) => item.ensSubname?.trim())?.ensSubname?.trim();
     if (collectionName) {
       return collectionName.includes(".") ? collectionName : `${collectionName}.nftfactory.eth`;

@@ -98,6 +98,8 @@ type ManageRoyaltySplitDraft = {
   bps: string;
 };
 
+const MAX_ROYALTY_BPS = 10_000;
+
 const SUBNAME_FEE_ETH = "0.001";
 const ENS_NAME_WRAPPER_ADDRESS = /^0x[a-fA-F0-9]{40}$/.test(process.env.NEXT_PUBLIC_ENS_NAME_WRAPPER_ADDRESS || "")
   ? (process.env.NEXT_PUBLIC_ENS_NAME_WRAPPER_ADDRESS as Address)
@@ -320,7 +322,7 @@ function shortenAddress(value: string): string {
 }
 
 function defaultRoyaltySplits(account: string): ManageRoyaltySplitDraft[] {
-  return [{ account, bps: "10000" }];
+  return [{ account, bps: String(MAX_ROYALTY_BPS) }];
 }
 
 function createCommitmentSecret(): Hex {
@@ -343,6 +345,53 @@ function formatBpsAsPercent(value: string | number): string {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2
   })}%`;
+}
+
+function sanitizeRoyaltyBpsInput(value: string): string {
+  const digits = String(value || "").replace(/[^\d]/g, "");
+  if (!digits) return "";
+  const parsed = Number.parseInt(digits, 10);
+  if (!Number.isFinite(parsed) || parsed < 0) return "";
+  return String(Math.min(MAX_ROYALTY_BPS, parsed));
+}
+
+function parseRoyaltyBps(value: string): number {
+  const parsed = Number.parseInt(value || "0", 10);
+  if (!Number.isFinite(parsed) || parsed < 0) return 0;
+  return Math.min(MAX_ROYALTY_BPS, parsed);
+}
+
+function sumRoyaltySplitBps(rows: ManageRoyaltySplitDraft[]): number {
+  return rows.reduce((total, split) => total + parseRoyaltyBps(split.bps), 0);
+}
+
+function buildAddedRoyaltySplitRows(rows: ManageRoyaltySplitDraft[]): ManageRoyaltySplitDraft[] {
+  if (rows.length === 0) return [{ account: "", bps: String(MAX_ROYALTY_BPS) }];
+
+  const remainingBps = MAX_ROYALTY_BPS - sumRoyaltySplitBps(rows);
+  if (remainingBps > 0) {
+    return [...rows, { account: "", bps: String(remainingBps) }];
+  }
+
+  let donorIndex = -1;
+  let donorBps = 0;
+  rows.forEach((split, index) => {
+    const nextBps = parseRoyaltyBps(split.bps);
+    if (nextBps > donorBps) {
+      donorBps = nextBps;
+      donorIndex = index;
+    }
+  });
+
+  if (donorIndex >= 0 && donorBps > 1) {
+    const carvedOutBps = Math.floor(donorBps / 2);
+    const donorNextBps = donorBps - carvedOutBps;
+    return rows
+      .map((split, index) => (index === donorIndex ? { ...split, bps: String(donorNextBps) } : split))
+      .concat({ account: "", bps: String(carvedOutBps) });
+  }
+
+  return [...rows, { account: "", bps: "" }];
 }
 
 function normalizeCollectionIdentityMode(value: string | undefined): CollectionIdentityMode {
@@ -874,11 +923,7 @@ export default function MintClient({
     return String(selectableWalletChains[0]?.id ?? config.chainId);
   }, [chainId, config.chainId, isConnected, requestedWalletNetworkId, selectableWalletChains]);
   const manageRoyaltySplitTotal = useMemo(
-    () =>
-      manageRoyaltySplits.reduce((total, split) => {
-        const nextBps = Number.parseInt(split.bps || "0", 10);
-        return total + (Number.isInteger(nextBps) ? nextBps : 0);
-      }, 0),
+    () => sumRoyaltySplitBps(manageRoyaltySplits),
     [manageRoyaltySplits]
   );
   const hasPendingOwnershipTransfer = useMemo(
@@ -915,7 +960,10 @@ export default function MintClient({
     () => (isAddress(manageCollectionOwner) ? toExplorerAddress(config.chainId, manageCollectionOwner) : null),
     [config.chainId, manageCollectionOwner]
   );
-  const manageRoyaltySplitReady = manageRoyaltySplits.length === 0 || manageRoyaltySplitTotal === 10_000;
+  const manageRoyaltySplitDelta = MAX_ROYALTY_BPS - manageRoyaltySplitTotal;
+  const manageRoyaltySplitReady = manageRoyaltySplits.length === 0 || manageRoyaltySplitDelta === 0;
+  const manageRoyaltySplitRemaining = Math.max(0, manageRoyaltySplitDelta);
+  const manageRoyaltySplitOverage = Math.max(0, Math.abs(Math.min(0, manageRoyaltySplitDelta)));
   const manageRoyaltyPercent = useMemo(() => formatBpsAsPercent(manageRoyaltyBps), [manageRoyaltyBps]);
   const collectionEnsParentCandidates = useMemo(
     () =>
@@ -2346,13 +2394,18 @@ export default function MintClient({
   function updateRoyaltySplitRow(index: number, field: keyof ManageRoyaltySplitDraft, value: string): void {
     setManageRoyaltySplits((prev) =>
       prev.map((split, currentIndex) =>
-        currentIndex === index ? { ...split, [field]: value } : split
+        currentIndex === index
+          ? {
+              ...split,
+              [field]: field === "bps" ? sanitizeRoyaltyBpsInput(value) : value
+            }
+          : split
       )
     );
   }
 
   function addRoyaltySplitRow(): void {
-    setManageRoyaltySplits((prev) => [...prev, { account: "", bps: "" }]);
+    setManageRoyaltySplits((prev) => buildAddedRoyaltySplitRows(prev));
   }
 
   function removeRoyaltySplitRow(index: number): void {
@@ -3572,24 +3625,26 @@ export default function MintClient({
                     Current target: <strong>{manageRoyaltyPercent}</strong>
                   </p>
                 </div>
-                <label>
-                  Default royalty receiver
-                  <input
-                    value={manageRoyaltyReceiver}
-                    onChange={(e) => setManageRoyaltyReceiver(e.target.value)}
-                    placeholder={account || "0x..."}
-                  />
-                </label>
-                <label>
-                  Default royalty (basis points)
-                  <input
-                    inputMode="numeric"
-                    value={manageRoyaltyBps}
-                    onChange={(e) => setManageRoyaltyBps(e.target.value)}
-                    placeholder="500"
-                  />
-                  <span className="hint">{manageRoyaltyPercent}</span>
-                </label>
+                <div className="gridMini mintRoyaltyDefaultGrid">
+                  <label className="mintField">
+                    <span>Default royalty receiver</span>
+                    <input
+                      value={manageRoyaltyReceiver}
+                      onChange={(e) => setManageRoyaltyReceiver(e.target.value)}
+                      placeholder={account || "0x..."}
+                    />
+                  </label>
+                  <label className="mintField mintFieldCompact">
+                    <span>Default royalty (basis points)</span>
+                    <input
+                      inputMode="numeric"
+                      value={manageRoyaltyBps}
+                      onChange={(e) => setManageRoyaltyBps(sanitizeRoyaltyBpsInput(e.target.value))}
+                      placeholder="500"
+                    />
+                    <span className="hint">{manageRoyaltyPercent}</span>
+                  </label>
+                </div>
                 <p className="hint">Use 0 bps to disable the collection contract&apos;s default royalty.</p>
                 <button
                   type="button"
@@ -3604,9 +3659,9 @@ export default function MintClient({
               <div className="selectionCard mintRoyaltyPanel">
                 <div className="mintRoyaltyHeader">
                   <div>
-                    <p><strong>Collaborator split policy</strong></p>
+                    <p><strong>Collaborator payout splits</strong></p>
                     <p className="hint">
-                      Optional weights stored in the protocol split registry for {appChain.name}. This does <strong>not</strong> update the collection contract&apos;s default royalty.
+                      Optional payout weights stored in the protocol split registry for {appChain.name}. This does <strong>not</strong> change the collection contract&apos;s default royalty above.
                     </p>
                   </div>
                   <p className={`hint mintRoyaltyMeta${manageRoyaltySplitReady ? "" : " error"}`}>
@@ -3630,21 +3685,39 @@ export default function MintClient({
                       )}
                     </p>
                     <p className="hint">
-                      Save an empty split list to clear the stored collaborator policy. If downstream royalty settlement reads the split registry, keep it aligned with the default royalty above.
+                      Save an empty split list to clear the stored collaborator policy. New rows automatically use any unallocated share, and once you are already at 100%, adding another row splits the largest existing share to give you a starting point.
                     </p>
+                    <div className="mintRoyaltyStats">
+                      <div className="selectionCard mintRoyaltyStat">
+                        <span className="hint">Split rows</span>
+                        <strong>{manageRoyaltySplits.length}</strong>
+                      </div>
+                      <div className="selectionCard mintRoyaltyStat">
+                        <span className="hint">Allocated</span>
+                        <strong>{formatBpsAsPercent(manageRoyaltySplitTotal)}</strong>
+                      </div>
+                      <div className={`selectionCard mintRoyaltyStat${manageRoyaltySplitReady ? "" : " is-warning"}`}>
+                        <span className="hint">
+                          {manageRoyaltySplitDelta >= 0 ? "Remaining" : "Over by"}
+                        </span>
+                        <strong>
+                          {formatBpsAsPercent(manageRoyaltySplitDelta >= 0 ? manageRoyaltySplitRemaining : manageRoyaltySplitOverage)}
+                        </strong>
+                      </div>
+                    </div>
                     {manageRoyaltySplits.length === 0 ? <p className="hint">No split rows configured yet.</p> : null}
                     {manageRoyaltySplits.map((split, index) => (
-                      <div key={`royalty-split-${index}`} className="gridMini selectionCard mintRoyaltySplitRow">
-                        <label>
-                          Recipient {index + 1}
+                      <div key={`royalty-split-${index}`} className="selectionCard mintRoyaltySplitRow">
+                        <label className="mintField">
+                          <span>Recipient {index + 1}</span>
                           <input
                             value={split.account}
                             onChange={(e) => updateRoyaltySplitRow(index, "account", e.target.value)}
                             placeholder="0x..."
                           />
                         </label>
-                        <label>
-                          Bps
+                        <label className="mintField mintFieldCompact">
+                          <span>Basis points</span>
                           <input
                             inputMode="numeric"
                             value={split.bps}
@@ -3653,21 +3726,29 @@ export default function MintClient({
                           />
                           <span className="hint">{formatBpsAsPercent(split.bps)}</span>
                         </label>
-                        <p className="hint mintRoyaltySplitPreview">
-                          Split: <strong>{formatBpsAsPercent(split.bps)}</strong>
-                        </p>
-                        <button
-                          type="button"
-                          className="secondary"
-                          onClick={() => removeRoyaltySplitRow(index)}
-                          disabled={royaltySplitTx.status === "pending"}
-                        >
-                          Remove
-                        </button>
+                        <div className="mintRoyaltySplitPreview">
+                          <span className="hint">Share</span>
+                          <strong>{formatBpsAsPercent(split.bps)}</strong>
+                        </div>
+                        <div className="mintRoyaltySplitRowActions">
+                          <button
+                            type="button"
+                            className="secondary"
+                            onClick={() => removeRoyaltySplitRow(index)}
+                            disabled={royaltySplitTx.status === "pending"}
+                          >
+                            Remove
+                          </button>
+                        </div>
                       </div>
                     ))}
                     <p className={`hint${manageRoyaltySplitReady ? "" : " error"}`}>
-                      Split total: {formatBpsAsPercent(manageRoyaltySplitTotal)} ({manageRoyaltySplitTotal.toLocaleString()} / 10,000 bps)
+                      Split total: {formatBpsAsPercent(manageRoyaltySplitTotal)} ({manageRoyaltySplitTotal.toLocaleString()} / {MAX_ROYALTY_BPS.toLocaleString()} bps)
+                      {manageRoyaltySplitDelta > 0
+                        ? ` · Add ${formatBpsAsPercent(manageRoyaltySplitRemaining)} more before saving.`
+                        : manageRoyaltySplitDelta < 0
+                          ? ` · Reduce by ${formatBpsAsPercent(manageRoyaltySplitOverage)} before saving.`
+                          : " · Ready to save."}
                     </p>
                     <div className="row mintRoyaltyActions">
                       <button
@@ -3676,7 +3757,7 @@ export default function MintClient({
                         onClick={addRoyaltySplitRow}
                         disabled={royaltySplitTx.status === "pending"}
                       >
-                        Add split row
+                        Add collaborator
                       </button>
                       <button
                         type="button"
