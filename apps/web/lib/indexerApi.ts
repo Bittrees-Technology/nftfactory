@@ -559,6 +559,20 @@ export async function fetchProfileDirectory(
   if (params?.sort) query.set("sort", params.sort);
   if (typeof params?.limit === "number" && Number.isFinite(params.limit)) query.set("limit", String(params.limit));
   const suffix = query.size > 0 ? `?${query.toString()}` : "";
+  if (!options?.baseUrl && !options?.chainId) {
+    const response = await fetch(`/api/profiles${suffix}`, {
+      method: "GET",
+      cache: "no-store",
+      headers: {
+        "Content-Type": "application/json"
+      }
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text || `Profile directory request failed (${response.status})`);
+    }
+    return (await response.json()) as ApiProfileDirectoryResponse;
+  }
   return fetchJson<ApiProfileDirectoryResponse>(`/api/profiles${suffix}`, undefined, undefined, options);
 }
 
