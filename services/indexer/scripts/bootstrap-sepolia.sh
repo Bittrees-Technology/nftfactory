@@ -3,6 +3,14 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 INDEXER_DIR="$ROOT_DIR/services/indexer"
+cd "$ROOT_DIR"
+
+if [[ -f "$INDEXER_DIR/.env" ]]; then
+  set -a
+  # shellcheck disable=SC1091
+  source "$INDEXER_DIR/.env"
+  set +a
+fi
 
 export CHAIN_ID="${CHAIN_ID:-11155111}"
 export RPC_URL="${RPC_URL:-https://eth-sepolia.g.alchemy.com/v2/8EMwh0Ehzhq0j7cDJl2Db}"

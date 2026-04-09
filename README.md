@@ -154,6 +154,13 @@ Those explicit entries are used in both places:
 - historical backfill (`npm run indexer:bootstrap:sepolia`)
 - live owner/profile sync reads inside the running indexer
 
+If the host does not have Docker or Podman, install a rootless local PostgreSQL bundle under the indexer service:
+
+1. `npm run indexer:db:install-local`
+2. `npm run indexer:db:start`
+
+That installs PostgreSQL into `services/indexer/.tools/postgres15` and starts it from the repo-local runtime directory.
+
 ### ENS Subname Backfill
 - Single record:
   - `npm --workspace services/indexer run admin:backfill-subname -- --subname studio --owner 0xYourOwnerAddress`

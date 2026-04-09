@@ -6,6 +6,10 @@ INDEXER_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 RUNTIME_DIR="$INDEXER_DIR/.runtime-host"
 LOG_DIR="$RUNTIME_DIR/logs"
 PID_DIR="$RUNTIME_DIR/pids"
+DB_NAME="${INDEXER_DB_NAME:-nftfactory}"
+DB_USER="${INDEXER_DB_USER:-postgres}"
+DB_PASSWORD="${INDEXER_DB_PASSWORD:-postgres}"
+DB_PORT="${INDEXER_DB_PORT:-5432}"
 
 mkdir -p "$LOG_DIR" "$PID_DIR"
 
@@ -64,11 +68,14 @@ start_service() {
   return 1
 }
 
-if [ -n "${DATABASE_URL:-}" ]; then
-  echo "Using existing DATABASE_URL for the indexer."
-else
+if [ -z "${DATABASE_URL:-}" ] || [[ "$DATABASE_URL" == *"@127.0.0.1:"* ]] || [[ "$DATABASE_URL" == *"@localhost:"* ]]; then
   echo "Ensuring Postgres is available for the indexer..."
   npm run db:start
+  if [ -z "${DATABASE_URL:-}" ]; then
+    export DATABASE_URL="postgresql://${DB_USER}:${DB_PASSWORD}@127.0.0.1:${DB_PORT}/${DB_NAME}"
+  fi
+else
+  echo "Using existing DATABASE_URL for the indexer."
 fi
 
 echo "Generating Prisma client..."

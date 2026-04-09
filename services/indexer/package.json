@@ -10,6 +10,7 @@
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:start": "bash ./scripts/ensure-postgres.sh",
+    "db:install-local": "bash ./scripts/install-local-postgres.sh",
     "bootstrap:sepolia": "bash ./scripts/bootstrap-sepolia.sh",
     "host:stack:start": "bash ./scripts/start-host-stack.sh",
     "host:stack:status": "bash ./scripts/status-host-stack.sh",

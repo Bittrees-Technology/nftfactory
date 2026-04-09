@@ -18,6 +18,7 @@
     "typecheck:indexer": "npm --workspace services/indexer run typecheck",
     "test:indexer": "npm --workspace services/indexer run test",
     "dev:indexer": "npm --workspace services/indexer run dev",
+    "indexer:db:install-local": "npm --workspace services/indexer run db:install-local",
     "indexer:db:start": "npm --workspace services/indexer run db:start",
     "indexer:bootstrap:sepolia": "npm --workspace services/indexer run bootstrap:sepolia",
     "indexer:host:start": "npm --workspace services/indexer run host:stack:start",
