@@ -88,6 +88,9 @@ Shared IPFS publishing commands in this repo use `projects/ipfs-evm-system`. Con
   - `RPC_URL=...`
   - `INDEXER_PORT=8787` (optional; defaults to `8787`)
   - `CHAIN_ID=1` (optional; defaults to Ethereum mainnet)
+  - `INDEXER_START_BLOCK=...` (optional; global lower bound for first-run chain scans)
+  - `INDEXER_REGISTRY_START_BLOCK=...` (optional; first-run lower bound for registry event scans)
+  - `INDEXER_COLLECTION_START_BLOCK=...` (optional; first-run lower bound for collection transfer scans)
   - `INDEXER_ADMIN_TOKEN=...` (recommended; required for admin mutation routes when set)
   - `INDEXER_ADMIN_ALLOWLIST=0xabc...,0xdef...` (optional; wallet addresses allowed to perform admin actions)
   - `REGISTRY_ADDRESS=...`
@@ -95,9 +98,21 @@ Shared IPFS publishing commands in this repo use `projects/ipfs-evm-system`. Con
   - `MODERATOR_REGISTRY_ADDRESS=...` (if using on-chain moderator reads)
   - `INDEXER_REGISTRY_SYNC_TTL_MS=120000` (optional; background registry discovery cadence)
   - `INDEXER_COLLECTION_SYNC_TTL_MS=300000` (optional; stale-collection rescan cadence)
+  - `INDEXER_LOG_CHUNK_SIZE=200` (optional; live log scan block window)
+  - `INDEXER_RPC_RETRY_BASE_MS=2000` (optional; live RPC backoff floor)
+  - `INDEXER_RPC_RETRY_MAX_MS=30000` (optional; live RPC backoff ceiling)
+  - `INDEXER_RPC_INTER_CHUNK_DELAY_MS=250` (optional; pause between live log chunks)
+  - `INDEXER_SYNC_CONCURRENCY=1` (optional; max concurrent collection syncs)
+  - `INDEXER_BACKFILL_LOG_CHUNK_SIZE=25` (optional; historical backfill log window)
+  - `INDEXER_BACKFILL_RPC_RETRY_BASE_MS=2000` (optional; historical backoff floor)
+  - `INDEXER_BACKFILL_RPC_RETRY_MAX_MS=30000` (optional; historical backoff ceiling)
+  - `INDEXER_BACKFILL_INTER_CHUNK_DELAY_MS=500` (optional; pause between historical log chunks)
   - `TRUST_PROXY=false` (optional; keep `false` unless a trusted proxy sets `X-Forwarded-For`)
   - for the current Sepolia validation stack:
     - `CHAIN_ID=11155111`
+    - `INDEXER_START_BLOCK=10359500`
+    - `INDEXER_REGISTRY_START_BLOCK=10359500`
+    - `INDEXER_COLLECTION_START_BLOCK=10359500`
     - `RPC_URL=https://eth-sepolia.g.alchemy.com/v2/8EMwh0Ehzhq0j7cDJl2Db`
     - `REGISTRY_ADDRESS=0x1c8124F401Ac7A067f0c3dD39ce102D3623F4DE3`
     - `MARKETPLACE_ADDRESS=0xc0098BCC01e2179A5018EFabf64a9c74a2E6244B`

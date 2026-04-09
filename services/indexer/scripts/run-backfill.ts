@@ -30,6 +30,16 @@ const SHARED_BACKFILL_TARGETS = getSharedBackfillTargets(process.env);
 const CUSTOM_COLLECTIONS_FILE = process.env.INDEXER_CUSTOM_COLLECTIONS_FILE || "";
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const FROM_BLOCK = BigInt(process.argv[2] || "0");
+const BACKFILL_LOG_CHUNK_SIZE = BigInt(Math.max(1, Number.parseInt(process.env.INDEXER_BACKFILL_LOG_CHUNK_SIZE || "25", 10) || 25));
+const BACKFILL_RPC_RETRY_BASE_MS = Math.max(250, Number.parseInt(process.env.INDEXER_BACKFILL_RPC_RETRY_BASE_MS || "2000", 10) || 2000);
+const BACKFILL_RPC_RETRY_MAX_MS = Math.max(
+  BACKFILL_RPC_RETRY_BASE_MS,
+  Number.parseInt(process.env.INDEXER_BACKFILL_RPC_RETRY_MAX_MS || "30000", 10) || 30000
+);
+const BACKFILL_INTER_CHUNK_DELAY_MS = Math.max(
+  0,
+  Number.parseInt(process.env.INDEXER_BACKFILL_INTER_CHUNK_DELAY_MS || "500", 10) || 500
+);
 
 const prisma = new PrismaClient();
 
@@ -166,7 +176,7 @@ function chunkArray<T>(arr: T[], size: number): T[][] {
 
 /** Retry any async fn on 429 / too-many-requests with exponential back-off. */
 async function withRetry<T>(fn: () => Promise<T>, maxRetries = 6): Promise<T> {
-  let retryDelay = 1500;
+  let retryDelay = BACKFILL_RPC_RETRY_BASE_MS;
   for (let attempt = 0; ; attempt++) {
     try {
       return await fn();
@@ -174,12 +184,12 @@ async function withRetry<T>(fn: () => Promise<T>, maxRetries = 6): Promise<T> {
       if (attempt >= maxRetries || !isRateLimitError(err)) throw err;
       process.stdout.write(`r`);
       await sleep(retryDelay);
-      retryDelay = Math.min(retryDelay * 2, 30_000);
+      retryDelay = Math.min(retryDelay * 2, BACKFILL_RPC_RETRY_MAX_MS);
     }
   }
 }
 
-async function getLogsChunked(client: any, params: any, label: string, initialChunkSize = 200n): Promise<any[]> {
+async function getLogsChunked(client: any, params: any, label: string, initialChunkSize = BACKFILL_LOG_CHUNK_SIZE): Promise<any[]> {
   const currentBlock = await withRetry(() => client.getBlockNumber());
   const fromBlock: bigint = params.fromBlock ?? 0n;
   const toBlock: bigint = params.toBlock ?? currentBlock;
@@ -193,7 +203,7 @@ async function getLogsChunked(client: any, params: any, label: string, initialCh
 
   while (start <= toBlock) {
     const end = start + chunkSize - 1n > toBlock ? toBlock : start + chunkSize - 1n;
-    let retryDelay = 2000;
+    let retryDelay = BACKFILL_RPC_RETRY_BASE_MS;
     let advanced = false;
 
     while (!advanced) {
@@ -203,12 +213,12 @@ async function getLogsChunked(client: any, params: any, label: string, initialCh
         start = end + 1n;
         chunks++;
         advanced = true;
-        await sleep(300); // inter-chunk pause to stay within CU budget
+        await sleep(BACKFILL_INTER_CHUNK_DELAY_MS); // inter-chunk pause to stay within CU budget
       } catch (err) {
         if (isRateLimitError(err)) {
           process.stdout.write(`r`);
           await sleep(retryDelay);
-          retryDelay = Math.min(retryDelay * 2, 30_000);
+          retryDelay = Math.min(retryDelay * 2, BACKFILL_RPC_RETRY_MAX_MS);
         } else if (isRangeTooLargeError(err) && chunkSize > 1n) {
           const preview = (err instanceof Error ? err.message : String(err)).split("\n")[0].slice(0, 120);
           process.stdout.write(`\n  [${label}] halving chunk ${chunkSize}→${chunkSize / 2n}: ${preview}\n`);

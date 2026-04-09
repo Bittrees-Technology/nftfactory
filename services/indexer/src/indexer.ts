@@ -767,6 +767,20 @@ const LISTING_SYNC_TTL_MS = 30_000;
 const MARKETPLACE_SYNC_TTL_MS = 30_000;
 const REGISTRY_SYNC_TTL_MS = Math.max(30_000, Number.parseInt(process.env.INDEXER_REGISTRY_SYNC_TTL_MS || "120000", 10) || 120_000);
 const COLLECTION_SYNC_TTL_MS = Math.max(30_000, Number.parseInt(process.env.INDEXER_COLLECTION_SYNC_TTL_MS || "300000", 10) || 300_000);
+const INDEXER_START_BLOCK = Math.max(0, Number.parseInt(process.env.INDEXER_START_BLOCK || "0", 10) || 0);
+const INDEXER_REGISTRY_START_BLOCK = Math.max(
+  0,
+  Number.parseInt(process.env.INDEXER_REGISTRY_START_BLOCK || String(INDEXER_START_BLOCK), 10) || INDEXER_START_BLOCK
+);
+const INDEXER_COLLECTION_START_BLOCK = Math.max(
+  0,
+  Number.parseInt(process.env.INDEXER_COLLECTION_START_BLOCK || String(INDEXER_START_BLOCK), 10) || INDEXER_START_BLOCK
+);
+const LOG_CHUNK_SIZE = BigInt(Math.max(1, Number.parseInt(process.env.INDEXER_LOG_CHUNK_SIZE || "200", 10) || 200));
+const RPC_RETRY_BASE_MS = Math.max(250, Number.parseInt(process.env.INDEXER_RPC_RETRY_BASE_MS || "2000", 10) || 2000);
+const RPC_RETRY_MAX_MS = Math.max(RPC_RETRY_BASE_MS, Number.parseInt(process.env.INDEXER_RPC_RETRY_MAX_MS || "30000", 10) || 30000);
+const RPC_INTER_CHUNK_DELAY_MS = Math.max(0, Number.parseInt(process.env.INDEXER_RPC_INTER_CHUNK_DELAY_MS || "250", 10) || 250);
+const INDEXER_SYNC_CONCURRENCY = Math.max(1, Number.parseInt(process.env.INDEXER_SYNC_CONCURRENCY || "1", 10) || 1);
 let lastListingSyncAt = 0;
 let lastListingSyncCount = 0;
 let listingSyncPromise: Promise<void> | null = null;
@@ -4561,10 +4575,29 @@ async function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function mapWithConcurrency<T>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T) => Promise<void>
+): Promise<void> {
+  if (items.length === 0) return;
+  const maxConcurrency = Math.max(1, concurrency);
+  let nextIndex = 0;
+  const runners = Array.from({ length: Math.min(maxConcurrency, items.length) }, async () => {
+    while (true) {
+      const index = nextIndex;
+      nextIndex += 1;
+      if (index >= items.length) return;
+      await worker(items[index]);
+    }
+  });
+  await Promise.all(runners);
+}
+
 async function getLogsChunked(
   client: ReturnType<typeof createPublicClient>,
   params: any,
-  initialChunkSize = 2000n
+  initialChunkSize = LOG_CHUNK_SIZE
 ): Promise<any[]> {
   const currentBlock = await client.getBlockNumber();
   const fromBlock: bigint = params.fromBlock ?? 0n;
@@ -4576,7 +4609,7 @@ async function getLogsChunked(
 
   while (start <= toBlock) {
     const end = start + chunkSize - 1n > toBlock ? toBlock : start + chunkSize - 1n;
-    let retryDelay = 2000;
+    let retryDelay = RPC_RETRY_BASE_MS;
     let advanced = false;
     while (!advanced) {
       try {
@@ -4587,7 +4620,7 @@ async function getLogsChunked(
       } catch (err) {
         if (isRateLimitError(err)) {
           await sleep(retryDelay);
-          retryDelay = Math.min(retryDelay * 2, 30_000);
+          retryDelay = Math.min(retryDelay * 2, RPC_RETRY_MAX_MS);
         } else if (isRangeTooLargeError(err) && chunkSize > 1n) {
           chunkSize = chunkSize / 2n < 1n ? 1n : chunkSize / 2n;
           break; // restart inner loop with smaller chunk
@@ -4595,6 +4628,9 @@ async function getLogsChunked(
           throw err;
         }
       }
+    }
+    if (RPC_INTER_CHUNK_DELAY_MS > 0) {
+      await sleep(RPC_INTER_CHUNK_DELAY_MS);
     }
   }
 
@@ -4693,7 +4729,7 @@ async function backfillCollectionTokens(
 
   const effectiveOwnerAddress = requestedCollectionOwner || chainOwnerAddress || existingCollection?.ownerAddress || null;
   const effectiveIsUpgradeable = payload.isUpgradeable ?? existingCollection?.isUpgradeable ?? true;
-  const scanFromBlock = payload.fromBlock != null ? BigInt(payload.fromBlock) : 0n;
+  const scanFromBlock = payload.fromBlock != null ? BigInt(payload.fromBlock) : BigInt(INDEXER_COLLECTION_START_BLOCK);
   const blockTimestampCache = new Map<string, string>();
   let collectionCreatedAtIso = payload.collectionCreatedAt?.trim() || null;
   let scanned = 0;
@@ -5135,9 +5171,9 @@ async function syncOwnerCollectionsIfStale(
     });
   }
 
-  await Promise.all(
-    Array.from(deduped.values()).map((item) => syncCollectionTokensIfStale(item, deps, config, options))
-  );
+  await mapWithConcurrency(Array.from(deduped.values()), INDEXER_SYNC_CONCURRENCY, async (item) => {
+    await syncCollectionTokensIfStale(item, deps, config, options);
+  });
 }
 
 async function syncParticipantContractsIfStale(
@@ -5159,8 +5195,7 @@ async function syncParticipantContractsIfStale(
   const contracts = summary.chains.flatMap((chain) => chain.contracts || []);
   if (contracts.length === 0) return;
 
-  await Promise.all(
-    contracts.map(async (contract) => {
+  await mapWithConcurrency(contracts, INDEXER_SYNC_CONCURRENCY, async (contract) => {
       const contractAddress = String(contract.contractAddress || "").trim().toLowerCase();
       if (!isAddress(contractAddress)) return;
       const existingCollection = await collectionDelegate.findUnique({
@@ -5198,8 +5233,7 @@ async function syncParticipantContractsIfStale(
       } catch (err) {
         log.warn({ err, participantAddress: address, contractAddress }, "participant_contract_sync_failed");
       }
-    })
-  );
+    });
 }
 
 async function syncRegistryCollectionsIfStale(
@@ -5230,7 +5264,7 @@ async function syncRegistryCollectionsIfStale(
       if (config.registryAddress) {
         const syncState = await readIndexerSyncState();
         const lastSyncedBlock = parseSyncStateBlock(syncState.registryLastBlock);
-        const fromBlock = force || lastSyncedBlock === null ? 0n : lastSyncedBlock + 1n;
+        const fromBlock = force || lastSyncedBlock === null ? BigInt(INDEXER_REGISTRY_START_BLOCK) : lastSyncedBlock + 1n;
         if (fromBlock <= currentBlock) {
           const logs = await getLogsChunked(client, {
             address: config.registryAddress,
@@ -5281,9 +5315,9 @@ async function syncRegistryCollectionsIfStale(
         });
       }
 
-      await Promise.all(
-        Array.from(discovered.values()).map((item) => syncCollectionTokensIfStale(item, deps, config, { force: true }))
-      );
+      await mapWithConcurrency(Array.from(discovered.values()), INDEXER_SYNC_CONCURRENCY, async (item) => {
+        await syncCollectionTokensIfStale(item, deps, config, { force: true });
+      });
 
       lastRegistrySyncAt = Date.now();
     } catch (err) {
