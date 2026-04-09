@@ -66,6 +66,15 @@ Shared IPFS publishing commands in this repo use `projects/ipfs-evm-system`. Con
    - `ETHERSCAN_API_KEY`
    - IPFS auth values
 3. Only add Sepolia env values if you explicitly want a second validation network alongside mainnet.
+   Current Sepolia validation snapshot:
+   - `NEXT_PUBLIC_RPC_URL_11155111=https://eth-sepolia.g.alchemy.com/v2/8EMwh0Ehzhq0j7cDJl2Db`
+   - `NEXT_PUBLIC_REGISTRY_ADDRESS_11155111=0x1c8124F401Ac7A067f0c3dD39ce102D3623F4DE3`
+   - `NEXT_PUBLIC_ROYALTY_SPLIT_REGISTRY_ADDRESS_11155111=0xF2527b3E8085e03A0319CecbcB95a6877546D4B5`
+   - `NEXT_PUBLIC_MARKETPLACE_ADDRESS_11155111=0xc0098BCC01e2179A5018EFabf64a9c74a2E6244B`
+   - `NEXT_PUBLIC_SHARED_721_ADDRESS_11155111=0x4018dD11271CecFAbb275656631896F7A8811965`
+   - `NEXT_PUBLIC_SHARED_1155_ADDRESS_11155111=0x530C5f6F1728dCF60C3399e6D9d3aC729a7637Ce`
+   - `NEXT_PUBLIC_SUBNAME_REGISTRAR_ADDRESS_11155111=0x0e8027b4b1E9B288E0e3Eedb50C52C20b8291294`
+   - `NEXT_PUBLIC_FACTORY_ADDRESS_11155111=0xe2E33E37A7bA2cAe9DEf60B1E1643c2803458DA8`
 4. Export the root env into your shell before running root-level checks:
    - `set -a; source .env; set +a`
 5. Run:
@@ -87,6 +96,13 @@ Shared IPFS publishing commands in this repo use `projects/ipfs-evm-system`. Con
   - `INDEXER_REGISTRY_SYNC_TTL_MS=120000` (optional; background registry discovery cadence)
   - `INDEXER_COLLECTION_SYNC_TTL_MS=300000` (optional; stale-collection rescan cadence)
   - `TRUST_PROXY=false` (optional; keep `false` unless a trusted proxy sets `X-Forwarded-For`)
+  - for the current Sepolia validation stack:
+    - `CHAIN_ID=11155111`
+    - `RPC_URL=https://eth-sepolia.g.alchemy.com/v2/8EMwh0Ehzhq0j7cDJl2Db`
+    - `REGISTRY_ADDRESS=0x1c8124F401Ac7A067f0c3dD39ce102D3623F4DE3`
+    - `MARKETPLACE_ADDRESS=0xc0098BCC01e2179A5018EFabf64a9c74a2E6244B`
+    - `SHARED_721_ADDRESS=0x4018dD11271CecFAbb275656631896F7A8811965`
+    - `SHARED_1155_ADDRESS=0x530C5f6F1728dCF60C3399e6D9d3aC729a7637Ce`
 - `apps/web/.env.local`
   - `NEXT_PUBLIC_INDEXER_API_URL=http://127.0.0.1:8787`
   - existing contract and wallet env vars already used by mint/list flows

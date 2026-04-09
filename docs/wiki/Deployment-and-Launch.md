@@ -42,6 +42,19 @@ Current Sepolia split-registry deployment:
 
 - `RoyaltySplitRegistry`: `0x6617DD523409a78831E75E156f532d1F0402b5D8`
 
+Current app-wired Sepolia contract snapshot:
+
+- `Registry`: `0x1c8124F401Ac7A067f0c3dD39ce102D3623F4DE3`
+- `Marketplace`: `0xc0098BCC01e2179A5018EFabf64a9c74a2E6244B`
+- `RoyaltySplitRegistry`: `0xF2527b3E8085e03A0319CecbcB95a6877546D4B5`
+- `SharedMint721`: `0x4018dD11271CecFAbb275656631896F7A8811965`
+- `SharedMint1155`: `0x530C5f6F1728dCF60C3399e6D9d3aC729a7637Ce`
+- `SubnameRegistrar`: `0x0e8027b4b1E9B288E0e3Eedb50C52C20b8291294`
+- `CreatorFactory`: `0xe2E33E37A7bA2cAe9DEf60B1E1643c2803458DA8`
+- `ENS NameWrapper`: `0x0635513f179D50A207757E05759CbD106d7dFcE8`
+- `ENS ETH Registrar Controller`: `0xFED6a969AaA60E4961FCD3EBF1A2e8913ac65B72`
+- `RPC`: `https://eth-sepolia.g.alchemy.com/v2/8EMwh0Ehzhq0j7cDJl2Db`
+
 ## Local development
 
 Local work should validate:
