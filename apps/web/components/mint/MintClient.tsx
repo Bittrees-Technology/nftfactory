@@ -51,6 +51,7 @@ import {
   getMintStatusLabel
 } from "../../lib/nftPresentation";
 import { verifyOwnedCollectionsOnChain } from "../../lib/onchainCollections";
+import { discoverOnchainWalletIdentity } from "../../lib/onchainIdentity";
 import {
   formatRoyaltySplitRegistryMissingMessage,
   getRoyaltySplitRegistryEnvHint
@@ -1201,6 +1202,33 @@ export default function MintClient({
   useEffect(() => {
     if (!account) return;
     let cancelled = false;
+
+    if (isAddress(config.registry) && publicClient) {
+      void discoverOnchainWalletIdentity({
+        publicClient,
+        chainId: config.chainId,
+        ownerAddress: account,
+        registryAddress: config.registry
+      })
+        .then((result) => {
+          if (cancelled) return;
+          const owned = (result.collections || []).map((item) => ({
+            chainId: item.chainId,
+            contractAddress: item.contractAddress,
+            ensSubname: item.ensSubname,
+            ownerAddress: item.ownerAddress,
+            createdAt: item.createdAt,
+            updatedAt: item.updatedAt
+          }));
+          if (owned.length > 0) {
+            mergeKnownCollections(owned);
+          }
+        })
+        .catch(() => {
+          // Keep the indexer/local-cache path as fallback.
+        });
+    }
+
     void fetchCollectionsByOwnerAcrossChains(account)
       .then((result) => {
         if (cancelled) return;
@@ -1224,7 +1252,7 @@ export default function MintClient({
     return () => {
       cancelled = true;
     };
-  }, [account]);
+  }, [account, config.chainId, config.registry, publicClient]);
 
   useEffect(() => {
     if (!account) {
