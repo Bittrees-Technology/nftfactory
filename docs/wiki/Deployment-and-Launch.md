@@ -146,6 +146,8 @@ For a detached local runtime that keeps the indexer serving on `127.0.0.1:8787`:
 2. `npm run indexer:host:status`
 3. `npm run indexer:host:stop`
 
+If `DATABASE_URL` is already set to a reachable Postgres instance, that flow skips the local container bootstrap and starts the indexer directly against the existing database.
+
 Cloudflare should map:
 
 - `api.nftfactory.org` -> `http://127.0.0.1:8787`

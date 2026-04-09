@@ -126,6 +126,7 @@ For a detached local host process that keeps the indexer on `127.0.0.1:8787`:
 3. `npm run indexer:host:stop`
 
 That path ensures Postgres, Prisma client generation, and Prisma migrations before starting the HTTP API.
+If `DATABASE_URL` is already set to an external Postgres instance, the host start flow skips the local container bootstrap and uses that database directly.
 
 For Cloudflare ingress, point:
 - `api.nftfactory.org` -> `http://127.0.0.1:8787`

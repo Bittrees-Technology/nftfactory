@@ -64,8 +64,12 @@ start_service() {
   return 1
 }
 
-echo "Ensuring Postgres is available for the indexer..."
-npm run db:start
+if [ -n "${DATABASE_URL:-}" ]; then
+  echo "Using existing DATABASE_URL for the indexer."
+else
+  echo "Ensuring Postgres is available for the indexer..."
+  npm run db:start
+fi
 
 echo "Generating Prisma client..."
 npm run db:generate
