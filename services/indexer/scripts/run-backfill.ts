@@ -20,7 +20,7 @@ import { getCollectionScanFromBlock, getRegistryBackfillChain } from "../src/reg
 
 const REGISTRY_ADDRESS = process.env.REGISTRY_ADDRESS || "";
 const RPC_URL = process.env.RPC_URL || "";
-const CHAIN_ID = Number.parseInt(process.env.CHAIN_ID || "11155111", 10);
+const CHAIN_ID = Number.parseInt(process.env.CHAIN_ID || "1", 10);
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const FROM_BLOCK = BigInt(process.argv[2] || "0");
 

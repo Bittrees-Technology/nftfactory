@@ -260,7 +260,7 @@ type SyncMintedTokenPayload = {
   skipHoldingSync?: boolean;
 };
 
-const CHAIN_ID = Number.parseInt(process.env.CHAIN_ID || "11155111", 10);
+const CHAIN_ID = Number.parseInt(process.env.CHAIN_ID || "1", 10);
 const PORT = Number.parseInt(process.env.INDEXER_PORT || "8787", 10);
 const HOST = process.env.INDEXER_HOST || "127.0.0.1";
 const ADMIN_TOKEN = process.env.INDEXER_ADMIN_TOKEN || "";

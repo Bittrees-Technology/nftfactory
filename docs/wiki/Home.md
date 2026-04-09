@@ -2,7 +2,7 @@
 
 ## Current build scope
 
-The current live product is a Sepolia-first creator flow with these active surfaces:
+The current live product is a mainnet-targeting creator flow that is still validated on Sepolia before release, with these active surfaces:
 
 1. **Landing**
    - root entry at `/`
@@ -26,8 +26,8 @@ The focus is hardening the current build, not broad feature expansion.
 
 Active work:
 
-- tightening Mint and Profile UX before mainnet
-- keeping indexer-backed profile routes and collection identity flows reliable on Sepolia
+- tightening Mint and Profile UX before full mainnet promotion
+- keeping indexer-backed profile routes, collection identity flows, and automatic backfills reliable on both Sepolia and mainnet
 - hardening the live Vercel + Cloudflare Tunnel + Kubo deployment path
 - validating the exact env wiring and contract addresses used by the live build
 

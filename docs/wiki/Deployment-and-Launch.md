@@ -9,6 +9,7 @@ The current posture:
 3. mainnet only after the exact wired build is stable
 
 Do not treat mainnet as a place to discover missing env wiring or stale addresses.
+Do not let checked-in Sepolia snapshots become implicit defaults for production.
 
 ## Current environment model
 
@@ -100,7 +101,7 @@ After deployment:
 
 The current build assumes:
 
-- web points to Sepolia via `NEXT_PUBLIC_RPC_URL`
+- web points to the explicitly configured primary chain via `NEXT_PUBLIC_PRIMARY_CHAIN_ID` or `NEXT_PUBLIC_CHAIN_ID`
 - the indexer points to the same chain via `RPC_URL`
 - the indexer knows the registry and marketplace addresses through its own env, not only the web env
 - the web uses `NEXT_PUBLIC_INDEXER_API_URL` to reach the indexer
@@ -109,6 +110,9 @@ Code defaults:
 
 - indexer host default: `127.0.0.1`
 - indexer port default: `8787`
+- indexer chain default: `1`
+- registry auto-sync TTL default: `120000` ms
+- collection auto-sync TTL default: `300000` ms
 
 Current local env snapshot in this repo:
 
@@ -120,6 +124,7 @@ Before deployment or release validation:
 
 - [ ] deployer or Safe is funded
 - [ ] RPC endpoints are valid
+- [ ] `NEXT_PUBLIC_PRIMARY_CHAIN_ID=1` and `CHAIN_ID=1` are set for the production cutover
 - [ ] `ETHERSCAN_API_KEY` is present wherever contract or proxy verification should run
 - [ ] web and indexer point to the same chain
 - [ ] `NEXT_PUBLIC_*` contract addresses match the intended deployment
@@ -148,8 +153,10 @@ Before deployment or release validation:
 ## Mainnet go criteria
 
 - [ ] Sepolia flows are stable with the exact wired env
+- [ ] root and service env templates have been replaced with the real mainnet values rather than checked-in Sepolia scaffolding
 - [ ] Mint, profile setup, public profile, and moderation/profile-linked operations are behaviorally locked
 - [ ] no critical indexer recovery path is still manual-only or undocumented
+- [ ] registry discovery and collection/token backfills are observed working automatically on the live mainnet indexer
 - [ ] ownership/admin posture is deliberate and documented
 - [ ] the wiki matches the real build, not historical assumptions
 

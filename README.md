@@ -12,7 +12,7 @@ NFTFactory is an all-in-one creator platform for launching, showcasing, and sell
 
 In plain terms, NFTFactory is a creator storefront plus discovery marketplace for NFTs, centered on creator branding and a cleaner user experience.
 
-Production-grade monorepo scaffold for `nftfactory.eth`.
+Production-grade monorepo scaffold for `nftfactory.eth`, now organized around a mainnet-first operator flow with Sepolia retained as the proving ground.
 
 ## Workspace
 - `apps/web`: Next.js frontend (`/mint`, `/profile/[name]`, `/discover`, `/admin`)
@@ -42,8 +42,8 @@ This repo includes build-ready scaffolding and first-pass contract/backend code.
 Profile pages can now be snapshotted from the public web route and published through the shared IPFS project tooling with `npm run ipfs:publish:profile-snapshot -- <profile-name> --source <public-web-origin>`. Use `--skip-publish` to export the JSON locally first. For password-protected deployments, pass `--basic-auth-user` and `--basic-auth-password` or set `PROFILE_SNAPSHOT_BASIC_AUTH_USERNAME` and `PROFILE_SNAPSHOT_BASIC_AUTH_PASSWORD`. The web app can also fall back to published snapshots when `NEXT_PUBLIC_PROFILE_SNAPSHOT_URL_TEMPLATE` or `NEXT_PUBLIC_PROFILE_SNAPSHOT_MANIFEST_URL` is configured.
 
 Before a production web build or release check, validate the required public build env set with `npm run check:web-env`.
-For deployed-network verification, run `npm run check:deployments` with a real chain RPC. If no contract env values are set, the command falls back to `docs/deployments.sepolia-app-wired.json`. Use `npm run print:deployment-env -- web` or `npm run print:deployment-env -- indexer` to emit the checked-in Sepolia address snapshot as env exports.
-The repo-root `.env.example` now includes the current Sepolia-wired address set plus the remaining blanks for RPC, indexer, wallet, explorer, and IPFS values so the root-level checks can be filled from one place.
+For deployed-network verification, run `npm run check:deployments` with the real target-chain RPC and explicit deployed addresses. If you run it with no contract env values set, it still falls back to `docs/deployments.sepolia-app-wired.json`, but that fallback should be treated as Sepolia-only scaffolding, not a production source of truth.
+The repo-root `.env.example` is now mainnet-first and should be filled with the exact live deployment values for RPC, indexer, wallet, explorer, and IPFS.
 
 ## Local development
 
@@ -54,10 +54,21 @@ Shared IPFS publishing commands in this repo use `projects/ipfs-evm-system`. Con
 
 ### Root env workflow
 1. Copy `.env.example` to `.env` at the repo root.
-2. Fill `NEXT_PUBLIC_RPC_URL_11155111`, `NEXT_PUBLIC_INDEXER_API_URL_11155111`, `RPC_URL` or `SEPOLIA_RPC_URL`, `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID`, `ETHERSCAN_API_KEY`, and the IPFS auth values.
-3. Export the root env into your shell before running root-level checks:
+2. Fill the mainnet block first:
+   - `NEXT_PUBLIC_PRIMARY_CHAIN_ID=1`
+   - `NEXT_PUBLIC_ENABLED_CHAIN_IDS=1`
+   - `NEXT_PUBLIC_RPC_URL_1`
+   - `NEXT_PUBLIC_INDEXER_API_URL_1`
+   - `NEXT_PUBLIC_*_1` contract addresses
+   - `REGISTRY_ADDRESS`, `MARKETPLACE_ADDRESS`, `MODERATOR_REGISTRY_ADDRESS`
+   - `RPC_URL`
+   - `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID`
+   - `ETHERSCAN_API_KEY`
+   - IPFS auth values
+3. Only add Sepolia env values if you explicitly want a second validation network alongside mainnet.
+4. Export the root env into your shell before running root-level checks:
    - `set -a; source .env; set +a`
-4. Run:
+5. Run:
    - `npm run check:web-env`
    - `npm run check:deployments`
 
@@ -66,9 +77,14 @@ Shared IPFS publishing commands in this repo use `projects/ipfs-evm-system`. Con
   - `DATABASE_URL=...`
   - `RPC_URL=...`
   - `INDEXER_PORT=8787` (optional; defaults to `8787`)
-  - `CHAIN_ID=11155111` (optional; defaults to Sepolia chain id)
+  - `CHAIN_ID=1` (optional; defaults to Ethereum mainnet)
   - `INDEXER_ADMIN_TOKEN=...` (recommended; required for admin mutation routes when set)
   - `INDEXER_ADMIN_ALLOWLIST=0xabc...,0xdef...` (optional; wallet addresses allowed to perform admin actions)
+  - `REGISTRY_ADDRESS=...`
+  - `MARKETPLACE_ADDRESS=...`
+  - `MODERATOR_REGISTRY_ADDRESS=...` (if using on-chain moderator reads)
+  - `INDEXER_REGISTRY_SYNC_TTL_MS=120000` (optional; background registry discovery cadence)
+  - `INDEXER_COLLECTION_SYNC_TTL_MS=300000` (optional; stale-collection rescan cadence)
   - `TRUST_PROXY=false` (optional; keep `false` unless a trusted proxy sets `X-Forwarded-For`)
 - `apps/web/.env.local`
   - `NEXT_PUBLIC_INDEXER_API_URL=http://127.0.0.1:8787`
@@ -105,3 +121,12 @@ Shared IPFS publishing commands in this repo use `projects/ipfs-evm-system`. Con
 
 ## Sepolia deployment
 Use `packages/contracts/script/Runbook.md` for exact command lines and required env vars.
+
+## Mainnet cutover
+Use [docs/wiki/Deployment-and-Launch.md](/workspace/projects/nftfactory/docs/wiki/Deployment-and-Launch.md) as the operator checklist for the live transition. The short version is:
+
+1. Deploy and verify the full contract suite on mainnet.
+2. Fill the mainnet-scoped web and indexer env vars explicitly.
+3. Restart the indexer against mainnet and let the automatic registry/collection sync warm the database.
+4. Confirm `https://nftfactory.org/api/deploy/health`, `/mint`, `/profile`, `/profile/[name]`, and collection token reads against the live indexer.
+5. Only then disable or deprioritize Sepolia in the public app config.
