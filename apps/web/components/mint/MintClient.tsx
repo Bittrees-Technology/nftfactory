@@ -1915,7 +1915,7 @@ export default function MintClient({
       setViewCollectionError("");
 
       try {
-        let result = await fetchCollectionTokens(manageAddress, { chainId: config.chainId, sync: true });
+        let result = await fetchCollectionTokens(manageAddress, { chainId: config.chainId });
         if (result.count === 0 && publicClient && manageCollectionStandard) {
           result = await fetchCollectionTokensOnChain({
             publicClient,
@@ -3610,7 +3610,7 @@ export default function MintClient({
             <h3>3. Indexed Tokens</h3>
             <div className="row" style={{ justifyContent: "space-between", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
               <p className="hint" style={{ margin: 0 }}>
-                This view triggers a live collection sync before reading indexed tokens.
+                This view reads indexed tokens directly. Use re-sync to run a targeted collection refresh.
                 {viewCollectionLastSyncedAt
                   ? ` Last synced ${new Date(viewCollectionLastSyncedAt).toLocaleTimeString()}.`
                   : ""}
@@ -3623,7 +3623,15 @@ export default function MintClient({
                   if (!isAddress(manageAddress)) return;
                   setViewCollectionLoading(true);
                   setViewCollectionError("");
-                  void fetchCollectionTokens(manageAddress, { chainId: config.chainId, sync: true })
+                  void fetchCollectionTokens(manageAddress, {
+                    chainId: config.chainId,
+                    sync: true,
+                    syncScope: "collection",
+                    timeoutMs: 30_000,
+                    ownerAddress: manageCollectionOwner || account || undefined,
+                    royaltyReceiverAddress: manageRoyaltyReceiver || undefined,
+                    implementationAddress: manageImplementationAddress || undefined
+                  })
                     .then(async (result) => {
                       if (result.count === 0 && publicClient && manageCollectionStandard) {
                         result = await fetchCollectionTokensOnChain({

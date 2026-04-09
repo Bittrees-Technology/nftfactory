@@ -10,6 +10,8 @@ export type IndexerRequestOptions = {
   baseUrl?: string;
 };
 
+export type CollectionSyncScope = "collection" | "deep";
+
 const INDEXER_PROXY_PREFIX = "/api/indexer";
 
 export function getIndexerBaseUrl(options?: IndexerRequestOptions): string {
@@ -681,17 +683,34 @@ export async function fetchOwnerHoldings(
 
 export async function fetchCollectionTokens(
   contractAddress: string,
-  options?: IndexerRequestOptions & { sync?: boolean }
+  options?: IndexerRequestOptions & {
+    sync?: boolean;
+    timeoutMs?: number;
+    syncScope?: CollectionSyncScope;
+    ownerAddress?: string;
+    royaltyReceiverAddress?: string;
+    implementationAddress?: string;
+  }
 ): Promise<ApiCollectionTokens> {
   const params = new URLSearchParams();
   if (options?.sync) {
     params.set("sync", "1");
+    params.set("syncScope", options.syncScope || "collection");
+  }
+  if (options?.ownerAddress) {
+    params.set("ownerAddress", options.ownerAddress);
+  }
+  if (options?.royaltyReceiverAddress) {
+    params.set("royaltyReceiverAddress", options.royaltyReceiverAddress);
+  }
+  if (options?.implementationAddress) {
+    params.set("implementationAddress", options.implementationAddress);
   }
   const suffix = params.size > 0 ? `?${params.toString()}` : "";
   return fetchJson<ApiCollectionTokens>(
     `/api/collections/${encodeURIComponent(contractAddress)}/tokens${suffix}`,
     undefined,
-    undefined,
+    options?.timeoutMs,
     options
   );
 }

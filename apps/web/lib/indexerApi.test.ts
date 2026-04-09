@@ -68,6 +68,10 @@ describe("indexerApi", () => {
       const url = String(input);
       expect(url).toContain("/api/indexer/api/collections/0x1234/tokens");
       expect(url).toContain("sync=1");
+      expect(url).toContain("syncScope=collection");
+      expect(url).toContain("ownerAddress=0xabc");
+      expect(url).toContain("royaltyReceiverAddress=0xdef");
+      expect(url).toContain("implementationAddress=0x456");
       expect(url).toContain("_chainId=11155111");
       return new Response(JSON.stringify(payload), {
         status: 200,
@@ -78,7 +82,16 @@ describe("indexerApi", () => {
     });
     global.fetch = fetchMock as typeof fetch;
 
-    await expect(fetchCollectionTokens("0x1234", { chainId: 11155111, sync: true })).resolves.toEqual(payload);
+    await expect(
+      fetchCollectionTokens("0x1234", {
+        chainId: 11155111,
+        sync: true,
+        syncScope: "collection",
+        ownerAddress: "0xabc",
+        royaltyReceiverAddress: "0xdef",
+        implementationAddress: "0x456"
+      })
+    ).resolves.toEqual(payload);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 

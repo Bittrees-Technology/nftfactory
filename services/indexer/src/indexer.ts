@@ -54,6 +54,8 @@ type BackfillCollectionTokensPayload = {
   collectionCreatedAt?: string | null;
 };
 
+type CollectionSyncScope = "collection" | "deep";
+
 type ModeratorPayload = {
   address: string;
   label?: string;
@@ -8032,6 +8034,11 @@ async function handleRequest(
       return;
     }
     const syncRequested = ["1", "true", "yes"].includes(String(url.searchParams.get("sync") || "").trim().toLowerCase());
+    const syncScope: CollectionSyncScope =
+      String(url.searchParams.get("syncScope") || "").trim().toLowerCase() === "deep" ? "deep" : "collection";
+    const requestedOwnerAddress = String(url.searchParams.get("ownerAddress") || "").trim().toLowerCase();
+    const requestedRoyaltyReceiverAddress = String(url.searchParams.get("royaltyReceiverAddress") || "").trim().toLowerCase();
+    const requestedImplementationAddress = String(url.searchParams.get("implementationAddress") || "").trim().toLowerCase();
     if (syncRequested && deps.isRateLimitedImpl(deps.getClientIpImpl(req, config.trustProxy))) {
       sendJson(res, 429, { error: "Too many requests" });
       return;
@@ -8050,7 +8057,8 @@ async function handleRequest(
       await syncCollectionTokensIfStale(
         {
           contractAddress,
-          ownerAddress: collectionRecord?.ownerAddress || undefined,
+          ownerAddress:
+            (isAddress(requestedOwnerAddress) ? requestedOwnerAddress : collectionRecord?.ownerAddress) || undefined,
           standard: collectionRecord?.standard || undefined,
           ensSubname: collectionRecord?.ensSubname ?? null,
           isFactoryCreated: collectionRecord?.isFactoryCreated ?? undefined,
@@ -8060,10 +8068,30 @@ async function handleRequest(
         config,
         { force: syncRequested }
       );
+      if (syncRequested) {
+        const relatedAddresses = [
+          isAddress(requestedOwnerAddress) ? requestedOwnerAddress : null,
+          isAddress(requestedRoyaltyReceiverAddress) ? requestedRoyaltyReceiverAddress : null,
+          isAddress(requestedImplementationAddress) ? requestedImplementationAddress : null
+        ].filter((value): value is string => Boolean(value));
+        for (const address of relatedAddresses) {
+          await recordParticipantActivity({
+            chainId: config.chainId,
+            address,
+            contractAddress,
+            standard: collectionRecord?.standard || "UNKNOWN",
+            origin: collectionRecord?.isFactoryCreated ? "factory" : "custom",
+            role: address === requestedOwnerAddress ? "collection-owner" : "collection-related",
+            action: "collection-sync"
+          });
+        }
+      }
     } catch (error) {
       log.warn({ err: error, contractAddress }, "collection_token_sync_failed");
     }
-    await syncMarketplaceIfStale(deps, config, { includeListings: true, includeOffers: true });
+    if (syncRequested && syncScope === "deep") {
+      await syncMarketplaceIfStale(deps, config, { includeListings: true, includeOffers: true });
+    }
     const [includeMintTxHash, includeTokenPresentation, includeListingV2, includeTokenHoldings] = await Promise.all([
       hasMintTxHashColumn(deps),
       hasTokenPresentationColumns(deps),
