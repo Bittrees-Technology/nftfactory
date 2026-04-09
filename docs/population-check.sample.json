@@ -1,0 +1,25 @@
+{
+  "indexerBaseUrl": "https://api.nftfactory.org",
+  "webBaseUrl": "https://nftfactory.org",
+  "cases": [
+    {
+      "label": "creator wallet sample",
+      "ownerAddress": "0x0000000000000000000000000000000000000000",
+      "profileName": "artist.eth",
+      "expectedCollections": [
+        {
+          "contractAddress": "0x0000000000000000000000000000000000000001",
+          "origin": "shared",
+          "tokenId": "1",
+          "minTokenCount": 1
+        },
+        {
+          "contractAddress": "0x0000000000000000000000000000000000000002",
+          "origin": "custom",
+          "tokenId": "1",
+          "minTokenCount": 1
+        }
+      ]
+    }
+  ]
+}

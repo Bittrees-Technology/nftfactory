@@ -71,6 +71,7 @@ Shared IPFS publishing commands in this repo use `projects/ipfs-evm-system`. Con
 5. Run:
    - `npm run check:web-env`
    - `npm run check:deployments`
+   - `npm run verify:population -- --config ./docs/population-check.sample.json` after replacing the sample values with real cases
 
 ### Required env vars
 - `services/indexer/.env`
@@ -130,3 +131,16 @@ Use [docs/wiki/Deployment-and-Launch.md](/workspace/projects/nftfactory/docs/wik
 3. Restart the indexer against mainnet and let the automatic registry/collection sync warm the database.
 4. Confirm `https://nftfactory.org/api/deploy/health`, `/mint`, `/profile`, `/profile/[name]`, and collection token reads against the live indexer.
 5. Only then disable or deprioritize Sepolia in the public app config.
+
+## Population verification
+Use `npm run verify:population -- --config ./path/to/config.json` to verify that ENS/profile resolution, collection population, and token ownership are actually visible through the live APIs.
+
+The script checks:
+- `/api/profile/:name`
+- `/api/owners/:address/summary`
+- `/api/collections?owner=:address`
+- `/api/users/:address/holdings`
+- `/api/collections/:address/tokens?sync=1`
+- `/api/profile/view/:name` when a web origin is configured
+
+Start from [population-check.sample.json](/workspace/projects/nftfactory/docs/population-check.sample.json) and define one shared-mint case and one custom-collection case for Sepolia now, then duplicate the same structure for mainnet after deployment.

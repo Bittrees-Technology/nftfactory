@@ -133,6 +133,7 @@ Before deployment or release validation:
 - [ ] `NEXT_PUBLIC_INDEXER_API_URL` points to a reachable host
 - [ ] IPFS upload service is configured (`IPFS_API_URL`, plus bearer auth for public endpoints, or `ALLOW_PUBLIC_IPFS_API_WITHOUT_AUTH=1` if the public endpoint is intentionally unauthenticated)
 - [ ] `https://nftfactory.org/api/deploy/health` returns `ok: true`
+- [ ] `npm run verify:population -- --config ./path/to/config.json` passes for one shared-mint case and one custom-collection case
 
 ## Operational launch gates
 
@@ -153,6 +154,7 @@ Before deployment or release validation:
 ## Mainnet go criteria
 
 - [ ] Sepolia flows are stable with the exact wired env
+- [ ] Sepolia ENS/profile resolution and collection/token population are verified for both shared-mint and custom-collection origins
 - [ ] root and service env templates have been replaced with the real mainnet values rather than checked-in Sepolia scaffolding
 - [ ] Mint, profile setup, public profile, and moderation/profile-linked operations are behaviorally locked
 - [ ] no critical indexer recovery path is still manual-only or undocumented
