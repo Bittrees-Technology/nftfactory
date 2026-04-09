@@ -10,6 +10,8 @@ export type IndexerRequestOptions = {
   baseUrl?: string;
 };
 
+const INDEXER_PROXY_PREFIX = "/api/indexer";
+
 export function getIndexerBaseUrl(options?: IndexerRequestOptions): string {
   if (options?.baseUrl) return options.baseUrl;
   if (options?.chainId) {
@@ -53,16 +55,21 @@ function withTimeout(
 async function fetchJson<T>(path: string, init?: RequestInit, timeoutMs?: number, options?: IndexerRequestOptions): Promise<T> {
   const effectiveTimeoutMs = timeoutMs ?? INDEXER_REQUEST_TIMEOUT_MS;
   const { init: requestInit, cleanup } = withTimeout(init, effectiveTimeoutMs);
-  const baseUrl = getIndexerBaseUrl(options);
+  const useSameOriginProxy =
+    !options?.baseUrl && (typeof window !== "undefined" || process.env.NODE_ENV === "test");
+  const baseUrl = useSameOriginProxy ? undefined : getIndexerBaseUrl(options);
+  const targetUrl = useSameOriginProxy
+    ? buildIndexerProxyUrl(path, options)
+    : `${baseUrl}${path}`;
 
-  if (process.env.NODE_ENV === "production" && isPrivateOrLocalUrl(baseUrl)) {
+  if (baseUrl && process.env.NODE_ENV === "production" && isPrivateOrLocalUrl(baseUrl)) {
     throw new Error(
       `Indexer API ${baseUrl} is not reachable from this deployment. Set NEXT_PUBLIC_INDEXER_API_URL to a public HTTP(S) endpoint.`
     );
   }
 
   try {
-    const response = await fetch(`${baseUrl}${path}`, {
+    const response = await fetch(targetUrl, {
       ...requestInit,
       headers: {
         "Content-Type": "application/json",
@@ -99,6 +106,14 @@ async function fetchJson<T>(path: string, init?: RequestInit, timeoutMs?: number
   } finally {
     cleanup();
   }
+}
+
+function buildIndexerProxyUrl(path: string, options?: IndexerRequestOptions): string {
+  const url = new URL(path, "http://n");
+  if (typeof options?.chainId === "number" && Number.isInteger(options.chainId) && options.chainId > 0) {
+    url.searchParams.set("_chainId", String(options.chainId));
+  }
+  return `${INDEXER_PROXY_PREFIX}${url.pathname}${url.search}`;
 }
 
 export type ApiHiddenListings = {
