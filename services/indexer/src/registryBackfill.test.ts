@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { sepolia } from "viem/chains";
-import { getCollectionScanFromBlock, getRegistryBackfillChain, isStaleIsoTimestamp } from "./registryBackfill.js";
+import {
+  getCollectionScanFromBlock,
+  getRegistryBackfillChain,
+  getSharedBackfillTargets,
+  isStaleIsoTimestamp
+} from "./registryBackfill.js";
 
 describe("registryBackfill helpers", () => {
   it("pins historical backfill to Sepolia", () => {
@@ -31,5 +36,25 @@ describe("registryBackfill helpers", () => {
     const now = Date.parse("2026-04-09T10:00:00.000Z");
     expect(isStaleIsoTimestamp("2026-04-09T09:59:30.000Z", 60_000, now)).toBe(false);
     expect(isStaleIsoTimestamp("2026-04-09T09:59:00.000Z", 60_000, now)).toBe(true);
+  });
+
+  it("returns shared backfill targets from env", () => {
+    expect(
+      getSharedBackfillTargets({
+        NEXT_PUBLIC_SHARED_721_ADDRESS: "0x4018dD11271CecFAbb275656631896F7A8811965",
+        NEXT_PUBLIC_SHARED_1155_ADDRESS: "0x530C5f6F1728dCF60C3399e6D9d3aC729a7637Ce"
+      })
+    ).toEqual([
+      {
+        contractAddress: "0x4018dd11271cecfabb275656631896f7a8811965",
+        standard: "ERC721",
+        isNftFactoryCreated: true
+      },
+      {
+        contractAddress: "0x530c5f6f1728dcf60c3399e6d9d3ac729a7637ce",
+        standard: "ERC1155",
+        isNftFactoryCreated: true
+      }
+    ]);
   });
 });

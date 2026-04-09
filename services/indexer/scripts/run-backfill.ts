@@ -16,11 +16,12 @@ import { existsSync, readFileSync, writeFileSync, unlinkSync } from "fs";
 import { resolve } from "path";
 import { PrismaClient } from "@prisma/client";
 import { createPublicClient, http, isAddress } from "viem";
-import { getCollectionScanFromBlock, getRegistryBackfillChain } from "../src/registryBackfill.js";
+import { getCollectionScanFromBlock, getRegistryBackfillChain, getSharedBackfillTargets } from "../src/registryBackfill.js";
 
 const REGISTRY_ADDRESS = process.env.REGISTRY_ADDRESS || "";
 const RPC_URL = process.env.RPC_URL || "";
 const CHAIN_ID = Number.parseInt(process.env.CHAIN_ID || "1", 10);
+const SHARED_BACKFILL_TARGETS = getSharedBackfillTargets(process.env);
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const FROM_BLOCK = BigInt(process.argv[2] || "0");
 
@@ -511,6 +512,18 @@ async function main() {
       standard: String(log.args?.standard || "").trim().toUpperCase(),
       isNftFactoryCreated: Boolean(log.args?.isNftFactoryCreated),
       registeredAtBlock: BigInt(log.blockNumber ?? FROM_BLOCK)
+    });
+  }
+
+  for (const shared of SHARED_BACKFILL_TARGETS) {
+    const existing = collectionMap.get(shared.contractAddress);
+    collectionMap.set(shared.contractAddress, {
+      creator: existing?.creator || ZERO_ADDRESS,
+      contractAddress: shared.contractAddress,
+      ensSubname: existing?.ensSubname || "",
+      standard: existing?.standard || shared.standard,
+      isNftFactoryCreated: true,
+      registeredAtBlock: existing?.registeredAtBlock ?? FROM_BLOCK
     });
   }
 
