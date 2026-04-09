@@ -5,14 +5,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAccount, usePublicClient } from "wagmi";
 import {
-  fetchCollectionsByOwner,
   fetchProfileDirectory,
-  fetchProfilesByOwner,
   type ApiOwnedCollections,
   type ApiProfileRecord
 } from "../../lib/indexerApi";
 import { getContractsConfig } from "../../lib/contracts";
 import { discoverOnchainWalletIdentity, type OnchainWalletIdentity } from "../../lib/onchainIdentity";
+import { fetchCollectionsByOwnerAcrossChains, fetchProfilesByOwnerAcrossChains } from "../../lib/ownerIdentityMultiChain";
 
 function deriveProfileRouteFromName(fullName: string): string {
   const normalized = String(fullName || "")
@@ -133,8 +132,8 @@ export default function ProfileSelectorClient() {
     setIsLoading(true);
     setNote("");
     void Promise.allSettled([
-      fetchProfilesByOwner(address),
-      fetchCollectionsByOwner(address),
+      fetchProfilesByOwnerAcrossChains(address),
+      fetchCollectionsByOwnerAcrossChains(address),
       discoverOnchainWalletIdentity({
         publicClient,
         chainId: config.chainId,

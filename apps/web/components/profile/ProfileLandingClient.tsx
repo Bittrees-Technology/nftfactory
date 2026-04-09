@@ -17,15 +17,14 @@ import {
   ZERO_ADDRESS
 } from "../../lib/ensSubnameCreation";
 import {
-  fetchCollectionsByOwner,
   fetchProfileResolution,
-  fetchProfilesByOwner,
   linkProfileIdentity,
   type ApiOwnedCollections,
   type ApiProfileRecord
 } from "../../lib/indexerApi";
 import { discoverOnchainWalletIdentity } from "../../lib/onchainIdentity";
 import { verifyOwnedCollectionsOnChain } from "../../lib/onchainCollections";
+import { fetchCollectionsByOwnerAcrossChains, fetchProfilesByOwnerAcrossChains } from "../../lib/ownerIdentityMultiChain";
 
 const SUBNAME_FEE_ETH = "0.001";
 const ENS_NAME_WRAPPER_ADDRESS = /^0x[a-fA-F0-9]{40}$/.test(process.env.NEXT_PUBLIC_ENS_NAME_WRAPPER_ADDRESS || "")
@@ -454,34 +453,34 @@ export default function ProfileLandingClient({
     () =>
       collectEnsParentCandidates([
         ...profiles.map((profile) => profile.fullName),
-        ...verifiedCollections.map((collection) => collection.ensSubname),
+        ...collections.map((collection) => collection.ensSubname),
         ...discoveredEnsNames
       ]),
-    [discoveredEnsNames, profiles, verifiedCollections]
+    [collections, discoveredEnsNames, profiles]
   );
   const existingEnsOptions = useMemo(
     () =>
       collectExistingEnsIdentityOptions(
         [
           ...profiles.map((profile) => profile.fullName),
-          ...verifiedCollections.map((collection) => collection.ensSubname),
+          ...collections.map((collection) => collection.ensSubname),
           ...discoveredEnsNames
         ],
         "ens"
       ),
-    [discoveredEnsNames, profiles, verifiedCollections]
+    [collections, discoveredEnsNames, profiles]
   );
   const existingSubnameOptions = useMemo(
     () =>
       collectExistingEnsIdentityOptions(
         [
           ...profiles.map((profile) => profile.fullName),
-          ...verifiedCollections.map((collection) => collection.ensSubname),
+          ...collections.map((collection) => collection.ensSubname),
           ...discoveredEnsNames
         ],
         "external-subname"
       ),
-    [discoveredEnsNames, profiles, verifiedCollections]
+    [collections, discoveredEnsNames, profiles]
   );
   const selectedSubnameParentOption = useMemo(() => {
     const normalized = String(subnameParent || "").trim().toLowerCase();
@@ -499,8 +498,8 @@ export default function ProfileLandingClient({
 
     let cancelled = false;
     void Promise.allSettled([
-      fetchProfilesByOwner(address),
-      fetchCollectionsByOwner(address),
+      fetchProfilesByOwnerAcrossChains(address),
+      fetchCollectionsByOwnerAcrossChains(address),
       discoverOnchainWalletIdentity({
         publicClient,
         chainId: config.chainId,
@@ -573,12 +572,15 @@ export default function ProfileLandingClient({
     }
 
     let cancelled = false;
-    void verifyOwnedCollectionsOnChain(publicClient, address, collections).then((verified) => {
+    const sameChainCandidates = collections.filter((item) => !item.chainId || item.chainId === config.chainId);
+    const indexedOtherChainCandidates = collections.filter((item) => item.chainId && item.chainId !== config.chainId);
+    void verifyOwnedCollectionsOnChain(publicClient, address, sameChainCandidates).then((verified) => {
       if (cancelled) return;
       const verifiedAddresses = new Set(verified.map((item) => item.contractAddress.toLowerCase()));
-      const nextCollections = collections.filter((item) =>
-        verifiedAddresses.has(item.contractAddress.toLowerCase())
-      );
+      const nextCollections = [
+        ...sameChainCandidates.filter((item) => verifiedAddresses.has(item.contractAddress.toLowerCase())),
+        ...indexedOtherChainCandidates
+      ];
       setVerifiedCollections(nextCollections);
       setSelectedCollection((current) => {
         const requestedCollection = initialCollectionAddress.trim().toLowerCase();
@@ -598,7 +600,7 @@ export default function ProfileLandingClient({
     return () => {
       cancelled = true;
     };
-  }, [address, collections, initialCollectionAddress, publicClient]);
+  }, [address, collections, config.chainId, initialCollectionAddress, publicClient]);
 
   useEffect(() => {
     if (!slug || !normalizedFullName) {
@@ -1631,7 +1633,7 @@ export default function ProfileLandingClient({
             Linked collection (optional)
             <select value={selectedCollection} onChange={(e) => setSelectedCollection(e.target.value)}>
               <option value="">No collection linked</option>
-              {verifiedCollections.map((collection) => (
+              {collections.map((collection) => (
                 <option key={collection.contractAddress} value={collection.contractAddress}>
                   {collection.ensSubname?.trim() || collection.contractAddress}
                 </option>

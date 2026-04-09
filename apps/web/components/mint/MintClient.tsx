@@ -38,13 +38,12 @@ import {
 } from "../../lib/ensSubnameCreation";
 import {
   fetchCollectionTokens,
-  fetchCollectionsByOwner,
-  fetchProfilesByOwner,
   fetchProfileResolution,
   linkProfileIdentity,
   syncMintedToken
 } from "../../lib/indexerApi";
 import { normalizeBackendFetchError, parseJsonResponse } from "../../lib/networkErrors";
+import { fetchCollectionsByOwnerAcrossChains, fetchProfilesByOwnerAcrossChains } from "../../lib/ownerIdentityMultiChain";
 import {
   getMintAmountLabel,
   getMintDisplayDescription,
@@ -502,6 +501,7 @@ type MintClientProps = {
 };
 
 type KnownCollection = {
+  chainId?: number;
   contractAddress: string;
   ensSubname: string | null;
   ownerAddress: string;
@@ -969,25 +969,25 @@ export default function MintClient({
     () =>
       collectEnsParentCandidates([
         ...ownedProfiles.map((profile) => profile.fullName),
-        ...verifiedKnownCollections.map((collection) => collection.ensSubname)
+        ...knownCollections.map((collection) => collection.ensSubname)
       ]),
-    [ownedProfiles, verifiedKnownCollections]
+    [knownCollections, ownedProfiles]
   );
   const existingCollectionEnsOptions = useMemo(
     () =>
       collectExistingEnsIdentityOptions(
-        [...ownedProfiles.map((profile) => profile.fullName), ...verifiedKnownCollections.map((collection) => collection.ensSubname)],
+        [...ownedProfiles.map((profile) => profile.fullName), ...knownCollections.map((collection) => collection.ensSubname)],
         "ens"
       ),
-    [ownedProfiles, verifiedKnownCollections]
+    [knownCollections, ownedProfiles]
   );
   const existingCollectionSubnameOptions = useMemo(
     () =>
       collectExistingEnsIdentityOptions(
-        [...ownedProfiles.map((profile) => profile.fullName), ...verifiedKnownCollections.map((collection) => collection.ensSubname)],
+        [...ownedProfiles.map((profile) => profile.fullName), ...knownCollections.map((collection) => collection.ensSubname)],
         "external-subname"
       ),
-    [ownedProfiles, verifiedKnownCollections]
+    [knownCollections, ownedProfiles]
   );
   const selectedCollectionSubnameParentOption = useMemo(() => {
     const normalized = String(collectionSubnameParent || "").trim().toLowerCase();
@@ -1071,9 +1071,10 @@ export default function MintClient({
         const normalizedOwner = item.ownerAddress.toLowerCase();
         const normalizedContract = item.contractAddress.toLowerCase();
         if (!isAddress(normalizedContract) || !isAddress(normalizedOwner)) continue;
-        const key = normalizedContract;
+        const key = `${item.chainId || 0}:${normalizedContract}`;
         const existing = merged.get(key);
         merged.set(key, {
+          chainId: item.chainId || existing?.chainId,
           contractAddress: item.contractAddress,
           ensSubname: item.ensSubname || existing?.ensSubname || null,
           ownerAddress: item.ownerAddress,
@@ -1175,31 +1176,38 @@ export default function MintClient({
     }
 
     let cancelled = false;
-    void verifyOwnedCollectionsOnChain(publicClient, account, knownCollections).then((verified) => {
+    const sameChainCandidates = knownCollections.filter((item) => !item.chainId || item.chainId === config.chainId);
+    const indexedOtherChainCandidates = knownCollections.filter((item) => item.chainId && item.chainId !== config.chainId);
+    void verifyOwnedCollectionsOnChain(publicClient, account, sameChainCandidates).then((verified) => {
       if (cancelled) return;
       setVerifiedKnownCollections(
-        verified.map((item) => ({
-          contractAddress: item.contractAddress,
-          ensSubname: item.ensSubname,
-          ownerAddress: item.ownerAddress
-        }))
+        [
+          ...verified.map((item) => ({
+            chainId: sameChainCandidates.find((candidate) => candidate.contractAddress.toLowerCase() === item.contractAddress.toLowerCase())?.chainId,
+            contractAddress: item.contractAddress,
+            ensSubname: item.ensSubname,
+            ownerAddress: item.ownerAddress
+          })),
+          ...indexedOtherChainCandidates
+        ]
       );
     });
 
     return () => {
       cancelled = true;
     };
-  }, [account, knownCollections, publicClient]);
+  }, [account, config.chainId, knownCollections, publicClient]);
 
   useEffect(() => {
     if (!account) return;
     let cancelled = false;
-    void fetchCollectionsByOwner(account)
+    void fetchCollectionsByOwnerAcrossChains(account)
       .then((result) => {
         if (cancelled) return;
         const owned = result.collections
           .filter((item) => item.ownerAddress.toLowerCase() === account.toLowerCase())
           .map((item) => ({
+            chainId: item.chainId,
             contractAddress: item.contractAddress,
             ensSubname: item.ensSubname,
             ownerAddress: item.ownerAddress,
@@ -1224,7 +1232,7 @@ export default function MintClient({
       return;
     }
     let cancelled = false;
-    void fetchProfilesByOwner(account)
+    void fetchProfilesByOwnerAcrossChains(account)
       .then((result) => {
         if (cancelled) return;
         setOwnedProfiles((result.profiles || []).map((profile) => ({ fullName: profile.fullName })));
@@ -1253,6 +1261,7 @@ export default function MintClient({
           .flatMap((result) => result?.collections || [])
           .filter((item) => item.ownerAddress.toLowerCase() === account.toLowerCase())
           .map((item) => ({
+            chainId: item.chainId,
             contractAddress: item.contractAddress,
             ensSubname: item.ensSubname,
             ownerAddress: item.ownerAddress,
