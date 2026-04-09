@@ -806,6 +806,7 @@ export default function MintClient({
   const [knownCollections, setKnownCollections] = useState<KnownCollection[]>([]);
   const [verifiedKnownCollections, setVerifiedKnownCollections] = useState<KnownCollection[]>([]);
   const [ownedProfiles, setOwnedProfiles] = useState<Array<{ fullName: string }>>([]);
+  const [discoveredEnsNames, setDiscoveredEnsNames] = useState<string[]>([]);
   // Whether to show the inline "deploy new collection" sub-form
   const [showDeployForm, setShowDeployForm] = useState(false);
   const [selectedCollectionName, setSelectedCollectionName] = useState("");
@@ -970,25 +971,34 @@ export default function MintClient({
     () =>
       collectEnsParentCandidates([
         ...ownedProfiles.map((profile) => profile.fullName),
+        ...discoveredEnsNames,
         ...knownCollections.map((collection) => collection.ensSubname)
       ]),
-    [knownCollections, ownedProfiles]
+    [discoveredEnsNames, knownCollections, ownedProfiles]
   );
   const existingCollectionEnsOptions = useMemo(
     () =>
       collectExistingEnsIdentityOptions(
-        [...ownedProfiles.map((profile) => profile.fullName), ...knownCollections.map((collection) => collection.ensSubname)],
+        [
+          ...ownedProfiles.map((profile) => profile.fullName),
+          ...discoveredEnsNames,
+          ...knownCollections.map((collection) => collection.ensSubname)
+        ],
         "ens"
       ),
-    [knownCollections, ownedProfiles]
+    [discoveredEnsNames, knownCollections, ownedProfiles]
   );
   const existingCollectionSubnameOptions = useMemo(
     () =>
       collectExistingEnsIdentityOptions(
-        [...ownedProfiles.map((profile) => profile.fullName), ...knownCollections.map((collection) => collection.ensSubname)],
+        [
+          ...ownedProfiles.map((profile) => profile.fullName),
+          ...discoveredEnsNames,
+          ...knownCollections.map((collection) => collection.ensSubname)
+        ],
         "external-subname"
       ),
-    [knownCollections, ownedProfiles]
+    [discoveredEnsNames, knownCollections, ownedProfiles]
   );
   const selectedCollectionSubnameParentOption = useMemo(() => {
     const normalized = String(collectionSubnameParent || "").trim().toLowerCase();
@@ -1212,6 +1222,7 @@ export default function MintClient({
       })
         .then((result) => {
           if (cancelled) return;
+          setDiscoveredEnsNames(result.ensNames || []);
           const owned = (result.collections || []).map((item) => ({
             chainId: item.chainId,
             contractAddress: item.contractAddress,
@@ -1225,8 +1236,13 @@ export default function MintClient({
           }
         })
         .catch(() => {
+          if (!cancelled) {
+            setDiscoveredEnsNames([]);
+          }
           // Keep the indexer/local-cache path as fallback.
         });
+    } else {
+      setDiscoveredEnsNames([]);
     }
 
     void fetchCollectionsByOwnerAcrossChains(account)
