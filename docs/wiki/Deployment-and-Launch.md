@@ -151,9 +151,20 @@ For a detached local runtime that keeps the indexer serving on `127.0.0.1:8787`:
 
 1. `npm run indexer:host:start`
 2. `npm run indexer:host:status`
-3. `npm run indexer:host:stop`
+3. `npm run indexer:host:restart-api`
+4. `npm run indexer:host:stop`
 
 If `DATABASE_URL` is already set to a reachable Postgres instance, that flow skips the local container bootstrap and starts the indexer directly against the existing database.
+
+Use `indexer:host:restart-api` when you need to reload the API process without dropping the warmed local PostgreSQL state in `services/indexer/.runtime-host/postgres-data`.
+
+To duplicate indexed state to another server:
+
+1. `npm run indexer:db:export`
+2. copy the generated `.runtime-host/backups/indexer-*.dump` file
+3. set `DATABASE_URL` on the destination
+4. `npm run indexer:db:import -- /path/to/indexer.dump`
+5. `npm run indexer:host:restart-api`
 
 Cloudflare should map:
 

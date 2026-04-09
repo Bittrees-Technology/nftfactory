@@ -138,7 +138,20 @@ For a detached local host process that keeps the indexer on `127.0.0.1:8787`:
 
 1. `npm run indexer:host:start`
 2. `npm run indexer:host:status`
-3. `npm run indexer:host:stop`
+3. `npm run indexer:host:restart-api`
+4. `npm run indexer:host:stop`
+
+Use `indexer:host:restart-api` when you need to reload the API process without wiping the current local PostgreSQL progress. It keeps `services/indexer/.runtime-host/postgres-data` running and reuses the existing database state.
+
+To copy the warmed indexer data to another machine:
+
+1. export a dump:
+   - `npm run indexer:db:export`
+2. copy the resulting `.runtime-host/backups/indexer-*.dump` file to the destination
+3. on the destination host, point `DATABASE_URL` at the target Postgres and run:
+   - `npm run indexer:db:import -- /path/to/indexer.dump`
+4. restart the indexer API:
+   - `npm run indexer:host:restart-api`
 
 That path ensures Postgres, Prisma client generation, and Prisma migrations before starting the HTTP API.
 If `DATABASE_URL` is already set to an external Postgres instance, the host start flow skips the local container bootstrap and uses that database directly.
