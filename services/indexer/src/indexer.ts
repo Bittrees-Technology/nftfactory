@@ -8,6 +8,7 @@ import { PrismaClient } from "@prisma/client";
 import { pino } from "pino";
 import { createPublicClient, http } from "viem";
 import { isAddress, isZeroAddress, normalizeSubname, parseBearerToken, getClientIp, isRateLimited } from "./utils.js";
+import { isStaleIsoTimestamp } from "./registryBackfill.js";
 
 const log = pino({ level: process.env.LOG_LEVEL || "info" });
 
@@ -278,6 +279,8 @@ const TOKEN_PRESENTATION_FILE =
   process.env.INDEXER_TOKEN_PRESENTATION_FILE || path.join(process.cwd(), "data", "token-presentation.json");
 const MARKETPLACE_SYNC_STATE_FILE =
   process.env.INDEXER_MARKETPLACE_SYNC_STATE_FILE || path.join(process.cwd(), "data", "marketplace-sync-state.json");
+const INDEXER_SYNC_STATE_FILE =
+  process.env.INDEXER_SYNC_STATE_FILE || path.join(process.cwd(), "data", "indexer-sync-state.json");
 const ADMIN_ALLOWLIST = new Set(
   (process.env.INDEXER_ADMIN_ALLOWLIST || "")
     .split(",")
@@ -288,6 +291,12 @@ const ADMIN_ALLOWLIST = new Set(
 type MarketplaceSyncStateRecord = {
   listingsLastBlock: string | null;
   offersLastBlock: string | null;
+  updatedAt: string | null;
+};
+
+type IndexerSyncStateRecord = {
+  registryLastBlock: string | null;
+  collections: Record<string, string>;
   updatedAt: string | null;
 };
 
@@ -713,6 +722,8 @@ const marketplaceOfferAcceptedEvent = {
 const LISTING_SYNC_BATCH_SIZE = 20;
 const LISTING_SYNC_TTL_MS = 30_000;
 const MARKETPLACE_SYNC_TTL_MS = 30_000;
+const REGISTRY_SYNC_TTL_MS = Math.max(30_000, Number.parseInt(process.env.INDEXER_REGISTRY_SYNC_TTL_MS || "120000", 10) || 120_000);
+const COLLECTION_SYNC_TTL_MS = Math.max(30_000, Number.parseInt(process.env.INDEXER_COLLECTION_SYNC_TTL_MS || "300000", 10) || 300_000);
 let lastListingSyncAt = 0;
 let lastListingSyncCount = 0;
 let listingSyncPromise: Promise<void> | null = null;
@@ -722,6 +733,8 @@ let lastMarketplaceListingSyncCount = 0;
 let lastOfferSyncCount = 0;
 let marketplaceListingSyncPromise: Promise<void> | null = null;
 let marketplaceOfferSyncPromise: Promise<void> | null = null;
+let lastRegistrySyncAt = 0;
+let registrySyncPromise: Promise<void> | null = null;
 type ListingSnapshot = {
   listingId: string;
   amountRaw: string;
@@ -957,6 +970,80 @@ async function writeMarketplaceSyncState(
   return marketplaceSyncStateWritePromise;
 }
 
+let indexerSyncStateCache: IndexerSyncStateRecord | null = null;
+let indexerSyncStateReadPromise: Promise<IndexerSyncStateRecord> | null = null;
+let indexerSyncStateWritePromise: Promise<IndexerSyncStateRecord> = Promise.resolve({
+  registryLastBlock: null,
+  collections: {},
+  updatedAt: null
+});
+
+async function readIndexerSyncState(): Promise<IndexerSyncStateRecord> {
+  if (indexerSyncStateCache) return indexerSyncStateCache;
+  if (indexerSyncStateReadPromise) return indexerSyncStateReadPromise;
+
+  indexerSyncStateReadPromise = (async () => {
+    try {
+      const raw = await readFile(INDEXER_SYNC_STATE_FILE, "utf8");
+      const parsed = JSON.parse(raw) as Partial<IndexerSyncStateRecord>;
+      const collectionEntries = Object.entries(parsed.collections || {})
+        .filter(([key, value]) => isAddress(String(key || "").toLowerCase()) && typeof value === "string")
+        .map(([key, value]) => [String(key).toLowerCase(), value] as const);
+      indexerSyncStateCache = {
+        registryLastBlock: typeof parsed.registryLastBlock === "string" ? parsed.registryLastBlock : null,
+        collections: Object.fromEntries(collectionEntries),
+        updatedAt: typeof parsed.updatedAt === "string" ? parsed.updatedAt : null
+      };
+    } catch {
+      indexerSyncStateCache = {
+        registryLastBlock: null,
+        collections: {},
+        updatedAt: null
+      };
+    } finally {
+      indexerSyncStateReadPromise = null;
+    }
+
+    return indexerSyncStateCache;
+  })();
+
+  return indexerSyncStateReadPromise;
+}
+
+async function writeIndexerSyncState(patch: {
+  registryLastBlock?: string | null;
+  collections?: Record<string, string | null | undefined>;
+}): Promise<IndexerSyncStateRecord> {
+  indexerSyncStateWritePromise = indexerSyncStateWritePromise.then(async () => {
+    const current = await readIndexerSyncState();
+    const nextCollections = { ...(current.collections || {}) };
+
+    for (const [rawAddress, value] of Object.entries(patch.collections || {})) {
+      const address = String(rawAddress || "").trim().toLowerCase();
+      if (!isAddress(address)) continue;
+      if (typeof value === "string" && value.trim()) {
+        nextCollections[address] = value;
+      } else {
+        delete nextCollections[address];
+      }
+    }
+
+    const next: IndexerSyncStateRecord = {
+      registryLastBlock:
+        patch.registryLastBlock !== undefined ? patch.registryLastBlock : current.registryLastBlock ?? null,
+      collections: nextCollections,
+      updatedAt: new Date().toISOString()
+    };
+
+    await mkdir(path.dirname(INDEXER_SYNC_STATE_FILE), { recursive: true });
+    await writeFile(INDEXER_SYNC_STATE_FILE, JSON.stringify(next, null, 2), "utf8");
+    indexerSyncStateCache = next;
+    return next;
+  });
+
+  return indexerSyncStateWritePromise;
+}
+
 function parseSyncStateBlock(value: string | null | undefined): bigint | null {
   const normalized = String(value || "").trim();
   if (!/^[0-9]+$/.test(normalized)) return null;
@@ -965,6 +1052,16 @@ function parseSyncStateBlock(value: string | null | undefined): bigint | null {
   } catch {
     return null;
   }
+}
+
+async function isCollectionSyncDue(
+  contractAddress: string,
+  now = Date.now()
+): Promise<boolean> {
+  const normalized = String(contractAddress || "").trim().toLowerCase();
+  if (!isAddress(normalized)) return false;
+  const state = await readIndexerSyncState();
+  return isStaleIsoTimestamp(state.collections[normalized] || null, COLLECTION_SYNC_TTL_MS, now);
 }
 
 async function readTokenPresentationIndex(): Promise<Map<string, TokenPresentationRecord>> {
@@ -4444,6 +4541,165 @@ async function backfillRegistryCollections(
   return { discovered: collectionMap.size, scanned: totalScanned, upserted: totalUpserted };
 }
 
+async function syncCollectionTokensIfStale(
+  payload: BackfillCollectionTokensPayload,
+  deps: IndexerDeps,
+  config: RequestHandlerConfig,
+  options?: { force?: boolean }
+): Promise<void> {
+  const contractAddress = String(payload.contractAddress || "").trim().toLowerCase();
+  if (!isAddress(contractAddress)) return;
+
+  const force = options?.force === true;
+  if (!force && !(await isCollectionSyncDue(contractAddress))) {
+    return;
+  }
+
+  await backfillCollectionTokens(
+    {
+      ...payload,
+      contractAddress,
+      fromBlock: 0
+    },
+    deps,
+    config
+  );
+
+  await writeIndexerSyncState({
+    collections: {
+      [contractAddress]: new Date().toISOString()
+    }
+  });
+}
+
+async function syncOwnerCollectionsIfStale(
+  ownerAddress: string,
+  deps: IndexerDeps,
+  config: RequestHandlerConfig,
+  options?: { force?: boolean }
+): Promise<void> {
+  if (!config.registryAddress) return;
+  const owner = String(ownerAddress || "").trim().toLowerCase();
+  if (!isAddress(owner)) return;
+
+  const client = createPublicClient({
+    transport: http(config.rpcUrl)
+  });
+
+  let chainRecords:
+    | Array<{
+        owner: string;
+        contractAddress: string;
+        isNftFactoryCreated: boolean;
+        ensSubname: string;
+        standard: string;
+      }>
+    | null = null;
+  try {
+    chainRecords = (await client.readContract({
+      address: config.registryAddress,
+      abi: registryReadAbi,
+      functionName: "creatorContracts",
+      args: [owner as `0x${string}`]
+    })) as Array<{
+      owner: string;
+      contractAddress: string;
+      isNftFactoryCreated: boolean;
+      ensSubname: string;
+      standard: string;
+    }>;
+  } catch (err) {
+    log.warn({ err, ownerAddress: owner }, "owner_collection_sync_failed");
+    return;
+  }
+
+  const deduped = new Map<string, BackfillCollectionTokensPayload>();
+  for (const record of chainRecords || []) {
+    const contractAddress = String(record.contractAddress || "").trim().toLowerCase();
+    if (!isAddress(contractAddress)) continue;
+    deduped.set(contractAddress, {
+      contractAddress,
+      ownerAddress: owner,
+      standard: String(record.standard || "").trim().toUpperCase() || undefined,
+      ensSubname: String(record.ensSubname || "").trim() || null,
+      isFactoryCreated: Boolean(record.isNftFactoryCreated)
+    });
+  }
+
+  await Promise.all(
+    Array.from(deduped.values()).map((item) => syncCollectionTokensIfStale(item, deps, config, options))
+  );
+}
+
+async function syncRegistryCollectionsIfStale(
+  deps: IndexerDeps,
+  config: RequestHandlerConfig,
+  options?: { force?: boolean }
+): Promise<void> {
+  if (!config.registryAddress) return;
+  const force = options?.force === true;
+  const now = Date.now();
+
+  if (registrySyncPromise) {
+    await registrySyncPromise;
+    return;
+  }
+  if (!force && now - lastRegistrySyncAt < REGISTRY_SYNC_TTL_MS) {
+    return;
+  }
+
+  registrySyncPromise = (async () => {
+    try {
+      const client = createPublicClient({
+        transport: http(config.rpcUrl)
+      });
+      const currentBlock = await client.getBlockNumber();
+      const syncState = await readIndexerSyncState();
+      const lastSyncedBlock = parseSyncStateBlock(syncState.registryLastBlock);
+      const fromBlock = force || lastSyncedBlock === null ? 0n : lastSyncedBlock + 1n;
+      if (fromBlock > currentBlock) {
+        await writeIndexerSyncState({ registryLastBlock: String(currentBlock) });
+        lastRegistrySyncAt = Date.now();
+        return;
+      }
+
+      const logs = await getLogsChunked(client, {
+        address: config.registryAddress,
+        event: creatorRegisteredEvent,
+        fromBlock,
+        toBlock: currentBlock
+      });
+
+      const discovered = new Map<string, BackfillCollectionTokensPayload>();
+      for (const logEntry of logs) {
+        const contractAddress = String(logEntry.args.contractAddress || "").trim().toLowerCase();
+        const creator = String(logEntry.args.creator || "").trim().toLowerCase();
+        if (!isAddress(contractAddress) || !isAddress(creator)) continue;
+        discovered.set(contractAddress, {
+          contractAddress,
+          ownerAddress: creator,
+          standard: String(logEntry.args.standard || "").trim().toUpperCase() || undefined,
+          ensSubname: String(logEntry.args.ensSubname || "").trim() || null,
+          isFactoryCreated: Boolean(logEntry.args.isNftFactoryCreated)
+        });
+      }
+
+      await Promise.all(
+        Array.from(discovered.values()).map((item) => syncCollectionTokensIfStale(item, deps, config, { force: true }))
+      );
+
+      await writeIndexerSyncState({ registryLastBlock: String(currentBlock) });
+      lastRegistrySyncAt = Date.now();
+    } catch (err) {
+      log.warn({ err }, "registry_collection_sync_failed");
+    } finally {
+      registrySyncPromise = null;
+    }
+  })();
+
+  await registrySyncPromise;
+}
+
 async function listHiddenListings(deps: IndexerDeps): Promise<{ listingIds: number[]; listingRecordIds: string[] }> {
   const includeListingRefs = await hasModerationActionListingColumns(deps);
   const actions = await (deps.prisma as any).moderationAction.findMany({
@@ -4594,6 +4850,13 @@ async function handleRequest(
           lastMarketplaceOfferSyncAt > 0 ? new Date(lastMarketplaceOfferSyncAt).toISOString() : null,
         lastMarketplaceListingSyncCount,
         lastOfferSyncCount
+      },
+      registry: {
+        configured: Boolean(config.registryAddress),
+        syncInProgress: Boolean(registrySyncPromise),
+        lastRegistrySyncAt: lastRegistrySyncAt > 0 ? new Date(lastRegistrySyncAt).toISOString() : null,
+        registrySyncTtlMs: REGISTRY_SYNC_TTL_MS,
+        collectionSyncTtlMs: COLLECTION_SYNC_TTL_MS
       }
     });
     return;
@@ -5202,8 +5465,14 @@ async function handleRequest(
   }
 
   if (req.method === "GET" && path === "/api/profiles") {
-    const includeListingV2 = await hasListingV2Columns(deps);
     const owner = String(url.searchParams.get("owner") || "").trim().toLowerCase();
+    if (owner && isAddress(owner)) {
+      await syncOwnerCollectionsIfStale(owner, deps, config);
+    } else {
+      await syncRegistryCollectionsIfStale(deps, config);
+    }
+
+    const includeListingV2 = await hasListingV2Columns(deps);
     const q = String(url.searchParams.get("q") || "").trim().toLowerCase();
     const source = String(url.searchParams.get("source") || "").trim().toLowerCase();
     const layoutMode = String(url.searchParams.get("layoutMode") || "").trim().toLowerCase();
@@ -5557,12 +5826,13 @@ async function handleRequest(
   }
 
   if (req.method === "GET" && /^\/api\/users\/[^/]+\/holdings$/.test(path)) {
-    await syncPreferredMarketplaceIfStale(deps, config, { includeOffers: true });
     const address = String(decodeURIComponent(path.split("/")[3] || "")).trim().toLowerCase();
     if (!address || !isAddress(address)) {
       sendJson(res, 400, { error: "Valid user address is required" });
       return;
     }
+    await syncOwnerCollectionsIfStale(address, deps, config);
+    await syncPreferredMarketplaceIfStale(deps, config, { includeOffers: true });
 
     const cursor = Math.max(0, Number.parseInt(String(url.searchParams.get("cursor") || "0"), 10) || 0);
     const limit = Math.min(100, Math.max(1, Number.parseInt(String(url.searchParams.get("limit") || "50"), 10) || 50));
@@ -5695,6 +5965,7 @@ async function handleRequest(
       sendJson(res, 400, { error: "Valid owner address is required" });
       return;
     }
+    await syncOwnerCollectionsIfStale(owner, deps, config);
     await syncPreferredMarketplaceIfStale(deps, config, { includeOffers: true });
     const [includeMintTxHash, includeTokenPresentation, includeListingV2, includeTokenHoldings, ownedTokenWhere] = await Promise.all([
       hasMintTxHashColumn(deps),
@@ -6713,6 +6984,7 @@ async function handleRequest(
   }
 
   if (req.method === "GET" && /^\/api\/profile\/[^/]+$/.test(path)) {
+    await syncRegistryCollectionsIfStale(deps, config);
     const rawName = String(decodeURIComponent(path.split("/")[3] || "")).trim().toLowerCase();
     const lookup = resolveProfileLookup(rawName);
     const slug = lookup?.slugCandidates[0] || "";
@@ -6872,6 +7144,7 @@ async function handleRequest(
   }
 
   if (req.method === "GET" && path === "/api/feed") {
+    await syncRegistryCollectionsIfStale(deps, config);
     const limitRaw = Number.parseInt(String(url.searchParams.get("limit") || "50"), 10);
     const cursorRaw = Number.parseInt(String(url.searchParams.get("cursor") || "0"), 10);
     const limit = Number.isInteger(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 100) : 50;
@@ -6974,6 +7247,7 @@ async function handleRequest(
   }
 
   if (req.method === "GET" && path === "/api/overview") {
+    await syncRegistryCollectionsIfStale(deps, config);
     await syncPreferredMarketplaceIfStale(deps, config);
     const includeListingV2 = await hasListingV2Columns(deps);
     const [collectionCount, tokenCount, activeListingCount, openReportCount, hiddenListingRefs, profiles, paymentTokens, moderators] =
@@ -7011,6 +7285,8 @@ async function handleRequest(
       sendJson(res, 400, { error: "Valid owner query param is required" });
       return;
     }
+
+    await syncOwnerCollectionsIfStale(owner, deps, config);
 
     const includeListingV2 = await hasListingV2Columns(deps);
     const collections = await deps.prisma.collection.findMany({
@@ -7080,38 +7356,36 @@ async function handleRequest(
       return;
     }
     const syncRequested = ["1", "true", "yes"].includes(String(url.searchParams.get("sync") || "").trim().toLowerCase());
-    if (syncRequested) {
-      if (deps.isRateLimitedImpl(deps.getClientIpImpl(req, config.trustProxy))) {
-        sendJson(res, 429, { error: "Too many requests" });
-        return;
-      }
-      try {
-        const collectionRecord = await deps.prisma.collection.findUnique({
-          where: { contractAddress },
-          select: {
-            ownerAddress: true,
-            ensSubname: true,
-            standard: true,
-            isFactoryCreated: true,
-            isUpgradeable: true
-          }
-        });
-
-        await backfillCollectionTokens(
-          {
-            contractAddress,
-            ownerAddress: collectionRecord?.ownerAddress || undefined,
-            standard: collectionRecord?.standard || undefined,
-            ensSubname: collectionRecord?.ensSubname ?? null,
-            isFactoryCreated: collectionRecord?.isFactoryCreated ?? undefined,
-            isUpgradeable: collectionRecord?.isUpgradeable ?? undefined
-          },
-          deps,
-          config
-        );
-      } catch (error) {
-        log.warn({ err: error, contractAddress }, "collection_token_sync_failed");
-      }
+    if (syncRequested && deps.isRateLimitedImpl(deps.getClientIpImpl(req, config.trustProxy))) {
+      sendJson(res, 429, { error: "Too many requests" });
+      return;
+    }
+    try {
+      const collectionRecord = await deps.prisma.collection.findUnique({
+        where: { contractAddress },
+        select: {
+          ownerAddress: true,
+          ensSubname: true,
+          standard: true,
+          isFactoryCreated: true,
+          isUpgradeable: true
+        }
+      });
+      await syncCollectionTokensIfStale(
+        {
+          contractAddress,
+          ownerAddress: collectionRecord?.ownerAddress || undefined,
+          standard: collectionRecord?.standard || undefined,
+          ensSubname: collectionRecord?.ensSubname ?? null,
+          isFactoryCreated: collectionRecord?.isFactoryCreated ?? undefined,
+          isUpgradeable: collectionRecord?.isUpgradeable ?? undefined
+        },
+        deps,
+        config,
+        { force: syncRequested }
+      );
+    } catch (error) {
+      log.warn({ err: error, contractAddress }, "collection_token_sync_failed");
     }
     await syncMarketplaceIfStale(deps, config, { includeListings: true, includeOffers: true });
     const [includeMintTxHash, includeTokenPresentation, includeListingV2, includeTokenHoldings] = await Promise.all([
@@ -7252,6 +7526,37 @@ export async function main() {
   server.listen(PORT, HOST, () => {
     log.info({ host: HOST, port: PORT }, "Indexer API listening");
   });
+
+  setInterval(() => {
+    syncRegistryCollectionsIfStale(
+      {
+        prisma,
+        getClientIpImpl: getClientIp,
+        isRateLimitedImpl: isRateLimited
+      },
+      {
+        chainId: CHAIN_ID,
+        rpcUrl,
+        adminToken: ADMIN_TOKEN,
+        adminAllowlist: ADMIN_ALLOWLIST,
+        trustProxy: TRUST_PROXY,
+        marketplaceAddress:
+          MARKETPLACE_ADDRESS && isAddress(MARKETPLACE_ADDRESS.toLowerCase())
+            ? (MARKETPLACE_ADDRESS.toLowerCase() as `0x${string}`)
+            : null,
+        registryAddress:
+          REGISTRY_ADDRESS && isAddress(REGISTRY_ADDRESS.toLowerCase())
+            ? (REGISTRY_ADDRESS.toLowerCase() as `0x${string}`)
+            : null,
+        moderatorRegistryAddress:
+          MODERATOR_REGISTRY_ADDRESS && isAddress(MODERATOR_REGISTRY_ADDRESS.toLowerCase())
+            ? (MODERATOR_REGISTRY_ADDRESS.toLowerCase() as `0x${string}`)
+            : null
+      }
+    ).catch((err) => {
+      log.warn({ err }, "registry_sync_interval_failed");
+    });
+  }, REGISTRY_SYNC_TTL_MS);
 
   setInterval(() => {
     log.debug("heartbeat");

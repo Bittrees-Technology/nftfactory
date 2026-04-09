@@ -16,3 +16,14 @@ export function getCollectionScanFromBlock(
 ): bigint {
   return registeredAtBlock && registeredAtBlock > 0n ? registeredAtBlock : fallbackFromBlock;
 }
+
+export function isStaleIsoTimestamp(
+  value: string | null | undefined,
+  ttlMs: number,
+  now = Date.now()
+): boolean {
+  if (!value) return true;
+  const parsed = Date.parse(value);
+  if (!Number.isFinite(parsed)) return true;
+  return now - parsed >= ttlMs;
+}
