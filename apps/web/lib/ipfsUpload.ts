@@ -1,50 +1,17 @@
-import { createRequire } from "node:module";
-
 type EnvLike = Record<string, string | undefined>;
-type SharedIpfsStorageConfig = {
-  apiBaseUrl: string;
-  gatewayBaseUrl: string;
-  apiBearerToken?: string | null;
-  apiBasicAuthUsername?: string | null;
-  apiBasicAuthPassword?: string | null;
-};
-
-type SharedIpfsStorageModule = {
-  getIpfsStorageConfig: (env?: NodeJS.ProcessEnv) => SharedIpfsStorageConfig;
-};
-
-const requireFromHere = createRequire(import.meta.url);
-let cachedSharedIpfsStorageModule: SharedIpfsStorageModule | null | undefined;
 
 function hasConfiguredEnvValue(env: EnvLike, name: string): boolean {
   return Boolean(String(env[name] || "").trim());
 }
 
-function loadSharedIpfsStorageModule(): SharedIpfsStorageModule | null {
-  if (cachedSharedIpfsStorageModule !== undefined) {
-    return cachedSharedIpfsStorageModule;
-  }
-
-  try {
-    cachedSharedIpfsStorageModule = requireFromHere("@workspace/ipfs-storage") as SharedIpfsStorageModule;
-  } catch {
-    cachedSharedIpfsStorageModule = null;
-  }
-
-  return cachedSharedIpfsStorageModule;
-}
-
 function resolveSharedIpfsStorageConfig(env: EnvLike = process.env) {
-  const sharedModule = loadSharedIpfsStorageModule();
-  const sharedConfig = sharedModule
-    ? sharedModule.getIpfsStorageConfig(env as NodeJS.ProcessEnv)
-    : {
-        apiBaseUrl: String(env.IPFS_API_BASE_URL || "").trim(),
-        gatewayBaseUrl: String(env.IPFS_GATEWAY_BASE_URL || "").trim(),
-        apiBearerToken: String(env.IPFS_API_BEARER_TOKEN || "").trim(),
-        apiBasicAuthUsername: String(env.IPFS_API_BASIC_AUTH_USERNAME || "").trim(),
-        apiBasicAuthPassword: String(env.IPFS_API_BASIC_AUTH_PASSWORD || "").trim()
-      };
+  const sharedConfig = {
+    apiBaseUrl: String(env.IPFS_API_BASE_URL || "").trim(),
+    gatewayBaseUrl: String(env.IPFS_GATEWAY_BASE_URL || "").trim(),
+    apiBearerToken: String(env.IPFS_API_BEARER_TOKEN || "").trim(),
+    apiBasicAuthUsername: String(env.IPFS_API_BASIC_AUTH_USERNAME || "").trim(),
+    apiBasicAuthPassword: String(env.IPFS_API_BASIC_AUTH_PASSWORD || "").trim()
+  };
 
   return {
     apiBaseUrl: hasConfiguredEnvValue(env, "IPFS_API_BASE_URL") ? sharedConfig.apiBaseUrl.trim() : "",
