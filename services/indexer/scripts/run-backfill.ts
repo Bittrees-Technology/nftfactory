@@ -16,12 +16,18 @@ import { existsSync, readFileSync, writeFileSync, unlinkSync } from "fs";
 import { resolve } from "path";
 import { PrismaClient } from "@prisma/client";
 import { createPublicClient, http, isAddress } from "viem";
-import { getCollectionScanFromBlock, getRegistryBackfillChain, getSharedBackfillTargets } from "../src/registryBackfill.js";
+import {
+  getCollectionScanFromBlock,
+  getRegistryBackfillChain,
+  getSharedBackfillTargets,
+  normalizeExplicitBackfillTargets
+} from "../src/registryBackfill.js";
 
 const REGISTRY_ADDRESS = process.env.REGISTRY_ADDRESS || "";
 const RPC_URL = process.env.RPC_URL || "";
 const CHAIN_ID = Number.parseInt(process.env.CHAIN_ID || "1", 10);
 const SHARED_BACKFILL_TARGETS = getSharedBackfillTargets(process.env);
+const CUSTOM_COLLECTIONS_FILE = process.env.INDEXER_CUSTOM_COLLECTIONS_FILE || "";
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const FROM_BLOCK = BigInt(process.argv[2] || "0");
 
@@ -231,6 +237,27 @@ type CheckpointData = {
   fromBlock: string;
   completedCollections: string[];
 };
+
+function loadExplicitCustomCollections(): Array<{
+  contractAddress: `0x${string}`;
+  ownerAddress: `0x${string}` | null;
+  ensSubname: string;
+  standard: "ERC721" | "ERC1155";
+  isNftFactoryCreated: boolean;
+}> {
+  const targetPath = String(CUSTOM_COLLECTIONS_FILE || "").trim();
+  if (!targetPath) return [];
+  const resolved = resolve(process.cwd(), targetPath);
+  if (!existsSync(resolved)) {
+    throw new Error(`INDEXER_CUSTOM_COLLECTIONS_FILE not found: ${resolved}`);
+  }
+
+  const parsed = JSON.parse(readFileSync(resolved, "utf8"));
+  if (!Array.isArray(parsed)) {
+    throw new Error(`INDEXER_CUSTOM_COLLECTIONS_FILE must contain a JSON array: ${resolved}`);
+  }
+  return normalizeExplicitBackfillTargets(parsed);
+}
 
 function loadCheckpoint(fromBlock: bigint): Set<string> {
   if (!existsSync(CHECKPOINT_FILE)) return new Set();
@@ -523,6 +550,18 @@ async function main() {
       ensSubname: existing?.ensSubname || "",
       standard: existing?.standard || shared.standard,
       isNftFactoryCreated: true,
+      registeredAtBlock: existing?.registeredAtBlock ?? FROM_BLOCK
+    });
+  }
+
+  for (const custom of loadExplicitCustomCollections()) {
+    const existing = collectionMap.get(custom.contractAddress);
+    collectionMap.set(custom.contractAddress, {
+      creator: custom.ownerAddress || existing?.creator || ZERO_ADDRESS,
+      contractAddress: custom.contractAddress,
+      ensSubname: custom.ensSubname || existing?.ensSubname || "",
+      standard: custom.standard || existing?.standard || "ERC721",
+      isNftFactoryCreated: custom.isNftFactoryCreated,
       registeredAtBlock: existing?.registeredAtBlock ?? FROM_BLOCK
     });
   }

@@ -6610,13 +6610,11 @@ async function handleRequest(
       transport: http(config.rpcUrl)
     });
 
-    const factoryCollectionIds = collections
-      .filter((item: any) => item.isFactoryCreated)
-      .map((item: any) => item.id);
-    const factoryCollectionTokens = factoryCollectionIds.length
+    const creatorCollectionIds = collections.map((item: any) => item.id);
+    const creatorCollectionTokens = creatorCollectionIds.length
       ? await (deps.prisma.token as any).findMany({
           where: {
-            collectionId: { in: factoryCollectionIds }
+            collectionId: { in: creatorCollectionIds }
           },
           orderBy: [{ mintedAt: "desc" }, { id: "desc" }],
           select: {
@@ -6647,19 +6645,15 @@ async function handleRequest(
         })
       : [];
     const tokensByCollectionId = new Map<string, any[]>();
-    for (const token of factoryCollectionTokens as Array<any>) {
+    for (const token of creatorCollectionTokens as Array<any>) {
       const next = tokensByCollectionId.get(token.collectionId) || [];
       next.push(token);
       tokensByCollectionId.set(token.collectionId, next);
     }
 
-    const dbFactoryByAddress = new Map<string, any>(
-      collections
-        .filter((item: any) => item.isFactoryCreated)
-        .map((item: any) => [String(item.contractAddress).toLowerCase(), item])
-    );
+    const dbCollectionsByAddress = new Map<string, any>(collections.map((item: any) => [String(item.contractAddress).toLowerCase(), item]));
 
-    const hydratedFactoryCollections: Array<{
+    const hydratedCreatorCollections: Array<{
       chainId: number;
       contractAddress: string;
       ownerAddress: string;
@@ -6692,16 +6686,15 @@ async function handleRequest(
       }>;
 
       for (const record of chainRecords) {
-        if (!record.isNftFactoryCreated) continue;
         const contractAddress = String(record.contractAddress || "").toLowerCase();
         if (!isAddress(contractAddress)) continue;
 
-        const existing = dbFactoryByAddress.get(contractAddress);
+        const existing = dbCollectionsByAddress.get(contractAddress);
         const existingTokens = existing
           ? (tokensByCollectionId.get(existing.id) || []).map((token: any) => toTokenApiShape(token, config, presentationIndex))
           : [];
         if (existing && existingTokens.length > 0) {
-          hydratedFactoryCollections.push({
+          hydratedCreatorCollections.push({
             chainId: existing.chainId,
             contractAddress: existing.contractAddress,
             ownerAddress: existing.ownerAddress,
@@ -6881,13 +6874,13 @@ async function handleRequest(
           }
         }
 
-        hydratedFactoryCollections.push({
+        hydratedCreatorCollections.push({
           chainId: existing?.chainId || config.chainId,
           contractAddress,
           ownerAddress: owner,
           ensSubname: existing?.ensSubname || String(record.ensSubname || "").trim() || null,
           standard,
-          isFactoryCreated: true,
+          isFactoryCreated: Boolean(record.isNftFactoryCreated),
           isUpgradeable: existing?.isUpgradeable ?? true,
           finalizedAt: existing?.finalizedAt || null,
           createdAt: existing?.createdAt || createdAt,
@@ -6900,11 +6893,10 @@ async function handleRequest(
       // keep DB-only response if chain hydration is unavailable
     }
 
-    const mergedFactoryCollections =
-      hydratedFactoryCollections.length > 0
-        ? hydratedFactoryCollections
+    const mergedCreatorCollections =
+      hydratedCreatorCollections.length > 0
+        ? hydratedCreatorCollections
         : collections
-            .filter((item: any) => item.isFactoryCreated)
             .map((item: any) => ({
               chainId: item.chainId,
               contractAddress: item.contractAddress,
@@ -6921,7 +6913,7 @@ async function handleRequest(
             }));
 
     await Promise.all(
-      mergedFactoryCollections.map((item: any) => attachOfferSummaries(item.tokens as Array<any>, deps))
+      mergedCreatorCollections.map((item: any) => attachOfferSummaries(item.tokens as Array<any>, deps))
     );
     const recentOwnedMints = recentOwnedTokens.map((item: any) => toOwnerHoldingApiShape(item, owner, config, presentationIndex));
     await attachOfferSummaries(recentOwnedMints as Array<any>, deps);
@@ -6930,10 +6922,10 @@ async function handleRequest(
       ownerAddress: owner,
       counts: {
         linkedProfiles: linkedProfiles.length,
-        ownedCollections: Math.max(collections.length, mergedFactoryCollections.length),
+        ownedCollections: Math.max(collections.length, mergedCreatorCollections.length),
         ownedTokens: Math.max(
           ownedTokenCount,
-          mergedFactoryCollections.reduce((sum: number, item: any) => sum + item.tokens.length, 0)
+          mergedCreatorCollections.reduce((sum: number, item: any) => sum + item.tokens.length, 0)
         ),
         createdTokens: createdTokenCount,
         activeListings,
@@ -6955,7 +6947,8 @@ async function handleRequest(
         updatedAt: item.updatedAt,
         tokenCount: item._count?.tokens || 0
       })),
-      factoryCollections: mergedFactoryCollections,
+      creatorCollections: mergedCreatorCollections,
+      factoryCollections: mergedCreatorCollections,
       recentOwnedMints,
       recentOffersMade: recentOffersMade.map((item: any) => toOfferApiShape(item)),
       recentOffersReceived: recentOffersReceived.map((item: any) => toOfferApiShape(item))

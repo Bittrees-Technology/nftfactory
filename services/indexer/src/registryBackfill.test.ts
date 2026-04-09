@@ -4,6 +4,7 @@ import {
   getCollectionScanFromBlock,
   getRegistryBackfillChain,
   getSharedBackfillTargets,
+  normalizeExplicitBackfillTargets,
   isStaleIsoTimestamp
 } from "./registryBackfill.js";
 
@@ -54,6 +55,33 @@ describe("registryBackfill helpers", () => {
         contractAddress: "0x530c5f6f1728dcf60c3399e6d9d3ac729a7637ce",
         standard: "ERC1155",
         isNftFactoryCreated: true
+      }
+    ]);
+  });
+
+  it("normalizes explicit custom collection backfill targets", () => {
+    expect(
+      normalizeExplicitBackfillTargets([
+        {
+          contractAddress: "0xabc",
+          ownerAddress: "0xdef",
+          standard: "ERC721"
+        },
+        {
+          contractAddress: "0x4018dD11271CecFAbb275656631896F7A8811965",
+          ownerAddress: "0xFDd45904F8f0ec01Ff3e198A96673634F3761185",
+          ensSubname: "artist",
+          standard: "erc721",
+          isFactoryCreated: false
+        }
+      ])
+    ).toEqual([
+      {
+        contractAddress: "0x4018dd11271cecfabb275656631896f7a8811965",
+        ownerAddress: "0xfdd45904f8f0ec01ff3e198a96673634f3761185",
+        ensSubname: "artist",
+        standard: "ERC721",
+        isNftFactoryCreated: false
       }
     ]);
   });

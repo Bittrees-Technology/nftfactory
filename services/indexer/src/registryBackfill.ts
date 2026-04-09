@@ -59,3 +59,42 @@ export function getSharedBackfillTargets(env: {
       isNftFactoryCreated: true
     }));
 }
+
+export function normalizeExplicitBackfillTargets(
+  items: Array<{
+    contractAddress?: string | null;
+    ownerAddress?: string | null;
+    ensSubname?: string | null;
+    standard?: string | null;
+    isFactoryCreated?: boolean | null;
+  }>
+): Array<{
+  contractAddress: `0x${string}`;
+  ownerAddress: `0x${string}` | null;
+  ensSubname: string;
+  standard: "ERC721" | "ERC1155";
+  isNftFactoryCreated: boolean;
+}> {
+  return items
+    .map((item) => {
+      const contractAddress = String(item.contractAddress || "").trim().toLowerCase();
+      const ownerAddress = String(item.ownerAddress || "").trim().toLowerCase();
+      const standard = String(item.standard || "").trim().toUpperCase();
+      if (!isAddress(contractAddress)) return null;
+      if (standard !== "ERC721" && standard !== "ERC1155") return null;
+      return {
+        contractAddress: contractAddress as `0x${string}`,
+        ownerAddress: isAddress(ownerAddress) ? (ownerAddress as `0x${string}`) : null,
+        ensSubname: String(item.ensSubname || "").trim(),
+        standard,
+        isNftFactoryCreated: item.isFactoryCreated === true
+      };
+    })
+    .filter((item): item is {
+      contractAddress: `0x${string}`;
+      ownerAddress: `0x${string}` | null;
+      ensSubname: string;
+      standard: "ERC721" | "ERC1155";
+      isNftFactoryCreated: boolean;
+    } => item !== null);
+}

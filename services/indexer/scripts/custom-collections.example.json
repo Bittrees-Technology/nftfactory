@@ -1,0 +1,9 @@
+[
+  {
+    "contractAddress": "0x0000000000000000000000000000000000000000",
+    "ownerAddress": "0x0000000000000000000000000000000000000000",
+    "ensSubname": "artist",
+    "standard": "ERC721",
+    "isFactoryCreated": false
+  }
+]

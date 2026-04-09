@@ -403,6 +403,38 @@ export type ApiActiveListingsResponse = {
   items: ApiActiveListingItem[];
 };
 
+type ApiOwnerSummaryCollection = {
+  chainId: number;
+  contractAddress: string;
+  ownerAddress: string;
+  ensSubname: string | null;
+  standard: string;
+  isFactoryCreated: boolean;
+  isUpgradeable: boolean;
+  finalizedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  tokenCount: number;
+  tokens: Array<{
+    id: string;
+    tokenId: string;
+    creatorAddress: string;
+    ownerAddress: string;
+    draftName?: string | null;
+    draftDescription?: string | null;
+    mintedAmountRaw?: string | null;
+    metadataCid: string;
+    metadataUrl: string | null;
+    mediaCid: string | null;
+    mediaUrl: string | null;
+    immutable: boolean;
+    mintedAt: string;
+    bestOffer?: ApiOfferSummary | null;
+    offerCount?: number;
+    activeListing: ApiMintFeedItem["activeListing"];
+  }>;
+};
+
 export type ApiOwnerSummary = {
   ownerAddress: string;
   counts: {
@@ -416,37 +448,8 @@ export type ApiOwnerSummary = {
   };
   profiles: ApiProfileRecord[];
   collections: ApiOwnedCollections["collections"];
-  factoryCollections: Array<{
-    chainId: number;
-    contractAddress: string;
-    ownerAddress: string;
-    ensSubname: string | null;
-    standard: string;
-    isFactoryCreated: boolean;
-    isUpgradeable: boolean;
-    finalizedAt: string | null;
-    createdAt: string;
-    updatedAt: string;
-    tokenCount: number;
-    tokens: Array<{
-      id: string;
-      tokenId: string;
-      creatorAddress: string;
-      ownerAddress: string;
-      draftName?: string | null;
-      draftDescription?: string | null;
-      mintedAmountRaw?: string | null;
-      metadataCid: string;
-      metadataUrl: string | null;
-      mediaCid: string | null;
-      mediaUrl: string | null;
-      immutable: boolean;
-      mintedAt: string;
-      bestOffer?: ApiOfferSummary | null;
-      offerCount?: number;
-      activeListing: ApiMintFeedItem["activeListing"];
-    }>;
-  }>;
+  creatorCollections: ApiOwnerSummaryCollection[];
+  factoryCollections: ApiOwnerSummaryCollection[];
   recentOwnedMints: Array<{
     id: string;
     tokenId: string;

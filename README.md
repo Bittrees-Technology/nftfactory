@@ -124,6 +124,16 @@ For a clean local Sepolia indexing setup:
 - shared 721: `0x4018dD11271CecFAbb275656631896F7A8811965`
 - shared 1155: `0x530C5f6F1728dCF60C3399e6D9d3aC729a7637Ce`
 
+If a creator-owned custom collection is not discoverable from the registry yet, set:
+- `INDEXER_CUSTOM_COLLECTIONS_FILE=./services/indexer/scripts/custom-collections.example.json`
+
+The file should be a JSON array of explicit collection records with:
+- `contractAddress`
+- `ownerAddress`
+- `standard` (`ERC721` or `ERC1155`)
+- optional `ensSubname`
+- `isFactoryCreated=false`
+
 ### ENS Subname Backfill
 - Single record:
   - `npm --workspace services/indexer run admin:backfill-subname -- --subname studio --owner 0xYourOwnerAddress`
