@@ -119,6 +119,20 @@ For a clean local Sepolia indexing setup:
 4. Start the indexer API:
    - `npm run dev:indexer`
 
+For a detached local host process that keeps the indexer on `127.0.0.1:8787`:
+
+1. `npm run indexer:host:start`
+2. `npm run indexer:host:status`
+3. `npm run indexer:host:stop`
+
+That path ensures Postgres, Prisma client generation, and Prisma migrations before starting the HTTP API.
+
+For Cloudflare ingress, point:
+- `api.nftfactory.org` -> `http://127.0.0.1:8787`
+
+Example tunnel config:
+- `services/indexer/examples/cloudflared-indexer-config.yml`
+
 `indexer:bootstrap:sepolia` applies the checked-in Prisma migrations and backfills:
 - registry: `0x1c8124F401Ac7A067f0c3dD39ce102D3623F4DE3`
 - marketplace: `0xc0098BCC01e2179A5018EFabf64a9c74a2E6244B`

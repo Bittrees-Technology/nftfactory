@@ -140,6 +140,20 @@ Local bootstrap path for a full Sepolia indexer warmup:
 
 That path applies Prisma migrations and runs the registry + shared-contract historical backfill before the API starts serving frontend reads.
 
+For a detached local runtime that keeps the indexer serving on `127.0.0.1:8787`:
+
+1. `npm run indexer:host:start`
+2. `npm run indexer:host:status`
+3. `npm run indexer:host:stop`
+
+Cloudflare should map:
+
+- `api.nftfactory.org` -> `http://127.0.0.1:8787`
+
+Example tunnel file:
+
+- `services/indexer/examples/cloudflared-indexer-config.yml`
+
 ## Environment readiness checklist
 
 Before deployment or release validation:
