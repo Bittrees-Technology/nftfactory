@@ -134,6 +134,10 @@ The file should be a JSON array of explicit collection records with:
 - optional `ensSubname`
 - `isFactoryCreated=false`
 
+Those explicit entries are used in both places:
+- historical backfill (`npm run indexer:bootstrap:sepolia`)
+- live owner/profile sync reads inside the running indexer
+
 ### ENS Subname Backfill
 - Single record:
   - `npm --workspace services/indexer run admin:backfill-subname -- --subname studio --owner 0xYourOwnerAddress`

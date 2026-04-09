@@ -8,7 +8,7 @@ import { PrismaClient } from "@prisma/client";
 import { pino } from "pino";
 import { createPublicClient, http } from "viem";
 import { isAddress, isZeroAddress, normalizeSubname, parseBearerToken, getClientIp, isRateLimited } from "./utils.js";
-import { isStaleIsoTimestamp } from "./registryBackfill.js";
+import { isStaleIsoTimestamp, normalizeExplicitBackfillTargets } from "./registryBackfill.js";
 
 const log = pino({ level: process.env.LOG_LEVEL || "info" });
 
@@ -277,6 +277,7 @@ const PROFILE_GUESTBOOK_COOLDOWN_MS = 30_000;
 const PAYMENT_TOKEN_FILE = process.env.INDEXER_PAYMENT_TOKEN_FILE || path.join(process.cwd(), "data", "payment-tokens.json");
 const PARTICIPANT_ACTIVITY_FILE =
   process.env.INDEXER_PARTICIPANT_ACTIVITY_FILE || path.join(process.cwd(), "data", "participant-activity.json");
+const CUSTOM_COLLECTIONS_FILE = process.env.INDEXER_CUSTOM_COLLECTIONS_FILE || "";
 const TOKEN_PRESENTATION_FILE =
   process.env.INDEXER_TOKEN_PRESENTATION_FILE || path.join(process.cwd(), "data", "token-presentation.json");
 const MARKETPLACE_SYNC_STATE_FILE =
@@ -1282,6 +1283,26 @@ let indexerSyncStateWritePromise: Promise<IndexerSyncStateRecord> = Promise.reso
   collections: {},
   updatedAt: null
 });
+let explicitCustomCollectionsCache:
+  | Array<{
+      contractAddress: `0x${string}`;
+      ownerAddress: `0x${string}` | null;
+      ensSubname: string;
+      standard: "ERC721" | "ERC1155";
+      isNftFactoryCreated: boolean;
+    }>
+  | null = null;
+let explicitCustomCollectionsReadPromise:
+  | Promise<
+      Array<{
+        contractAddress: `0x${string}`;
+        ownerAddress: `0x${string}` | null;
+        ensSubname: string;
+        standard: "ERC721" | "ERC1155";
+        isNftFactoryCreated: boolean;
+      }>
+    >
+  | null = null;
 
 async function readIndexerSyncState(): Promise<IndexerSyncStateRecord> {
   if (indexerSyncStateCache) return indexerSyncStateCache;
@@ -1347,6 +1368,39 @@ async function writeIndexerSyncState(patch: {
   });
 
   return indexerSyncStateWritePromise;
+}
+
+async function readExplicitCustomCollections(): Promise<
+  Array<{
+    contractAddress: `0x${string}`;
+    ownerAddress: `0x${string}` | null;
+    ensSubname: string;
+    standard: "ERC721" | "ERC1155";
+    isNftFactoryCreated: boolean;
+  }>
+> {
+  const targetPath = String(CUSTOM_COLLECTIONS_FILE || "").trim();
+  if (!targetPath) return [];
+  if (explicitCustomCollectionsCache) return explicitCustomCollectionsCache;
+  if (explicitCustomCollectionsReadPromise) return explicitCustomCollectionsReadPromise;
+
+  explicitCustomCollectionsReadPromise = (async () => {
+    try {
+      const raw = await readFile(path.resolve(process.cwd(), targetPath), "utf8");
+      const parsed = JSON.parse(raw);
+      const normalized = Array.isArray(parsed) ? normalizeExplicitBackfillTargets(parsed) : [];
+      explicitCustomCollectionsCache = normalized;
+      return normalized;
+    } catch (err) {
+      log.warn({ err, path: targetPath }, "custom_collection_index_read_failed");
+      explicitCustomCollectionsCache = [];
+      return [];
+    } finally {
+      explicitCustomCollectionsReadPromise = null;
+    }
+  })();
+
+  return explicitCustomCollectionsReadPromise;
 }
 
 function parseSyncStateBlock(value: string | null | undefined): bigint | null {
@@ -5066,6 +5120,18 @@ async function syncOwnerCollectionsIfStale(
       standard: String(record.standard || "").trim().toUpperCase() || undefined,
       ensSubname: String(record.ensSubname || "").trim() || null,
       isFactoryCreated: Boolean(record.isNftFactoryCreated)
+    });
+  }
+
+  const explicitCustomCollections = await readExplicitCustomCollections();
+  for (const record of explicitCustomCollections) {
+    if (record.ownerAddress !== owner) continue;
+    deduped.set(record.contractAddress, {
+      contractAddress: record.contractAddress,
+      ownerAddress: owner,
+      standard: record.standard,
+      ensSubname: record.ensSubname || null,
+      isFactoryCreated: record.isNftFactoryCreated
     });
   }
 
