@@ -338,6 +338,11 @@ function formatCollectionIdentity(value: string | null): string | null {
   return trimmed.includes(".") ? trimmed : `${trimmed}.nftfactory.eth`;
 }
 
+function getCollectionFallbackFromBlock(chainId: number): bigint {
+  if (chainId === 11155111) return 10359500n;
+  return 0n;
+}
+
 function formatBpsAsPercent(value: string | number): string {
   const parsed = typeof value === "number" ? value : Number.parseInt(value || "0", 10);
   if (!Number.isFinite(parsed)) return "0%";
@@ -612,6 +617,209 @@ const DEFAULT_IPFS_GATEWAY = (process.env.NEXT_PUBLIC_IPFS_GATEWAY || "https://d
 
 type ViewCollectionToken = Awaited<ReturnType<typeof fetchCollectionTokens>>["tokens"][number];
 
+async function getLogsChunkedForCollection(
+  publicClient: NonNullable<ReturnType<typeof usePublicClient>>,
+  params: Record<string, unknown>,
+  initialChunkSize = 2000n
+): Promise<any[]> {
+  const latest = await publicClient.getBlockNumber();
+  const fromBlock = typeof params.fromBlock === "bigint" ? params.fromBlock : 0n;
+  const logs: any[] = [];
+  let start = fromBlock;
+  let chunkSize = initialChunkSize;
+
+  while (start <= latest) {
+    const end = start + chunkSize - 1n > latest ? latest : start + chunkSize - 1n;
+    try {
+      const chunk = await (publicClient as any).getLogs({
+        ...params,
+        fromBlock: start,
+        toBlock: end
+      });
+      logs.push(...chunk);
+      start = end + 1n;
+    } catch {
+      if (chunkSize <= 1n) throw new Error("Failed to scan collection logs on-chain.");
+      chunkSize = chunkSize / 2n < 1n ? 1n : chunkSize / 2n;
+    }
+  }
+
+  return logs;
+}
+
+async function fetchCollectionTokensOnChain(args: {
+  publicClient: NonNullable<ReturnType<typeof usePublicClient>>;
+  chainId: number;
+  contractAddress: string;
+  standard: Standard;
+  ownerAddress: string;
+  ensSubname: string | null;
+  isFactoryCreated: boolean;
+  isUpgradeable: boolean;
+}): Promise<Awaited<ReturnType<typeof fetchCollectionTokens>>> {
+  const {
+    publicClient,
+    chainId,
+    contractAddress,
+    standard,
+    ownerAddress,
+    ensSubname,
+    isFactoryCreated,
+    isUpgradeable
+  } = args;
+  const collection = {
+    chainId,
+    contractAddress,
+    ownerAddress,
+    ensSubname,
+    standard,
+    isFactoryCreated,
+    isUpgradeable,
+    finalizedAt: null,
+    createdAt: "",
+    updatedAt: ""
+  };
+  const fromBlock = getCollectionFallbackFromBlock(chainId);
+
+  if (standard === "ERC721") {
+    const logs = await getLogsChunkedForCollection(publicClient, {
+      address: contractAddress,
+      event: erc721TransferEvent,
+      fromBlock
+    });
+    const mintedLogs = logs.filter((log) => String(log.args?.from || "").toLowerCase() === ZERO_ADDRESS.toLowerCase());
+    const blockCache = new Map<string, string>();
+    const tokens = await Promise.all(
+      mintedLogs.map(async (log) => {
+        const tokenId = BigInt(log.args?.tokenId || 0n).toString();
+        const currentOwner = String(
+          await publicClient.readContract({
+            address: contractAddress as Address,
+            abi: erc721ReadAbi,
+            functionName: "ownerOf",
+            args: [BigInt(tokenId)]
+          }).catch(() => log.args?.to || ZERO_ADDRESS)
+        ).toLowerCase();
+        const metadataUrl = String(
+          await publicClient.readContract({
+            address: contractAddress as Address,
+            abi: erc721ReadAbi,
+            functionName: "tokenURI",
+            args: [BigInt(tokenId)]
+          }).catch(() => "")
+        );
+        const blockKey = String(log.blockNumber || "");
+        if (!blockCache.has(blockKey) && log.blockNumber) {
+          const block = await publicClient.getBlock({ blockNumber: BigInt(log.blockNumber) }).catch(() => null);
+          blockCache.set(blockKey, block ? new Date(Number(block.timestamp) * 1000).toISOString() : new Date().toISOString());
+        }
+        return {
+          id: `onchain:${chainId}:${contractAddress.toLowerCase()}:${tokenId}`,
+          tokenId,
+          creatorAddress: ownerAddress,
+          ownerAddress: currentOwner,
+          currentOwnerAddress: currentOwner,
+          currentOwnerAddresses: [currentOwner],
+          heldAmountRaw: "1",
+          reservedAmountRaw: "0",
+          availableAmountRaw: "1",
+          mintTxHash: null,
+          draftName: null,
+          draftDescription: null,
+          mintedAmountRaw: "1",
+          metadataCid: metadataUrl,
+          metadataUrl: metadataUrl || null,
+          mediaCid: null,
+          mediaUrl: null,
+          immutable: false,
+          mintedAt: blockCache.get(blockKey) || new Date().toISOString(),
+          bestOffer: null,
+          offerCount: 0,
+          collection,
+          activeListing: null
+        } satisfies ViewCollectionToken;
+      })
+    );
+    tokens.sort((a, b) => b.mintedAt.localeCompare(a.mintedAt));
+    return { contractAddress, count: tokens.length, tokens };
+  }
+
+  const singleLogs = await getLogsChunkedForCollection(publicClient, {
+    address: contractAddress,
+    event: erc1155TransferSingleEvent,
+    fromBlock
+  });
+  const batchLogs = await getLogsChunkedForCollection(publicClient, {
+    address: contractAddress,
+    event: erc1155TransferBatchEvent,
+    fromBlock
+  });
+  const minted = new Map<string, { ownerAddress: string; amountRaw: string }>();
+  for (const log of singleLogs) {
+    if (String(log.args?.from || "").toLowerCase() !== ZERO_ADDRESS.toLowerCase()) continue;
+    minted.set(BigInt(log.args?.id || 0n).toString(), {
+      ownerAddress: String(log.args?.to || ZERO_ADDRESS).toLowerCase(),
+      amountRaw: BigInt(log.args?.value || 0n).toString()
+    });
+  }
+  for (const log of batchLogs) {
+    if (String(log.args?.from || "").toLowerCase() !== ZERO_ADDRESS.toLowerCase()) continue;
+    const ids = Array.isArray(log.args?.ids) ? log.args.ids : [];
+    const values = Array.isArray(log.args?.values) ? log.args.values : [];
+    ids.forEach((id: unknown, index: number) => {
+      minted.set(BigInt((id as bigint | string | number | boolean | null | undefined) || 0n).toString(), {
+        ownerAddress: String(log.args?.to || ZERO_ADDRESS).toLowerCase(),
+        amountRaw: BigInt(values[index] || 0n).toString()
+      });
+    });
+  }
+  const tokens = await Promise.all(
+    [...minted.entries()].map(async ([tokenId, token]) => {
+      const balance = await publicClient.readContract({
+        address: contractAddress as Address,
+        abi: erc1155ReadAbi,
+        functionName: "balanceOf",
+        args: [token.ownerAddress as Address, BigInt(tokenId)]
+      }).catch(() => BigInt(token.amountRaw));
+      const metadataUrl = String(
+        await publicClient.readContract({
+          address: contractAddress as Address,
+          abi: erc1155ReadAbi,
+          functionName: "uri",
+          args: [BigInt(tokenId)]
+        }).catch(() => "")
+      );
+      return {
+        id: `onchain:${chainId}:${contractAddress.toLowerCase()}:${tokenId}`,
+        tokenId,
+        creatorAddress: ownerAddress,
+        ownerAddress: token.ownerAddress,
+        currentOwnerAddress: token.ownerAddress,
+        currentOwnerAddresses: [token.ownerAddress],
+        heldAmountRaw: BigInt(balance || 0n).toString(),
+        reservedAmountRaw: "0",
+        availableAmountRaw: BigInt(balance || 0n).toString(),
+        mintTxHash: null,
+        draftName: null,
+        draftDescription: null,
+        mintedAmountRaw: token.amountRaw,
+        metadataCid: metadataUrl,
+        metadataUrl: metadataUrl || null,
+        mediaCid: null,
+        mediaUrl: null,
+        immutable: false,
+        mintedAt: new Date().toISOString(),
+        bestOffer: null,
+        offerCount: 0,
+        collection,
+        activeListing: null
+      } satisfies ViewCollectionToken;
+    })
+  );
+  tokens.sort((a, b) => b.tokenId.localeCompare(a.tokenId, undefined, { numeric: true }));
+  return { contractAddress, count: tokens.length, tokens };
+}
+
 function ViewCollectionTokenCard({ token }: { token: ViewCollectionToken }) {
   const preview = useNftMetadataPreview({
     metadataUri: token.metadataCid,
@@ -695,6 +903,77 @@ const interfaceProbeAbi = [
     outputs: [{ name: "", type: "bool" }]
   }
 ] as const;
+
+const erc721ReadAbi = [
+  {
+    type: "function",
+    name: "ownerOf",
+    stateMutability: "view",
+    inputs: [{ name: "tokenId", type: "uint256" }],
+    outputs: [{ name: "", type: "address" }]
+  },
+  {
+    type: "function",
+    name: "tokenURI",
+    stateMutability: "view",
+    inputs: [{ name: "tokenId", type: "uint256" }],
+    outputs: [{ name: "", type: "string" }]
+  }
+] as const;
+
+const erc1155ReadAbi = [
+  {
+    type: "function",
+    name: "balanceOf",
+    stateMutability: "view",
+    inputs: [
+      { name: "account", type: "address" },
+      { name: "id", type: "uint256" }
+    ],
+    outputs: [{ name: "", type: "uint256" }]
+  },
+  {
+    type: "function",
+    name: "uri",
+    stateMutability: "view",
+    inputs: [{ name: "id", type: "uint256" }],
+    outputs: [{ name: "", type: "string" }]
+  }
+] as const;
+
+const erc721TransferEvent = {
+  type: "event",
+  name: "Transfer",
+  inputs: [
+    { indexed: true, name: "from", type: "address" },
+    { indexed: true, name: "to", type: "address" },
+    { indexed: true, name: "tokenId", type: "uint256" }
+  ]
+} as const;
+
+const erc1155TransferSingleEvent = {
+  type: "event",
+  name: "TransferSingle",
+  inputs: [
+    { indexed: true, name: "operator", type: "address" },
+    { indexed: true, name: "from", type: "address" },
+    { indexed: true, name: "to", type: "address" },
+    { indexed: false, name: "id", type: "uint256" },
+    { indexed: false, name: "value", type: "uint256" }
+  ]
+} as const;
+
+const erc1155TransferBatchEvent = {
+  type: "event",
+  name: "TransferBatch",
+  inputs: [
+    { indexed: true, name: "operator", type: "address" },
+    { indexed: true, name: "from", type: "address" },
+    { indexed: true, name: "to", type: "address" },
+    { indexed: false, name: "ids", type: "uint256[]" },
+    { indexed: false, name: "values", type: "uint256[]" }
+  ]
+} as const;
 
 const factoryImplementationAbi = [
   {
@@ -1636,7 +1915,21 @@ export default function MintClient({
       setViewCollectionError("");
 
       try {
-        const result = await fetchCollectionTokens(manageAddress, { chainId: config.chainId, sync: true });
+        let result = await fetchCollectionTokens(manageAddress, { chainId: config.chainId, sync: true });
+        if (result.count === 0 && publicClient && manageCollectionStandard) {
+          result = await fetchCollectionTokensOnChain({
+            publicClient,
+            chainId: config.chainId,
+            contractAddress: manageAddress,
+            standard: manageCollectionStandard,
+            ownerAddress: manageCollectionOwner || account || ZERO_ADDRESS,
+            ensSubname: verifiedKnownCollections.find(
+              (item) => item.contractAddress.toLowerCase() === manageAddress.toLowerCase()
+            )?.ensSubname || null,
+            isFactoryCreated: false,
+            isUpgradeable: false
+          });
+        }
         if (cancelled) return;
         setViewCollectionTokens(result.tokens);
         setViewCollectionCount(result.count);
@@ -1658,7 +1951,7 @@ export default function MintClient({
     return () => {
       cancelled = true;
     };
-  }, [config.chainId, manageAddress, pageMode]);
+  }, [account, config.chainId, manageAddress, manageCollectionOwner, manageCollectionStandard, pageMode, publicClient, verifiedKnownCollections]);
 
   // ── Utilities ─────────────────────────────────────────────────────────────
 
@@ -3331,7 +3624,21 @@ export default function MintClient({
                   setViewCollectionLoading(true);
                   setViewCollectionError("");
                   void fetchCollectionTokens(manageAddress, { chainId: config.chainId, sync: true })
-                    .then((result) => {
+                    .then(async (result) => {
+                      if (result.count === 0 && publicClient && manageCollectionStandard) {
+                        result = await fetchCollectionTokensOnChain({
+                          publicClient,
+                          chainId: config.chainId,
+                          contractAddress: manageAddress,
+                          standard: manageCollectionStandard,
+                          ownerAddress: manageCollectionOwner || account || ZERO_ADDRESS,
+                          ensSubname: verifiedKnownCollections.find(
+                            (item) => item.contractAddress.toLowerCase() === manageAddress.toLowerCase()
+                          )?.ensSubname || null,
+                          isFactoryCreated: false,
+                          isUpgradeable: false
+                        });
+                      }
                       setViewCollectionTokens(result.tokens);
                       setViewCollectionCount(result.count);
                       setViewCollectionLastSyncedAt(Date.now());
