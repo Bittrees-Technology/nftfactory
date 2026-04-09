@@ -2252,6 +2252,27 @@ export default function MintClient({
         args: [label]
       });
       if (!available) {
+        const fullName = `${label}.eth`;
+        try {
+          const currentOwner = await resolveEnsEffectiveOwner(publicClient, fullName);
+          if (
+            isAddress(currentOwner) &&
+            currentOwner.toLowerCase() === walletClient.account.address.toLowerCase()
+          ) {
+            setDiscoveredEnsNames((current) =>
+              Array.from(new Set([...current, fullName])).sort((left, right) => left.localeCompare(right))
+            );
+            setIdentityMode("ens");
+            setRegisterSubnameLabel(fullName);
+            setSubnameTx({
+              status: "success",
+              message: `${fullName} is already registered and owned by this wallet. It is now available under Existing ENS name.`
+            });
+            return;
+          }
+        } catch {
+          // Fall through to the generic ownership message below.
+        }
         setSubnameTx({ status: "error", message: `${label}.eth is already registered in ENS.` });
         return;
       }
