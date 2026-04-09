@@ -769,6 +769,10 @@ const LISTING_SYNC_TTL_MS = 30_000;
 const MARKETPLACE_SYNC_TTL_MS = 30_000;
 const REGISTRY_SYNC_TTL_MS = Math.max(30_000, Number.parseInt(process.env.INDEXER_REGISTRY_SYNC_TTL_MS || "120000", 10) || 120_000);
 const COLLECTION_SYNC_TTL_MS = Math.max(30_000, Number.parseInt(process.env.INDEXER_COLLECTION_SYNC_TTL_MS || "300000", 10) || 300_000);
+const ENABLE_REGISTRY_READ_SYNC = process.env.INDEXER_ENABLE_REGISTRY_READ_SYNC !== "0";
+const ENABLE_OWNER_READ_SYNC = process.env.INDEXER_ENABLE_OWNER_READ_SYNC !== "0";
+const ENABLE_PARTICIPANT_READ_SYNC = process.env.INDEXER_ENABLE_PARTICIPANT_READ_SYNC !== "0";
+const ENABLE_MARKETPLACE_READ_SYNC = process.env.INDEXER_ENABLE_MARKETPLACE_READ_SYNC !== "0";
 const INDEXER_START_BLOCK = Math.max(0, Number.parseInt(process.env.INDEXER_START_BLOCK || "0", 10) || 0);
 const INDEXER_REGISTRY_START_BLOCK = Math.max(
   0,
@@ -5332,6 +5336,44 @@ async function syncRegistryCollectionsIfStale(
   await registrySyncPromise;
 }
 
+async function syncRegistryCollectionsIfAllowed(
+  deps: IndexerDeps,
+  config: RequestHandlerConfig,
+  options?: { force?: boolean }
+): Promise<void> {
+  if (!ENABLE_REGISTRY_READ_SYNC && options?.force !== true) return;
+  await syncRegistryCollectionsIfStale(deps, config, options);
+}
+
+async function syncOwnerCollectionsIfAllowed(
+  ownerAddress: string,
+  deps: IndexerDeps,
+  config: RequestHandlerConfig,
+  options?: { force?: boolean }
+): Promise<void> {
+  if (!ENABLE_OWNER_READ_SYNC && options?.force !== true) return;
+  await syncOwnerCollectionsIfStale(ownerAddress, deps, config, options);
+}
+
+async function syncParticipantContractsIfAllowed(
+  participantAddress: string,
+  deps: IndexerDeps,
+  config: RequestHandlerConfig,
+  options?: { force?: boolean }
+): Promise<void> {
+  if (!ENABLE_PARTICIPANT_READ_SYNC && options?.force !== true) return;
+  await syncParticipantContractsIfStale(participantAddress, deps, config, options);
+}
+
+async function syncMarketplaceIfAllowed(
+  deps: IndexerDeps,
+  config: RequestHandlerConfig,
+  options?: { includeListings?: boolean; includeOffers?: boolean; force?: boolean }
+): Promise<void> {
+  if (!ENABLE_MARKETPLACE_READ_SYNC && options?.force !== true) return;
+  await syncMarketplaceIfStale(deps, config, options);
+}
+
 async function listHiddenListings(deps: IndexerDeps): Promise<{ listingIds: number[]; listingRecordIds: string[] }> {
   const includeListingRefs = await hasModerationActionListingColumns(deps);
   const actions = await (deps.prisma as any).moderationAction.findMany({
@@ -6599,22 +6641,22 @@ async function handleRequest(
       sendJson(res, 400, { error: "Valid participant address is required" });
       return;
     }
-    await syncOwnerCollectionsIfStale(address, deps, config);
-    await syncParticipantContractsIfStale(address, deps, config);
-    await syncPreferredMarketplaceIfStale(deps, config, { includeOffers: true });
+    await syncOwnerCollectionsIfAllowed(address, deps, config);
+    await syncParticipantContractsIfAllowed(address, deps, config);
+    await syncPreferredMarketplaceIfStale(deps, config, { includeOffers: ENABLE_MARKETPLACE_READ_SYNC });
     const summary = await readParticipantSummary(address, config.chainId);
     sendJson(res, 200, summary);
     return;
   }
 
   if (req.method === "GET" && /^\/api\/users\/[^/]+\/offers-received$/.test(path)) {
-    await syncMarketplaceIfStale(deps, config, { includeListings: false, includeOffers: true });
+    await syncMarketplaceIfAllowed(deps, config, { includeListings: false, includeOffers: true });
     const address = String(decodeURIComponent(path.split("/")[3] || "")).trim().toLowerCase();
     if (!address || !isAddress(address)) {
       sendJson(res, 400, { error: "Valid user address is required" });
       return;
     }
-    await syncParticipantContractsIfStale(address, deps, config);
+    await syncParticipantContractsIfAllowed(address, deps, config);
 
     const cursor = Math.max(0, Number.parseInt(String(url.searchParams.get("cursor") || "0"), 10) || 0);
     const limit = Math.min(100, Math.max(1, Number.parseInt(String(url.searchParams.get("limit") || "50"), 10) || 50));
@@ -6646,9 +6688,9 @@ async function handleRequest(
       sendJson(res, 400, { error: "Valid owner address is required" });
       return;
     }
-    await syncOwnerCollectionsIfStale(owner, deps, config);
-    await syncParticipantContractsIfStale(owner, deps, config);
-    await syncPreferredMarketplaceIfStale(deps, config, { includeOffers: true });
+    await syncOwnerCollectionsIfAllowed(owner, deps, config);
+    await syncParticipantContractsIfAllowed(owner, deps, config);
+    await syncPreferredMarketplaceIfStale(deps, config, { includeOffers: ENABLE_MARKETPLACE_READ_SYNC });
     const [includeMintTxHash, includeTokenPresentation, includeListingV2, includeTokenHoldings, ownedTokenWhere] = await Promise.all([
       hasMintTxHashColumn(deps),
       hasTokenPresentationColumns(deps),
@@ -7662,7 +7704,7 @@ async function handleRequest(
   }
 
   if (req.method === "GET" && /^\/api\/profile\/[^/]+$/.test(path)) {
-    await syncRegistryCollectionsIfStale(deps, config);
+    await syncRegistryCollectionsIfAllowed(deps, config);
     const rawName = String(decodeURIComponent(path.split("/")[3] || "")).trim().toLowerCase();
     const lookup = resolveProfileLookup(rawName);
     const slug = lookup?.slugCandidates[0] || "";
@@ -7925,7 +7967,7 @@ async function handleRequest(
   }
 
   if (req.method === "GET" && path === "/api/overview") {
-    await syncRegistryCollectionsIfStale(deps, config);
+    await syncRegistryCollectionsIfAllowed(deps, config);
     await syncPreferredMarketplaceIfStale(deps, config);
     const includeListingV2 = await hasListingV2Columns(deps);
     const [collectionCount, tokenCount, activeListingCount, openReportCount, hiddenListingRefs, profiles, paymentTokens, moderators] =
@@ -7964,7 +8006,7 @@ async function handleRequest(
       return;
     }
 
-    await syncOwnerCollectionsIfStale(owner, deps, config);
+    await syncOwnerCollectionsIfAllowed(owner, deps, config);
 
     const includeListingV2 = await hasListingV2Columns(deps);
     const collections = await deps.prisma.collection.findMany({

@@ -103,6 +103,10 @@ Shared IPFS publishing commands in this repo use `projects/ipfs-evm-system`. Con
   - `INDEXER_RPC_RETRY_MAX_MS=30000` (optional; live RPC backoff ceiling)
   - `INDEXER_RPC_INTER_CHUNK_DELAY_MS=250` (optional; pause between live log chunks)
   - `INDEXER_SYNC_CONCURRENCY=1` (optional; max concurrent collection syncs)
+  - `INDEXER_ENABLE_REGISTRY_READ_SYNC=1` (optional; set `0` during warmup to stop read-triggered registry scans)
+  - `INDEXER_ENABLE_OWNER_READ_SYNC=1` (optional; set `0` during warmup to stop owner reads from forcing chain sync)
+  - `INDEXER_ENABLE_PARTICIPANT_READ_SYNC=1` (optional; set `0` during warmup to stop participant reads from forcing chain sync)
+  - `INDEXER_ENABLE_MARKETPLACE_READ_SYNC=1` (optional; set `0` during warmup to stop read-triggered marketplace syncs)
   - `INDEXER_BACKFILL_LOG_CHUNK_SIZE=25` (optional; historical backfill log window)
   - `INDEXER_BACKFILL_RPC_RETRY_BASE_MS=2000` (optional; historical backoff floor)
   - `INDEXER_BACKFILL_RPC_RETRY_MAX_MS=30000` (optional; historical backoff ceiling)
@@ -181,6 +185,13 @@ The file should be a JSON array of explicit collection records with:
 Those explicit entries are used in both places:
 - historical backfill (`npm run indexer:bootstrap:sepolia`)
 - live owner/profile sync reads inside the running indexer
+
+During initial warmup, it is safer to let the historical backfill seed Postgres first and temporarily disable read-triggered syncs:
+
+- `INDEXER_ENABLE_REGISTRY_READ_SYNC=0`
+- `INDEXER_ENABLE_OWNER_READ_SYNC=0`
+- `INDEXER_ENABLE_PARTICIPANT_READ_SYNC=0`
+- `INDEXER_ENABLE_MARKETPLACE_READ_SYNC=0`
 
 If the host does not have Docker or Podman, install a rootless local PostgreSQL bundle under the indexer service:
 
