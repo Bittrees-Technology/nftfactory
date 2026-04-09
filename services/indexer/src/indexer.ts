@@ -8,7 +8,7 @@ import { PrismaClient } from "@prisma/client";
 import { pino } from "pino";
 import { createPublicClient, http } from "viem";
 import { isAddress, isZeroAddress, normalizeSubname, parseBearerToken, getClientIp, isRateLimited } from "./utils.js";
-import { isStaleIsoTimestamp, normalizeExplicitBackfillTargets } from "./registryBackfill.js";
+import { getSharedBackfillTargets, isStaleIsoTimestamp, normalizeExplicitBackfillTargets } from "./registryBackfill.js";
 
 const log = pino({ level: process.env.LOG_LEVEL || "info" });
 
@@ -5207,7 +5207,7 @@ async function syncRegistryCollectionsIfStale(
   config: RequestHandlerConfig,
   options?: { force?: boolean }
 ): Promise<void> {
-  if (!config.registryAddress) return;
+  if (!String(config.rpcUrl || "").trim()) return;
   const force = options?.force === true;
   const now = Date.now();
 
@@ -5224,34 +5224,60 @@ async function syncRegistryCollectionsIfStale(
       const client = createPublicClient({
         transport: http(config.rpcUrl)
       });
+      const discovered = new Map<string, BackfillCollectionTokensPayload>();
       const currentBlock = await client.getBlockNumber();
-      const syncState = await readIndexerSyncState();
-      const lastSyncedBlock = parseSyncStateBlock(syncState.registryLastBlock);
-      const fromBlock = force || lastSyncedBlock === null ? 0n : lastSyncedBlock + 1n;
-      if (fromBlock > currentBlock) {
+
+      if (config.registryAddress) {
+        const syncState = await readIndexerSyncState();
+        const lastSyncedBlock = parseSyncStateBlock(syncState.registryLastBlock);
+        const fromBlock = force || lastSyncedBlock === null ? 0n : lastSyncedBlock + 1n;
+        if (fromBlock <= currentBlock) {
+          const logs = await getLogsChunked(client, {
+            address: config.registryAddress,
+            event: creatorRegisteredEvent,
+            fromBlock,
+            toBlock: currentBlock
+          });
+
+          for (const logEntry of logs) {
+            const contractAddress = String(logEntry.args.contractAddress || "").trim().toLowerCase();
+            const creator = String(logEntry.args.creator || "").trim().toLowerCase();
+            if (!isAddress(contractAddress) || !isAddress(creator)) continue;
+            discovered.set(contractAddress, {
+              contractAddress,
+              ownerAddress: creator,
+              standard: String(logEntry.args.standard || "").trim().toUpperCase() || undefined,
+              ensSubname: String(logEntry.args.ensSubname || "").trim() || null,
+              isFactoryCreated: Boolean(logEntry.args.isNftFactoryCreated)
+            });
+          }
+        }
+
         await writeIndexerSyncState({ registryLastBlock: String(currentBlock) });
-        lastRegistrySyncAt = Date.now();
-        return;
       }
 
-      const logs = await getLogsChunked(client, {
-        address: config.registryAddress,
-        event: creatorRegisteredEvent,
-        fromBlock,
-        toBlock: currentBlock
-      });
+      for (const shared of getSharedBackfillTargets({
+        SHARED_721_ADDRESS: process.env.SHARED_721_ADDRESS,
+        NEXT_PUBLIC_SHARED_721_ADDRESS: process.env.NEXT_PUBLIC_SHARED_721_ADDRESS,
+        SHARED_1155_ADDRESS: process.env.SHARED_1155_ADDRESS,
+        NEXT_PUBLIC_SHARED_1155_ADDRESS: process.env.NEXT_PUBLIC_SHARED_1155_ADDRESS
+      })) {
+        discovered.set(shared.contractAddress, {
+          contractAddress: shared.contractAddress,
+          ownerAddress: undefined,
+          standard: shared.standard,
+          ensSubname: null,
+          isFactoryCreated: shared.isNftFactoryCreated
+        });
+      }
 
-      const discovered = new Map<string, BackfillCollectionTokensPayload>();
-      for (const logEntry of logs) {
-        const contractAddress = String(logEntry.args.contractAddress || "").trim().toLowerCase();
-        const creator = String(logEntry.args.creator || "").trim().toLowerCase();
-        if (!isAddress(contractAddress) || !isAddress(creator)) continue;
-        discovered.set(contractAddress, {
-          contractAddress,
-          ownerAddress: creator,
-          standard: String(logEntry.args.standard || "").trim().toUpperCase() || undefined,
-          ensSubname: String(logEntry.args.ensSubname || "").trim() || null,
-          isFactoryCreated: Boolean(logEntry.args.isNftFactoryCreated)
+      for (const custom of await readExplicitCustomCollections()) {
+        discovered.set(custom.contractAddress, {
+          contractAddress: custom.contractAddress,
+          ownerAddress: custom.ownerAddress || undefined,
+          standard: custom.standard,
+          ensSubname: custom.ensSubname || null,
+          isFactoryCreated: custom.isNftFactoryCreated
         });
       }
 
@@ -5259,7 +5285,6 @@ async function syncRegistryCollectionsIfStale(
         Array.from(discovered.values()).map((item) => syncCollectionTokensIfStale(item, deps, config, { force: true }))
       );
 
-      await writeIndexerSyncState({ registryLastBlock: String(currentBlock) });
       lastRegistrySyncAt = Date.now();
     } catch (err) {
       log.warn({ err }, "registry_collection_sync_failed");
