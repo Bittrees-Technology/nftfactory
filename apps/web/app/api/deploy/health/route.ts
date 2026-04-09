@@ -6,6 +6,7 @@ import {
   isPrivateOrLocalUrl,
   resolveIpfsApiUrl
 } from "../../../../lib/ipfsUpload";
+import { resolveIndexerServerUrl } from "../../../../lib/indexerServerEnv";
 import { getLegacyChainPublicEnv, getRootPublicEnv, getScopedChainPublicEnv } from "../../../../lib/publicEnv";
 
 export const dynamic = "force-dynamic";
@@ -70,6 +71,7 @@ async function fetchWithTimeout(url: string, init?: RequestInit): Promise<Respon
 
 async function checkIndexer(chainId: number): Promise<ServiceCheck> {
   const configuredUrl =
+    resolveIndexerServerUrl(chainId) ||
     getScopedChainPublicEnv("NEXT_PUBLIC_INDEXER_API_URL", chainId) ||
     (String(chainId) === (getRootPublicEnv("NEXT_PUBLIC_PRIMARY_CHAIN_ID") || getRootPublicEnv("NEXT_PUBLIC_CHAIN_ID") || "1")
       ? getLegacyChainPublicEnv("NEXT_PUBLIC_INDEXER_API_URL")
@@ -81,7 +83,7 @@ async function checkIndexer(chainId: number): Promise<ServiceCheck> {
       url: null,
       ok: false,
       status: null,
-      message: "Missing NEXT_PUBLIC_INDEXER_API_URL for this chain."
+      message: "Missing INDEXER_API_URL or NEXT_PUBLIC_INDEXER_API_URL for this chain."
     };
   }
 

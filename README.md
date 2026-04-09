@@ -105,6 +105,7 @@ Shared IPFS publishing commands in this repo use `projects/ipfs-evm-system`. Con
     - `SHARED_1155_ADDRESS=0x530C5f6F1728dCF60C3399e6D9d3aC729a7637Ce`
 - `apps/web/.env.local`
   - `NEXT_PUBLIC_INDEXER_API_URL=http://127.0.0.1:8787`
+  - `INDEXER_API_URL=http://127.0.0.1:8787` (optional server-side override for app routes/proxies)
   - existing contract and wallet env vars already used by mint/list flows
 
 ### Local indexer bootstrap

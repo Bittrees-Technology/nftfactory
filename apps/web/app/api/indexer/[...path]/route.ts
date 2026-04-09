@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getIndexerBaseUrl } from "../../../../lib/indexerApi";
+import { resolveIndexerServerUrl } from "../../../../lib/indexerServerEnv";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +24,7 @@ async function proxyRequest(
     inboundUrl.searchParams.delete("_chainId");
 
     const upstreamPath = `/${path.join("/")}`.replace(/\/+/g, "/");
-    const baseUrl = getIndexerBaseUrl(chainId ? { chainId } : undefined).replace(/\/$/, "");
+    const baseUrl = (resolveIndexerServerUrl(chainId) || getIndexerBaseUrl(chainId ? { chainId } : undefined)).replace(/\/$/, "");
     const upstreamUrl = `${baseUrl}${upstreamPath}${inboundUrl.search}`;
 
     const method = request.method.toUpperCase();
@@ -49,7 +50,7 @@ async function proxyRequest(
     });
   } catch (error) {
     return NextResponse.json(
-      { error: toErrorMessage(error, "Indexer proxy request failed.") },
+      { error: toErrorMessage(error, "Indexer proxy request failed. Configure INDEXER_API_URL[_CHAIN_ID] or NEXT_PUBLIC_INDEXER_API_URL[_CHAIN_ID].") },
       { status: 503 }
     );
   }
