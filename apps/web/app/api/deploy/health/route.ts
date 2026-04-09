@@ -16,6 +16,7 @@ type ServiceCheck = {
   ok: boolean;
   status: number | null;
   message: string;
+  details?: Record<string, unknown>;
 };
 
 const REQUEST_TIMEOUT_MS = 8_000;
@@ -97,12 +98,39 @@ async function checkIndexer(chainId: number): Promise<ServiceCheck> {
   try {
     const response = await fetchWithTimeout(`${configuredUrl.replace(/\/$/, "")}/health`);
     const text = await response.text();
+    let details: Record<string, unknown> | undefined;
+    try {
+      const parsed = JSON.parse(text) as {
+        indexingSources?: {
+          sharedContracts?: { count?: number };
+          explicitCustomCollections?: { count?: number; configured?: boolean };
+        };
+      };
+      if (parsed && typeof parsed === "object") {
+        details = parsed as Record<string, unknown>;
+      }
+    } catch {
+      details = undefined;
+    }
+
+    const sharedCount = Number(
+      ((details?.indexingSources as Record<string, unknown> | undefined)?.sharedContracts as Record<string, unknown> | undefined)?.count || 0
+    );
+    const explicitCustom = ((details?.indexingSources as Record<string, unknown> | undefined)?.explicitCustomCollections as Record<string, unknown> | undefined) || undefined;
+    const customCount = Number(explicitCustom?.count || 0);
+    const customConfigured = Boolean(explicitCustom?.configured);
+    const sourceSummary =
+      sharedCount > 0 || customConfigured
+        ? `shared=${sharedCount}, custom=${customCount}${customConfigured ? "" : " (custom file unset)"}`
+        : "registry-only";
+
     return {
       label: `indexer:${chainId}`,
       url: maskUrl(configuredUrl),
       ok: response.ok,
       status: response.status,
-      message: response.ok ? "OK" : text || `HTTP ${response.status}`
+      message: response.ok ? `OK (${sourceSummary})` : text || `HTTP ${response.status}`,
+      details
     };
   } catch (error) {
     return {

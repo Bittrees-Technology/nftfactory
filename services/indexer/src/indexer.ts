@@ -5413,12 +5413,45 @@ async function handleRequest(
         hasOfferTable(deps),
         hasTokenHoldingTable(deps)
       ]);
+    const explicitCustomCollections = await readExplicitCustomCollections();
+    const sharedContracts = getSharedBackfillTargets({
+      SHARED_721_ADDRESS: process.env.SHARED_721_ADDRESS,
+      NEXT_PUBLIC_SHARED_721_ADDRESS: process.env.NEXT_PUBLIC_SHARED_721_ADDRESS,
+      SHARED_1155_ADDRESS: process.env.SHARED_1155_ADDRESS,
+      NEXT_PUBLIC_SHARED_1155_ADDRESS: process.env.NEXT_PUBLIC_SHARED_1155_ADDRESS
+    });
     sendJson(res, 200, {
       ok: true,
       service: "indexer-api",
       contracts: {
         registryAddress: config.registryAddress,
-        moderatorRegistryAddress: config.moderatorRegistryAddress
+        moderatorRegistryAddress: config.moderatorRegistryAddress,
+        marketplaceAddress: config.marketplaceAddress
+      },
+      indexingSources: {
+        registry: {
+          configured: Boolean(config.registryAddress)
+        },
+        sharedContracts: {
+          configured: sharedContracts.length > 0,
+          count: sharedContracts.length,
+          contracts: sharedContracts.map((item) => ({
+            contractAddress: item.contractAddress,
+            standard: item.standard
+          }))
+        },
+        explicitCustomCollections: {
+          configured: Boolean(String(CUSTOM_COLLECTIONS_FILE || "").trim()),
+          path: String(CUSTOM_COLLECTIONS_FILE || "").trim() || null,
+          count: explicitCustomCollections.length,
+          contracts: explicitCustomCollections.map((item) => ({
+            contractAddress: item.contractAddress,
+            ownerAddress: item.ownerAddress,
+            standard: item.standard,
+            ensSubname: item.ensSubname || null,
+            isFactoryCreated: item.isNftFactoryCreated
+          }))
+        }
       },
       schema: {
         mintTxHashColumnAvailable,
