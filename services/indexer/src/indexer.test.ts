@@ -25,11 +25,61 @@ function createMockPrisma(): PrismaClient {
     },
     collection: {
       findMany: vi.fn(async () => []),
+      findUnique: vi.fn(async () => null),
       updateMany: vi.fn(async () => ({ count: 0 })),
-      upsert: vi.fn()
+      upsert: vi.fn(async ({ create }: any) => ({
+        id: "col_1",
+        chainId: create.chainId,
+        contractAddress: create.contractAddress,
+        ownerAddress: create.ownerAddress,
+        ensSubname: create.ensSubname || null,
+        standard: create.standard,
+        isFactoryCreated: create.isFactoryCreated,
+        isUpgradeable: create.isUpgradeable,
+        finalizedAt: create.finalizedAt || null,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }))
     },
     token: {
-      upsert: vi.fn()
+      upsert: vi.fn(async ({ create }: any) => ({
+        id: "tok_1",
+        tokenId: create.tokenId,
+        creatorAddress: create.creatorAddress,
+        ownerAddress: create.ownerAddress,
+        mintTxHash: create.mintTxHash || null,
+        draftName: create.draftName || null,
+        draftDescription: create.draftDescription || null,
+        mintedAmountRaw: create.mintedAmountRaw || null,
+        metadataCid: create.metadataCid,
+        mediaCid: create.mediaCid || null,
+        immutable: create.immutable,
+        mintedAt: create.mintedAt || new Date(),
+        collection: {
+          chainId: create.chainId || 11155111,
+          contractAddress: create.contractAddress || "0x00000000000000000000000000000000000000bb",
+          ownerAddress: create.ownerAddress,
+          ensSubname: null,
+          standard: create.standard || "ERC721",
+          isFactoryCreated: true,
+          isUpgradeable: true,
+          finalizedAt: null,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        },
+        listings: []
+      })),
+      count: vi.fn(async () => 0),
+      findMany: vi.fn(async () => []),
+      findFirst: vi.fn(async () => null),
+      update: vi.fn(async () => ({}))
+    },
+    tokenHolding: {
+      upsert: vi.fn(async () => ({})),
+      deleteMany: vi.fn(async () => ({ count: 0 })),
+      findUnique: vi.fn(async () => null),
+      findMany: vi.fn(async () => []),
+      count: vi.fn(async () => 0)
     }
   } as unknown as PrismaClient;
 }
@@ -302,5 +352,66 @@ describe("indexer handler", () => {
 
     await rm(guestbookFile, { force: true });
     await rm(profileFile, { force: true });
+  });
+
+  it("tracks participant activity for synced tokens and exposes a participant summary", async () => {
+    const participantFile = path.join(process.cwd(), "data", "participant-activity.json");
+    await rm(participantFile, { force: true });
+
+    const handler = createRequestHandler(
+      {
+        prisma: createMockPrisma(),
+        getClientIpImpl: () => "127.0.0.1",
+        isRateLimitedImpl: () => false
+      },
+      {
+        chainId: 11155111,
+        adminToken: "",
+        adminAllowlist: new Set(),
+        trustProxy: false
+      }
+    );
+
+    const ownerAddress = "0x00000000000000000000000000000000000000aa";
+    const contractAddress = "0x00000000000000000000000000000000000000bb";
+    const syncResponse = await runHandler(
+      handler,
+      createReq({
+        method: "POST",
+        url: "/api/tokens/sync",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          chainId: 11155111,
+          contractAddress,
+          collectionOwnerAddress: ownerAddress,
+          tokenId: "1",
+          creatorAddress: ownerAddress,
+          ownerAddress,
+          standard: "ERC721",
+          isFactoryCreated: true,
+          isUpgradeable: true,
+          metadataCid: "ipfs://metadata",
+          immutable: true
+        })
+      })
+    );
+
+    expect(syncResponse.status).toBe(200);
+
+    const summaryResponse = await runHandler(
+      handler,
+      createReq({ method: "GET", url: `/api/participants/${ownerAddress}/summary` })
+    );
+
+    expect(summaryResponse.status).toBe(200);
+    expect(summaryResponse.body.address).toBe(ownerAddress);
+    expect(summaryResponse.body.totals.chains).toBe(1);
+    expect(summaryResponse.body.totals.contracts).toBe(1);
+    expect(summaryResponse.body.chains[0].chainId).toBe(11155111);
+    expect(summaryResponse.body.chains[0].contracts[0].contractAddress).toBe(contractAddress);
+    expect(summaryResponse.body.chains[0].contracts[0].actions).toContain("mint");
+    expect(summaryResponse.body.chains[0].contracts[0].roles).toContain("creator");
+
+    await rm(participantFile, { force: true });
   });
 });

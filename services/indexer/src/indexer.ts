@@ -275,6 +275,8 @@ const PROFILE_GUESTBOOK_WINDOW_MS = 10 * 60_000;
 const PROFILE_GUESTBOOK_MAX_POSTS_PER_WINDOW = 3;
 const PROFILE_GUESTBOOK_COOLDOWN_MS = 30_000;
 const PAYMENT_TOKEN_FILE = process.env.INDEXER_PAYMENT_TOKEN_FILE || path.join(process.cwd(), "data", "payment-tokens.json");
+const PARTICIPANT_ACTIVITY_FILE =
+  process.env.INDEXER_PARTICIPANT_ACTIVITY_FILE || path.join(process.cwd(), "data", "participant-activity.json");
 const TOKEN_PRESENTATION_FILE =
   process.env.INDEXER_TOKEN_PRESENTATION_FILE || path.join(process.cwd(), "data", "token-presentation.json");
 const MARKETPLACE_SYNC_STATE_FILE =
@@ -298,6 +300,46 @@ type IndexerSyncStateRecord = {
   registryLastBlock: string | null;
   collections: Record<string, string>;
   updatedAt: string | null;
+};
+
+type ParticipantContractTouch = {
+  contractAddress: string;
+  standards: string[];
+  origins: string[];
+  roles: string[];
+  actions: string[];
+  tokenIds: string[];
+  relatedAddresses: string[];
+  txHashes: string[];
+  firstSeenAt: string;
+  lastSeenAt: string;
+  interactionCount: number;
+};
+
+type ParticipantActivityRecord = {
+  chainId: number;
+  address: string;
+  roles: string[];
+  actions: string[];
+  relatedAddresses: string[];
+  contracts: ParticipantContractTouch[];
+  firstSeenAt: string;
+  lastSeenAt: string;
+  interactionCount: number;
+};
+
+type ParticipantActivityInput = {
+  chainId: number;
+  address: string;
+  contractAddress?: string | null;
+  standard?: string | null;
+  origin?: "factory" | "custom" | "shared" | "marketplace" | "registry" | null;
+  role?: string | null;
+  action?: string | null;
+  tokenId?: string | null;
+  relatedAddress?: string | null;
+  txHash?: string | null;
+  occurredAt?: string | null;
 };
 
 function createFallbackPrisma(): PrismaClient {
@@ -832,6 +874,268 @@ async function writePaymentTokenRecords(records: PaymentTokenRecord[]): Promise<
   await writeFile(PAYMENT_TOKEN_FILE, JSON.stringify(records, null, 2), "utf8");
 }
 
+function sanitizeParticipantLabel(value: string | null | undefined, max = 64): string | null {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (!normalized) return null;
+  return normalized.slice(0, max);
+}
+
+function normalizeParticipantContractTouch(input: ParticipantContractTouch): ParticipantContractTouch | null {
+  const contractAddress = String(input.contractAddress || "").trim().toLowerCase();
+  if (!isAddress(contractAddress)) return null;
+  const unique = (items: Array<string | null | undefined>, max = 64) =>
+    Array.from(
+      new Set(
+        items
+          .map((item) => sanitizeParticipantLabel(item, max))
+          .filter((item): item is string => Boolean(item))
+      )
+    ).sort((a, b) => a.localeCompare(b));
+
+  const tokenIds = Array.from(
+    new Set(
+      (input.tokenIds || [])
+        .map((item) => String(item || "").trim())
+        .filter(Boolean)
+        .slice(0, 128)
+    )
+  ).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  const relatedAddresses = Array.from(
+    new Set(
+      (input.relatedAddresses || [])
+        .map((item) => String(item || "").trim().toLowerCase())
+        .filter((item) => isAddress(item))
+        .slice(0, 128)
+    )
+  ).sort((a, b) => a.localeCompare(b));
+  const txHashes = Array.from(
+    new Set(
+      (input.txHashes || [])
+        .map((item) => String(item || "").trim())
+        .filter(Boolean)
+        .slice(0, 128)
+    )
+  ).sort((a, b) => a.localeCompare(b));
+
+  const firstSeenAt = input.firstSeenAt || new Date().toISOString();
+  const lastSeenAt = input.lastSeenAt || firstSeenAt;
+  return {
+    contractAddress,
+    standards: unique(input.standards || []),
+    origins: unique(input.origins || []),
+    roles: unique(input.roles || []),
+    actions: unique(input.actions || []),
+    tokenIds,
+    relatedAddresses,
+    txHashes,
+    firstSeenAt,
+    lastSeenAt,
+    interactionCount: Math.max(1, Number(input.interactionCount || 0))
+  };
+}
+
+function normalizeParticipantActivityRecord(input: ParticipantActivityRecord): ParticipantActivityRecord | null {
+  const address = String(input.address || "").trim().toLowerCase();
+  if (!Number.isInteger(input.chainId) || input.chainId <= 0 || !isAddress(address)) {
+    return null;
+  }
+  const unique = (items: Array<string | null | undefined>, max = 64) =>
+    Array.from(
+      new Set(
+        items
+          .map((item) => sanitizeParticipantLabel(item, max))
+          .filter((item): item is string => Boolean(item))
+      )
+    ).sort((a, b) => a.localeCompare(b));
+  const relatedAddresses = Array.from(
+    new Set(
+      (input.relatedAddresses || [])
+        .map((item) => String(item || "").trim().toLowerCase())
+        .filter((item) => isAddress(item))
+        .slice(0, 256)
+    )
+  ).sort((a, b) => a.localeCompare(b));
+  const contracts = (input.contracts || [])
+    .map(normalizeParticipantContractTouch)
+    .filter((item): item is ParticipantContractTouch => Boolean(item))
+    .sort((a, b) => a.contractAddress.localeCompare(b.contractAddress));
+  const firstSeenAt = input.firstSeenAt || new Date().toISOString();
+  const lastSeenAt = input.lastSeenAt || firstSeenAt;
+  return {
+    chainId: input.chainId,
+    address,
+    roles: unique(input.roles || []),
+    actions: unique(input.actions || []),
+    relatedAddresses,
+    contracts,
+    firstSeenAt,
+    lastSeenAt,
+    interactionCount: Math.max(1, Number(input.interactionCount || 0))
+  };
+}
+
+async function readParticipantActivityRecords(): Promise<ParticipantActivityRecord[]> {
+  try {
+    const raw = await readFile(PARTICIPANT_ACTIVITY_FILE, "utf8");
+    const parsed = JSON.parse(raw) as ParticipantActivityRecord[];
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map(normalizeParticipantActivityRecord)
+      .filter((item): item is ParticipantActivityRecord => Boolean(item))
+      .sort((a, b) => {
+        if (a.chainId !== b.chainId) return a.chainId - b.chainId;
+        return a.address.localeCompare(b.address);
+      });
+  } catch {
+    return [];
+  }
+}
+
+async function writeParticipantActivityRecords(records: ParticipantActivityRecord[]): Promise<void> {
+  await mkdir(path.dirname(PARTICIPANT_ACTIVITY_FILE), { recursive: true });
+  await writeFile(PARTICIPANT_ACTIVITY_FILE, JSON.stringify(records, null, 2), "utf8");
+}
+
+async function recordParticipantActivity(input: ParticipantActivityInput): Promise<void> {
+  const address = String(input.address || "").trim().toLowerCase();
+  if (!Number.isInteger(input.chainId) || input.chainId <= 0 || !isAddress(address)) return;
+  participantActivityWritePromise = participantActivityWritePromise.then(async () => {
+    const now = input.occurredAt && String(input.occurredAt).trim() ? String(input.occurredAt).trim() : new Date().toISOString();
+    const role = sanitizeParticipantLabel(input.role);
+    const action = sanitizeParticipantLabel(input.action);
+    const standard = sanitizeParticipantLabel(input.standard);
+    const origin = sanitizeParticipantLabel(input.origin);
+    const tokenId = String(input.tokenId || "").trim() || null;
+    const contractAddress = String(input.contractAddress || "").trim().toLowerCase();
+    const relatedAddress = String(input.relatedAddress || "").trim().toLowerCase();
+    const txHash = String(input.txHash || "").trim() || null;
+
+    const current = await readParticipantActivityRecords();
+    const next = current.map((item) => ({ ...item, contracts: item.contracts.map((contract) => ({ ...contract })) }));
+    const existing = next.find((item) => item.chainId === input.chainId && item.address === address);
+    const record =
+      existing ||
+      {
+        chainId: input.chainId,
+        address,
+        roles: [],
+        actions: [],
+        relatedAddresses: [],
+        contracts: [],
+        firstSeenAt: now,
+        lastSeenAt: now,
+        interactionCount: 0
+      };
+
+    if (role && !record.roles.includes(role)) record.roles.push(role);
+    if (action && !record.actions.includes(action)) record.actions.push(action);
+    if (isAddress(relatedAddress) && !record.relatedAddresses.includes(relatedAddress)) record.relatedAddresses.push(relatedAddress);
+    record.lastSeenAt = now;
+    if (!record.firstSeenAt || record.firstSeenAt > now) record.firstSeenAt = now;
+    record.interactionCount += 1;
+
+    if (isAddress(contractAddress)) {
+      let contract = record.contracts.find((item) => item.contractAddress === contractAddress);
+      if (!contract) {
+        contract = {
+          contractAddress,
+          standards: [],
+          origins: [],
+          roles: [],
+          actions: [],
+          tokenIds: [],
+          relatedAddresses: [],
+          txHashes: [],
+          firstSeenAt: now,
+          lastSeenAt: now,
+          interactionCount: 0
+        };
+        record.contracts.push(contract);
+      }
+      if (standard && !contract.standards.includes(standard)) contract.standards.push(standard);
+      if (origin && !contract.origins.includes(origin)) contract.origins.push(origin);
+      if (role && !contract.roles.includes(role)) contract.roles.push(role);
+      if (action && !contract.actions.includes(action)) contract.actions.push(action);
+      if (tokenId && !contract.tokenIds.includes(tokenId)) contract.tokenIds.push(tokenId);
+      if (isAddress(relatedAddress) && !contract.relatedAddresses.includes(relatedAddress)) contract.relatedAddresses.push(relatedAddress);
+      if (txHash && !contract.txHashes.includes(txHash)) contract.txHashes.push(txHash);
+      contract.lastSeenAt = now;
+      if (!contract.firstSeenAt || contract.firstSeenAt > now) contract.firstSeenAt = now;
+      contract.interactionCount += 1;
+    }
+
+    record.roles.sort((a, b) => a.localeCompare(b));
+    record.actions.sort((a, b) => a.localeCompare(b));
+    record.relatedAddresses.sort((a, b) => a.localeCompare(b));
+    record.contracts = record.contracts
+      .map(normalizeParticipantContractTouch)
+      .filter((item): item is ParticipantContractTouch => Boolean(item))
+      .sort((a, b) => a.contractAddress.localeCompare(b.contractAddress));
+
+    if (!existing) {
+      next.push(record);
+    }
+
+    const normalized = next
+      .map(normalizeParticipantActivityRecord)
+      .filter((item): item is ParticipantActivityRecord => Boolean(item))
+      .sort((a, b) => {
+        if (a.chainId !== b.chainId) return a.chainId - b.chainId;
+        return a.address.localeCompare(b.address);
+      });
+    await writeParticipantActivityRecords(normalized);
+  });
+  await participantActivityWritePromise;
+}
+
+async function readParticipantSummary(
+  address: string,
+  chainId?: number
+): Promise<{
+  address: string;
+  totals: {
+    chains: number;
+    contracts: number;
+    interactions: number;
+  };
+  chains: Array<{
+    chainId: number;
+    roles: string[];
+    actions: string[];
+    relatedAddresses: string[];
+    interactionCount: number;
+    firstSeenAt: string;
+    lastSeenAt: string;
+    contracts: ParticipantContractTouch[];
+  }>;
+}> {
+  const normalizedAddress = String(address || "").trim().toLowerCase();
+  const records = (await readParticipantActivityRecords())
+    .filter((item) => item.address === normalizedAddress)
+    .filter((item) => (typeof chainId === "number" ? item.chainId === chainId : true))
+    .sort((a, b) => a.chainId - b.chainId);
+
+  const contractCount = new Set(records.flatMap((item) => item.contracts.map((contract) => `${item.chainId}:${contract.contractAddress}`))).size;
+  return {
+    address: normalizedAddress,
+    totals: {
+      chains: records.length,
+      contracts: contractCount,
+      interactions: records.reduce((sum, item) => sum + item.interactionCount, 0)
+    },
+    chains: records.map((item) => ({
+      chainId: item.chainId,
+      roles: item.roles,
+      actions: item.actions,
+      relatedAddresses: item.relatedAddresses,
+      interactionCount: item.interactionCount,
+      firstSeenAt: item.firstSeenAt,
+      lastSeenAt: item.lastSeenAt,
+      contracts: item.contracts
+    }))
+  };
+}
+
 async function hydratePaymentTokenRecords(
   records: PaymentTokenRecord[],
   config: RequestHandlerConfig
@@ -921,6 +1225,7 @@ let marketplaceSyncStateWritePromise: Promise<MarketplaceSyncStateRecord> = Prom
   offersLastBlock: null,
   updatedAt: null
 });
+let participantActivityWritePromise: Promise<void> = Promise.resolve();
 
 async function readMarketplaceSyncState(): Promise<MarketplaceSyncStateRecord> {
   if (marketplaceSyncStateCache) return marketplaceSyncStateCache;
@@ -3139,6 +3444,16 @@ async function fullSyncMarketplaceListings(
             txHash: null
           }
         });
+        await recordParticipantActivity({
+          chainId: config.chainId,
+          address: row[0].toLowerCase(),
+          contractAddress: collectionAddress,
+          standard,
+          origin: "marketplace",
+          role: "seller",
+          action: isActive ? "list" : "listing-sync",
+          tokenId
+        });
       })
     );
   }
@@ -3330,6 +3645,32 @@ async function syncMarketplaceListings(
             txHash: sold?.txHash || cancelled?.txHash || listed?.txHash || null
           }
         });
+        await recordParticipantActivity({
+          chainId: config.chainId,
+          address: row[0].toLowerCase(),
+          contractAddress: collectionAddress,
+          standard,
+          origin: "marketplace",
+          role: "seller",
+          action: sold ? "sale" : cancelled ? "listing-cancel" : isActive ? "list" : "listing-sync",
+          tokenId,
+          relatedAddress: sold?.buyerAddress || null,
+          txHash: sold?.txHash || cancelled?.txHash || listed?.txHash || null
+        });
+        if (sold?.buyerAddress) {
+          await recordParticipantActivity({
+            chainId: config.chainId,
+            address: sold.buyerAddress,
+            contractAddress: collectionAddress,
+            standard,
+            origin: "marketplace",
+            role: "buyer",
+            action: "buy",
+            tokenId,
+            relatedAddress: row[0].toLowerCase(),
+            txHash: sold.txHash
+          });
+        }
       })
     );
   }
@@ -3504,7 +3845,32 @@ async function fullSyncMarketplaceOffers(
           }
         });
 
+        await recordParticipantActivity({
+          chainId: config.chainId,
+          address: row[0].toLowerCase(),
+          contractAddress: collectionAddress,
+          standard: String(row[4] || "UNKNOWN"),
+          origin: "marketplace",
+          role: "buyer",
+          action: accepted ? "offer-accepted" : cancelled ? "offer-cancel" : active ? "offer-create" : "offer-sync",
+          tokenId,
+          relatedAddress: accepted?.sellerAddress || null,
+          txHash: accepted?.txHash || cancelled?.txHash || null
+        });
+
         if (accepted?.txHash && accepted.txHash !== previousOffer?.acceptedTxHash) {
+          await recordParticipantActivity({
+            chainId: config.chainId,
+            address: accepted.sellerAddress,
+            contractAddress: collectionAddress,
+            standard: String(row[4] || "UNKNOWN"),
+            origin: "marketplace",
+            role: "seller",
+            action: "sale",
+            tokenId,
+            relatedAddress: accepted.buyerAddress,
+            txHash: accepted.txHash
+          });
           await applyAcceptedOfferOwnership(deps, tokenRefId, {
             buyerAddress: accepted.buyerAddress,
             sellerAddress: accepted.sellerAddress,
@@ -3694,7 +4060,32 @@ async function syncMarketplaceOffers(
           }
         });
 
+        await recordParticipantActivity({
+          chainId: config.chainId,
+          address: row[0].toLowerCase(),
+          contractAddress: collectionAddress,
+          standard: String(row[4] || "UNKNOWN"),
+          origin: "marketplace",
+          role: "buyer",
+          action: accepted ? "offer-accepted" : cancelled ? "offer-cancel" : active ? "offer-create" : "offer-sync",
+          tokenId,
+          relatedAddress: accepted?.sellerAddress || null,
+          txHash: accepted?.txHash || cancelled?.txHash || null
+        });
+
         if (accepted?.txHash && accepted.txHash !== previousOffer?.acceptedTxHash) {
+          await recordParticipantActivity({
+            chainId: config.chainId,
+            address: accepted.sellerAddress,
+            contractAddress: collectionAddress,
+            standard: String(row[4] || "UNKNOWN"),
+            origin: "marketplace",
+            role: "seller",
+            action: "sale",
+            tokenId,
+            relatedAddress: accepted.buyerAddress,
+            txHash: accepted.txHash
+          });
           await applyAcceptedOfferOwnership(deps, tokenRefId, {
             buyerAddress: accepted.buyerAddress,
             sellerAddress: accepted.sellerAddress,
@@ -4055,6 +4446,49 @@ async function upsertMintedToken(
       standard
     );
   }
+
+  const origin: ParticipantActivityInput["origin"] = payload.isFactoryCreated === true ? "factory" : "custom";
+  await Promise.all([
+    recordParticipantActivity({
+      chainId: config.chainId,
+      address: collectionOwnerAddress,
+      contractAddress,
+      standard,
+      origin,
+      role: "collection-owner",
+      action: "collection-sync",
+      tokenId,
+      relatedAddress: ownerAddress,
+      txHash: mintTxHash,
+      occurredAt: mintedAt.toISOString()
+    }),
+    recordParticipantActivity({
+      chainId: config.chainId,
+      address: creatorAddress,
+      contractAddress,
+      standard,
+      origin,
+      role: "creator",
+      action: "mint",
+      tokenId,
+      relatedAddress: ownerAddress,
+      txHash: mintTxHash,
+      occurredAt: mintedAt.toISOString()
+    }),
+    recordParticipantActivity({
+      chainId: config.chainId,
+      address: ownerAddress,
+      contractAddress,
+      standard,
+      origin,
+      role: "holder",
+      action: "hold",
+      tokenId,
+      relatedAddress: creatorAddress,
+      txHash: mintTxHash,
+      occurredAt: mintedAt.toISOString()
+    })
+  ]);
 
   return token;
 }
@@ -4515,6 +4949,15 @@ async function backfillRegistryCollections(
 
   for (const collection of collectionMap.values()) {
     try {
+      await recordParticipantActivity({
+        chainId: config.chainId,
+        address: collection.creator,
+        contractAddress: collection.contractAddress,
+        standard: collection.standard,
+        origin: collection.isNftFactoryCreated ? "factory" : "custom",
+        role: "collection-owner",
+        action: "collection-register"
+      });
       const result = await backfillCollectionTokens(
         {
           contractAddress: collection.contractAddress,
@@ -5927,6 +6370,19 @@ async function handleRequest(
     return;
   }
 
+  if (req.method === "GET" && /^\/api\/participants\/[^/]+\/summary$/.test(path)) {
+    const address = String(decodeURIComponent(path.split("/")[3] || "")).trim().toLowerCase();
+    if (!address || !isAddress(address)) {
+      sendJson(res, 400, { error: "Valid participant address is required" });
+      return;
+    }
+    await syncOwnerCollectionsIfStale(address, deps, config);
+    await syncPreferredMarketplaceIfStale(deps, config, { includeOffers: true });
+    const summary = await readParticipantSummary(address, config.chainId);
+    sendJson(res, 200, summary);
+    return;
+  }
+
   if (req.method === "GET" && /^\/api\/users\/[^/]+\/offers-received$/.test(path)) {
     await syncMarketplaceIfStale(deps, config, { includeListings: false, includeOffers: true });
     const address = String(decodeURIComponent(path.split("/")[3] || "")).trim().toLowerCase();
@@ -5986,7 +6442,8 @@ async function handleRequest(
       offersReceived,
       recentOffersMade,
       recentOffersReceived,
-      recentOwnedTokens
+      recentOwnedTokens,
+      participantSummary
     ] = await Promise.all([
       readProfileRecords().then((records) => records.filter((item) => item.ownerAddress === owner).map(toProfileResponse)),
       deps.prisma.collection.findMany({
@@ -6079,7 +6536,8 @@ async function handleRequest(
             }
           }
         }
-      })
+      }),
+      readParticipantSummary(owner, config.chainId)
     ]);
 
     const onchainClient = createPublicClient({
@@ -6416,6 +6874,7 @@ async function handleRequest(
         offersMade,
         offersReceived
       },
+      participant: participantSummary,
       profiles: linkedProfiles,
       collections: collections.map((item: any) => ({
         chainId: item.chainId,
