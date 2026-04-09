@@ -18,6 +18,8 @@
     "typecheck:indexer": "npm --workspace services/indexer run typecheck",
     "test:indexer": "npm --workspace services/indexer run test",
     "dev:indexer": "npm --workspace services/indexer run dev",
+    "indexer:db:start": "npm --workspace services/indexer run db:start",
+    "indexer:bootstrap:sepolia": "npm --workspace services/indexer run bootstrap:sepolia",
     "test:contracts": "npm --workspace packages/contracts run test",
     "docs:contracts-deps": "bash scripts/generate-contract-dependency-tree.sh",
     "check:ensv2": "node scripts/check-ensv2-readiness.mjs",

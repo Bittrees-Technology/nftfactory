@@ -107,6 +107,23 @@ Shared IPFS publishing commands in this repo use `projects/ipfs-evm-system`. Con
   - `NEXT_PUBLIC_INDEXER_API_URL=http://127.0.0.1:8787`
   - existing contract and wallet env vars already used by mint/list flows
 
+### Local indexer bootstrap
+For a clean local Sepolia indexing setup:
+
+1. Start Postgres:
+   - `npm run indexer:db:start`
+2. Export the printed `DATABASE_URL` if it is not already in your shell.
+3. Bootstrap Prisma + backfill the NFTFactory Sepolia contract set:
+   - `npm run indexer:bootstrap:sepolia`
+4. Start the indexer API:
+   - `npm run dev:indexer`
+
+`indexer:bootstrap:sepolia` applies the checked-in Prisma migrations and backfills:
+- registry: `0x1c8124F401Ac7A067f0c3dD39ce102D3623F4DE3`
+- marketplace: `0xc0098BCC01e2179A5018EFabf64a9c74a2E6244B`
+- shared 721: `0x4018dD11271CecFAbb275656631896F7A8811965`
+- shared 1155: `0x530C5f6F1728dCF60C3399e6D9d3aC729a7637Ce`
+
 ### ENS Subname Backfill
 - Single record:
   - `npm --workspace services/indexer run admin:backfill-subname -- --subname studio --owner 0xYourOwnerAddress`

@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: nftfactory-indexer-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${INDEXER_DB_NAME:-nftfactory}
+      POSTGRES_USER: ${INDEXER_DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${INDEXER_DB_PASSWORD:-postgres}
+    ports:
+      - "${INDEXER_DB_PORT:-5432}:5432"
+    volumes:
+      - nftfactory_indexer_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${INDEXER_DB_USER:-postgres} -d ${INDEXER_DB_NAME:-nftfactory}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  nftfactory_indexer_postgres_data:

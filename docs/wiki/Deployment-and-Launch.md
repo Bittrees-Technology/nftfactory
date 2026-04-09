@@ -131,6 +131,15 @@ Current local env snapshot in this repo:
 
 - indexer port override: `8791`
 
+Local bootstrap path for a full Sepolia indexer warmup:
+
+1. `npm run indexer:db:start`
+2. export the resulting `DATABASE_URL`
+3. `npm run indexer:bootstrap:sepolia`
+4. `npm run dev:indexer`
+
+That path applies Prisma migrations and runs the registry + shared-contract historical backfill before the API starts serving frontend reads.
+
 ## Environment readiness checklist
 
 Before deployment or release validation:
