@@ -46,6 +46,8 @@ export type OnchainWalletIdentity = {
   collections: ApiOwnedCollections["collections"];
 };
 
+const ONCHAIN_IDENTITY_CACHE_TTL_MS = 10 * 60 * 1000;
+
 type DiscoveredOnchainCollection = ApiOwnedCollections["collections"][number];
 
 function isAddress(value: string): value is Address {
@@ -98,7 +100,7 @@ async function verifyCollectionOwner(
   }
 }
 
-export async function discoverOnchainWalletIdentity(args: {
+async function discoverOnchainWalletIdentityUncached(args: {
   publicClient: PublicClient | undefined;
   chainId: number;
   ownerAddress: string;
@@ -159,4 +161,62 @@ export async function discoverOnchainWalletIdentity(args: {
     ensNames: [...ensNames].sort((a, b) => a.localeCompare(b)),
     collections: verifiedRecords
   };
+}
+
+function onchainIdentityCacheKey(args: {
+  chainId: number;
+  ownerAddress: string;
+  registryAddress: string;
+}): string {
+  return [
+    "nftfactory:onchain-identity",
+    String(args.chainId),
+    String(args.ownerAddress || "").trim().toLowerCase(),
+    String(args.registryAddress || "").trim().toLowerCase()
+  ].join(":");
+}
+
+export async function discoverOnchainWalletIdentity(args: {
+  publicClient: PublicClient | undefined;
+  chainId: number;
+  ownerAddress: string;
+  registryAddress: string;
+}): Promise<OnchainWalletIdentity> {
+  const cacheKey = onchainIdentityCacheKey(args);
+  if (typeof window !== "undefined") {
+    try {
+      const raw = window.sessionStorage.getItem(cacheKey);
+      if (raw) {
+        const parsed = JSON.parse(raw) as { cachedAt?: number; value?: OnchainWalletIdentity };
+        if (
+          parsed &&
+          typeof parsed.cachedAt === "number" &&
+          parsed.value &&
+          Date.now() - parsed.cachedAt < ONCHAIN_IDENTITY_CACHE_TTL_MS
+        ) {
+          return parsed.value;
+        }
+      }
+    } catch {
+      // Ignore cache corruption and fall through to a live lookup.
+    }
+  }
+
+  const value = await discoverOnchainWalletIdentityUncached(args);
+
+  if (typeof window !== "undefined") {
+    try {
+      window.sessionStorage.setItem(
+        cacheKey,
+        JSON.stringify({
+          cachedAt: Date.now(),
+          value
+        })
+      );
+    } catch {
+      // Ignore storage failures.
+    }
+  }
+
+  return value;
 }

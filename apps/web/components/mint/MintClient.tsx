@@ -3926,29 +3926,36 @@ export default function MintClient({
                   {identityMode === "ens" || identityMode === "external-subname" ? (
                     <>
                       {collectionIdentityLabel}
-                      <select
+                      <input
                         value={registerSubnameLabel}
                         onChange={(e) => setRegisterSubnameLabel(e.target.value)}
-                        disabled={(identityMode === "ens" ? existingCollectionEnsOptions : existingCollectionSubnameOptions).length === 0}
-                      >
-                        <option value="">
-                          {identityMode === "ens" ? "Select existing ENS name" : "Select existing ENS subname"}
-                        </option>
-                        {(identityMode === "ens" ? existingCollectionEnsOptions : existingCollectionSubnameOptions).map(
-                          (candidate) => (
-                            <option key={candidate} value={candidate}>
-                              {candidate}
-                            </option>
-                          )
-                        )}
-                      </select>
+                        list={identityMode === "ens" ? "existing-ens-options" : "existing-ens-subname-options"}
+                        placeholder={identityMode === "ens" ? "artist.eth" : "studio.example.eth"}
+                      />
+                      <datalist id="existing-ens-options">
+                        {existingCollectionEnsOptions.map((candidate) => (
+                          <option key={candidate} value={candidate} />
+                        ))}
+                      </datalist>
+                      <datalist id="existing-ens-subname-options">
+                        {existingCollectionSubnameOptions.map((candidate) => (
+                          <option key={candidate} value={candidate} />
+                        ))}
+                      </datalist>
                       {(identityMode === "ens" ? existingCollectionEnsOptions : existingCollectionSubnameOptions)
                         .length === 0 ? (
                         <p className="hint">
-                          No {identityMode === "ens" ? "ENS names" : "ENS subnames"} exist in your inventory yet.{" "}
-                          {identityMode === "ens" ? "Register or mint one first." : "Create or mint one first."}
+                          No {identityMode === "ens" ? "ENS names" : "ENS subnames"} were discovered automatically.{" "}
+                          {identityMode === "ens"
+                            ? "Enter an owned ENS name manually, or register/mint one first."
+                            : "Enter an owned ENS subname manually, or create/mint one first."}
                         </p>
-                      ) : null}
+                      ) : (
+                        <p className="hint">
+                          Suggestions are listed from indexed and onchain discovery, but you can also enter an owned{" "}
+                          {identityMode === "ens" ? ".eth" : " ENS subname"} manually.
+                        </p>
+                      )}
                     </>
                   ) : (
                     <>
@@ -3983,8 +3990,6 @@ export default function MintClient({
                   identityMode === "register-eth" ||
                   identityMode === "register-eth-subname") &&
                   wrongNetwork) ||
-                (identityMode === "ens" && existingCollectionEnsOptions.length === 0) ||
-                (identityMode === "external-subname" && existingCollectionSubnameOptions.length === 0) ||
                 (identityMode === "register-eth-subname" &&
                   !String(collectionSubnameParent || "").trim()) ||
                 (identityMode === "register-eth" &&
