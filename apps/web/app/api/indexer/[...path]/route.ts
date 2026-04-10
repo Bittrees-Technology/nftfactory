@@ -3,6 +3,10 @@ import { getIndexerBaseUrl } from "../../../../lib/indexerApi";
 import { resolveIndexerServerUrl } from "../../../../lib/indexerServerEnv";
 
 export const dynamic = "force-dynamic";
+const INDEXER_PROXY_TIMEOUT_MS = Math.max(
+  1_000,
+  Number.parseInt(process.env.INDEXER_PROXY_TIMEOUT_MS || "8000", 10) || 8_000
+);
 
 function toErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message || fallback : fallback;
@@ -11,6 +15,15 @@ function toErrorMessage(error: unknown, fallback: string): string {
 function parseChainId(value: string | null): number | undefined {
   const parsed = Number.parseInt(String(value || ""), 10);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+function withTimeout(timeoutMs = INDEXER_PROXY_TIMEOUT_MS): { signal: AbortSignal; cleanup: () => void } {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  return {
+    signal: controller.signal,
+    cleanup: () => clearTimeout(timeout)
+  };
 }
 
 async function proxyRequest(
@@ -31,24 +44,36 @@ async function proxyRequest(
     const hasBody = !["GET", "HEAD"].includes(method);
     const body = hasBody ? await request.text() : undefined;
     const contentType = request.headers.get("Content-Type");
+    const { signal, cleanup } = withTimeout();
 
-    const response = await fetch(upstreamUrl, {
-      method,
-      headers: {
-        ...(contentType ? { "Content-Type": contentType } : {})
-      },
-      body,
-      cache: "no-store"
-    });
+    try {
+      const response = await fetch(upstreamUrl, {
+        method,
+        headers: {
+          ...(contentType ? { "Content-Type": contentType } : {})
+        },
+        body,
+        cache: "no-store",
+        signal
+      });
 
-    const text = await response.text();
-    return new NextResponse(text, {
-      status: response.status,
-      headers: {
-        "Content-Type": response.headers.get("Content-Type") || "application/json"
-      }
-    });
+      const text = await response.text();
+      return new NextResponse(text, {
+        status: response.status,
+        headers: {
+          "Content-Type": response.headers.get("Content-Type") || "application/json"
+        }
+      });
+    } finally {
+      cleanup();
+    }
   } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      return NextResponse.json(
+        { error: `Indexer proxy request timed out after ${INDEXER_PROXY_TIMEOUT_MS}ms.` },
+        { status: 504 }
+      );
+    }
     return NextResponse.json(
       { error: toErrorMessage(error, "Indexer proxy request failed. Configure INDEXER_API_URL[_CHAIN_ID] or NEXT_PUBLIC_INDEXER_API_URL[_CHAIN_ID].") },
       { status: 503 }

@@ -13,6 +13,18 @@ import type { ApiProfileViewResponse } from "../../../../../lib/profileViewApi";
 
 export const dynamic = "force-dynamic";
 const HOLDINGS_PREVIEW_LIMIT = 24;
+const PROFILE_VIEW_MAX_LIMIT = Math.max(
+  1,
+  Number.parseInt(process.env.PROFILE_VIEW_MAX_LIMIT || "100", 10) || 100
+);
+const PROFILE_VIEW_RESOLUTION_TIMEOUT_MS = Math.max(
+  1_000,
+  Number.parseInt(process.env.PROFILE_VIEW_RESOLUTION_TIMEOUT_MS || "4000", 10) || 4_000
+);
+const PROFILE_VIEW_SECTION_TIMEOUT_MS = Math.max(
+  1_000,
+  Number.parseInt(process.env.PROFILE_VIEW_SECTION_TIMEOUT_MS || "5000", 10) || 5_000
+);
 
 function isAddress(value: string | null | undefined): value is `0x${string}` {
   return /^0x[a-fA-F0-9]{40}$/.test(String(value || "").trim());
@@ -25,6 +37,18 @@ function parsePositiveInt(value: string | null, fallback: number): number {
 
 function toErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message || fallback : fallback;
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => {
+      timeout = setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs}ms`)), timeoutMs);
+    })
+  ]).finally(() => {
+    if (timeout) clearTimeout(timeout);
+  });
 }
 
 function pickActiveSellerAddresses(
@@ -116,14 +140,18 @@ export async function GET(
 
   const searchParams = new URL(request.url).searchParams;
   const manualSellerAddress = searchParams.get("seller");
-  const limit = Math.min(parsePositiveInt(searchParams.get("limit"), 250), 1000);
+  const limit = Math.min(parsePositiveInt(searchParams.get("limit"), 100), PROFILE_VIEW_MAX_LIMIT);
 
   let resolution: ApiProfileViewResponse["resolution"] = null;
   let resolutionFailures: ChainFailure[] = [];
   let resolutionError: string | null = null;
 
   try {
-    const result = await fetchProfileResolutionAcrossChains(name);
+    const result = await withTimeout(
+      fetchProfileResolutionAcrossChains(name),
+      PROFILE_VIEW_RESOLUTION_TIMEOUT_MS,
+      "Profile resolution"
+    );
     resolution = result.resolution;
     resolutionFailures = result.failures || [];
   } catch (error) {
@@ -151,14 +179,34 @@ export async function GET(
   if (activeSellerAddresses.length > 0) {
     const activeSellerAddress = activeSellerAddresses[0];
     const [listingsResult, hiddenResult, offersMadeResult, offersReceivedResult, holdingsResult] = await Promise.allSettled([
-      fetchActiveListingsAcrossChains({ limit, seller: activeSellerAddress }),
-      fetchHiddenListingRecordIdsAcrossChains(),
-      fetchOffersMadeAcrossChains(activeSellerAddress, limit),
-      fetchOffersReceivedAcrossChains(activeSellerAddress, limit),
-      fetchOwnerHoldingsAcrossChains(activeSellerAddress, {
-        perPage: HOLDINGS_PREVIEW_LIMIT,
-        maxPages: 2
-      })
+      withTimeout(
+        fetchActiveListingsAcrossChains({ limit, seller: activeSellerAddress }),
+        PROFILE_VIEW_SECTION_TIMEOUT_MS,
+        "Profile listings"
+      ),
+      withTimeout(
+        fetchHiddenListingRecordIdsAcrossChains(),
+        PROFILE_VIEW_SECTION_TIMEOUT_MS,
+        "Profile hidden-listing filters"
+      ),
+      withTimeout(
+        fetchOffersMadeAcrossChains(activeSellerAddress, limit),
+        PROFILE_VIEW_SECTION_TIMEOUT_MS,
+        "Profile offers made"
+      ),
+      withTimeout(
+        fetchOffersReceivedAcrossChains(activeSellerAddress, limit),
+        PROFILE_VIEW_SECTION_TIMEOUT_MS,
+        "Profile offers received"
+      ),
+      withTimeout(
+        fetchOwnerHoldingsAcrossChains(activeSellerAddress, {
+          perPage: HOLDINGS_PREVIEW_LIMIT,
+          maxPages: 1
+        }),
+        PROFILE_VIEW_SECTION_TIMEOUT_MS,
+        "Profile holdings"
+      )
     ]);
 
     if (listingsResult.status === "fulfilled") {
