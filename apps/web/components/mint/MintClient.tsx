@@ -40,6 +40,7 @@ import {
   fetchCollectionTokens,
   fetchProfileResolution,
   linkProfileIdentity,
+  syncWalletScope,
   syncMintedToken
 } from "../../lib/indexerApi";
 import { normalizeBackendFetchError, parseJsonResponse } from "../../lib/networkErrors";
@@ -51,7 +52,7 @@ import {
   getMintStatusLabel
 } from "../../lib/nftPresentation";
 import { verifyOwnedCollectionsOnChain } from "../../lib/onchainCollections";
-import { discoverOnchainWalletIdentity } from "../../lib/onchainIdentity";
+import { clearOnchainWalletIdentityCache, discoverOnchainWalletIdentity } from "../../lib/onchainIdentity";
 import {
   formatRoyaltySplitRegistryMissingMessage,
   getRoyaltySplitRegistryEnvHint
@@ -1492,17 +1493,31 @@ export default function MintClient({
     if (!account) return;
     let cancelled = false;
 
-    if (isAddress(config.registry) && publicClient) {
-      void discoverOnchainWalletIdentity({
-        publicClient,
+    void (async () => {
+      if (isAddress(config.registry)) {
+        clearOnchainWalletIdentityCache({
+          chainId: config.chainId,
+          ownerAddress: account,
+          registryAddress: config.registry
+        });
+      }
+
+      await syncWalletScope(account, {
         chainId: config.chainId,
-        ownerAddress: account,
-        registryAddress: config.registry
-      })
-        .then((result) => {
-          if (cancelled) return;
-          setDiscoveredEnsNames(result.ensNames || []);
-          const owned = (result.collections || []).map((item) => ({
+        force: true,
+        timeoutMs: 15_000
+      }).catch(() => null);
+
+      if (isAddress(config.registry) && publicClient) {
+        const result = await discoverOnchainWalletIdentity({
+          publicClient,
+          chainId: config.chainId,
+          ownerAddress: account,
+          registryAddress: config.registry
+        }).catch(() => null);
+        if (!cancelled) {
+          setDiscoveredEnsNames(result?.ensNames || []);
+          const owned = (result?.collections || []).map((item) => ({
             chainId: item.chainId,
             contractAddress: item.contractAddress,
             ensSubname: item.ensSubname,
@@ -1513,37 +1528,28 @@ export default function MintClient({
           if (owned.length > 0) {
             mergeKnownCollections(owned);
           }
-        })
-        .catch(() => {
-          if (!cancelled) {
-            setDiscoveredEnsNames([]);
-          }
-          // Keep the indexer/local-cache path as fallback.
-        });
-    } else {
-      setDiscoveredEnsNames([]);
-    }
-
-    void fetchCollectionsByOwnerAcrossChains(account)
-      .then((result) => {
-        if (cancelled) return;
-        const owned = result.collections
-          .filter((item) => item.ownerAddress.toLowerCase() === account.toLowerCase())
-          .map((item) => ({
-            chainId: item.chainId,
-            contractAddress: item.contractAddress,
-            ensSubname: item.ensSubname,
-            ownerAddress: item.ownerAddress,
-            createdAt: item.createdAt,
-            updatedAt: item.updatedAt
-          }));
-        if (owned.length > 0) {
-          mergeKnownCollections(owned);
         }
-      })
-      .catch(() => {
-        // Keep the local cache fallback when the indexer is unavailable.
-      });
+      } else if (!cancelled) {
+        setDiscoveredEnsNames([]);
+      }
+
+      const result = await fetchCollectionsByOwnerAcrossChains(account).catch(() => null);
+      if (cancelled || !result) return;
+      const owned = result.collections
+        .filter((item) => item.ownerAddress.toLowerCase() === account.toLowerCase())
+        .map((item) => ({
+          chainId: item.chainId,
+          contractAddress: item.contractAddress,
+          ensSubname: item.ensSubname,
+          ownerAddress: item.ownerAddress,
+          createdAt: item.createdAt,
+          updatedAt: item.updatedAt
+        }));
+      if (owned.length > 0) {
+        mergeKnownCollections(owned);
+      }
+    })();
+
     return () => {
       cancelled = true;
     };

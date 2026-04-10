@@ -19,10 +19,11 @@ import {
 import {
   fetchProfileResolution,
   linkProfileIdentity,
+  syncWalletScope,
   type ApiOwnedCollections,
   type ApiProfileRecord
 } from "../../lib/indexerApi";
-import { discoverOnchainWalletIdentity } from "../../lib/onchainIdentity";
+import { clearOnchainWalletIdentityCache, discoverOnchainWalletIdentity } from "../../lib/onchainIdentity";
 import { verifyOwnedCollectionsOnChain } from "../../lib/onchainCollections";
 import { fetchCollectionsByOwnerAcrossChains, fetchProfilesByOwnerAcrossChains } from "../../lib/ownerIdentityMultiChain";
 
@@ -497,16 +498,28 @@ export default function ProfileLandingClient({
     }
 
     let cancelled = false;
-    void Promise.allSettled([
-      fetchProfilesByOwnerAcrossChains(address),
-      fetchCollectionsByOwnerAcrossChains(address),
-      discoverOnchainWalletIdentity({
-        publicClient,
+    void (async () => {
+      clearOnchainWalletIdentityCache({
         chainId: config.chainId,
         ownerAddress: address,
         registryAddress: config.registry
-      })
-    ])
+      });
+      await syncWalletScope(address, {
+        chainId: config.chainId,
+        force: true,
+        timeoutMs: 15_000
+      }).catch(() => null);
+      return Promise.allSettled([
+        fetchProfilesByOwnerAcrossChains(address),
+        fetchCollectionsByOwnerAcrossChains(address),
+        discoverOnchainWalletIdentity({
+          publicClient,
+          chainId: config.chainId,
+          ownerAddress: address,
+          registryAddress: config.registry
+        })
+      ]);
+    })()
       .then((results) => {
         if (cancelled) return;
 

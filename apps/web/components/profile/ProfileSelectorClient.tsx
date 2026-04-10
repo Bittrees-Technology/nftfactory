@@ -6,11 +6,16 @@ import { useRouter } from "next/navigation";
 import { useAccount, usePublicClient } from "wagmi";
 import {
   fetchProfileDirectory,
+  syncWalletScope,
   type ApiOwnedCollections,
   type ApiProfileRecord
 } from "../../lib/indexerApi";
 import { getContractsConfig } from "../../lib/contracts";
-import { discoverOnchainWalletIdentity, type OnchainWalletIdentity } from "../../lib/onchainIdentity";
+import {
+  clearOnchainWalletIdentityCache,
+  discoverOnchainWalletIdentity,
+  type OnchainWalletIdentity
+} from "../../lib/onchainIdentity";
 import { fetchCollectionsByOwnerAcrossChains, fetchProfilesByOwnerAcrossChains } from "../../lib/ownerIdentityMultiChain";
 
 function deriveProfileRouteFromName(fullName: string): string {
@@ -131,16 +136,28 @@ export default function ProfileSelectorClient() {
     let cancelled = false;
     setIsLoading(true);
     setNote("");
-    void Promise.allSettled([
-      fetchProfilesByOwnerAcrossChains(address),
-      fetchCollectionsByOwnerAcrossChains(address),
-      discoverOnchainWalletIdentity({
-        publicClient,
+    void (async () => {
+      clearOnchainWalletIdentityCache({
         chainId: config.chainId,
         ownerAddress: address,
         registryAddress: config.registry
-      })
-    ])
+      });
+      await syncWalletScope(address, {
+        chainId: config.chainId,
+        force: true,
+        timeoutMs: 15_000
+      }).catch(() => null);
+      return Promise.allSettled([
+        fetchProfilesByOwnerAcrossChains(address),
+        fetchCollectionsByOwnerAcrossChains(address),
+        discoverOnchainWalletIdentity({
+          publicClient,
+          chainId: config.chainId,
+          ownerAddress: address,
+          registryAddress: config.registry
+        })
+      ]);
+    })()
       .then((results) => {
         if (cancelled) return;
 

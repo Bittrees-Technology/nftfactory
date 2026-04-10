@@ -176,6 +176,19 @@ function onchainIdentityCacheKey(args: {
   ].join(":");
 }
 
+export function clearOnchainWalletIdentityCache(args: {
+  chainId: number;
+  ownerAddress: string;
+  registryAddress: string;
+}): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.removeItem(onchainIdentityCacheKey(args));
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
 export async function discoverOnchainWalletIdentity(args: {
   publicClient: PublicClient | undefined;
   chainId: number;
