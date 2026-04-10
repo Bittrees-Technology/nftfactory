@@ -558,6 +558,35 @@ export async function fetchProfilesByOwner(ownerAddress: string, options?: Index
   return fetchJson<ApiOwnedProfiles>(`/api/profiles?owner=${encodeURIComponent(ownerAddress)}`, undefined, undefined, options);
 }
 
+export async function syncWalletScope(
+  ownerAddress: string,
+  options?: IndexerRequestOptions & {
+    includeOffers?: boolean;
+    includeListings?: boolean;
+    force?: boolean;
+    timeoutMs?: number;
+  }
+): Promise<{
+  ok: boolean;
+  walletAddress: string;
+  includeOffers: boolean;
+  includeListings: boolean;
+  force: boolean;
+  summary: unknown;
+}> {
+  const params = new URLSearchParams();
+  if (options?.includeOffers) params.set("includeOffers", "1");
+  if (options?.includeListings) params.set("includeListings", "1");
+  if (options?.force) params.set("force", "1");
+  const suffix = params.size > 0 ? `?${params.toString()}` : "";
+  return fetchJson(
+    `/api/wallets/${encodeURIComponent(ownerAddress)}/sync${suffix}`,
+    { method: "POST" },
+    options?.timeoutMs,
+    options
+  );
+}
+
 export async function fetchProfileDirectory(
   params?: {
     cursor?: number;

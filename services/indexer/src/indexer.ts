@@ -5374,6 +5374,27 @@ async function syncMarketplaceIfAllowed(
   await syncMarketplaceIfStale(deps, config, options);
 }
 
+async function syncWalletScopeIfAllowed(
+  address: string,
+  deps: IndexerDeps,
+  config: RequestHandlerConfig,
+  options?: { includeMarketplaceOffers?: boolean; includeMarketplaceListings?: boolean; force?: boolean }
+): Promise<void> {
+  const normalizedAddress = String(address || "").trim().toLowerCase();
+  if (!isAddress(normalizedAddress)) return;
+
+  await syncOwnerCollectionsIfAllowed(normalizedAddress, deps, config, options);
+  await syncParticipantContractsIfAllowed(normalizedAddress, deps, config, options);
+
+  if (options?.includeMarketplaceOffers || options?.includeMarketplaceListings) {
+    await syncMarketplaceIfAllowed(deps, config, {
+      includeOffers: options?.includeMarketplaceOffers,
+      includeListings: options?.includeMarketplaceListings,
+      force: options?.force
+    });
+  }
+}
+
 async function listHiddenListings(deps: IndexerDeps): Promise<{ listingIds: number[]; listingRecordIds: string[] }> {
   const includeListingRefs = await hasModerationActionListingColumns(deps);
   const actions = await (deps.prisma as any).moderationAction.findMany({
@@ -6174,9 +6195,7 @@ async function handleRequest(
   if (req.method === "GET" && path === "/api/profiles") {
     const owner = String(url.searchParams.get("owner") || "").trim().toLowerCase();
     if (owner && isAddress(owner)) {
-      await syncOwnerCollectionsIfStale(owner, deps, config);
-    } else {
-      await syncRegistryCollectionsIfStale(deps, config);
+      await syncOwnerCollectionsIfAllowed(owner, deps, config);
     }
 
     const includeListingV2 = await hasListingV2Columns(deps);
@@ -6641,8 +6660,9 @@ async function handleRequest(
       sendJson(res, 400, { error: "Valid participant address is required" });
       return;
     }
-    await syncOwnerCollectionsIfAllowed(address, deps, config);
-    await syncParticipantContractsIfAllowed(address, deps, config);
+    await syncWalletScopeIfAllowed(address, deps, config, {
+      includeMarketplaceOffers: ENABLE_MARKETPLACE_READ_SYNC
+    });
     await syncPreferredMarketplaceIfStale(deps, config, { includeOffers: ENABLE_MARKETPLACE_READ_SYNC });
     const summary = await readParticipantSummary(address, config.chainId);
     sendJson(res, 200, summary);
@@ -6688,8 +6708,9 @@ async function handleRequest(
       sendJson(res, 400, { error: "Valid owner address is required" });
       return;
     }
-    await syncOwnerCollectionsIfAllowed(owner, deps, config);
-    await syncParticipantContractsIfAllowed(owner, deps, config);
+    await syncWalletScopeIfAllowed(owner, deps, config, {
+      includeMarketplaceOffers: ENABLE_MARKETPLACE_READ_SYNC
+    });
     await syncPreferredMarketplaceIfStale(deps, config, { includeOffers: ENABLE_MARKETPLACE_READ_SYNC });
     const [includeMintTxHash, includeTokenPresentation, includeListingV2, includeTokenHoldings, ownedTokenWhere] = await Promise.all([
       hasMintTxHashColumn(deps),
@@ -7704,7 +7725,6 @@ async function handleRequest(
   }
 
   if (req.method === "GET" && /^\/api\/profile\/[^/]+$/.test(path)) {
-    await syncRegistryCollectionsIfAllowed(deps, config);
     const rawName = String(decodeURIComponent(path.split("/")[3] || "")).trim().toLowerCase();
     const lookup = resolveProfileLookup(rawName);
     const slug = lookup?.slugCandidates[0] || "";
@@ -7864,7 +7884,6 @@ async function handleRequest(
   }
 
   if (req.method === "GET" && path === "/api/feed") {
-    await syncRegistryCollectionsIfStale(deps, config);
     const limitRaw = Number.parseInt(String(url.searchParams.get("limit") || "50"), 10);
     const cursorRaw = Number.parseInt(String(url.searchParams.get("cursor") || "0"), 10);
     const limit = Number.isInteger(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 100) : 50;
@@ -7967,7 +7986,6 @@ async function handleRequest(
   }
 
   if (req.method === "GET" && path === "/api/overview") {
-    await syncRegistryCollectionsIfAllowed(deps, config);
     await syncPreferredMarketplaceIfStale(deps, config);
     const includeListingV2 = await hasListingV2Columns(deps);
     const [collectionCount, tokenCount, activeListingCount, openReportCount, hiddenListingRefs, profiles, paymentTokens, moderators] =
@@ -8065,6 +8083,40 @@ async function handleRequest(
         tokenCount: item._count?.tokens || 0,
         activeListingCount: activeListingCounts.get(item.contractAddress.toLowerCase()) || 0
       }))
+    });
+    return;
+  }
+
+  if ((req.method === "GET" || req.method === "POST") && /^\/api\/wallets\/[^/]+\/sync$/.test(path)) {
+    if (deps.isRateLimitedImpl(deps.getClientIpImpl(req, config.trustProxy))) {
+      sendJson(res, 429, { error: "Too many requests" });
+      return;
+    }
+
+    const address = String(decodeURIComponent(path.split("/")[3] || "")).trim().toLowerCase();
+    if (!address || !isAddress(address)) {
+      sendJson(res, 400, { error: "Valid wallet address is required" });
+      return;
+    }
+
+    const includeOffers = ["1", "true", "yes"].includes(String(url.searchParams.get("includeOffers") || "").trim().toLowerCase());
+    const includeListings = ["1", "true", "yes"].includes(String(url.searchParams.get("includeListings") || "").trim().toLowerCase());
+    const force = ["1", "true", "yes"].includes(String(url.searchParams.get("force") || "").trim().toLowerCase());
+
+    await syncWalletScopeIfAllowed(address, deps, config, {
+      includeMarketplaceOffers: includeOffers,
+      includeMarketplaceListings: includeListings,
+      force
+    });
+
+    const summary = await readParticipantSummary(address, config.chainId);
+    sendJson(res, 200, {
+      ok: true,
+      walletAddress: address,
+      includeOffers,
+      includeListings,
+      force,
+      summary
     });
     return;
   }
