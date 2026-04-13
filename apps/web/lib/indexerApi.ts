@@ -3,7 +3,7 @@ import {
   getScopedChainPublicEnv
 } from "./publicEnv";
 import { isPrivateOrLocalUrl } from "./ipfsUpload";
-import { normalizeBackendFetchError } from "./networkErrors";
+import { normalizeBackendFetchError, sanitizeBackendErrorMessage } from "./networkErrors";
 
 export type IndexerRequestOptions = {
   chainId?: number;
@@ -13,6 +13,29 @@ export type IndexerRequestOptions = {
 export type CollectionSyncScope = "collection" | "deep";
 
 const INDEXER_PROXY_PREFIX = "/api/indexer";
+const OWNER_COLLECTIONS_CACHE_TTL_MS = 15_000;
+const OWNER_PROFILES_CACHE_TTL_MS = 15_000;
+const WALLET_SYNC_COOLDOWN_MS = 20_000;
+
+type CachedAsyncValue<T> = {
+  expiresAt: number;
+  value?: T;
+  promise?: Promise<T>;
+};
+
+const ownerCollectionsCache = new Map<string, CachedAsyncValue<ApiOwnedCollections>>();
+const ownerProfilesCache = new Map<string, CachedAsyncValue<ApiOwnedProfiles>>();
+const walletSyncCache = new Map<
+  string,
+  CachedAsyncValue<{
+    ok: boolean;
+    walletAddress: string;
+    includeOffers: boolean;
+    includeListings: boolean;
+    force: boolean;
+    summary: unknown;
+  }>
+>();
 
 export function getIndexerBaseUrl(options?: IndexerRequestOptions): string {
   if (options?.baseUrl) return options.baseUrl;
@@ -82,15 +105,19 @@ async function fetchJson<T>(path: string, init?: RequestInit, timeoutMs?: number
 
     if (!response.ok) {
       const text = await response.text();
-      let message = text;
+      let message = sanitizeBackendErrorMessage(text, `Indexer API request failed (${response.status})`, {
+        serviceLabel: "Indexer API"
+      });
       if (text) {
         try {
           const parsed = JSON.parse(text) as { error?: string };
           if (parsed.error?.trim()) {
-            message = parsed.error;
+            message = sanitizeBackendErrorMessage(parsed.error, message, {
+              serviceLabel: "Indexer API"
+            });
           }
         } catch {
-          // Keep raw response text when payload is not JSON.
+          // Keep the sanitized text fallback when payload is not JSON.
         }
       }
       throw new Error(message || `Request failed (${response.status})`);
@@ -108,6 +135,41 @@ async function fetchJson<T>(path: string, init?: RequestInit, timeoutMs?: number
   } finally {
     cleanup();
   }
+}
+
+async function getCachedAsync<T>(
+  cache: Map<string, CachedAsyncValue<T>>,
+  key: string,
+  ttlMs: number,
+  load: () => Promise<T>
+): Promise<T> {
+  const now = Date.now();
+  const cached = cache.get(key);
+  if (cached?.value !== undefined && cached.expiresAt > now) {
+    return cached.value;
+  }
+  if (cached?.promise) {
+    return cached.promise;
+  }
+
+  const promise = load()
+    .then((value) => {
+      cache.set(key, {
+        expiresAt: Date.now() + ttlMs,
+        value
+      });
+      return value;
+    })
+    .catch((error) => {
+      cache.delete(key);
+      throw error;
+    });
+
+  cache.set(key, {
+    expiresAt: now + ttlMs,
+    promise
+  });
+  return promise;
 }
 
 function buildIndexerProxyUrl(path: string, options?: IndexerRequestOptions): string {
@@ -551,11 +613,25 @@ export async function fetchProfileResolution(name: string, options?: IndexerRequ
 }
 
 export async function fetchCollectionsByOwner(ownerAddress: string, options?: IndexerRequestOptions): Promise<ApiOwnedCollections> {
-  return fetchJson<ApiOwnedCollections>(`/api/collections?owner=${encodeURIComponent(ownerAddress)}`, undefined, undefined, options);
+  const normalizedOwnerAddress = String(ownerAddress || "").trim().toLowerCase();
+  const cacheKey = `${options?.chainId || 0}:${options?.baseUrl || ""}:collections:${normalizedOwnerAddress}`;
+  return getCachedAsync(
+    ownerCollectionsCache,
+    cacheKey,
+    OWNER_COLLECTIONS_CACHE_TTL_MS,
+    () => fetchJson<ApiOwnedCollections>(`/api/collections?owner=${encodeURIComponent(ownerAddress)}`, undefined, undefined, options)
+  );
 }
 
 export async function fetchProfilesByOwner(ownerAddress: string, options?: IndexerRequestOptions): Promise<ApiOwnedProfiles> {
-  return fetchJson<ApiOwnedProfiles>(`/api/profiles?owner=${encodeURIComponent(ownerAddress)}`, undefined, undefined, options);
+  const normalizedOwnerAddress = String(ownerAddress || "").trim().toLowerCase();
+  const cacheKey = `${options?.chainId || 0}:${options?.baseUrl || ""}:profiles:${normalizedOwnerAddress}`;
+  return getCachedAsync(
+    ownerProfilesCache,
+    cacheKey,
+    OWNER_PROFILES_CACHE_TTL_MS,
+    () => fetchJson<ApiOwnedProfiles>(`/api/profiles?owner=${encodeURIComponent(ownerAddress)}`, undefined, undefined, options)
+  );
 }
 
 export async function syncWalletScope(
@@ -574,16 +650,40 @@ export async function syncWalletScope(
   force: boolean;
   summary: unknown;
 }> {
+  const normalizedOwnerAddress = String(ownerAddress || "").trim().toLowerCase();
   const params = new URLSearchParams();
   if (options?.includeOffers) params.set("includeOffers", "1");
   if (options?.includeListings) params.set("includeListings", "1");
   if (options?.force) params.set("force", "1");
   const suffix = params.size > 0 ? `?${params.toString()}` : "";
-  return fetchJson(
-    `/api/wallets/${encodeURIComponent(ownerAddress)}/sync${suffix}`,
-    { method: "POST" },
-    options?.timeoutMs,
-    options
+  const cacheKey = [
+    options?.chainId || 0,
+    options?.baseUrl || "",
+    normalizedOwnerAddress,
+    options?.includeOffers ? "offers" : "no-offers",
+    options?.includeListings ? "listings" : "no-listings",
+    options?.force ? "force" : "normal"
+  ].join(":");
+  const ttlMs = options?.force ? 0 : WALLET_SYNC_COOLDOWN_MS;
+  if (ttlMs <= 0) {
+    return fetchJson(
+      `/api/wallets/${encodeURIComponent(ownerAddress)}/sync${suffix}`,
+      { method: "POST" },
+      options?.timeoutMs,
+      options
+    );
+  }
+  return getCachedAsync(
+    walletSyncCache,
+    cacheKey,
+    ttlMs,
+    () =>
+      fetchJson(
+        `/api/wallets/${encodeURIComponent(ownerAddress)}/sync${suffix}`,
+        { method: "POST" },
+        options?.timeoutMs,
+        options
+      )
   );
 }
 

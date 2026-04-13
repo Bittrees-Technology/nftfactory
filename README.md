@@ -62,6 +62,9 @@ Shared IPFS publishing commands in this repo use `projects/ipfs-evm-system`. Con
    - `NEXT_PUBLIC_*_1` contract addresses
    - `REGISTRY_ADDRESS`, `MARKETPLACE_ADDRESS`, `MODERATOR_REGISTRY_ADDRESS`
    - `RPC_URL`
+   - `RPC_URLS` (optional comma-separated failover list for indexer + verification scripts)
+   - `ALCHEMY_SEPOLIA_RPC_URL` (optional provider-specific fallback slot)
+   - `INFURA_SEPOLIA_RPC_URL` (optional provider-specific fallback slot)
    - `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID`
    - `ETHERSCAN_API_KEY`
    - IPFS auth values
@@ -86,6 +89,9 @@ Shared IPFS publishing commands in this repo use `projects/ipfs-evm-system`. Con
 - `services/indexer/.env`
   - `DATABASE_URL=...`
   - `RPC_URL=...`
+  - `RPC_URLS=...,...` (optional; first URL stays primary, later URLs are fallback RPCs)
+  - `ALCHEMY_SEPOLIA_RPC_URL=...` (optional)
+  - `INFURA_SEPOLIA_RPC_URL=...` (optional)
   - `INDEXER_PORT=8787` (optional; defaults to `8787`)
   - `CHAIN_ID=1` (optional; defaults to Ethereum mainnet)
   - `INDEXER_START_BLOCK=...` (optional; global lower bound for first-run chain scans)

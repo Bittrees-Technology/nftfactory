@@ -15,6 +15,25 @@ function isLikelyFetchFailure(error: unknown): boolean {
   return message.includes("fetch failed") || message.includes("failed to fetch");
 }
 
+function looksLikeHtmlDocument(text: string): boolean {
+  const normalized = text.trim().toLowerCase();
+  return (
+    normalized.startsWith("<!doctype html") ||
+    normalized.startsWith("<html") ||
+    normalized.includes("<head") ||
+    normalized.includes("<body")
+  );
+}
+
+function looksLikeCloudflareTunnelError(text: string): boolean {
+  const normalized = text.toLowerCase();
+  return (
+    normalized.includes("cloudflare tunnel error") ||
+    (normalized.includes("cloudflare") && normalized.includes("error 1033")) ||
+    normalized.includes("configured as a cloudflare tunnel")
+  );
+}
+
 export function normalizeBackendFetchError(error: unknown, options: BackendFetchErrorOptions): Error {
   const { serviceLabel, envVarName, baseUrl } = options;
 
@@ -31,6 +50,29 @@ export function normalizeBackendFetchError(error: unknown, options: BackendFetch
   }
 
   return error instanceof Error ? error : new Error(extractErrorMessage(error) || `${serviceLabel} request failed.`);
+}
+
+export function sanitizeBackendErrorMessage(
+  rawText: string,
+  fallbackMessage: string,
+  options?: {
+    serviceLabel?: string;
+  }
+): string {
+  const trimmed = rawText.trim();
+  if (!trimmed) {
+    return fallbackMessage;
+  }
+  if (looksLikeCloudflareTunnelError(trimmed)) {
+    return `${options?.serviceLabel || "Backend service"} is temporarily unavailable because the upstream tunnel is down.`;
+  }
+  if (looksLikeHtmlDocument(trimmed)) {
+    return fallbackMessage;
+  }
+  if (trimmed.length > 300) {
+    return `${trimmed.slice(0, 297)}...`;
+  }
+  return trimmed;
 }
 
 export function parseJsonResponse<T>(text: string, fallbackMessage: string): T {

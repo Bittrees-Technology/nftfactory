@@ -117,4 +117,36 @@ describe("profileViewApi", () => {
 
     await expect(fetchProfileView("demo")).rejects.toThrow("fetch failed");
   });
+
+  it("sanitizes Cloudflare tunnel HTML when no snapshot fallback is configured", async () => {
+    delete process.env.NEXT_PUBLIC_PROFILE_SNAPSHOT_MANIFEST_URL;
+    delete process.env.NEXT_PUBLIC_PROFILE_SNAPSHOT_URL_TEMPLATE;
+    global.fetch = vi.fn(async () =>
+      new Response(
+        "<!doctype html><html><head><title>Cloudflare Tunnel error</title></head><body>Error 1033</body></html>",
+        {
+          status: 503,
+          headers: {
+            "Content-Type": "text/html"
+          }
+        }
+      )
+    ) as typeof fetch;
+
+    await expect(fetchProfileView("demo")).rejects.toThrow(
+      "Profile data is temporarily unavailable because the upstream tunnel is down."
+    );
+  });
+
+  it("sanitizes thrown HTML-like fetch errors when no snapshot fallback is configured", async () => {
+    delete process.env.NEXT_PUBLIC_PROFILE_SNAPSHOT_MANIFEST_URL;
+    delete process.env.NEXT_PUBLIC_PROFILE_SNAPSHOT_URL_TEMPLATE;
+    global.fetch = vi.fn(async () => {
+      throw new Error("<!doctype html><html><body>Cloudflare Tunnel error</body></html>");
+    }) as typeof fetch;
+
+    await expect(fetchProfileView("demo")).rejects.toThrow(
+      "Profile data is temporarily unavailable because the upstream tunnel is down."
+    );
+  });
 });

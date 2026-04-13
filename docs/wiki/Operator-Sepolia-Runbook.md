@@ -24,6 +24,7 @@ The checked-in Sepolia snapshot already fills the current contract addresses. Th
 - `NEXT_PUBLIC_RPC_URL_11155111`
 - `NEXT_PUBLIC_INDEXER_API_URL_11155111`
 - `RPC_URL` or `SEPOLIA_RPC_URL`
+- `RPC_URLS` (optional local-first or multi-provider failover list)
 - `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID`
 - `ETHERSCAN_API_KEY`
 - `IPFS_API_URL`

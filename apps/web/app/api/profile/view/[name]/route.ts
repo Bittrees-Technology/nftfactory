@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { ApiOwnerHoldingsResponse } from "../../../../../lib/indexerApi";
+import { sanitizeBackendErrorMessage } from "../../../../../lib/networkErrors";
 import {
   fetchActiveListingsAcrossChains,
   fetchHiddenListingRecordIdsAcrossChains,
@@ -36,7 +37,8 @@ function parsePositiveInt(value: string | null, fallback: number): number {
 }
 
 function toErrorMessage(error: unknown, fallback: string): string {
-  return error instanceof Error ? error.message || fallback : fallback;
+  const message = error instanceof Error ? error.message || fallback : fallback;
+  return sanitizeBackendErrorMessage(message, fallback, { serviceLabel: "Profile data" });
 }
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
@@ -132,144 +134,148 @@ export async function GET(
   request: Request,
   context: { params: Promise<{ name: string }> }
 ) {
-  const params = await context.params;
-  const name = decodeURIComponent(params.name || "").trim();
-  if (!name) {
-    return NextResponse.json({ error: "Profile name is required." }, { status: 400 });
-  }
-
-  const searchParams = new URL(request.url).searchParams;
-  const manualSellerAddress = searchParams.get("seller");
-  const limit = Math.min(parsePositiveInt(searchParams.get("limit"), 100), PROFILE_VIEW_MAX_LIMIT);
-
-  let resolution: ApiProfileViewResponse["resolution"] = null;
-  let resolutionFailures: ChainFailure[] = [];
-  let resolutionError: string | null = null;
-
   try {
-    const result = await withTimeout(
-      fetchProfileResolutionAcrossChains(name),
-      PROFILE_VIEW_RESOLUTION_TIMEOUT_MS,
-      "Profile resolution"
-    );
-    resolution = result.resolution;
-    resolutionFailures = result.failures || [];
-  } catch (error) {
-    resolutionError = toErrorMessage(error, "Profile resolution failed.");
-  }
-
-  const activeSellerAddresses = pickActiveSellerAddresses(resolution, manualSellerAddress);
-
-  let listings: ApiProfileViewResponse["listings"] = [];
-  let listingFailures: ChainFailure[] = [];
-  let listingError: string | null = null;
-
-  let hiddenListingRecordIds: string[] = [];
-  let hiddenListingFailures: ChainFailure[] = [];
-  let hiddenListingError: string | null = null;
-
-  let offers: ApiProfileViewResponse["offers"] = [];
-  let offerFailures: ChainFailure[] = [];
-  let offerError: string | null = null;
-
-  let holdings: ApiProfileViewResponse["holdings"] = [];
-  let holdingsFailures: ChainFailure[] = [];
-  let holdingsError: string | null = null;
-
-  if (activeSellerAddresses.length > 0) {
-    const activeSellerAddress = activeSellerAddresses[0];
-    const [listingsResult, hiddenResult, offersMadeResult, offersReceivedResult, holdingsResult] = await Promise.allSettled([
-      withTimeout(
-        fetchActiveListingsAcrossChains({ limit, seller: activeSellerAddress }),
-        PROFILE_VIEW_SECTION_TIMEOUT_MS,
-        "Profile listings"
-      ),
-      withTimeout(
-        fetchHiddenListingRecordIdsAcrossChains(),
-        PROFILE_VIEW_SECTION_TIMEOUT_MS,
-        "Profile hidden-listing filters"
-      ),
-      withTimeout(
-        fetchOffersMadeAcrossChains(activeSellerAddress, limit),
-        PROFILE_VIEW_SECTION_TIMEOUT_MS,
-        "Profile offers made"
-      ),
-      withTimeout(
-        fetchOffersReceivedAcrossChains(activeSellerAddress, limit),
-        PROFILE_VIEW_SECTION_TIMEOUT_MS,
-        "Profile offers received"
-      ),
-      withTimeout(
-        fetchOwnerHoldingsAcrossChains(activeSellerAddress, {
-          perPage: HOLDINGS_PREVIEW_LIMIT,
-          maxPages: 1
-        }),
-        PROFILE_VIEW_SECTION_TIMEOUT_MS,
-        "Profile holdings"
-      )
-    ]);
-
-    if (listingsResult.status === "fulfilled") {
-      listings = listingsResult.value.items || [];
-      listingFailures = listingsResult.value.failures || [];
-    } else {
-      listingError = toErrorMessage(listingsResult.reason, "Failed to load indexed creator listings.");
+    const params = await context.params;
+    const name = decodeURIComponent(params.name || "").trim();
+    if (!name) {
+      return NextResponse.json({ error: "Profile name is required." }, { status: 400 });
     }
 
-    if (hiddenResult.status === "fulfilled") {
-      hiddenListingRecordIds = hiddenResult.value.listingRecordIds || [];
-      hiddenListingFailures = hiddenResult.value.failures || [];
-    } else {
-      hiddenListingError = toErrorMessage(
-        hiddenResult.reason,
-        "Indexer moderation filters are unavailable, so hidden-list filtering is currently disabled."
+    const searchParams = new URL(request.url).searchParams;
+    const manualSellerAddress = searchParams.get("seller");
+    const limit = Math.min(parsePositiveInt(searchParams.get("limit"), 100), PROFILE_VIEW_MAX_LIMIT);
+
+    let resolution: ApiProfileViewResponse["resolution"] = null;
+    let resolutionFailures: ChainFailure[] = [];
+    let resolutionError: string | null = null;
+
+    try {
+      const result = await withTimeout(
+        fetchProfileResolutionAcrossChains(name),
+        PROFILE_VIEW_RESOLUTION_TIMEOUT_MS,
+        "Profile resolution"
       );
+      resolution = result.resolution;
+      resolutionFailures = result.failures || [];
+    } catch (error) {
+      resolutionError = toErrorMessage(error, "Profile resolution failed.");
     }
 
-    const mergedOffers: ApiProfileViewResponse["offers"] = [];
-    if (offersMadeResult.status === "fulfilled") {
-      mergedOffers.push(...(offersMadeResult.value.items || []));
-      offerFailures = [...offerFailures, ...(offersMadeResult.value.failures || [])];
-    }
-    if (offersReceivedResult.status === "fulfilled") {
-      mergedOffers.push(...(offersReceivedResult.value.items || []));
-      offerFailures = [...offerFailures, ...(offersReceivedResult.value.failures || [])];
-    }
-    offers = dedupeOffers(mergedOffers);
-    if (offersMadeResult.status === "rejected" && offersReceivedResult.status === "rejected") {
-      offerError = [
-        toErrorMessage(offersMadeResult.reason, "Failed to load indexed offers made."),
-        toErrorMessage(offersReceivedResult.reason, "Failed to load indexed offers received.")
-      ].join(" | ");
+    const activeSellerAddresses = pickActiveSellerAddresses(resolution, manualSellerAddress);
+
+    let listings: ApiProfileViewResponse["listings"] = [];
+    let listingFailures: ChainFailure[] = [];
+    let listingError: string | null = null;
+
+    let hiddenListingRecordIds: string[] = [];
+    let hiddenListingFailures: ChainFailure[] = [];
+    let hiddenListingError: string | null = null;
+
+    let offers: ApiProfileViewResponse["offers"] = [];
+    let offerFailures: ChainFailure[] = [];
+    let offerError: string | null = null;
+
+    let holdings: ApiProfileViewResponse["holdings"] = [];
+    let holdingsFailures: ChainFailure[] = [];
+    let holdingsError: string | null = null;
+
+    if (activeSellerAddresses.length > 0) {
+      const activeSellerAddress = activeSellerAddresses[0];
+      const [listingsResult, hiddenResult, offersMadeResult, offersReceivedResult, holdingsResult] = await Promise.allSettled([
+        withTimeout(
+          fetchActiveListingsAcrossChains({ limit, seller: activeSellerAddress }),
+          PROFILE_VIEW_SECTION_TIMEOUT_MS,
+          "Profile listings"
+        ),
+        withTimeout(
+          fetchHiddenListingRecordIdsAcrossChains(),
+          PROFILE_VIEW_SECTION_TIMEOUT_MS,
+          "Profile hidden-listing filters"
+        ),
+        withTimeout(
+          fetchOffersMadeAcrossChains(activeSellerAddress, limit),
+          PROFILE_VIEW_SECTION_TIMEOUT_MS,
+          "Profile offers made"
+        ),
+        withTimeout(
+          fetchOffersReceivedAcrossChains(activeSellerAddress, limit),
+          PROFILE_VIEW_SECTION_TIMEOUT_MS,
+          "Profile offers received"
+        ),
+        withTimeout(
+          fetchOwnerHoldingsAcrossChains(activeSellerAddress, {
+            perPage: HOLDINGS_PREVIEW_LIMIT,
+            maxPages: 1
+          }),
+          PROFILE_VIEW_SECTION_TIMEOUT_MS,
+          "Profile holdings"
+        )
+      ]);
+
+      if (listingsResult.status === "fulfilled") {
+        listings = listingsResult.value.items || [];
+        listingFailures = listingsResult.value.failures || [];
+      } else {
+        listingError = toErrorMessage(listingsResult.reason, "Failed to load indexed creator listings.");
+      }
+
+      if (hiddenResult.status === "fulfilled") {
+        hiddenListingRecordIds = hiddenResult.value.listingRecordIds || [];
+        hiddenListingFailures = hiddenResult.value.failures || [];
+      } else {
+        hiddenListingError = toErrorMessage(
+          hiddenResult.reason,
+          "Indexer moderation filters are unavailable, so hidden-list filtering is currently disabled."
+        );
+      }
+
+      const mergedOffers: ApiProfileViewResponse["offers"] = [];
+      if (offersMadeResult.status === "fulfilled") {
+        mergedOffers.push(...(offersMadeResult.value.items || []));
+        offerFailures = [...offerFailures, ...(offersMadeResult.value.failures || [])];
+      }
+      if (offersReceivedResult.status === "fulfilled") {
+        mergedOffers.push(...(offersReceivedResult.value.items || []));
+        offerFailures = [...offerFailures, ...(offersReceivedResult.value.failures || [])];
+      }
+      offers = dedupeOffers(mergedOffers);
+      if (offersMadeResult.status === "rejected" && offersReceivedResult.status === "rejected") {
+        offerError = [
+          toErrorMessage(offersMadeResult.reason, "Failed to load indexed offers made."),
+          toErrorMessage(offersReceivedResult.reason, "Failed to load indexed offers received.")
+        ].join(" | ");
+      }
+
+      if (holdingsResult.status === "fulfilled") {
+        holdings = dedupeHoldings((holdingsResult.value.items || []).filter((item) => item.collection));
+        holdingsFailures = holdingsResult.value.failures || [];
+      } else {
+        holdingsError = toErrorMessage(holdingsResult.reason, "Failed to load indexed holdings.");
+      }
     }
 
-    if (holdingsResult.status === "fulfilled") {
-      holdings = dedupeHoldings((holdingsResult.value.items || []).filter((item) => item.collection));
-      holdingsFailures = holdingsResult.value.failures || [];
-    } else {
-      holdingsError = toErrorMessage(holdingsResult.reason, "Failed to load indexed holdings.");
-    }
+    const payload: ApiProfileViewResponse = {
+      name,
+      resolution,
+      resolutionFailures,
+      resolutionError,
+      activeSellerAddresses,
+      listings,
+      listingFailures,
+      listingError,
+      hiddenListingRecordIds,
+      hiddenListingFailures,
+      hiddenListingError,
+      offers,
+      offerFailures,
+      offerError,
+      holdings,
+      holdingsFailures,
+      holdingsError
+    };
+
+    return NextResponse.json(payload);
+  } catch (error) {
+    return NextResponse.json({ error: toErrorMessage(error, "Failed to load profile view.") }, { status: 503 });
   }
-
-  const payload: ApiProfileViewResponse = {
-    name,
-    resolution,
-    resolutionFailures,
-    resolutionError,
-    activeSellerAddresses,
-    listings,
-    listingFailures,
-    listingError,
-    hiddenListingRecordIds,
-    hiddenListingFailures,
-    hiddenListingError,
-    offers,
-    offerFailures,
-    offerError,
-    holdings,
-    holdingsFailures,
-    holdingsError
-  };
-
-  return NextResponse.json(payload);
 }

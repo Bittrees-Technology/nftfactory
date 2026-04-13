@@ -6,7 +6,7 @@ import path from "node:path";
 import { URL } from "node:url";
 import { PrismaClient } from "@prisma/client";
 import { pino } from "pino";
-import { createPublicClient, http } from "viem";
+import { createPublicClient, fallback, http } from "viem";
 import { isAddress, isZeroAddress, normalizeSubname, parseBearerToken, getClientIp, isRateLimited } from "./utils.js";
 import { getSharedBackfillTargets, isStaleIsoTimestamp, normalizeExplicitBackfillTargets } from "./registryBackfill.js";
 
@@ -439,6 +439,7 @@ class BadRequestError extends Error {}
 type RequestHandlerConfig = {
   chainId: number;
   rpcUrl: string;
+  rpcUrls?: string[];
   adminToken: string;
   adminAllowlist: Set<string>;
   trustProxy: boolean;
@@ -467,6 +468,32 @@ function assertEnv(name: string): string {
     throw new Error(`Missing env var: ${name}`);
   }
   return value;
+}
+
+function parseEnvList(value: string | undefined): string[] {
+  return String(value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function resolveRpcUrls(): string[] {
+  const urls = [
+    ...parseEnvList(process.env.RPC_URLS),
+    ...parseEnvList(process.env.RPC_URL),
+    ...parseEnvList(process.env.SEPOLIA_RPC_URL),
+    ...parseEnvList(process.env.ALCHEMY_SEPOLIA_RPC_URL),
+    ...parseEnvList(process.env.INFURA_SEPOLIA_RPC_URL)
+  ];
+  return [...new Set(urls)];
+}
+
+function createRpcClient(config: Pick<RequestHandlerConfig, "rpcUrl" | "rpcUrls">) {
+  const urls = config.rpcUrls && config.rpcUrls.length > 0 ? config.rpcUrls : [config.rpcUrl];
+  const transports = urls.map((url) => http(url));
+  return createPublicClient({
+    transport: transports.length === 1 ? transports[0] : fallback(transports, { rank: false })
+  });
 }
 
 async function readModeratorRecords(): Promise<ModeratorRecord[]> {
@@ -811,9 +838,7 @@ async function readOnchainModeratorRecords(config: RequestHandlerConfig): Promis
   if (!config.moderatorRegistryAddress) return [];
 
   try {
-    const client = createPublicClient({
-      transport: http(config.rpcUrl)
-    });
+    const client = createRpcClient(config);
 
     const count = await client.readContract({
       address: config.moderatorRegistryAddress,
@@ -1167,9 +1192,7 @@ async function hydratePaymentTokenRecords(
   }
 
   try {
-    const client = createPublicClient({
-      transport: http(config.rpcUrl)
-    });
+    const client = createRpcClient(config);
 
     const allowlistEntries = await Promise.all(
       records.map(async (record) => {
@@ -3137,9 +3160,7 @@ async function attachMintTxHashes(
   );
   if (pending.length === 0) return;
 
-  const client = createPublicClient({
-    transport: http(config.rpcUrl)
-  });
+  const client = createRpcClient(config);
 
   const groups = new Map<string, typeof pending>();
   for (const item of pending) {
@@ -3281,9 +3302,7 @@ async function syncMarketplaceListingsIfStale(
 
   listingSyncPromise = (async () => {
     try {
-      const client = createPublicClient({
-        transport: http(config.rpcUrl)
-      });
+      const client = createRpcClient(config);
       const includeListingV2 = await hasListingV2Columns(deps);
 
       const nextListingId = (await client.readContract({
@@ -4190,9 +4209,7 @@ async function syncMarketplaceIfStale(
   let client: ReturnType<typeof createPublicClient> | null = null;
   const getClient = () => {
     if (client) return client;
-    client = createPublicClient({
-      transport: http(config.rpcUrl)
-    });
+    client = createRpcClient(config);
     return client;
   };
 
@@ -4688,9 +4705,7 @@ async function backfillCollectionTokens(
     }
   });
 
-  const client = createPublicClient({
-    transport: http(config.rpcUrl)
-  });
+  const client = createRpcClient(config);
 
   let chainOwnerAddress: string | null = null;
   try {
@@ -4831,7 +4846,13 @@ async function backfillCollectionTokens(
   } else {
     const collectionOwnerAddress = effectiveOwnerAddress;
     if (!collectionOwnerAddress) {
-      throw new BadRequestError("ownerAddress is required to backfill ERC1155 collections");
+      log.warn({ contractAddress, standard }, "Skipping ERC1155 backfill because collection owner is unknown");
+      return {
+        scanned: 0,
+        upserted: 0,
+        standard,
+        ownerAddress: null
+      };
     }
 
     const singleLogs = await getLogsChunked(client, {
@@ -5010,7 +5031,7 @@ async function backfillRegistryCollections(
     throw new BadRequestError("REGISTRY_ADDRESS is not configured");
   }
 
-  const client = createPublicClient({ transport: http(config.rpcUrl) });
+  const client = createRpcClient(config);
 
   const logs = await getLogsChunked(client, {
     address: config.registryAddress,
@@ -5111,6 +5132,43 @@ async function syncCollectionTokensIfStale(
   });
 }
 
+type RegistryCreatorContractRecord = {
+  owner: string;
+  contractAddress: string;
+  isNftFactoryCreated: boolean;
+  ensSubname: string;
+  standard: string;
+};
+
+async function readOwnerCollectionsFromRegistry(
+  ownerAddress: string,
+  config: RequestHandlerConfig
+): Promise<RegistryCreatorContractRecord[]> {
+  if (!config.registryAddress) return [];
+  const owner = String(ownerAddress || "").trim().toLowerCase();
+  if (!isAddress(owner)) return [];
+  const client = createRpcClient(config);
+  const records = (await client.readContract({
+    address: config.registryAddress,
+    abi: registryReadAbi,
+    functionName: "creatorContracts",
+    args: [owner as `0x${string}`]
+  })) as RegistryCreatorContractRecord[];
+  return Array.isArray(records) ? records : [];
+}
+
+async function withSoftTimeout<T>(promise: Promise<T>, timeoutMs: number, fallbackValue: T): Promise<T> {
+  let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+  const timeoutPromise = new Promise<T>((resolve) => {
+    timeoutHandle = setTimeout(() => resolve(fallbackValue), timeoutMs);
+  });
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timeoutHandle) clearTimeout(timeoutHandle);
+  }
+}
+
 async function syncOwnerCollectionsIfStale(
   ownerAddress: string,
   deps: IndexerDeps,
@@ -5121,32 +5179,13 @@ async function syncOwnerCollectionsIfStale(
   const owner = String(ownerAddress || "").trim().toLowerCase();
   if (!isAddress(owner)) return;
 
-  const client = createPublicClient({
-    transport: http(config.rpcUrl)
-  });
+  const client = createRpcClient(config);
 
   let chainRecords:
-    | Array<{
-        owner: string;
-        contractAddress: string;
-        isNftFactoryCreated: boolean;
-        ensSubname: string;
-        standard: string;
-      }>
+    | RegistryCreatorContractRecord[]
     | null = null;
   try {
-    chainRecords = (await client.readContract({
-      address: config.registryAddress,
-      abi: registryReadAbi,
-      functionName: "creatorContracts",
-      args: [owner as `0x${string}`]
-    })) as Array<{
-      owner: string;
-      contractAddress: string;
-      isNftFactoryCreated: boolean;
-      ensSubname: string;
-      standard: string;
-    }>;
+    chainRecords = await readOwnerCollectionsFromRegistry(owner, config);
   } catch (err) {
     log.warn({ err, ownerAddress: owner }, "owner_collection_sync_failed");
     return;
@@ -5261,9 +5300,7 @@ async function syncRegistryCollectionsIfStale(
 
   registrySyncPromise = (async () => {
     try {
-      const client = createPublicClient({
-        transport: http(config.rpcUrl)
-      });
+      const client = createRpcClient(config);
       const discovered = new Map<string, BackfillCollectionTokensPayload>();
       const currentBlock = await client.getBlockNumber();
 
@@ -5522,6 +5559,10 @@ async function handleRequest(
     sendJson(res, 200, {
       ok: true,
       service: "indexer-api",
+      rpc: {
+        primaryUrl: config.rpcUrl,
+        urls: config.rpcUrls && config.rpcUrls.length > 0 ? config.rpcUrls : [config.rpcUrl]
+      },
       contracts: {
         registryAddress: config.registryAddress,
         moderatorRegistryAddress: config.moderatorRegistryAddress,
@@ -6829,9 +6870,7 @@ async function handleRequest(
       readParticipantSummary(owner, config.chainId)
     ]);
 
-    const onchainClient = createPublicClient({
-      transport: http(config.rpcUrl)
-    });
+    const onchainClient = createRpcClient(config);
 
     const creatorCollectionIds = collections.map((item: any) => item.id);
     const creatorCollectionTokens = creatorCollectionIds.length
@@ -8024,10 +8063,10 @@ async function handleRequest(
       return;
     }
 
-    await syncOwnerCollectionsIfAllowed(owner, deps, config);
+    await withSoftTimeout(syncOwnerCollectionsIfAllowed(owner, deps, config), 3_500, undefined);
 
     const includeListingV2 = await hasListingV2Columns(deps);
-    const collections = await deps.prisma.collection.findMany({
+    const dbCollections = await deps.prisma.collection.findMany({
       where: {
         ownerAddress: owner
       },
@@ -8049,6 +8088,43 @@ async function handleRequest(
         }
       },
       orderBy: { createdAt: "desc" }
+    });
+
+    let registryCollections: RegistryCreatorContractRecord[] = [];
+    try {
+      registryCollections = await readOwnerCollectionsFromRegistry(owner, config);
+    } catch (err) {
+      log.warn({ err, ownerAddress: owner }, "owner_collection_registry_read_failed");
+    }
+
+    const collectionsByAddress = new Map<string, any>();
+    for (const item of dbCollections as Array<any>) {
+      collectionsByAddress.set(String(item.contractAddress).toLowerCase(), item);
+    }
+    for (const record of registryCollections) {
+      const contractAddress = String(record.contractAddress || "").trim().toLowerCase();
+      if (!isAddress(contractAddress) || collectionsByAddress.has(contractAddress)) continue;
+      collectionsByAddress.set(contractAddress, {
+        chainId: config.chainId,
+        ownerAddress: owner,
+        ensSubname: String(record.ensSubname || "").trim() || null,
+        contractAddress,
+        standard: String(record.standard || "").trim().toUpperCase() === "ERC1155" ? "ERC1155" : "ERC721",
+        isFactoryCreated: Boolean(record.isNftFactoryCreated),
+        isUpgradeable: Boolean(record.isNftFactoryCreated),
+        finalizedAt: null,
+        createdAt: new Date(0).toISOString(),
+        updatedAt: new Date(0).toISOString(),
+        _count: {
+          tokens: 0
+        }
+      });
+    }
+
+    const collections = Array.from(collectionsByAddress.values()).sort((a: any, b: any) => {
+      const aTime = new Date(a.createdAt || 0).getTime();
+      const bTime = new Date(b.createdAt || 0).getTime();
+      return bTime - aTime;
     });
 
     const contractAddresses = collections.map((item: any) => item.contractAddress.toLowerCase());
@@ -8283,14 +8359,40 @@ export function createRequestHandler(
 }
 
 export async function main() {
-  const rpcUrl = assertEnv("RPC_URL");
+  const rpcUrls = resolveRpcUrls();
+  const rpcUrl = rpcUrls[0];
   const dbUrl = assertEnv("DATABASE_URL");
+
+  if (!rpcUrl) {
+    throw new Error("Missing RPC_URL or RPC_URLS");
+  }
 
   if (!ADMIN_TOKEN && ADMIN_ALLOWLIST.size === 0) {
     log.warn("No INDEXER_ADMIN_TOKEN or INDEXER_ADMIN_ALLOWLIST configured — admin endpoints are unprotected");
   }
 
-  log.info({ rpcUrl, db: dbUrl.slice(0, 18) + "..." }, "Indexer booting");
+  log.info({ rpcUrl, rpcUrls, db: dbUrl.slice(0, 18) + "..." }, "Indexer booting");
+
+  const requestConfig: RequestHandlerConfig = {
+    chainId: CHAIN_ID,
+    rpcUrl,
+    rpcUrls,
+    adminToken: ADMIN_TOKEN,
+    adminAllowlist: ADMIN_ALLOWLIST,
+    trustProxy: TRUST_PROXY,
+    marketplaceAddress:
+      MARKETPLACE_ADDRESS && isAddress(MARKETPLACE_ADDRESS.toLowerCase())
+        ? (MARKETPLACE_ADDRESS.toLowerCase() as `0x${string}`)
+        : null,
+    registryAddress:
+      REGISTRY_ADDRESS && isAddress(REGISTRY_ADDRESS.toLowerCase())
+        ? (REGISTRY_ADDRESS.toLowerCase() as `0x${string}`)
+        : null,
+    moderatorRegistryAddress:
+      MODERATOR_REGISTRY_ADDRESS && isAddress(MODERATOR_REGISTRY_ADDRESS.toLowerCase())
+        ? (MODERATOR_REGISTRY_ADDRESS.toLowerCase() as `0x${string}`)
+        : null
+  };
 
   const handler = createRequestHandler(
     {
@@ -8298,25 +8400,7 @@ export async function main() {
       getClientIpImpl: getClientIp,
       isRateLimitedImpl: isRateLimited
     },
-    {
-      chainId: CHAIN_ID,
-      rpcUrl,
-      adminToken: ADMIN_TOKEN,
-      adminAllowlist: ADMIN_ALLOWLIST,
-      trustProxy: TRUST_PROXY,
-      marketplaceAddress:
-        MARKETPLACE_ADDRESS && isAddress(MARKETPLACE_ADDRESS.toLowerCase())
-          ? (MARKETPLACE_ADDRESS.toLowerCase() as `0x${string}`)
-          : null,
-      registryAddress:
-        REGISTRY_ADDRESS && isAddress(REGISTRY_ADDRESS.toLowerCase())
-          ? (REGISTRY_ADDRESS.toLowerCase() as `0x${string}`)
-          : null,
-      moderatorRegistryAddress:
-        MODERATOR_REGISTRY_ADDRESS && isAddress(MODERATOR_REGISTRY_ADDRESS.toLowerCase())
-          ? (MODERATOR_REGISTRY_ADDRESS.toLowerCase() as `0x${string}`)
-          : null
-    }
+    requestConfig
   );
   const server = createServer(handler);
   server.requestTimeout = 0; // disable for long-running admin backfills
@@ -8332,25 +8416,7 @@ export async function main() {
         getClientIpImpl: getClientIp,
         isRateLimitedImpl: isRateLimited
       },
-      {
-        chainId: CHAIN_ID,
-        rpcUrl,
-        adminToken: ADMIN_TOKEN,
-        adminAllowlist: ADMIN_ALLOWLIST,
-        trustProxy: TRUST_PROXY,
-        marketplaceAddress:
-          MARKETPLACE_ADDRESS && isAddress(MARKETPLACE_ADDRESS.toLowerCase())
-            ? (MARKETPLACE_ADDRESS.toLowerCase() as `0x${string}`)
-            : null,
-        registryAddress:
-          REGISTRY_ADDRESS && isAddress(REGISTRY_ADDRESS.toLowerCase())
-            ? (REGISTRY_ADDRESS.toLowerCase() as `0x${string}`)
-            : null,
-        moderatorRegistryAddress:
-          MODERATOR_REGISTRY_ADDRESS && isAddress(MODERATOR_REGISTRY_ADDRESS.toLowerCase())
-            ? (MODERATOR_REGISTRY_ADDRESS.toLowerCase() as `0x${string}`)
-            : null
-      }
+      requestConfig
     ).catch((err) => {
       log.warn({ err }, "registry_sync_interval_failed");
     });

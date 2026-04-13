@@ -5,6 +5,7 @@ import type {
   ApiProfileResolution
 } from "./indexerApi";
 import type { ChainFailure } from "./profileMultiChain";
+import { sanitizeBackendErrorMessage } from "./networkErrors";
 import {
   fetchProfileViewSnapshot,
   hasProfileSnapshotFallbackConfigured
@@ -46,7 +47,7 @@ function parseErrorMessage(error: unknown, fallback: string): string {
     if (error.name === "AbortError") {
       return `Profile view request timed out after ${PROFILE_VIEW_TIMEOUT_MS}ms`;
     }
-    return error.message || fallback;
+    return sanitizeBackendErrorMessage(error.message, fallback, { serviceLabel: "Profile data" });
   }
   return fallback;
 }
@@ -80,7 +81,11 @@ export async function fetchProfileView(
     });
     if (!response.ok) {
       const text = await response.text();
-      throw new Error(text || `Profile view request failed (${response.status})`);
+      throw new Error(
+        sanitizeBackendErrorMessage(text, `Profile view request failed (${response.status})`, {
+          serviceLabel: "Profile data"
+        })
+      );
     }
     return (await response.json()) as ApiProfileViewResponse;
   } catch (error) {

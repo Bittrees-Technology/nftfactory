@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { normalizeBackendFetchError, parseJsonResponse } from "./networkErrors";
+import {
+  normalizeBackendFetchError,
+  parseJsonResponse,
+  sanitizeBackendErrorMessage
+} from "./networkErrors";
 
 describe("networkErrors", () => {
   it("maps private backend URLs to a deployment reachability error", () => {
@@ -40,5 +44,25 @@ describe("networkErrors", () => {
 
   it("throws a fallback error when the response is not JSON", () => {
     expect(() => parseJsonResponse("<html>oops</html>", "Bad response")).toThrow("Bad response");
+  });
+
+  it("collapses Cloudflare tunnel HTML into a safe backend message", () => {
+    const message = sanitizeBackendErrorMessage(
+      "<!doctype html><html><head><title>Cloudflare Tunnel error</title></head><body>Error 1033</body></html>",
+      "Indexer API request failed (503)",
+      { serviceLabel: "Indexer API" }
+    );
+
+    expect(message).toBe("Indexer API is temporarily unavailable because the upstream tunnel is down.");
+  });
+
+  it("falls back for generic HTML error pages", () => {
+    const message = sanitizeBackendErrorMessage(
+      "<html><body>Bad gateway</body></html>",
+      "Indexer API request failed (502)",
+      { serviceLabel: "Indexer API" }
+    );
+
+    expect(message).toBe("Indexer API request failed (502)");
   });
 });

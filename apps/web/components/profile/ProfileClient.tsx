@@ -70,6 +70,7 @@ import {
   fetchOwnerHoldingsAcrossChains,
   summarizeChainFailures
 } from "../../lib/profileMultiChain";
+import { sanitizeBackendErrorMessage } from "../../lib/networkErrors";
 import { fetchProfileView, type ApiProfileViewResponse } from "../../lib/profileViewApi";
 import { errorStatus, hintStatus } from "../../lib/statusItems";
 import { getWalletActionError, sendWalletTransactionAndWait } from "../../lib/walletActions";
@@ -880,7 +881,11 @@ export default function ProfileClient({ name }: { name: string }) {
       }
     } catch (err) {
       if (requestId !== profileViewRequestIdRef.current) return;
-      const message = err instanceof Error ? err.message : "Failed to load profile view.";
+      const message = sanitizeBackendErrorMessage(
+        err instanceof Error ? err.message : "",
+        "Failed to load profile view.",
+        { serviceLabel: "Profile data" }
+      );
       setProfileResolution(null);
       setAllListings([]);
       setHiddenListingRecordIds([]);

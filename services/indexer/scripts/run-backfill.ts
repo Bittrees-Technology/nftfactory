@@ -15,7 +15,7 @@ import "dotenv/config";
 import { existsSync, readFileSync, writeFileSync, unlinkSync } from "fs";
 import { resolve } from "path";
 import { PrismaClient } from "@prisma/client";
-import { createPublicClient, http, isAddress } from "viem";
+import { createPublicClient, fallback, http, isAddress } from "viem";
 import {
   getCollectionScanFromBlock,
   getRegistryBackfillChain,
@@ -25,6 +25,12 @@ import {
 
 const REGISTRY_ADDRESS = process.env.REGISTRY_ADDRESS || "";
 const RPC_URL = process.env.RPC_URL || "";
+const RPC_URLS = String(process.env.RPC_URLS || "")
+  .split(",")
+  .map((item) => item.trim())
+  .filter(Boolean);
+const ALCHEMY_SEPOLIA_RPC_URL = process.env.ALCHEMY_SEPOLIA_RPC_URL || "";
+const INFURA_SEPOLIA_RPC_URL = process.env.INFURA_SEPOLIA_RPC_URL || "";
 const CHAIN_ID = Number.parseInt(process.env.CHAIN_ID || "1", 10);
 const SHARED_BACKFILL_TARGETS = getSharedBackfillTargets(process.env);
 const CUSTOM_COLLECTIONS_FILE = process.env.INDEXER_CUSTOM_COLLECTIONS_FILE || "";
@@ -509,11 +515,23 @@ async function main() {
   if (!REGISTRY_ADDRESS || !isAddress(REGISTRY_ADDRESS)) {
     throw new Error(`Invalid or missing REGISTRY_ADDRESS: "${REGISTRY_ADDRESS}"`);
   }
-  if (!RPC_URL.trim()) {
-    throw new Error("Missing RPC_URL");
+  const rpcUrls = [
+    ...new Set([
+      ...RPC_URLS,
+      ...String(RPC_URL || "").split(",").map((item) => item.trim()).filter(Boolean),
+      ...String(ALCHEMY_SEPOLIA_RPC_URL || "").split(",").map((item) => item.trim()).filter(Boolean),
+      ...String(INFURA_SEPOLIA_RPC_URL || "").split(",").map((item) => item.trim()).filter(Boolean)
+    ])
+  ];
+  if (rpcUrls.length === 0) {
+    throw new Error("Missing RPC_URL or RPC_URLS");
   }
 
-  const client = createPublicClient({ chain: getRegistryBackfillChain(CHAIN_ID), transport: http(RPC_URL) });
+  const transports = rpcUrls.map((url) => http(url));
+  const client = createPublicClient({
+    chain: getRegistryBackfillChain(CHAIN_ID),
+    transport: transports.length === 1 ? transports[0] : fallback(transports, { rank: false })
+  });
 
   console.log(`Registry backfill`);
   console.log(`  Registry : ${REGISTRY_ADDRESS}`);

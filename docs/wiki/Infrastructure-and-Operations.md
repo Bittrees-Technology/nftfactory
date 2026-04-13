@@ -100,6 +100,7 @@ The indexer currently reads these keys:
 
 - `DATABASE_URL`
 - `RPC_URL`
+- `RPC_URLS`
 - `CHAIN_ID`
 - `INDEXER_HOST`
 - `INDEXER_PORT`
@@ -111,6 +112,8 @@ The indexer currently reads these keys:
 - `MODERATOR_REGISTRY_ADDRESS`
 
 Note: `services/indexer/.env.example` is also a minimal example, not a full mirror of the current local env.
+
+For local-first Sepolia operation with your own node, use [Self-Hosted Sepolia RPC](./Self-Hosted-Sepolia-RPC.md) and `services/indexer/examples/self-hosted-sepolia.env.example`.
 
 ## Manual startup
 

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getIndexerBaseUrl } from "../../../../lib/indexerApi";
+import { sanitizeBackendErrorMessage } from "../../../../lib/networkErrors";
 import { resolveIndexerServerUrl } from "../../../../lib/indexerServerEnv";
 
 export const dynamic = "force-dynamic";
@@ -10,6 +11,10 @@ const INDEXER_PROXY_TIMEOUT_MS = Math.max(
 
 function toErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message || fallback : fallback;
+}
+
+function isHtmlContentType(value: string | null): boolean {
+  return String(value || "").toLowerCase().includes("text/html");
 }
 
 function parseChainId(value: string | null): number | undefined {
@@ -58,10 +63,25 @@ async function proxyRequest(
       });
 
       const text = await response.text();
+      const upstreamContentType = response.headers.get("Content-Type");
+      if (isHtmlContentType(upstreamContentType)) {
+        const fallbackMessage = response.ok
+          ? "Indexer API returned an unexpected HTML response."
+          : `Indexer API request failed (${response.status}).`;
+        const status = response.ok ? 502 : response.status;
+        return NextResponse.json(
+          {
+            error: sanitizeBackendErrorMessage(text, fallbackMessage, {
+              serviceLabel: "Indexer API"
+            })
+          },
+          { status }
+        );
+      }
       return new NextResponse(text, {
         status: response.status,
         headers: {
-          "Content-Type": response.headers.get("Content-Type") || "application/json"
+          "Content-Type": upstreamContentType || "application/json"
         }
       });
     } finally {

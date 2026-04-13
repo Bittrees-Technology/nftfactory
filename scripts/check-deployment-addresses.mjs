@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { createPublicClient, getAddress, http } from 'viem';
+import { createPublicClient, fallback, getAddress, http } from 'viem';
 
 const DEFAULT_SNAPSHOT_PATH = resolve(process.cwd(), 'docs/deployments.sepolia-app-wired.json');
 
@@ -41,6 +41,23 @@ function readRpcUrl(id) {
   );
 }
 
+function parseRpcUrls(value) {
+  return String(value || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function readRpcUrls(id) {
+  return [
+    ...parseRpcUrls(process.env[`NEXT_PUBLIC_RPC_URLS_${id}`]),
+    ...parseRpcUrls(process.env.RPC_URLS),
+    ...parseRpcUrls(readRpcUrl(id)),
+    ...parseRpcUrls(process.env.ALCHEMY_SEPOLIA_RPC_URL),
+    ...parseRpcUrls(process.env.INFURA_SEPOLIA_RPC_URL)
+  ].filter((value, index, list) => list.indexOf(value) === index);
+}
+
 const deployment = {
   registry: readAddress('NEXT_PUBLIC_REGISTRY_ADDRESS', chainId, 'registry'),
   royaltySplitRegistry: readAddress('NEXT_PUBLIC_ROYALTY_SPLIT_REGISTRY_ADDRESS', chainId, 'royaltySplitRegistry'),
@@ -54,7 +71,8 @@ const deployment = {
   creatorCollection1155Implementation: getAddress(String(snapshot?.contracts?.creatorCollection1155Implementation || '0x0000000000000000000000000000000000000000'))
 };
 
-const rpcUrl = readRpcUrl(chainId);
+const rpcUrls = readRpcUrls(chainId);
+const rpcUrl = rpcUrls[0];
 
 if (!Number.isInteger(chainId) || chainId <= 0) {
   console.error('Invalid chain id. Set NEXT_PUBLIC_PRIMARY_CHAIN_ID, NEXT_PUBLIC_CHAIN_ID, CHAIN_ID, or DEPLOYMENT_SNAPSHOT.');
@@ -62,7 +80,7 @@ if (!Number.isInteger(chainId) || chainId <= 0) {
 }
 
 if (!rpcUrl) {
-  console.error(`Missing RPC URL for chain ${chainId}. Set NEXT_PUBLIC_RPC_URL_${chainId}, RPC_URL, or SEPOLIA_RPC_URL.`);
+  console.error(`Missing RPC URL for chain ${chainId}. Set NEXT_PUBLIC_RPC_URL_${chainId}, NEXT_PUBLIC_RPC_URLS_${chainId}, RPC_URL, RPC_URLS, or SEPOLIA_RPC_URL.`);
   process.exit(1);
 }
 
@@ -81,7 +99,10 @@ if (missing.length > 0) {
   process.exit(1);
 }
 
-const client = createPublicClient({ transport: http(rpcUrl) });
+const transports = rpcUrls.map((url) => http(url));
+const client = createPublicClient({
+  transport: transports.length === 1 ? transports[0] : fallback(transports, { rank: false })
+});
 
 const ownedAbi = [
   { type: 'function', name: 'owner', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
@@ -158,6 +179,9 @@ if (deployment.moderatorRegistry) {
 
 console.log(`Deployment verification for chain ${chainId}`);
 console.log(`RPC: ${rpcUrl}`);
+if (rpcUrls.length > 1) {
+  console.log(`RPC fallbacks: ${rpcUrls.slice(1).join(', ')}`);
+}
 if (snapshot) {
   console.log(`Snapshot: ${process.env.DEPLOYMENT_SNAPSHOT || DEFAULT_SNAPSHOT_PATH}`);
 }

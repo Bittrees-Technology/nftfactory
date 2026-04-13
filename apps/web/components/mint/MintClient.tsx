@@ -52,7 +52,7 @@ import {
   getMintStatusLabel
 } from "../../lib/nftPresentation";
 import { verifyOwnedCollectionsOnChain } from "../../lib/onchainCollections";
-import { clearOnchainWalletIdentityCache, discoverOnchainWalletIdentity } from "../../lib/onchainIdentity";
+import { discoverOnchainWalletIdentity } from "../../lib/onchainIdentity";
 import {
   formatRoyaltySplitRegistryMissingMessage,
   getRoyaltySplitRegistryEnvHint
@@ -512,6 +512,7 @@ type KnownCollection = {
   contractAddress: string;
   ensSubname: string | null;
   ownerAddress: string;
+  standard?: string;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -1104,6 +1105,7 @@ export default function MintClient({
   });
   const [networkSwitchMessage, setNetworkSwitchMessage] = useState("");
   const [requestedWalletNetworkId, setRequestedWalletNetworkId] = useState<string | null>(null);
+  const walletBootstrapKeyRef = useRef<string | null>(null);
 
   // Token metadata
   const [name, setName] = useState("");
@@ -1284,6 +1286,15 @@ export default function MintClient({
     const normalized = String(collectionSubnameParent || "").trim().toLowerCase();
     return collectionEnsParentCandidates.includes(normalized) ? normalized : "";
   }, [collectionEnsParentCandidates, collectionSubnameParent]);
+  const mintFilteredKnownCollections = useMemo(
+    () =>
+      verifiedKnownCollections.filter((item) => {
+        const normalized = String(item.standard || "").trim().toUpperCase();
+        return normalized ? normalized === standard : true;
+      }),
+    [standard, verifiedKnownCollections]
+  );
+  const needsWalletCollectionLookup = isConnected && Boolean(account) && (pageMode === "manage" || mintMode === "custom");
 
   useEffect(() => {
     if (!isConnected) {
@@ -1369,6 +1380,7 @@ export default function MintClient({
           contractAddress: item.contractAddress,
           ensSubname: item.ensSubname || existing?.ensSubname || null,
           ownerAddress: item.ownerAddress,
+          standard: item.standard || existing?.standard || "",
           createdAt: item.createdAt || existing?.createdAt,
           updatedAt: item.updatedAt || existing?.updatedAt
         });
@@ -1457,7 +1469,7 @@ export default function MintClient({
   }, [pendingCollectionEnsRegistration]);
 
   useEffect(() => {
-    if (!account) {
+    if (!needsWalletCollectionLookup || !account) {
       setVerifiedKnownCollections([]);
       return;
     }
@@ -1477,7 +1489,8 @@ export default function MintClient({
             chainId: sameChainCandidates.find((candidate) => candidate.contractAddress.toLowerCase() === item.contractAddress.toLowerCase())?.chainId,
             contractAddress: item.contractAddress,
             ensSubname: item.ensSubname,
-            ownerAddress: item.ownerAddress
+            ownerAddress: item.ownerAddress,
+            standard: sameChainCandidates.find((candidate) => candidate.contractAddress.toLowerCase() === item.contractAddress.toLowerCase())?.standard || ""
           })),
           ...indexedOtherChainCandidates
         ]
@@ -1487,26 +1500,33 @@ export default function MintClient({
     return () => {
       cancelled = true;
     };
-  }, [account, config.chainId, knownCollections, publicClient]);
+  }, [account, config.chainId, knownCollections, needsWalletCollectionLookup, publicClient]);
 
   useEffect(() => {
-    if (!account) return;
+    if (!needsWalletCollectionLookup || !account) {
+      walletBootstrapKeyRef.current = null;
+      setDiscoveredEnsNames([]);
+      setOwnedProfiles([]);
+      return;
+    }
+
+    const bootstrapKey = `${config.chainId}:${account.toLowerCase()}`;
+    if (walletBootstrapKeyRef.current === bootstrapKey) {
+      return;
+    }
+    walletBootstrapKeyRef.current = bootstrapKey;
+
     let cancelled = false;
 
     void (async () => {
-      if (isAddress(config.registry)) {
-        clearOnchainWalletIdentityCache({
+      const shouldSyncIndexer = knownCollections.length === 0;
+      if (shouldSyncIndexer) {
+        await syncWalletScope(account, {
           chainId: config.chainId,
-          ownerAddress: account,
-          registryAddress: config.registry
-        });
+          force: false,
+          timeoutMs: 8_000
+        }).catch(() => null);
       }
-
-      await syncWalletScope(account, {
-        chainId: config.chainId,
-        force: true,
-        timeoutMs: 15_000
-      }).catch(() => null);
 
       if (isAddress(config.registry) && publicClient) {
         const result = await discoverOnchainWalletIdentity({
@@ -1533,7 +1553,7 @@ export default function MintClient({
         setDiscoveredEnsNames([]);
       }
 
-      const result = await fetchCollectionsByOwnerAcrossChains(account).catch(() => null);
+      const result = await fetchCollectionsByOwnerAcrossChains(account, [config.chainId]).catch(() => null);
       if (cancelled || !result) return;
       const owned = result.collections
         .filter((item) => item.ownerAddress.toLowerCase() === account.toLowerCase())
@@ -1548,58 +1568,56 @@ export default function MintClient({
       if (owned.length > 0) {
         mergeKnownCollections(owned);
       }
+
+      const profiles = await fetchProfilesByOwnerAcrossChains(account, [config.chainId]).catch(() => null);
+      if (cancelled) return;
+      setOwnedProfiles((profiles?.profiles || []).map((profile) => ({ fullName: profile.fullName })));
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [account, config.chainId, config.registry, publicClient]);
+  }, [account, config.chainId, config.registry, knownCollections.length, needsWalletCollectionLookup, publicClient]);
 
   useEffect(() => {
-    if (!account) {
+    if (!needsWalletCollectionLookup || !account) {
       setOwnedProfiles([]);
       return;
     }
-    let cancelled = false;
-    void fetchProfilesByOwnerAcrossChains(account)
-      .then((result) => {
-        if (cancelled) return;
-        setOwnedProfiles((result.profiles || []).map((profile) => ({ fullName: profile.fullName })));
-      })
-      .catch(() => {
-        if (!cancelled) setOwnedProfiles([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [account]);
+  }, [account, needsWalletCollectionLookup]);
 
   useEffect(() => {
     if (!account) return;
     const labels = [
       normalizeSubname(deploySubname),
       normalizeSubname(registerSubnameLabel)
-    ].filter(Boolean);
+    ]
+      .filter((label) => Boolean(label) && label.length >= 3);
     const uniqueLabels = [...new Set(labels)];
     if (uniqueLabels.length === 0) return;
     let cancelled = false;
-    void Promise.all(uniqueLabels.map((label) => fetchProfileResolution(label).catch(() => null)))
-      .then((results) => {
-        if (cancelled) return;
-        const owned = results
-          .flatMap((result) => result?.collections || [])
-          .filter((item) => item.ownerAddress.toLowerCase() === account.toLowerCase())
-          .map((item) => ({
-            chainId: item.chainId,
-            contractAddress: item.contractAddress,
-            ensSubname: item.ensSubname,
-            ownerAddress: item.ownerAddress,
-            createdAt: item.createdAt,
-            updatedAt: item.updatedAt
-          }));
-        if (owned.length > 0) mergeKnownCollections(owned);
-      });
-    return () => { cancelled = true; };
+    const timer = globalThis.setTimeout(() => {
+      void Promise.all(uniqueLabels.map((label) => fetchProfileResolution(label).catch(() => null)))
+        .then((results) => {
+          if (cancelled) return;
+          const owned = results
+            .flatMap((result) => result?.collections || [])
+            .filter((item) => item.ownerAddress.toLowerCase() === account.toLowerCase())
+            .map((item) => ({
+              chainId: item.chainId,
+              contractAddress: item.contractAddress,
+              ensSubname: item.ensSubname,
+              ownerAddress: item.ownerAddress,
+              createdAt: item.createdAt,
+              updatedAt: item.updatedAt
+            }));
+          if (owned.length > 0) mergeKnownCollections(owned);
+        });
+    }, 450);
+    return () => {
+      cancelled = true;
+      globalThis.clearTimeout(timer);
+    };
   }, [account, deploySubname, registerSubnameLabel]);
 
   useEffect(() => {
@@ -1700,14 +1718,17 @@ export default function MintClient({
 
   useEffect(() => {
     if (mintMode !== "custom") return;
-    if (verifiedKnownCollections.length === 0) {
+    if (mintFilteredKnownCollections.length === 0) {
       setCollectionSelector("manual");
       return;
     }
-    if (collectionSelector === "saved" && !customCollectionAddress) {
-      setCustomCollectionAddress(verifiedKnownCollections[0].contractAddress);
+    const selectedStillMatches = mintFilteredKnownCollections.some(
+      (item) => item.contractAddress.toLowerCase() === customCollectionAddress.toLowerCase()
+    );
+    if (collectionSelector === "saved" && (!customCollectionAddress || !selectedStillMatches)) {
+      setCustomCollectionAddress(mintFilteredKnownCollections[0].contractAddress);
     }
-  }, [collectionSelector, customCollectionAddress, mintMode, verifiedKnownCollections]);
+  }, [collectionSelector, customCollectionAddress, mintFilteredKnownCollections, mintMode]);
 
   useEffect(() => {
     if (!manageAddress && isAddress(customCollectionAddress)) {
@@ -1958,6 +1979,10 @@ export default function MintClient({
       cancelled = true;
     };
   }, [account, config.chainId, manageAddress, manageCollectionOwner, manageCollectionStandard, pageMode, publicClient, verifiedKnownCollections]);
+
+  useEffect(() => {
+    setCollectionVerificationTx({ status: "idle" });
+  }, [config.chainId, manageAddress, manageCollectionStandard]);
 
   // ── Utilities ─────────────────────────────────────────────────────────────
 
@@ -2987,7 +3012,7 @@ export default function MintClient({
     }
   }
 
-  const selectedKnownCollection = verifiedKnownCollections.find(
+  const selectedKnownCollection = mintFilteredKnownCollections.find(
     (item) => item.contractAddress.toLowerCase() === customCollectionAddress.toLowerCase()
   ) || null;
   const selectedManageCollection = verifiedKnownCollections.find(
@@ -3176,18 +3201,18 @@ export default function MintClient({
                       value={collectionSelector}
                       onChange={(e) => setCollectionSelector(e.target.value as "saved" | "manual")}
                     >
-                      {verifiedKnownCollections.length > 0 ? <option value="saved">Select one of my on-chain collections</option> : null}
+                      {mintFilteredKnownCollections.length > 0 ? <option value="saved">Select one of my on-chain collections</option> : null}
                       <option value="manual">Enter collection address manually</option>
                     </select>
                   </label>
-                  {collectionSelector === "saved" && verifiedKnownCollections.length > 0 ? (
+                  {collectionSelector === "saved" && mintFilteredKnownCollections.length > 0 ? (
                     <label>
                       Creator collection
                       <select
                         value={customCollectionAddress}
                         onChange={(e) => setCustomCollectionAddress(e.target.value)}
                       >
-                        {verifiedKnownCollections.map((item) => (
+                        {mintFilteredKnownCollections.map((item) => (
                           <option key={item.contractAddress} value={item.contractAddress}>
                             {formatCollectionIdentity(item.ensSubname) || shortenAddress(item.contractAddress)} - {shortenAddress(item.contractAddress)}
                           </option>
@@ -3203,9 +3228,9 @@ export default function MintClient({
                       />
                     </label>
                   )}
-                  {verifiedKnownCollections.length === 0 ? (
+                  {mintFilteredKnownCollections.length === 0 ? (
                     <p className="hint">
-                      On-chain collections appear here after the app confirms ownership from your wallet. Indexed and cached data only provide candidate addresses.
+                      No {standard} creator collections are available yet for this wallet on the current network. Switch token type or enter an address manually.
                     </p>
                   ) : null}
                 </div>
