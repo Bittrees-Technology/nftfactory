@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useAccount, useChainId, usePublicClient, useSwitchChain, useWalletClient } from "wagmi";
-import { encodeFunctionData, formatEther } from "viem";
+import { createPublicClient, encodeFunctionData, formatEther, http } from "viem";
 import type { Address, Hex } from "viem";
 import { namehash } from "viem/ens";
+import { mainnet } from "viem/chains";
 import {
   encodeCreatorPublish1155,
   encodeCreatorPublish721,
@@ -58,6 +59,7 @@ import {
   getRoyaltySplitRegistryEnvHint
 } from "../../lib/royaltySplitRegistryConfig";
 import { useNftMetadataPreview } from "../../lib/nftMetadata";
+import { getScopedChainPublicEnv } from "../../lib/publicEnv";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -110,6 +112,11 @@ const ENS_ETH_REGISTRAR_CONTROLLER_ADDRESS = /^0x[a-fA-F0-9]{40}$/.test(
 )
   ? (process.env.NEXT_PUBLIC_ENS_ETH_REGISTRAR_CONTROLLER_ADDRESS as Address)
   : null;
+const MAINNET_RPC_URL =
+  getScopedChainPublicEnv("NEXT_PUBLIC_RPC_URL", mainnet.id) ||
+  mainnet.rpcUrls.default.http[0] ||
+  "";
+const ENS_RESOLUTION_DEBOUNCE_MS = 450;
 
 const ENS_REGISTRY_ABI = [
   {
@@ -225,6 +232,36 @@ function isValidSubnameLabel(label: string): boolean {
 function isValidEnsReference(value: string): boolean {
   if (!value) return false;
   return /^(?:[a-z0-9-]+\.)+[a-z]{2,}$/i.test(value.trim());
+}
+
+function shouldResolveEnsAddress(value: string): boolean {
+  const normalized = String(value || "").trim().toLowerCase();
+  return normalized.endsWith(".eth") && isValidEnsReference(normalized);
+}
+
+let mainnetEnsClient: ReturnType<typeof createPublicClient> | null = null;
+
+function getMainnetEnsClient() {
+  if (!MAINNET_RPC_URL) return null;
+  if (mainnetEnsClient) return mainnetEnsClient;
+  mainnetEnsClient = createPublicClient({
+    chain: mainnet,
+    transport: http(MAINNET_RPC_URL)
+  });
+  return mainnetEnsClient;
+}
+
+async function resolveAddressInput(value: string): Promise<string | null> {
+  const normalized = String(value || "").trim();
+  if (!normalized) return null;
+  if (isAddress(normalized)) return normalized;
+  if (!shouldResolveEnsAddress(normalized)) return null;
+  const client = getMainnetEnsClient();
+  if (!client) {
+    throw new Error("Mainnet ENS resolution is not configured for this deployment.");
+  }
+  const resolved = await client.getEnsAddress({ name: normalized.toLowerCase() });
+  return isAddress(String(resolved || "")) ? String(resolved) : null;
 }
 
 function normalizeCollectionIdentityName(value: string, mode: "ens" | "subname" | "nftfactory"): string {
@@ -1098,6 +1135,10 @@ export default function MintClient({
   const [deploySymbol, setDeploySymbol] = useState("");
   const [deploySubname, setDeploySubname] = useState(initialProfileLabel);
   const [deployRoyaltyReceiver, setDeployRoyaltyReceiver] = useState("");
+  const [deployRoyaltyReceiverResolvedAddress, setDeployRoyaltyReceiverResolvedAddress] = useState("");
+  const [deployRoyaltyReceiverResolutionStatus, setDeployRoyaltyReceiverResolutionStatus] =
+    useState<"idle" | "resolving" | "resolved" | "error">("idle");
+  const [deployRoyaltyReceiverResolutionMessage, setDeployRoyaltyReceiverResolutionMessage] = useState("");
   const [deployRoyaltyBps, setDeployRoyaltyBps] = useState("500");
   const [deployTx, setDeployTx] = useState<TxState>({ status: "idle" });
   const [collectionVerificationTx, setCollectionVerificationTx] = useState<CollectionVerificationTxState>({
@@ -1628,6 +1669,60 @@ export default function MintClient({
   }, [audioFile, includeAudio]);
 
   useEffect(() => {
+    const input = deployRoyaltyReceiver.trim();
+    if (!input) {
+      setDeployRoyaltyReceiverResolvedAddress("");
+      setDeployRoyaltyReceiverResolutionStatus("idle");
+      setDeployRoyaltyReceiverResolutionMessage("");
+      return;
+    }
+    if (isAddress(input)) {
+      setDeployRoyaltyReceiverResolvedAddress(input);
+      setDeployRoyaltyReceiverResolutionStatus("resolved");
+      setDeployRoyaltyReceiverResolutionMessage("Using direct address.");
+      return;
+    }
+    if (!shouldResolveEnsAddress(input)) {
+      setDeployRoyaltyReceiverResolvedAddress("");
+      setDeployRoyaltyReceiverResolutionStatus("idle");
+      setDeployRoyaltyReceiverResolutionMessage("");
+      return;
+    }
+
+    let cancelled = false;
+    setDeployRoyaltyReceiverResolutionStatus("resolving");
+    setDeployRoyaltyReceiverResolutionMessage("Resolving ENS name…");
+    const timer = globalThis.setTimeout(() => {
+      void resolveAddressInput(input)
+        .then((resolved) => {
+          if (cancelled) return;
+          if (!resolved) {
+            setDeployRoyaltyReceiverResolvedAddress("");
+            setDeployRoyaltyReceiverResolutionStatus("error");
+            setDeployRoyaltyReceiverResolutionMessage("ENS name did not resolve to an address.");
+            return;
+          }
+          setDeployRoyaltyReceiverResolvedAddress(resolved);
+          setDeployRoyaltyReceiverResolutionStatus("resolved");
+          setDeployRoyaltyReceiverResolutionMessage(`Resolves to ${resolved}`);
+        })
+        .catch((error) => {
+          if (cancelled) return;
+          setDeployRoyaltyReceiverResolvedAddress("");
+          setDeployRoyaltyReceiverResolutionStatus("error");
+          setDeployRoyaltyReceiverResolutionMessage(
+            error instanceof Error ? error.message : "Failed to resolve ENS name."
+          );
+        });
+    }, ENS_RESOLUTION_DEBOUNCE_MS);
+
+    return () => {
+      cancelled = true;
+      globalThis.clearTimeout(timer);
+    };
+  }, [deployRoyaltyReceiver]);
+
+  useEffect(() => {
     const previousMode = previousCollectionIdentityModeRef.current;
     if (previousMode === identityMode) return;
     previousCollectionIdentityModeRef.current = identityMode;
@@ -2100,7 +2195,11 @@ export default function MintClient({
     if (!deployName.trim()) { setDeployTx({ status: "error", message: "Collection name is required." }); return; }
     if (!deploySymbol.trim()) { setDeployTx({ status: "error", message: "Symbol is required." }); return; }
 
-    const royaltyReceiver = deployRoyaltyReceiver.trim() || account;
+    const rawRoyaltyReceiver = deployRoyaltyReceiver.trim();
+    let royaltyReceiver = rawRoyaltyReceiver || account;
+    if (rawRoyaltyReceiver && !isAddress(rawRoyaltyReceiver)) {
+      royaltyReceiver = deployRoyaltyReceiverResolvedAddress || (await resolveAddressInput(rawRoyaltyReceiver).catch(() => null)) || "";
+    }
     if (!isAddress(royaltyReceiver)) {
       setDeployTx({ status: "error", message: "Royalty receiver must be a valid address." });
       return;
@@ -3316,7 +3415,21 @@ export default function MintClient({
                       <input
                         value={deployRoyaltyReceiver}
                         onChange={(e) => setDeployRoyaltyReceiver(e.target.value)}
+                        placeholder="0x... or name.eth"
                       />
+                      <span className="hint">
+                        Leave blank to default to your connected wallet. You can also enter an ENS name like <code>creator.eth</code>.
+                      </span>
+                      {deployRoyaltyReceiverResolutionStatus !== "idle" ? (
+                        <span
+                          className="hint mono"
+                          style={{
+                            color: deployRoyaltyReceiverResolutionStatus === "error" ? "#b42318" : undefined
+                          }}
+                        >
+                          {deployRoyaltyReceiverResolutionMessage}
+                        </span>
+                      ) : null}
                     </label>
                     <label>
                       Royalty (basis points)
