@@ -65,4 +65,14 @@ describe("networkErrors", () => {
 
     expect(message).toBe("Indexer API request failed (502)");
   });
+
+  it("collapses Cloudflare tunnel HTML into a safe IPFS backend message", () => {
+    const message = sanitizeBackendErrorMessage(
+      "<!doctype html><html><head><title>Cloudflare Tunnel error | ipfs-api.nftfactory.org</title></head><body>Error 1033</body></html>",
+      "IPFS upload failed (HTTP 530).",
+      { serviceLabel: "IPFS upload backend" }
+    );
+
+    expect(message).toBe("IPFS upload backend is temporarily unavailable because the upstream tunnel is down.");
+  });
 });

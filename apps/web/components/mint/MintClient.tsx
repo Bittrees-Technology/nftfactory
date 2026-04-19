@@ -3,10 +3,9 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useAccount, useChainId, usePublicClient, useSwitchChain, useWalletClient } from "wagmi";
-import { createPublicClient, encodeFunctionData, formatEther, http } from "viem";
+import { encodeFunctionData, formatEther } from "viem";
 import type { Address, Hex } from "viem";
 import { namehash } from "viem/ens";
-import { mainnet } from "viem/chains";
 import {
   encodeCreatorPublish1155,
   encodeCreatorPublish721,
@@ -53,13 +52,12 @@ import {
   getMintStatusLabel
 } from "../../lib/nftPresentation";
 import { verifyOwnedCollectionsOnChain } from "../../lib/onchainCollections";
-import { discoverOnchainWalletIdentity } from "../../lib/onchainIdentity";
+import { fetchWalletIdentity } from "../../lib/walletIdentityApi";
 import {
   formatRoyaltySplitRegistryMissingMessage,
   getRoyaltySplitRegistryEnvHint
 } from "../../lib/royaltySplitRegistryConfig";
 import { useNftMetadataPreview } from "../../lib/nftMetadata";
-import { getScopedChainPublicEnv } from "../../lib/publicEnv";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -112,10 +110,6 @@ const ENS_ETH_REGISTRAR_CONTROLLER_ADDRESS = /^0x[a-fA-F0-9]{40}$/.test(
 )
   ? (process.env.NEXT_PUBLIC_ENS_ETH_REGISTRAR_CONTROLLER_ADDRESS as Address)
   : null;
-const MAINNET_RPC_URL =
-  getScopedChainPublicEnv("NEXT_PUBLIC_RPC_URL", mainnet.id) ||
-  mainnet.rpcUrls.default.http[0] ||
-  "";
 const ENS_RESOLUTION_DEBOUNCE_MS = 450;
 
 const ENS_REGISTRY_ABI = [
@@ -239,29 +233,23 @@ function shouldResolveEnsAddress(value: string): boolean {
   return normalized.endsWith(".eth") && isValidEnsReference(normalized);
 }
 
-let mainnetEnsClient: ReturnType<typeof createPublicClient> | null = null;
-
-function getMainnetEnsClient() {
-  if (!MAINNET_RPC_URL) return null;
-  if (mainnetEnsClient) return mainnetEnsClient;
-  mainnetEnsClient = createPublicClient({
-    chain: mainnet,
-    transport: http(MAINNET_RPC_URL)
-  });
-  return mainnetEnsClient;
-}
-
 async function resolveAddressInput(value: string): Promise<string | null> {
   const normalized = String(value || "").trim();
   if (!normalized) return null;
   if (isAddress(normalized)) return normalized;
   if (!shouldResolveEnsAddress(normalized)) return null;
-  const client = getMainnetEnsClient();
-  if (!client) {
-    throw new Error("Mainnet ENS resolution is not configured for this deployment.");
+  const response = await fetch(`/api/ens/resolve?name=${encodeURIComponent(normalized.toLowerCase())}`, {
+    method: "GET",
+    cache: "no-store"
+  });
+  const payload = parseJsonResponse<{ address?: string | null; error?: string }>(
+    await response.text(),
+    "ENS resolution is unavailable right now."
+  );
+  if (!response.ok) {
+    throw new Error(payload.error || "ENS resolution is unavailable right now.");
   }
-  const resolved = await client.getEnsAddress({ name: normalized.toLowerCase() });
-  return isAddress(String(resolved || "")) ? String(resolved) : null;
+  return isAddress(String(payload.address || "")) ? String(payload.address) : null;
 }
 
 function normalizeCollectionIdentityName(value: string, mode: "ens" | "subname" | "nftfactory"): string {
@@ -1569,12 +1557,10 @@ export default function MintClient({
         }).catch(() => null);
       }
 
-      if (isAddress(config.registry) && publicClient) {
-        const result = await discoverOnchainWalletIdentity({
-          publicClient,
+      if (isAddress(config.registry)) {
+        const result = await fetchWalletIdentity({
           chainId: config.chainId,
-          ownerAddress: account,
-          registryAddress: config.registry
+          ownerAddress: account
         }).catch(() => null);
         if (!cancelled) {
           setDiscoveredEnsNames(result?.ensNames || []);
@@ -1618,7 +1604,7 @@ export default function MintClient({
     return () => {
       cancelled = true;
     };
-  }, [account, config.chainId, config.registry, knownCollections.length, needsWalletCollectionLookup, publicClient]);
+  }, [account, config.chainId, config.registry, knownCollections.length, needsWalletCollectionLookup]);
 
   useEffect(() => {
     if (!needsWalletCollectionLookup || !account) {

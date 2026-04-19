@@ -30,9 +30,9 @@ Recommended pairings:
 - `geth` + `lighthouse`
 - `reth` + `lighthouse`
 
-`geth` is the conservative choice.
+If storage is the main constraint, prefer `reth` with aggressive pruning.
 
-`reth` may be faster, but if the goal is just "replace Alchemy for the indexer with the lowest operator risk", `geth` is the safer default.
+`geth` is the conservative choice, but it is not the smallest-footprint choice. If the job is only "serve current Sepolia reads for NFTFactory", `reth` in a pruned mode is the better storage target.
 
 ## What NFTFactory needs from the node
 
@@ -51,6 +51,12 @@ This repo now supports:
 - `ALCHEMY_SEPOLIA_RPC_URL` for an explicit Alchemy fallback slot
 - `INFURA_SEPOLIA_RPC_URL` for an explicit Infura fallback slot
 
+For storage-sensitive setups, the indexer also supports:
+
+- `INDEXER_STORAGE_PROFILE=core` to keep the focus on ENS/NFTFactory collection ownership rather than extra participant telemetry
+- `INDEXER_ENABLE_PARTICIPANT_ACTIVITY_PERSISTENCE=0` to stop writing the participant activity sidecar
+- `INDEXER_MARKETPLACE_RETENTION_DAYS=14` to prune inactive listing and offer rows after a retention window
+
 That means you can cut over gradually:
 
 1. keep current external RPC as fallback
@@ -66,6 +72,13 @@ Minimum practical expectations for a stable Sepolia box:
 - SSD-backed storage
 - enough disk for execution + consensus databases
 - enough RAM to run both clients without swap thrash
+
+If storage pressure matters more than operational conservatism:
+
+- use checkpoint sync on Lighthouse
+- use a pruned execution client
+- avoid archive mode entirely
+- keep old-history pruning available as a maintenance task
 
 If this machine is also serving web, indexer, IPFS, and tunnels, avoid overcommitting it. Running the node on a separate box or VM is cleaner.
 
@@ -121,6 +134,32 @@ lighthouse bn \
 
 Checkpoint sync is the practical way to get Sepolia online quickly.
 
+## Storage-first option: reth + lighthouse on Sepolia
+
+If disk is the primary constraint, use `reth` as the execution client.
+
+Example shape:
+
+```bash
+reth node \
+  --chain sepolia \
+  --datadir ~/.ethereum/reth-sepolia \
+  --http \
+  --http.addr 127.0.0.1 \
+  --http.port 8545 \
+  --http.api eth,net,web3 \
+  --authrpc.addr 127.0.0.1 \
+  --authrpc.port 8551 \
+  --authrpc.jwtsecret ~/.ethereum/sepolia/jwt.hex \
+  --full
+```
+
+Notes:
+
+- in current `reth` releases, `--full` is the pruned non-archive mode
+- this repo keeps `RETH_PRUNING_MODE=minimal` as a storage-first alias and maps it to that pruned mode
+- keep the same Lighthouse checkpoint-sync flow
+
 ## Repo helper scripts
 
 This workspace now includes helper scripts:
@@ -139,18 +178,57 @@ Equivalent npm commands:
 npm run rpc:selfhosted:start
 npm run rpc:selfhosted:status
 npm run rpc:selfhosted:sync
+npm run rpc:selfhosted:prune
 npm run rpc:selfhosted:stop
 ```
 
 They expect binaries in:
 
 - `/workspace/tools/ethnode/bin/geth`
+- `/workspace/tools/ethnode/bin/reth`
 - `/workspace/tools/ethnode/bin/lighthouse`
 
 And store runtime state under:
 
 - `/workspace/tools/ethnode/data`
 - `/workspace/tools/ethnode/run`
+
+By default the scripts now prefer `reth` when it is installed. If `reth` is not present, they fall back to `geth`.
+
+To force the lower-storage path explicitly:
+
+```bash
+cd /workspace/projects/nftfactory
+EXECUTION_CLIENT=reth RETH_PRUNING_MODE=minimal npm run rpc:selfhosted:start
+```
+
+To reclaim space on an existing stopped node:
+
+```bash
+cd /workspace/projects/nftfactory
+EXECUTION_CLIENT=geth npm run rpc:selfhosted:prune
+```
+
+Or for a reth-based node:
+
+```bash
+cd /workspace/projects/nftfactory
+EXECUTION_CLIENT=reth npm run rpc:selfhosted:prune
+```
+
+To inspect current disk usage:
+
+```bash
+cd /workspace/projects/nftfactory
+npm run rpc:selfhosted:disk
+```
+
+To delete the legacy `geth` datadir after you are satisfied with `reth`:
+
+```bash
+cd /workspace/projects/nftfactory
+CONFIRM=delete-geth-sepolia-data npm run rpc:selfhosted:cleanup:geth
+```
 
 ## NFTFactory env cutover
 
@@ -166,6 +244,10 @@ REGISTRY_ADDRESS=0x1c8124F401Ac7A067f0c3dD39ce102D3623F4DE3
 MARKETPLACE_ADDRESS=0xc0098BCC01e2179A5018EFabf64a9c74a2E6244B
 SHARED_721_ADDRESS=0x4018dD11271CecFAbb275656631896F7A8811965
 SHARED_1155_ADDRESS=0x530C5f6F1728dCF60C3399e6D9d3aC729a7637Ce
+INDEXER_STORAGE_PROFILE=core
+INDEXER_MARKETPLACE_RETENTION_DAYS=14
+INDEXER_ENABLE_PARTICIPANT_READ_SYNC=0
+INDEXER_ENABLE_PARTICIPANT_ACTIVITY_PERSISTENCE=0
 ```
 
 If you also want root verification scripts to use the same local-first path:
@@ -216,3 +298,14 @@ Avoid these shortcuts:
 - exposing execution or auth RPC on a public interface
 - cutting all backups before the local node is proven
 - assuming execution-only is enough without a consensus client
+
+## Practical recommendation for this repo
+
+If storage is the top concern, use this rollout order:
+
+1. keep the current `geth` node only long enough to avoid downtime
+2. prune it once with `npm run rpc:selfhosted:prune`
+3. install `reth`
+4. restart the stack; the repo will now prefer `reth` automatically when it is installed
+5. keep Alchemy and Infura in `RPC_URLS` until the pruned local node proves stable
+6. delete the old `geth` datadir only after you no longer need rollback

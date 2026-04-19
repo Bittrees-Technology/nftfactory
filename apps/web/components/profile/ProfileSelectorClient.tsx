@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useAccount, usePublicClient } from "wagmi";
+import { useAccount } from "wagmi";
 import {
   fetchProfileDirectory,
   syncWalletScope,
@@ -11,12 +11,9 @@ import {
   type ApiProfileRecord
 } from "../../lib/indexerApi";
 import { getContractsConfig } from "../../lib/contracts";
-import {
-  clearOnchainWalletIdentityCache,
-  discoverOnchainWalletIdentity,
-  type OnchainWalletIdentity
-} from "../../lib/onchainIdentity";
+import type { OnchainWalletIdentity } from "../../lib/onchainIdentity";
 import { fetchCollectionsByOwnerAcrossChains, fetchProfilesByOwnerAcrossChains } from "../../lib/ownerIdentityMultiChain";
+import { fetchWalletIdentity } from "../../lib/walletIdentityApi";
 
 function deriveProfileRouteFromName(fullName: string): string {
   const normalized = String(fullName || "")
@@ -105,7 +102,6 @@ export default function ProfileSelectorClient() {
   const router = useRouter();
   const { address, isConnected } = useAccount();
   const config = useMemo(() => getContractsConfig(), []);
-  const publicClient = usePublicClient({ chainId: config.chainId });
   const [profiles, setProfiles] = useState<ApiProfileRecord[]>([]);
   const [onchainIdentity, setOnchainIdentity] = useState<OnchainWalletIdentity>({ ensNames: [], collections: [] });
   const [isLoading, setIsLoading] = useState(false);
@@ -137,24 +133,17 @@ export default function ProfileSelectorClient() {
     setIsLoading(true);
     setNote("");
     void (async () => {
-      clearOnchainWalletIdentityCache({
-        chainId: config.chainId,
-        ownerAddress: address,
-        registryAddress: config.registry
-      });
       await syncWalletScope(address, {
         chainId: config.chainId,
-        force: true,
+        force: false,
         timeoutMs: 15_000
       }).catch(() => null);
       return Promise.allSettled([
-        fetchProfilesByOwnerAcrossChains(address),
-        fetchCollectionsByOwnerAcrossChains(address),
-        discoverOnchainWalletIdentity({
-          publicClient,
+        fetchProfilesByOwnerAcrossChains(address, [config.chainId]),
+        fetchCollectionsByOwnerAcrossChains(address, [config.chainId]),
+        fetchWalletIdentity({
           chainId: config.chainId,
-          ownerAddress: address,
-          registryAddress: config.registry
+          ownerAddress: address
         })
       ]);
     })()
@@ -256,7 +245,7 @@ export default function ProfileSelectorClient() {
     return () => {
       cancelled = true;
     };
-  }, [address, config.chainId, config.registry, isConnected, publicClient]);
+  }, [address, config.chainId, isConnected]);
 
   useEffect(() => {
     if (!isConnected || isLoading || profiles.length === 0) return;

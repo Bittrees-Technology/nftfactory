@@ -23,6 +23,7 @@
     "admin:backfill-token-presentation": "tsx scripts/backfill-token-presentation.ts",
     "admin:backfill-subname": "tsx scripts/backfill-subnames.ts",
     "admin:backfill-subnames-file": "tsx scripts/backfill-subnames.ts --file",
+    "admin:prune-marketplace-history": "tsx scripts/prune-marketplace-history.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },

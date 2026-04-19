@@ -26,4 +26,5 @@ stop_service() {
 }
 
 stop_service "lighthouse-sepolia"
+stop_service "reth-sepolia"
 stop_service "geth-sepolia"

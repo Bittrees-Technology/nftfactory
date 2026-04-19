@@ -15,6 +15,8 @@ export type CollectionSyncScope = "collection" | "deep";
 const INDEXER_PROXY_PREFIX = "/api/indexer";
 const OWNER_COLLECTIONS_CACHE_TTL_MS = 15_000;
 const OWNER_PROFILES_CACHE_TTL_MS = 15_000;
+const OWNER_SUMMARY_CACHE_TTL_MS = 15_000;
+const OWNER_HOLDINGS_CACHE_TTL_MS = 15_000;
 const WALLET_SYNC_COOLDOWN_MS = 20_000;
 
 type CachedAsyncValue<T> = {
@@ -25,6 +27,8 @@ type CachedAsyncValue<T> = {
 
 const ownerCollectionsCache = new Map<string, CachedAsyncValue<ApiOwnedCollections>>();
 const ownerProfilesCache = new Map<string, CachedAsyncValue<ApiOwnedProfiles>>();
+const ownerSummaryCache = new Map<string, CachedAsyncValue<ApiOwnerSummary>>();
+const ownerHoldingsCache = new Map<string, CachedAsyncValue<ApiOwnerHoldingsResponse>>();
 const walletSyncCache = new Map<
   string,
   CachedAsyncValue<{
@@ -32,6 +36,7 @@ const walletSyncCache = new Map<
     walletAddress: string;
     includeOffers: boolean;
     includeListings: boolean;
+    includeRelatedContracts?: boolean;
     force: boolean;
     summary: unknown;
   }>
@@ -639,6 +644,7 @@ export async function syncWalletScope(
   options?: IndexerRequestOptions & {
     includeOffers?: boolean;
     includeListings?: boolean;
+    includeRelatedContracts?: boolean;
     force?: boolean;
     timeoutMs?: number;
   }
@@ -647,6 +653,7 @@ export async function syncWalletScope(
   walletAddress: string;
   includeOffers: boolean;
   includeListings: boolean;
+  includeRelatedContracts?: boolean;
   force: boolean;
   summary: unknown;
 }> {
@@ -654,6 +661,7 @@ export async function syncWalletScope(
   const params = new URLSearchParams();
   if (options?.includeOffers) params.set("includeOffers", "1");
   if (options?.includeListings) params.set("includeListings", "1");
+  if (options?.includeRelatedContracts) params.set("includeRelatedContracts", "1");
   if (options?.force) params.set("force", "1");
   const suffix = params.size > 0 ? `?${params.toString()}` : "";
   const cacheKey = [
@@ -662,6 +670,7 @@ export async function syncWalletScope(
     normalizedOwnerAddress,
     options?.includeOffers ? "offers" : "no-offers",
     options?.includeListings ? "listings" : "no-listings",
+    options?.includeRelatedContracts ? "related-contracts" : "owner-only",
     options?.force ? "force" : "normal"
   ].join(":");
   const ttlMs = options?.force ? 0 : WALLET_SYNC_COOLDOWN_MS;
@@ -784,8 +793,15 @@ export async function fetchOffersReceived(
   );
 }
 
-export async function fetchOwnerSummary(ownerAddress: string): Promise<ApiOwnerSummary> {
-  return fetchJson<ApiOwnerSummary>(`/api/owners/${encodeURIComponent(ownerAddress)}/summary`);
+export async function fetchOwnerSummary(ownerAddress: string, options?: IndexerRequestOptions): Promise<ApiOwnerSummary> {
+  const normalizedOwnerAddress = String(ownerAddress || "").trim().toLowerCase();
+  const cacheKey = `${options?.chainId || 0}:${options?.baseUrl || ""}:summary:${normalizedOwnerAddress}`;
+  return getCachedAsync(
+    ownerSummaryCache,
+    cacheKey,
+    OWNER_SUMMARY_CACHE_TTL_MS,
+    () => fetchJson<ApiOwnerSummary>(`/api/owners/${encodeURIComponent(ownerAddress)}/summary`, undefined, undefined, options)
+  );
 }
 
 export async function fetchOwnerHoldings(
@@ -802,11 +818,27 @@ export async function fetchOwnerHoldings(
   if (standard === "ERC721" || standard === "ERC1155") {
     params.set("standard", standard);
   }
-  return fetchJson<ApiOwnerHoldingsResponse>(
-    `/api/users/${encodeURIComponent(ownerAddress)}/holdings?${params.toString()}`,
-    undefined,
-    undefined,
-    options
+  const normalizedOwnerAddress = String(ownerAddress || "").trim().toLowerCase();
+  const cacheKey = [
+    options?.chainId || 0,
+    options?.baseUrl || "",
+    "holdings",
+    normalizedOwnerAddress,
+    cursor,
+    limit,
+    standard || "all"
+  ].join(":");
+  return getCachedAsync(
+    ownerHoldingsCache,
+    cacheKey,
+    OWNER_HOLDINGS_CACHE_TTL_MS,
+    () =>
+      fetchJson<ApiOwnerHoldingsResponse>(
+        `/api/users/${encodeURIComponent(ownerAddress)}/holdings?${params.toString()}`,
+        undefined,
+        undefined,
+        options
+      )
   );
 }
 

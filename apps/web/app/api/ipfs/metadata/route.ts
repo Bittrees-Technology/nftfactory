@@ -14,6 +14,7 @@ import {
   resolveIpfsApiUrl,
   resolveIpfsGatewayBaseUrl
 } from "../../../../lib/ipfsUpload";
+import { sanitizeBackendErrorMessage } from "../../../../lib/networkErrors";
 
 const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
 const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
@@ -60,7 +61,11 @@ async function pinFile(file: File, fileName: string, apiUrl: string, authHeaders
 
     if (!response.ok) {
       const text = await response.text();
-      lastError = new Error(`IPFS upload failed (HTTP ${response.status}): ${text}`);
+      const fallbackMessage = `IPFS upload failed (HTTP ${response.status}).`;
+      const sanitizedMessage = sanitizeBackendErrorMessage(text, fallbackMessage, {
+        serviceLabel: "IPFS upload backend"
+      });
+      lastError = new Error(sanitizedMessage);
       if (attempt < MAX_IPFS_UPLOAD_ATTEMPTS && isRetryableIpfsUploadStatus(response.status)) {
         await new Promise((resolve) => setTimeout(resolve, IPFS_UPLOAD_RETRY_DELAYS_MS[attempt - 1] || 1000));
         continue;

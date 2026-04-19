@@ -23,9 +23,9 @@ import {
   type ApiOwnedCollections,
   type ApiProfileRecord
 } from "../../lib/indexerApi";
-import { clearOnchainWalletIdentityCache, discoverOnchainWalletIdentity } from "../../lib/onchainIdentity";
 import { verifyOwnedCollectionsOnChain } from "../../lib/onchainCollections";
 import { fetchCollectionsByOwnerAcrossChains, fetchProfilesByOwnerAcrossChains } from "../../lib/ownerIdentityMultiChain";
+import { fetchWalletIdentity } from "../../lib/walletIdentityApi";
 
 const SUBNAME_FEE_ETH = "0.001";
 const ENS_NAME_WRAPPER_ADDRESS = /^0x[a-fA-F0-9]{40}$/.test(process.env.NEXT_PUBLIC_ENS_NAME_WRAPPER_ADDRESS || "")
@@ -499,24 +499,17 @@ export default function ProfileLandingClient({
 
     let cancelled = false;
     void (async () => {
-      clearOnchainWalletIdentityCache({
-        chainId: config.chainId,
-        ownerAddress: address,
-        registryAddress: config.registry
-      });
       await syncWalletScope(address, {
         chainId: config.chainId,
-        force: true,
+        force: false,
         timeoutMs: 15_000
       }).catch(() => null);
       return Promise.allSettled([
-        fetchProfilesByOwnerAcrossChains(address),
-        fetchCollectionsByOwnerAcrossChains(address),
-        discoverOnchainWalletIdentity({
-          publicClient,
+        fetchProfilesByOwnerAcrossChains(address, [config.chainId]),
+        fetchCollectionsByOwnerAcrossChains(address, [config.chainId]),
+        fetchWalletIdentity({
           chainId: config.chainId,
-          ownerAddress: address,
-          registryAddress: config.registry
+          ownerAddress: address
         })
       ]);
     })()

@@ -23,5 +23,6 @@ status_service() {
   echo "$name: stopped log=$logf"
 }
 
+status_service "reth-sepolia"
 status_service "geth-sepolia"
 status_service "lighthouse-sepolia"

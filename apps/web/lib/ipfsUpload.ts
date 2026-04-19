@@ -184,7 +184,7 @@ export function buildIpfsTerminatedError(urlLike: string): string {
 }
 
 export function isRetryableIpfsUploadStatus(status: number): boolean {
-  return [408, 429, 500, 502, 503, 504, 522, 523, 524].includes(status);
+  return [408, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524, 530].includes(status);
 }
 
 export function isRetryableIpfsUploadErrorMessage(message: string): boolean {
