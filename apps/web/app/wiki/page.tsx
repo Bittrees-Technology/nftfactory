@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import WikiMarkdown from "../../components/wiki/WikiMarkdown";
 import { getWikiPageBySlug, getWikiPages } from "../../lib/wiki";
 
 export default async function WikiHomePage() {
@@ -27,7 +28,7 @@ export default async function WikiHomePage() {
       <article className="card wikiArticle">
         <p className="eyebrow">Home</p>
         <h2>{homePage.title}</h2>
-        <pre className="wikiPre">{homePage.content}</pre>
+        <WikiMarkdown content={homePage.content} />
       </article>
     </section>
   );
