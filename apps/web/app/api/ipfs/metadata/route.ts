@@ -12,6 +12,7 @@ import {
   isPrivateOrLocalUrl,
   parseIpfsAddResponse,
   resolveIpfsApiUrl,
+  resolveIpfsApiUrls,
   resolveIpfsGatewayBaseUrl
 } from "../../../../lib/ipfsUpload";
 import { sanitizeBackendErrorMessage } from "../../../../lib/networkErrors";
@@ -96,11 +97,34 @@ async function pinFile(file: File, fileName: string, apiUrl: string, authHeaders
   throw lastError || new Error("IPFS upload failed.");
 }
 
+async function pinFileWithFailover(
+  file: File,
+  fileName: string,
+  apiUrls: string[],
+  authHeaders: HeadersInit
+): Promise<string> {
+  let lastError: Error | null = null;
+
+  for (const apiUrl of apiUrls) {
+    try {
+      return await pinFile(file, fileName, apiUrl, authHeaders);
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error("IPFS upload failed.");
+    }
+  }
+
+  throw lastError || new Error("IPFS upload failed.");
+}
+
 export async function POST(request: Request) {
   try {
-    const apiUrl = buildIpfsAddUrl(resolveIpfsApiUrl(process.env) || requireEnv("IPFS_API_URL"));
-    if (!isPrivateOrLocalUrl(apiUrl) && !hasIpfsApiAuthConfigured(process.env)) {
-      throw new Error(buildIpfsAuthRequirementError(apiUrl));
+    const configuredApiUrls = resolveIpfsApiUrls(process.env);
+    const apiUrls = configuredApiUrls.length > 0
+      ? configuredApiUrls.map((url) => buildIpfsAddUrl(url))
+      : [buildIpfsAddUrl(resolveIpfsApiUrl(process.env) || requireEnv("IPFS_API_URL"))];
+    const primaryApiUrl = apiUrls[0];
+    if (!isPrivateOrLocalUrl(primaryApiUrl) && !hasIpfsApiAuthConfigured(process.env)) {
+      throw new Error(buildIpfsAuthRequirementError(primaryApiUrl));
     }
     const authHeaders = buildIpfsAuthHeaders(process.env);
     const gateway = resolveIpfsGatewayBaseUrl(process.env);
@@ -146,12 +170,12 @@ export async function POST(request: Request) {
     let audioUri: string | null = null;
 
     if (image instanceof File) {
-      imageHash = await pinFile(image, image.name || "asset.png", apiUrl, authHeaders);
+      imageHash = await pinFileWithFailover(image, image.name || "asset.png", apiUrls, authHeaders);
       imageUri = `ipfs://${imageHash}`;
     }
 
     if (audio instanceof File) {
-      audioHash = await pinFile(audio, audio.name || "audio.mp3", apiUrl, authHeaders);
+      audioHash = await pinFileWithFailover(audio, audio.name || "audio.mp3", apiUrls, authHeaders);
       audioUri = `ipfs://${audioHash}`;
     }
 
@@ -182,7 +206,7 @@ export async function POST(request: Request) {
     const metadataFile = new File([JSON.stringify(metadata, null, 2)], "metadata.json", {
       type: "application/json"
     });
-    const metadataHash = await pinFile(metadataFile, "metadata.json", apiUrl, authHeaders);
+    const metadataHash = await pinFileWithFailover(metadataFile, "metadata.json", apiUrls, authHeaders);
     const metadataUri = `ipfs://${metadataHash}`;
 
     return NextResponse.json({

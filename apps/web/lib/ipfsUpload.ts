@@ -107,12 +107,20 @@ export function buildIpfsReachabilityError(urlLike: string): string {
 }
 
 export function resolveIpfsApiUrl(env: EnvLike = process.env): string {
-  const explicitApiUrl = String(env.IPFS_API_URL || "").trim();
-  if (explicitApiUrl) {
-    return explicitApiUrl;
-  }
+  return resolveIpfsApiUrls(env)[0] || "";
+}
 
-  return resolveSharedIpfsStorageConfig(env).apiBaseUrl;
+export function resolveIpfsApiUrls(env: EnvLike = process.env): string[] {
+  const configured = [
+    ...String(env.IPFS_API_URLS || "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean),
+    String(env.IPFS_API_URL || "").trim(),
+    resolveSharedIpfsStorageConfig(env).apiBaseUrl
+  ].filter(Boolean);
+
+  return [...new Set(configured)];
 }
 
 export function resolveIpfsGatewayBaseUrl(env: EnvLike = process.env): string {

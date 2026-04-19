@@ -4,7 +4,8 @@ import {
   buildIpfsVersionUrl,
   getIpfsApiAuthMode,
   isPrivateOrLocalUrl,
-  resolveIpfsApiUrl
+  resolveIpfsApiUrl,
+  resolveIpfsApiUrls
 } from "../../../../lib/ipfsUpload";
 import { resolveIndexerServerUrl } from "../../../../lib/indexerServerEnv";
 import { getLegacyChainPublicEnv, getRootPublicEnv, getScopedChainPublicEnv } from "../../../../lib/publicEnv";
@@ -146,7 +147,8 @@ async function checkIndexer(chainId: number): Promise<ServiceCheck> {
 }
 
 async function checkIpfs(): Promise<ServiceCheck> {
-  const configuredUrl = resolveIpfsApiUrl(process.env);
+  const configuredUrls = resolveIpfsApiUrls(process.env);
+  const configuredUrl = configuredUrls[0] || resolveIpfsApiUrl(process.env);
   if (!configuredUrl) {
     return {
       label: "ipfs",
@@ -169,30 +171,51 @@ async function checkIpfs(): Promise<ServiceCheck> {
     };
   }
 
-  const versionUrl = buildIpfsVersionUrl(configuredUrl);
+  const versionUrls = (configuredUrls.length > 0 ? configuredUrls : [configuredUrl]).map((url) => buildIpfsVersionUrl(url));
+  let lastFailure: ServiceCheck | null = null;
 
-  try {
-    const response = await fetchWithTimeout(versionUrl, {
-      method: "POST",
-      headers: buildIpfsAuthHeaders(process.env)
-    });
-    const text = await response.text();
-    return {
-      label: "ipfs",
-      url: maskUrl(versionUrl),
-      ok: response.ok,
-      status: response.status,
-      message: response.ok ? `OK (auth: ${authMode})` : text || `HTTP ${response.status} (auth: ${authMode})`
-    };
-  } catch (error) {
-    return {
-      label: "ipfs",
-      url: maskUrl(versionUrl),
-      ok: false,
-      status: null,
-      message: error instanceof Error ? `${error.message} (auth: ${authMode})` : `IPFS request failed. (auth: ${authMode})`
-    };
+  for (const versionUrl of versionUrls) {
+    try {
+      const response = await fetchWithTimeout(versionUrl, {
+        method: "POST",
+        headers: buildIpfsAuthHeaders(process.env)
+      });
+      const text = await response.text();
+      if (response.ok) {
+        return {
+          label: "ipfs",
+          url: maskUrl(versionUrl),
+          ok: true,
+          status: response.status,
+          message: `OK (auth: ${authMode})`,
+          details: versionUrls.length > 1 ? { checkedUrls: versionUrls.map((url) => maskUrl(url)) } : undefined
+        };
+      }
+      lastFailure = {
+        label: "ipfs",
+        url: maskUrl(versionUrl),
+        ok: false,
+        status: response.status,
+        message: text || `HTTP ${response.status} (auth: ${authMode})`
+      };
+    } catch (error) {
+      lastFailure = {
+        label: "ipfs",
+        url: maskUrl(versionUrl),
+        ok: false,
+        status: null,
+        message: error instanceof Error ? `${error.message} (auth: ${authMode})` : `IPFS request failed. (auth: ${authMode})`
+      };
+    }
   }
+
+  return lastFailure || {
+    label: "ipfs",
+    url: maskUrl(versionUrls[0] || configuredUrl),
+    ok: false,
+    status: null,
+    message: `IPFS request failed. (auth: ${authMode})`
+  };
 }
 
 export async function GET() {

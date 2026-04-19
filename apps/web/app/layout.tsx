@@ -21,6 +21,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   <Link href="/" className="brandLink">NFTFactory</Link>
                   <Link href="/mint">Mint</Link>
                   <Link href="/profile">Profile</Link>
+                  <Link href="/wiki">Wiki</Link>
                 </div>
                 <HeaderWalletButton />
               </nav>
