@@ -3151,22 +3151,25 @@ export default function MintClient({
 
   return (
     <section className="wizard mintWorkspace">
-      <div className="card formCard">
-        <h3>
-          {pageMode === "manage"
-            ? "Manage Collection"
-            : pageMode === "view"
-              ? "View Collection"
-              : "Mint NFT"}
-        </h3>
-        <p className="hint">
-          {pageMode === "manage"
-            ? "Manage an existing creator collection."
-            : pageMode === "view"
-              ? "Inspect a creator collection and its indexed tokens."
-              : "Mint into the shared contract or your own collection."}
-        </p>
-        <div className="row">
+      <div className="card formCard mintWorkspaceHero">
+        <div className="mintWorkspaceHeroCopy">
+          <p className="eyebrow">Creator Studio</p>
+          <h2>
+            {pageMode === "manage"
+              ? "Manage Collection"
+              : pageMode === "view"
+                ? "View Collection"
+                : "Mint and Publish"}
+          </h2>
+          <p className="hint">
+            {pageMode === "manage"
+              ? "Tune collection settings, identity, verification, and token inventory from one studio."
+              : pageMode === "view"
+                ? "Inspect a creator collection, its indexed tokens, and the storefront state around it."
+                : "Create onchain media inside the shared contract or one of your own creator collections."}
+          </p>
+        </div>
+        <div className="row mintWorkspaceModes">
           <button type="button" className={pageMode === "mint" ? "presetButton presetActive" : "presetButton"} onClick={() => setPageMode("mint")}>
             Mint and publish
           </button>

@@ -171,7 +171,7 @@ export default function ProfileModerationClient() {
       <div className="card formCard profileStudioCard">
         <h2>Profile Moderation</h2>
         <p className="sectionLead">
-          Owner and moderator tools for Myspace-style guestbook entries. This workspace now loads the public queue plus hidden and deleted history for the actor wallet.
+          Owner and moderator tools for creator guestbook entries. This workspace loads the public queue plus hidden and deleted history for the actor wallet.
         </p>
         <div className="gridMini">
           <label>

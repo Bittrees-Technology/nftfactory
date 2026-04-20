@@ -127,7 +127,6 @@ export default function ProfileSelectorClient() {
   const [requestCursor, setRequestCursor] = useState(0);
   const [searchValue, setSearchValue] = useState("");
   const [sourceFilter, setSourceFilter] = useState<"all" | ApiProfileRecord["source"]>("all");
-  const [layoutFilter, setLayoutFilter] = useState<"all" | "default" | "myspace">("all");
   const [collectionFilter, setCollectionFilter] = useState<"all" | "with-collection" | "without-collection">("all");
   const [sortFilter, setSortFilter] = useState<"popular" | "name-asc" | "updated-desc" | "created-desc">("popular");
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
@@ -270,18 +269,18 @@ export default function ProfileSelectorClient() {
   }, [isConnected, isLoading, profiles, router]);
 
   const previousFilters = usePrevious(
-    `${searchValue}::${sourceFilter}::${layoutFilter}::${collectionFilter}::${sortFilter}`
+    `${searchValue}::${sourceFilter}::${collectionFilter}::${sortFilter}`
   );
 
   useEffect(() => {
-    const currentFilters = `${searchValue}::${sourceFilter}::${layoutFilter}::${collectionFilter}::${sortFilter}`;
+    const currentFilters = `${searchValue}::${sourceFilter}::${collectionFilter}::${sortFilter}`;
     if (previousFilters === undefined || previousFilters === currentFilters) return;
     setDirectoryProfiles([]);
     setDirectoryTotal(0);
     setDirectoryCanLoadMore(false);
     setNextCursor(0);
     setRequestCursor(0);
-  }, [searchValue, sourceFilter, layoutFilter, collectionFilter, sortFilter, previousFilters]);
+  }, [searchValue, sourceFilter, collectionFilter, sortFilter, previousFilters]);
 
   useEffect(() => {
     let cancelled = false;
@@ -292,7 +291,7 @@ export default function ProfileSelectorClient() {
         cursor: requestCursor,
         q: searchValue,
         source: sourceFilter,
-        layoutMode: layoutFilter,
+        layoutMode: "all",
         hasCollection:
           collectionFilter === "with-collection"
             ? true
@@ -329,7 +328,7 @@ export default function ProfileSelectorClient() {
       cancelled = true;
       clearTimeout(timeout);
     };
-  }, [requestCursor, searchValue, sourceFilter, layoutFilter, collectionFilter, sortFilter]);
+  }, [requestCursor, searchValue, sourceFilter, collectionFilter, sortFilter]);
 
   useEffect(() => {
     const target = loadMoreRef.current;
@@ -475,14 +474,6 @@ export default function ProfileSelectorClient() {
               </select>
             </label>
             <label>
-              Layout
-              <select value={layoutFilter} onChange={(event) => setLayoutFilter(event.target.value as "all" | "default" | "myspace")}>
-                <option value="all">All layouts</option>
-                <option value="default">Default</option>
-                <option value="myspace">Myspace</option>
-              </select>
-            </label>
-            <label>
               Collection
               <select value={collectionFilter} onChange={(event) => setCollectionFilter(event.target.value as "all" | "with-collection" | "without-collection")}>
                 <option value="all">All profiles</option>
@@ -517,7 +508,7 @@ export default function ProfileSelectorClient() {
                     <span className="mono">/profile/{profile.slug}</span>
                     {" · "}
                     {profile.source}
-                    {profile.layoutMode ? ` · ${profile.layoutMode}` : ""}
+                    {profile.layoutMode ? " · creator page" : ""}
                   </p>
                   <p className="hint">
                     Owner <span className="mono">{profile.ownerAddress}</span>

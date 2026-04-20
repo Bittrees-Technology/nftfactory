@@ -81,6 +81,87 @@ type PublishedProfileManifest = {
   profile?: Partial<ApiProfileRecord>;
 };
 
+const UNIFIED_PROFILE_LAYOUT = "default" as const;
+
+type EditableProfilePayload = {
+  name: string;
+  source: ApiProfileRecord["source"];
+  ownerAddress: string;
+  collectionAddress?: string;
+  tagline: string;
+  displayName: string;
+  bio: string;
+  layoutMode: "default";
+  aboutMe: string;
+  interests: string;
+  whoIdLikeToMeet: string;
+  statusHeadline: string;
+  sidebarFacts: Array<{ label: string; value: string }>;
+  bannerUrl: string;
+  avatarUrl: string;
+  featuredUrl: string;
+  accentColor: string;
+  customCss: string;
+  customHtml: string;
+  topFriends: string[];
+  testimonials: string[];
+  profileSongUrl: string;
+  mediaEmbeds: Array<{ title: string; url: string }>;
+  retroBlocks: ApiProfileRetroBlock[];
+  moduleOrder: MyspaceOrderableModuleId[];
+  heroModules: MyspaceOrderableModuleId[];
+  heroCompactModules: MyspaceOrderableModuleId[];
+  sidebarModules: MyspaceSidebarModuleId[];
+  sidebarCompactModules: MyspaceSidebarModuleId[];
+  mainColumnSplitModules: MyspaceMainSplittableModuleId[];
+  mainColumnCompactModules: MyspaceMainSplittableModuleId[];
+  stamps: string[];
+  customBoxes: Array<{ title: string; content: string }>;
+  links: string[];
+};
+
+function toComparableEditableProfilePayload(profile: Partial<ApiProfileRecord> | null | undefined): EditableProfilePayload | null {
+  if (!profile?.fullName || !profile?.source || !profile?.ownerAddress) return null;
+  const heroModules = normalizeMyspaceHeroModules(profile.heroModules);
+  const sidebarModules = normalizeMyspaceSidebarModules(profile.sidebarModules);
+  return {
+    name: profile.fullName,
+    source: profile.source,
+    ownerAddress: profile.ownerAddress,
+    collectionAddress: profile.collectionAddress || undefined,
+    tagline: profile.tagline || "",
+    displayName: profile.displayName || "",
+    bio: profile.bio || "",
+    layoutMode: UNIFIED_PROFILE_LAYOUT,
+    aboutMe: profile.aboutMe || "",
+    interests: profile.interests || "",
+    whoIdLikeToMeet: profile.whoIdLikeToMeet || "",
+    statusHeadline: profile.statusHeadline || "",
+    sidebarFacts: profile.sidebarFacts || [],
+    bannerUrl: profile.bannerUrl || "",
+    avatarUrl: profile.avatarUrl || "",
+    featuredUrl: profile.featuredUrl || "",
+    accentColor: profile.accentColor || "#c53a1f",
+    customCss: profile.customCss || "",
+    customHtml: profile.customHtml || "",
+    topFriends: profile.topFriends || [],
+    testimonials: profile.testimonials || [],
+    profileSongUrl: profile.profileSongUrl || "",
+    mediaEmbeds: profile.mediaEmbeds || [],
+    retroBlocks: profile.retroBlocks || [],
+    moduleOrder: normalizeMyspaceModuleOrder(profile.moduleOrder),
+    heroModules,
+    heroCompactModules: normalizeMyspaceHeroCompactModules(profile.heroCompactModules).filter((moduleId) => heroModules.includes(moduleId)),
+    sidebarModules,
+    sidebarCompactModules: normalizeMyspaceSidebarCompactModules(profile.sidebarCompactModules).filter((moduleId) => sidebarModules.includes(moduleId)),
+    mainColumnSplitModules: normalizeMyspaceMainColumnSplitModules(profile.mainColumnSplitModules).filter((moduleId) => !sidebarModules.includes(moduleId as MyspaceSidebarModuleId)),
+    mainColumnCompactModules: normalizeMyspaceMainColumnCompactModules(profile.mainColumnCompactModules).filter((moduleId) => !sidebarModules.includes(moduleId as MyspaceSidebarModuleId)),
+    stamps: profile.stamps || [],
+    customBoxes: profile.customBoxes || [],
+    links: profile.links || []
+  };
+}
+
 function isAddress(value: string): value is Address {
   return /^0x[a-fA-F0-9]{40}$/.test(value);
 }
@@ -746,7 +827,6 @@ export default function ProfileClient({ name }: { name: string }) {
   const [editTagline, setEditTagline] = useState("");
   const [editDisplayName, setEditDisplayName] = useState("");
   const [editBio, setEditBio] = useState("");
-  const [editLayoutMode, setEditLayoutMode] = useState<"default" | "myspace">("default");
   const [editAboutMe, setEditAboutMe] = useState("");
   const [editInterests, setEditInterests] = useState("");
   const [editWhoIdLikeToMeet, setEditWhoIdLikeToMeet] = useState("");
@@ -788,6 +868,7 @@ export default function ProfileClient({ name }: { name: string }) {
   const [publishedProfileGatewayUrl, setPublishedProfileGatewayUrl] = useState<string | null>(null);
   const [publishedProfileSnapshot, setPublishedProfileSnapshot] = useState<Partial<ApiProfileRecord> | null>(null);
   const [transferState, setTransferState] = useState<ActionState>(idleActionState());
+  const [ownerRailOpen, setOwnerRailOpen] = useState(false);
   const profileViewRequestIdRef = useRef(0);
   const manualSellerAddress = useMemo(() => (isAddress(sellerAddress) ? sellerAddress : null), [sellerAddress]);
   const customPreviewId = useId();
@@ -1345,7 +1426,6 @@ export default function ProfileClient({ name }: { name: string }) {
     setEditTagline(primaryProfile.tagline || "");
     setEditDisplayName(primaryProfile.displayName || "");
     setEditBio(primaryProfile.bio || "");
-    setEditLayoutMode(primaryProfile.layoutMode === "myspace" ? "myspace" : "default");
     setEditAboutMe(primaryProfile.aboutMe || "");
     setEditInterests(primaryProfile.interests || "");
     setEditWhoIdLikeToMeet(primaryProfile.whoIdLikeToMeet || "");
@@ -1381,7 +1461,12 @@ export default function ProfileClient({ name }: { name: string }) {
     setPublishedProfileSnapshot(null);
     setTransferAddress("");
     setTransferState(idleActionState());
+    setOwnerRailOpen(false);
   }, [primaryProfile]);
+
+  useEffect(() => {
+    if (!canEditProfile) setOwnerRailOpen(false);
+  }, [canEditProfile]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1442,7 +1527,7 @@ export default function ProfileClient({ name }: { name: string }) {
       tagline: editTagline,
       displayName: editDisplayName,
       bio: editBio,
-      layoutMode: editLayoutMode,
+      layoutMode: UNIFIED_PROFILE_LAYOUT,
       aboutMe: editAboutMe,
       interests: editInterests,
       whoIdLikeToMeet: editWhoIdLikeToMeet,
@@ -1475,7 +1560,6 @@ export default function ProfileClient({ name }: { name: string }) {
     editTagline,
     editDisplayName,
     editBio,
-    editLayoutMode,
     editAboutMe,
     editInterests,
     editWhoIdLikeToMeet,
@@ -1503,6 +1587,17 @@ export default function ProfileClient({ name }: { name: string }) {
     editCustomBoxesText,
     editLinksText
   ]);
+  const currentDraftPayload = useMemo(() => buildEditableProfilePayload(), [buildEditableProfilePayload]);
+  const publishedComparablePayload = useMemo(
+    () => toComparableEditableProfilePayload(publishedProfileSnapshot || primaryProfile || null),
+    [primaryProfile, publishedProfileSnapshot]
+  );
+  const hasPublishedProfile = Boolean(primaryProfile?.publishedProfileUri);
+  const hasUnpublishedChanges = useMemo(() => {
+    if (!currentDraftPayload || !publishedComparablePayload) return false;
+    return JSON.stringify(currentDraftPayload) !== JSON.stringify(publishedComparablePayload);
+  }, [currentDraftPayload, publishedComparablePayload]);
+  const publishedProfileTimestamp = primaryProfile?.publishedProfilePublishedAt || null;
 
   async function saveProfileDetails(): Promise<void> {
     const payload = buildEditableProfilePayload();
@@ -1584,7 +1679,7 @@ export default function ProfileClient({ name }: { name: string }) {
     }
   }
 
-  const isMyspaceProfile = presentationProfile?.layoutMode === "myspace";
+  const usesUnifiedCreatorLayout = Boolean(presentationProfile);
   const retroAccentStyle = useMemo(
     () => ({ "--profile-accent": presentationProfile?.accentColor || "#ff6a00" } as CSSProperties),
     [presentationProfile?.accentColor]
@@ -1946,7 +2041,7 @@ export default function ProfileClient({ name }: { name: string }) {
   }
 
   return (
-    <section className={`wizard profilePage ${isMyspaceProfile ? "profilePage--myspace" : ""}`.trim()} style={isMyspaceProfile ? retroAccentStyle : undefined}>
+    <section className={`wizard profilePage ${usesUnifiedCreatorLayout ? "profilePage--myspace" : ""}`.trim()} style={usesUnifiedCreatorLayout ? retroAccentStyle : undefined}>
       <ProfileHeroSections
         name={name}
         mintProfileParam={mintProfileParam}
@@ -1968,21 +2063,21 @@ export default function ProfileClient({ name }: { name: string }) {
         configChainId={config.chainId}
       />
 
-      {isMyspaceProfile ? (
+      {usesUnifiedCreatorLayout ? (
         <div className="profileMyspaceShell">
           <section className="card formCard profileMyspaceIntroCard">
-            <p className="eyebrow">Classic Mode</p>
-            <h3>{creatorDisplayName}'s Retro Page</h3>
+            <p className="eyebrow">Published Creator Page</p>
+            <h3>{creatorDisplayName}'s Public Page</h3>
             <p className="sectionLead">
-              This profile is using the Myspace-style layout mode: expressive blurbs, loud colors, profile-song energy,
-              and creator-controlled modules that should read like a personal page first and a storefront second.
+              This profile uses the unified creator-page layout: expressive blurbs, bold modules, profile-song energy,
+              and creator-controlled sections that should read like a personal page first and a storefront second.
             </p>
             <div className="profileMyspaceStatusStrip">
               <span className="profileMyspaceStatusLabel">Currently</span>
               <strong>{presentationProfile?.statusHeadline?.trim() || "offline, coding the perfect profile"}</strong>
             </div>
             <div className="profileChipRow">
-              <span className="profileChip">{presentationProfile?.layoutMode === "myspace" ? "Myspace mode" : "Default mode"}</span>
+              <span className="profileChip">Unified creator page</span>
               <span className="profileChip">{presentationProfile?.topFriends?.length || 0} top friend{(presentationProfile?.topFriends?.length || 0) === 1 ? "" : "s"}</span>
               <span className="profileChip">{retroBlocks.length} retro block{retroBlocks.length === 1 ? "" : "s"}</span>
               <span className="profileChip">{mediaEmbedCards.length} media embed{mediaEmbedCards.length === 1 ? "" : "s"}</span>
@@ -2641,7 +2736,30 @@ export default function ProfileClient({ name }: { name: string }) {
         </div>
       </div>
 
-      <div className="profileStudioGrid">
+      {canEditProfile ? (
+        <section className="card formCard profileOwnerRailCard">
+          <div className="profileOwnerRailHeader">
+            <div>
+              <p className="eyebrow">Owner Rail</p>
+              <h3>Manage Published Profile</h3>
+              <p className="sectionLead">
+                Owner-only tools stay collapsed here so the public route remains focused on the published page.
+              </p>
+            </div>
+            <button type="button" onClick={() => setOwnerRailOpen((current) => !current)}>
+              {ownerRailOpen ? "Hide owner tools" : "Open owner tools"}
+            </button>
+          </div>
+          <div className="detailGrid">
+            <DetailGridItem label="Studio Access" value="Owner connected" />
+            <DetailGridItem label="Published Snapshot" value={hasPublishedProfile ? "Available" : "Not published yet"} />
+            <DetailGridItem label="Draft Status" value={!hasPublishedProfile ? "Draft only" : hasUnpublishedChanges ? "Unpublished changes" : "Matches published"} />
+            <DetailGridItem label="Route" value={canonicalRoute} valueClassName="detailValue mono" />
+          </div>
+        </section>
+      ) : null}
+
+      {(!canEditProfile || ownerRailOpen) ? <div className="profileStudioGrid">
         <div className="card formCard profileWalletCard">
           <h3>Linked Wallets</h3>
           <p className="sectionLead">
@@ -2751,7 +2869,7 @@ export default function ProfileClient({ name }: { name: string }) {
         <div className="card formCard profileStudioCard">
           <SectionCardHeader
             title="Profile Studio"
-            description="This is the editable identity layer for the page. Treat it like the creator homepage: banner, avatar, featured media, links, and transfer controls live here."
+            description="This is the editable identity layer for the page. Treat it like the creator homepage: banner, avatar, featured media, links, and publishing controls live here."
             descriptionClassName="sectionLead"
             actions={
               <Link href={`/profile/setup?label=${encodeURIComponent(name)}`} className="ctaLink secondaryLink">
@@ -2773,57 +2891,53 @@ export default function ProfileClient({ name }: { name: string }) {
                   <div className="inset profileStudioPreviewInset">
                     <div className="profileStudioPreviewHeader">
                       <div>
-                        <h3>Live Retro Preview</h3>
-                        <p className="hint">Unsaved layout preview driven by the current studio fields.</p>
+                        <h3>Live Creator Page Preview</h3>
+                        <p className="hint">Unsaved preview driven by the current studio fields.</p>
                       </div>
-                      <span className="profileChip">{editLayoutMode === "myspace" ? "Myspace preview" : "Default layout selected"}</span>
+                      <span className="profileChip">Unified layout preview</span>
                     </div>
-                    {editLayoutMode === "myspace" ? (
-                      <div className="profileStudioPreviewShell">
-                        <div className="profileStudioPreviewHero">
-                          <strong>{studioPreviewDisplayName}</strong>
-                          <span>{studioPreviewStatusHeadline}</span>
-                        </div>
-                        {studioPreviewModuleOrder.filter((moduleId) => studioPreviewHeroModules.includes(moduleId)).length > 0 ? (
-                          <div className="profileStudioPreviewHeroModules">
-                            {studioPreviewModuleOrder.filter((moduleId) => studioPreviewHeroModules.includes(moduleId)).map((moduleId) => (
-                              <div key={moduleId} className={`profileStudioPreviewModuleCard profileStudioPreviewModuleCard--hero ${studioPreviewHeroCompactModules.includes(moduleId) ? "profileStudioPreviewModuleCard--compact" : ""}`.trim()}>
-                                <strong>{MYSPACE_MODULE_LABELS[moduleId]}</strong>
-                                <span className="mono">{getMyspaceDensityLabel(studioPreviewHeroCompactModules.includes(moduleId), "hero")}</span>
-                                <p>{studioPreviewModuleSummaries[moduleId]}</p>
-                              </div>
-                            ))}
-                          </div>
-                        ) : null}
-                        <div className="profileStudioPreviewColumns">
-                          <div className="profileStudioPreviewMain">
-                            {studioPreviewModuleOrder.filter((moduleId) => !studioPreviewSidebarModules.includes(moduleId as MyspaceSidebarModuleId)).map((moduleId) => (
-                              <div key={moduleId} className={`profileStudioPreviewModuleCard profileStudioPreviewModuleCard--${getMyspaceMainColumnWidth(moduleId as MyspaceMainSplittableModuleId, studioPreviewMainColumnSplitModules, studioPreviewMainColumnCompactModules)}`.trim()}>
-                                <strong>{MYSPACE_MODULE_LABELS[moduleId]}</strong>
-                                <span className="mono">{getMyspaceMainColumnWidthLabel(getMyspaceMainColumnWidth(moduleId as MyspaceMainSplittableModuleId, studioPreviewMainColumnSplitModules, studioPreviewMainColumnCompactModules))}</span>
-                                <p>{studioPreviewModuleSummaries[moduleId]}</p>
-                              </div>
-                            ))}
-                          </div>
-                          <aside className="profileStudioPreviewSidebar">
-                            <div className="profileStudioPreviewModuleCard profileStudioPreviewModuleCard--details">
-                              <strong>Details Sidebar</strong>
-                              <span className="mono">always pinned</span>
-                              <p>{studioPreviewSidebarFacts.length > 0 ? studioPreviewSidebarFacts.map((fact) => fact.label + ": " + fact.value).join(" | ") : "no sidebar facts yet"}</p>
-                            </div>
-                            {studioPreviewModuleOrder.filter((moduleId) => studioPreviewSidebarModules.includes(moduleId as MyspaceSidebarModuleId)).map((moduleId) => (
-                              <div key={moduleId} className={`profileStudioPreviewModuleCard ${studioPreviewSidebarCompactModules.includes(moduleId as MyspaceSidebarModuleId) ? "profileStudioPreviewModuleCard--compact" : ""}`.trim()}>
-                                <strong>{MYSPACE_MODULE_LABELS[moduleId]}</strong>
-                                <span className="mono">{getMyspaceDensityLabel(studioPreviewSidebarCompactModules.includes(moduleId as MyspaceSidebarModuleId), "sidebar")}</span>
-                                <p>{studioPreviewModuleSummaries[moduleId]}</p>
-                              </div>
-                            ))}
-                          </aside>
-                        </div>
+                    <div className="profileStudioPreviewShell">
+                      <div className="profileStudioPreviewHero">
+                        <strong>{studioPreviewDisplayName}</strong>
+                        <span>{studioPreviewStatusHeadline}</span>
                       </div>
-                    ) : (
-                      <p className="hint">Switch layout mode to Myspace classic to preview retro module composition live.</p>
-                    )}
+                      {studioPreviewModuleOrder.filter((moduleId) => studioPreviewHeroModules.includes(moduleId)).length > 0 ? (
+                        <div className="profileStudioPreviewHeroModules">
+                          {studioPreviewModuleOrder.filter((moduleId) => studioPreviewHeroModules.includes(moduleId)).map((moduleId) => (
+                            <div key={moduleId} className={`profileStudioPreviewModuleCard profileStudioPreviewModuleCard--hero ${studioPreviewHeroCompactModules.includes(moduleId) ? "profileStudioPreviewModuleCard--compact" : ""}`.trim()}>
+                              <strong>{MYSPACE_MODULE_LABELS[moduleId]}</strong>
+                              <span className="mono">{getMyspaceDensityLabel(studioPreviewHeroCompactModules.includes(moduleId), "hero")}</span>
+                              <p>{studioPreviewModuleSummaries[moduleId]}</p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                      <div className="profileStudioPreviewColumns">
+                        <div className="profileStudioPreviewMain">
+                          {studioPreviewModuleOrder.filter((moduleId) => !studioPreviewSidebarModules.includes(moduleId as MyspaceSidebarModuleId)).map((moduleId) => (
+                            <div key={moduleId} className={`profileStudioPreviewModuleCard profileStudioPreviewModuleCard--${getMyspaceMainColumnWidth(moduleId as MyspaceMainSplittableModuleId, studioPreviewMainColumnSplitModules, studioPreviewMainColumnCompactModules)}`.trim()}>
+                              <strong>{MYSPACE_MODULE_LABELS[moduleId]}</strong>
+                              <span className="mono">{getMyspaceMainColumnWidthLabel(getMyspaceMainColumnWidth(moduleId as MyspaceMainSplittableModuleId, studioPreviewMainColumnSplitModules, studioPreviewMainColumnCompactModules))}</span>
+                              <p>{studioPreviewModuleSummaries[moduleId]}</p>
+                            </div>
+                          ))}
+                        </div>
+                        <aside className="profileStudioPreviewSidebar">
+                          <div className="profileStudioPreviewModuleCard profileStudioPreviewModuleCard--details">
+                            <strong>Details Sidebar</strong>
+                            <span className="mono">always pinned</span>
+                            <p>{studioPreviewSidebarFacts.length > 0 ? studioPreviewSidebarFacts.map((fact) => fact.label + ": " + fact.value).join(" | ") : "no sidebar facts yet"}</p>
+                          </div>
+                          {studioPreviewModuleOrder.filter((moduleId) => studioPreviewSidebarModules.includes(moduleId as MyspaceSidebarModuleId)).map((moduleId) => (
+                            <div key={moduleId} className={`profileStudioPreviewModuleCard ${studioPreviewSidebarCompactModules.includes(moduleId as MyspaceSidebarModuleId) ? "profileStudioPreviewModuleCard--compact" : ""}`.trim()}>
+                              <strong>{MYSPACE_MODULE_LABELS[moduleId]}</strong>
+                              <span className="mono">{getMyspaceDensityLabel(studioPreviewSidebarCompactModules.includes(moduleId as MyspaceSidebarModuleId), "sidebar")}</span>
+                              <p>{studioPreviewModuleSummaries[moduleId]}</p>
+                            </div>
+                          ))}
+                        </aside>
+                      </div>
+                    </div>
                   </div>
 
                   <div className="inset">
@@ -2835,9 +2949,19 @@ export default function ProfileClient({ name }: { name: string }) {
                       <div>
                         <h3>Publish Snapshot To IPFS</h3>
                         <p className="hint">
-                          Use the current studio fields to publish a portable profile manifest. This does not replace the live indexed profile yet,
-                          but it gives the creator an IPFS-backed version of the page configuration that can be linked, archived, or used for future published-profile resolution.
+                          Use the current studio fields to publish a portable profile manifest. The public page can resolve this published snapshot,
+                          while the editor remains your working draft.
                         </p>
+                      </div>
+                      <div className="profilePublishStatus">
+                        <strong>{!hasPublishedProfile ? "Draft only" : hasUnpublishedChanges ? "Draft has unpublished changes" : "Draft matches published profile"}</strong>
+                        <span className="hint">
+                          {!hasPublishedProfile
+                            ? "Publish the current studio state to create the first public snapshot."
+                            : publishedProfileTimestamp
+                              ? `Last published ${new Date(publishedProfileTimestamp).toLocaleString()}.`
+                              : "A published snapshot is available."}
+                        </span>
                       </div>
                       {(publishedProfileUri || publishedProfileGatewayUrl) ? (
                         <div className="profilePublishGrid">
@@ -2866,14 +2990,13 @@ export default function ProfileClient({ name }: { name: string }) {
                     </div>
                     <div className="profileStudioStarterBar">
                       <div>
-                        <strong>Myspace Starter Pack</strong>
-                        <p className="hint">Load a structured retro baseline before reaching for raw custom HTML.</p>
+                        <strong>Creator Page Starter Pack</strong>
+                        <p className="hint">Load a structured expressive baseline before reaching for raw custom HTML.</p>
                       </div>
                       <div className="row">
                         <button
                           type="button"
                           onClick={() => {
-                            setEditLayoutMode("myspace");
                             setEditStatusHeadline((current) => current.trim() || "tuning this page like it's 2006");
                             setEditSidebarFactsText((current) => current.trim() || formatSidebarFactsInput(MYSPACE_STARTER_SIDEBAR_FACTS));
                             setEditTopFriendsText((current) => current.trim() || "Tom\nBestie\nFavorite collector");
@@ -2912,11 +3035,8 @@ export default function ProfileClient({ name }: { name: string }) {
                         <input value={editTagline} onChange={(e) => setEditTagline(e.target.value)} />
                       </label>
                       <label>
-                        Layout mode
-                        <select value={editLayoutMode} onChange={(e) => setEditLayoutMode(e.target.value === "myspace" ? "myspace" : "default")}>
-                          <option value="default">Default storefront</option>
-                          <option value="myspace">Myspace classic</option>
-                        </select>
+                        Layout
+                        <input value="Unified creator page" readOnly />
                       </label>
                       <label>
                         Accent color
@@ -2976,7 +3096,7 @@ Occupation: Pixel archivist" />
                       </label>
                       <label>
                         Custom CSS
-                        <textarea value={editCustomCss} onChange={(e) => setEditCustomCss(e.target.value)} placeholder=".myspace-panel { transform: rotate(-1deg); }" />
+                        <textarea value={editCustomCss} onChange={(e) => setEditCustomCss(e.target.value)} placeholder=".profile-panel { transform: rotate(-1deg); }" />
                       </label>
                       <label>
                         Custom HTML
@@ -3294,7 +3414,7 @@ collector core" />
             />
           )}
         </div>
-      </div>
+      </div> : null}
     </section>
   );
 }

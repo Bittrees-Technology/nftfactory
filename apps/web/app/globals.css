@@ -401,6 +401,30 @@ nav {
   background: linear-gradient(180deg, #fff8ef 0%, #ffeccc 100%);
 }
 
+.profilePublishStatus {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(185, 50, 24, 0.16);
+}
+
+.profileOwnerRailCard {
+  gap: 14px;
+  background:
+    linear-gradient(180deg, rgba(255, 248, 239, 0.98) 0%, rgba(255, 238, 214, 0.98) 100%);
+  border: 1px solid rgba(185, 50, 24, 0.16);
+}
+
+.profileOwnerRailHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
 .profilePublishGrid {
   display: grid;
   gap: 12px;
@@ -682,6 +706,29 @@ nav {
 
 .mintWorkspace {
   gap: 14px;
+}
+
+.mintWorkspaceHero {
+  display: grid;
+  gap: 14px;
+  background:
+    radial-gradient(circle at top right, rgba(0, 194, 168, 0.12), transparent 32%),
+    linear-gradient(180deg, #fff7ed 0%, #ffe6cf 100%);
+  border: 1px solid rgba(185, 50, 24, 0.16);
+}
+
+.mintWorkspaceHeroCopy {
+  display: grid;
+  gap: 8px;
+}
+
+.mintWorkspaceHeroCopy h2 {
+  margin: 0;
+  color: var(--ink);
+}
+
+.mintWorkspaceModes {
+  flex-wrap: wrap;
 }
 
 .mintWorkspace .card {
