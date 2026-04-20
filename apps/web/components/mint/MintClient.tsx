@@ -52,6 +52,7 @@ import {
   getMintStatusLabel
 } from "../../lib/nftPresentation";
 import { verifyOwnedCollectionsOnChain } from "../../lib/onchainCollections";
+import { discoverOnchainWalletIdentity } from "../../lib/onchainIdentity";
 import {
   formatRoyaltySplitRegistryMissingMessage,
   getRoyaltySplitRegistryEnvHint
@@ -1557,13 +1558,18 @@ export default function MintClient({
     let cancelled = false;
 
     void (async () => {
-      const shouldSyncIndexer = knownCollections.length === 0;
-      let collectionsResult = await fetchCollectionsByOwnerAcrossChains(account, [config.chainId]).catch(() => null);
+      const onchainIdentity = await discoverOnchainWalletIdentity({
+        publicClient,
+        chainId: config.chainId,
+        ownerAddress: account,
+        registryAddress: config.registry
+      }).catch(() => ({ ensNames: [], collections: [] }));
       let profilesResult = await fetchProfilesByOwnerAcrossChains(account, [config.chainId]).catch(() => null);
 
       const shouldRetryAfterSync =
-        shouldSyncIndexer &&
-        ((collectionsResult?.collections || []).length === 0 || (profilesResult?.profiles || []).length === 0);
+        knownCollections.length === 0 &&
+        onchainIdentity.collections.length === 0 &&
+        (profilesResult?.profiles || []).length === 0;
 
       if (shouldRetryAfterSync) {
         await syncWalletScope(account, {
@@ -1571,16 +1577,11 @@ export default function MintClient({
           force: false,
           timeoutMs: 8_000
         }).catch(() => null);
-        const [nextCollections, nextProfiles] = await Promise.all([
-          fetchCollectionsByOwnerAcrossChains(account, [config.chainId]).catch(() => null),
-          fetchProfilesByOwnerAcrossChains(account, [config.chainId]).catch(() => null)
-        ]);
-        collectionsResult = nextCollections;
-        profilesResult = nextProfiles;
+        profilesResult = await fetchProfilesByOwnerAcrossChains(account, [config.chainId]).catch(() => null);
       }
 
       if (cancelled) return;
-      const ownedCollections = (collectionsResult?.collections || [])
+      const ownedCollections = onchainIdentity.collections
         .filter((item) => item.ownerAddress.toLowerCase() === account.toLowerCase())
         .map((item) => ({
           chainId: item.chainId,
@@ -1590,7 +1591,7 @@ export default function MintClient({
           createdAt: item.createdAt,
           updatedAt: item.updatedAt
         }));
-      setDiscoveredEnsNames(deriveEnsNamesFromOwnedCollections(ownedCollections));
+      setDiscoveredEnsNames(onchainIdentity.ensNames.length > 0 ? onchainIdentity.ensNames : deriveEnsNamesFromOwnedCollections(ownedCollections));
       if (ownedCollections.length > 0) {
         mergeKnownCollections(ownedCollections);
       }
@@ -1601,7 +1602,7 @@ export default function MintClient({
     return () => {
       cancelled = true;
     };
-  }, [account, config.chainId, knownCollections.length, needsWalletCollectionLookup]);
+  }, [account, config.chainId, config.registry, knownCollections.length, needsWalletCollectionLookup, publicClient]);
 
   useEffect(() => {
     if (!needsWalletCollectionLookup || !account) {

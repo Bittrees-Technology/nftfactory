@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useAccount } from "wagmi";
+import { useAccount, usePublicClient } from "wagmi";
 import {
   fetchProfileDirectory,
   syncWalletScope,
@@ -11,8 +11,8 @@ import {
   type ApiProfileRecord
 } from "../../lib/indexerApi";
 import { getContractsConfig } from "../../lib/contracts";
-import type { OnchainWalletIdentity } from "../../lib/onchainIdentity";
-import { fetchCollectionsByOwnerAcrossChains, fetchProfilesByOwnerAcrossChains } from "../../lib/ownerIdentityMultiChain";
+import { discoverOnchainWalletIdentity, type OnchainWalletIdentity } from "../../lib/onchainIdentity";
+import { fetchProfilesByOwnerAcrossChains } from "../../lib/ownerIdentityMultiChain";
 
 function deriveProfileRouteFromName(fullName: string): string {
   const normalized = String(fullName || "")
@@ -108,6 +108,7 @@ function usePrevious<T>(value: T): T | undefined {
 export default function ProfileSelectorClient() {
   const router = useRouter();
   const { address, isConnected } = useAccount();
+  const publicClient = usePublicClient();
   const config = useMemo(() => getContractsConfig(), []);
   const [profiles, setProfiles] = useState<ApiProfileRecord[]>([]);
   const [onchainIdentity, setOnchainIdentity] = useState<OnchainWalletIdentity>({ ensNames: [], collections: [] });
@@ -140,16 +141,18 @@ export default function ProfileSelectorClient() {
     setIsLoading(true);
     setNote("");
     void (async () => {
-      let results = await Promise.allSettled([
-        fetchProfilesByOwnerAcrossChains(address, [config.chainId]),
-        fetchCollectionsByOwnerAcrossChains(address, [config.chainId])
-      ]);
+      let onchainIdentity = await discoverOnchainWalletIdentity({
+        publicClient,
+        chainId: config.chainId,
+        ownerAddress: address,
+        registryAddress: config.registry
+      }).catch(() => ({ ensNames: [], collections: [] }));
+      let results = await Promise.allSettled([fetchProfilesByOwnerAcrossChains(address, [config.chainId])]);
       const profileResult = results[0];
-      const collectionResult = results[1];
       const shouldRetryAfterSync =
-        (profileResult.status === "rejected" && collectionResult.status === "rejected") ||
-        ((profileResult.status === "fulfilled" ? profileResult.value.profiles.length : 0) === 0 &&
-          (collectionResult.status === "fulfilled" ? collectionResult.value.collections.length : 0) === 0);
+        (profileResult.status === "rejected" || (profileResult.status === "fulfilled" && profileResult.value.profiles.length === 0)) &&
+        onchainIdentity.collections.length === 0 &&
+        onchainIdentity.ensNames.length === 0;
 
       if (shouldRetryAfterSync) {
         await syncWalletScope(address, {
@@ -157,23 +160,27 @@ export default function ProfileSelectorClient() {
           force: false,
           timeoutMs: 15_000
         }).catch(() => null);
-        results = await Promise.allSettled([
-          fetchProfilesByOwnerAcrossChains(address, [config.chainId]),
-          fetchCollectionsByOwnerAcrossChains(address, [config.chainId])
-        ]);
+        onchainIdentity = await discoverOnchainWalletIdentity({
+          publicClient,
+          chainId: config.chainId,
+          ownerAddress: address,
+          registryAddress: config.registry
+        }).catch(() => ({ ensNames: [], collections: [] }));
+        results = await Promise.allSettled([fetchProfilesByOwnerAcrossChains(address, [config.chainId])]);
       }
-      return results;
+      return { results, onchainIdentity };
     })()
-      .then((results) => {
+      .then(({ results, onchainIdentity }) => {
         if (cancelled) return;
 
         const profileResult = results[0];
-        const collectionResult = results[1];
 
         const linkedProfiles =
           profileResult.status === "fulfilled" ? profileResult.value.profiles || [] : [];
-        const indexedCollections = collectionResult.status === "fulfilled" ? collectionResult.value.collections || [] : [];
-        const discoveredEnsNames = deriveEnsNamesFromCollections(indexedCollections);
+        const indexedCollections = onchainIdentity.collections || [];
+        const discoveredEnsNames = onchainIdentity.ensNames.length > 0
+          ? onchainIdentity.ensNames
+          : deriveEnsNamesFromCollections(indexedCollections);
         setOnchainIdentity({
           ensNames: discoveredEnsNames,
           collections: indexedCollections
@@ -198,14 +205,9 @@ export default function ProfileSelectorClient() {
         setProfiles(nextProfiles);
 
         if (nextProfiles.length === 0) {
-          if (
-            profileResult.status === "rejected" &&
-            collectionResult.status === "rejected"
-          ) {
+          if (profileResult.status === "rejected" && indexedCollections.length === 0 && discoveredEnsNames.length === 0) {
             const reason =
-              profileResult.reason instanceof Error
-                ? profileResult.reason.message
-                : collectionResult.reason instanceof Error ? collectionResult.reason.message : "Indexer request failed";
+              profileResult.reason instanceof Error ? profileResult.reason.message : "Indexer request failed";
             setNote(`Profile lookup is unavailable right now (${reason}). Open setup to continue with manual creator onboarding.`);
             return;
           }
@@ -221,7 +223,7 @@ export default function ProfileSelectorClient() {
 
         if (
           profileResult.status === "rejected" &&
-          collectionResult.status === "fulfilled"
+          (indexedCollections.length > 0 || discoveredEnsNames.length > 0)
         ) {
           const reason =
             profileResult.reason instanceof Error ? profileResult.reason.message : "Direct profile lookup failed";
@@ -257,7 +259,7 @@ export default function ProfileSelectorClient() {
     return () => {
       cancelled = true;
     };
-  }, [address, config.chainId, isConnected]);
+  }, [address, config.chainId, config.registry, isConnected, publicClient]);
 
   useEffect(() => {
     if (!isConnected || isLoading || profiles.length === 0) return;

@@ -25,6 +25,7 @@ import {
 } from "../../lib/indexerApi";
 import { verifyOwnedCollectionsOnChain } from "../../lib/onchainCollections";
 import { fetchCollectionsByOwnerAcrossChains, fetchProfilesByOwnerAcrossChains } from "../../lib/ownerIdentityMultiChain";
+import { discoverOnchainWalletIdentity } from "../../lib/onchainIdentity";
 
 const SUBNAME_FEE_ETH = "0.001";
 const ENS_NAME_WRAPPER_ADDRESS = /^0x[a-fA-F0-9]{40}$/.test(process.env.NEXT_PUBLIC_ENS_NAME_WRAPPER_ADDRESS || "")
@@ -508,16 +509,21 @@ export default function ProfileLandingClient({
 
     let cancelled = false;
     void (async () => {
+      let onchainIdentity = await discoverOnchainWalletIdentity({
+        publicClient,
+        chainId: config.chainId,
+        ownerAddress: address,
+        registryAddress: config.registry
+      }).catch(() => ({ ensNames: [], collections: [] }));
       let results = await Promise.allSettled([
         fetchProfilesByOwnerAcrossChains(address, [config.chainId]),
         fetchCollectionsByOwnerAcrossChains(address, [config.chainId])
       ]);
       const profileResult = results[0];
-      const collectionResult = results[1];
       const shouldRetryAfterSync =
-        (profileResult.status === "rejected" && collectionResult.status === "rejected") ||
-        ((profileResult.status === "fulfilled" ? profileResult.value.profiles.length : 0) === 0 &&
-          (collectionResult.status === "fulfilled" ? collectionResult.value.collections.length : 0) === 0);
+        (profileResult.status === "rejected" || (profileResult.status === "fulfilled" && profileResult.value.profiles.length === 0)) &&
+        onchainIdentity.collections.length === 0 &&
+        onchainIdentity.ensNames.length === 0;
 
       if (shouldRetryAfterSync) {
         await syncWalletScope(address, {
@@ -525,14 +531,20 @@ export default function ProfileLandingClient({
           force: false,
           timeoutMs: 15_000
         }).catch(() => null);
+        onchainIdentity = await discoverOnchainWalletIdentity({
+          publicClient,
+          chainId: config.chainId,
+          ownerAddress: address,
+          registryAddress: config.registry
+        }).catch(() => ({ ensNames: [], collections: [] }));
         results = await Promise.allSettled([
           fetchProfilesByOwnerAcrossChains(address, [config.chainId]),
           fetchCollectionsByOwnerAcrossChains(address, [config.chainId])
         ]);
       }
-      return results;
+      return { results, onchainIdentity };
     })()
-      .then((results) => {
+      .then(({ results, onchainIdentity }) => {
         if (cancelled) return;
 
         const profileResult = results[0];
@@ -544,11 +556,16 @@ export default function ProfileLandingClient({
         }
 
         const collectionResult = results[1];
+        const indexedCollections = collectionResult.status === "fulfilled" ? collectionResult.value.collections || [] : [];
+        const nextCollections = dedupeCollections([
+          ...indexedCollections,
+          ...(onchainIdentity.collections || [])
+        ]);
+        const nextEnsNames = onchainIdentity.ensNames.length > 0
+          ? onchainIdentity.ensNames
+          : deriveEnsNamesFromCollections(nextCollections);
         if (collectionResult.status === "fulfilled") {
-          setDiscoveredEnsNames(deriveEnsNamesFromCollections(collectionResult.value.collections || []));
-          const nextCollections = dedupeCollections([
-            ...(collectionResult.value.collections || [])
-          ]);
+          setDiscoveredEnsNames(nextEnsNames);
           setCollections(nextCollections);
           setSelectedCollection((current) => {
             if (current) return current;
@@ -562,9 +579,9 @@ export default function ProfileLandingClient({
             return nextCollections[0]?.contractAddress || "";
           });
         } else {
-          setCollections([]);
-          setDiscoveredEnsNames([]);
-          setSelectedCollection("");
+          setCollections(nextCollections);
+          setDiscoveredEnsNames(nextEnsNames);
+          setSelectedCollection((current) => current || nextCollections[0]?.contractAddress || "");
         }
       })
       .catch(() => {
@@ -578,7 +595,7 @@ export default function ProfileLandingClient({
     return () => {
       cancelled = true;
     };
-  }, [address, config.chainId, initialCollectionAddress, isConnected, publicClient]);
+  }, [address, config.chainId, config.registry, initialCollectionAddress, isConnected, publicClient]);
 
   useEffect(() => {
     if (!address) {

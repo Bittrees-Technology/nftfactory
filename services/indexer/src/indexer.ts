@@ -5240,6 +5240,16 @@ type RegistryCreatorContractRecord = {
   standard: string;
 };
 
+function isRegistryZeroDataError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const message = String(error.message || "").toLowerCase();
+  return message.includes('creatorcontracts') && (
+    message.includes('returned no data') ||
+    message.includes('cannot decode zero data') ||
+    message.includes('0x')
+  );
+}
+
 async function readOwnerCollectionsFromRegistry(
   ownerAddress: string,
   config: RequestHandlerConfig
@@ -5248,12 +5258,27 @@ async function readOwnerCollectionsFromRegistry(
   const owner = String(ownerAddress || "").trim().toLowerCase();
   if (!isAddress(owner)) return [];
   const client = createRpcClient(config);
-  const records = (await client.readContract({
-    address: config.registryAddress,
-    abi: registryReadAbi,
-    functionName: "creatorContracts",
-    args: [owner as `0x${string}`]
-  })) as RegistryCreatorContractRecord[];
+  let records: RegistryCreatorContractRecord[] = [];
+  try {
+    records = (await client.readContract({
+      address: config.registryAddress,
+      abi: registryReadAbi,
+      functionName: "creatorContracts",
+      args: [owner as `0x${string}`]
+    })) as RegistryCreatorContractRecord[];
+  } catch (error) {
+    if (isRegistryZeroDataError(error)) {
+      log.warn(
+        {
+          ownerAddress: owner,
+          registryAddress: config.registryAddress
+        },
+        "owner_collection_registry_zero_data"
+      );
+      return [];
+    }
+    throw error;
+  }
   return Array.isArray(records) ? records : [];
 }
 
@@ -6421,7 +6446,7 @@ async function handleRequest(
   if (req.method === "GET" && path === "/api/profiles") {
     const owner = String(url.searchParams.get("owner") || "").trim().toLowerCase();
     if (owner && isAddress(owner)) {
-      await syncOwnerCollectionsIfAllowed(owner, deps, config);
+      await withSoftTimeout(syncOwnerCollectionsIfAllowed(owner, deps, config), 3_500, undefined);
     }
 
     const includeListingV2 = await hasListingV2Columns(deps);
@@ -7110,18 +7135,40 @@ async function handleRequest(
       if (!config.registryAddress) {
         throw new Error("Registry address not configured");
       }
-      const chainRecords = (await onchainClient.readContract({
-        address: config.registryAddress,
-        abi: registryReadAbi,
-        functionName: "creatorContracts",
-        args: [owner as `0x${string}`]
-      })) as Array<{
+      let chainRecords: Array<{
         owner: string;
         contractAddress: string;
         isNftFactoryCreated: boolean;
         ensSubname: string;
         standard: string;
-      }>;
+      }> = [];
+      try {
+        chainRecords = (await onchainClient.readContract({
+          address: config.registryAddress,
+          abi: registryReadAbi,
+          functionName: "creatorContracts",
+          args: [owner as `0x${string}`]
+        })) as Array<{
+          owner: string;
+          contractAddress: string;
+          isNftFactoryCreated: boolean;
+          ensSubname: string;
+          standard: string;
+        }>;
+      } catch (error) {
+        if (isRegistryZeroDataError(error)) {
+          log.warn(
+            {
+              ownerAddress: owner,
+              registryAddress: config.registryAddress
+            },
+            "owner_collection_hydration_registry_zero_data"
+          );
+          chainRecords = [];
+        } else {
+          throw error;
+        }
+      }
 
       for (const record of chainRecords) {
         const contractAddress = String(record.contractAddress || "").toLowerCase();
