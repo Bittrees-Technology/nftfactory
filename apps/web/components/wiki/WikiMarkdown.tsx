@@ -96,7 +96,7 @@ function isHeadingLine(line: string): boolean {
 
 function isSpecialLine(line: string): boolean {
   const trimmed = line.trim();
-  return !trimmed || trimmed.startsWith("```") || isHeadingLine(trimmed) || isListLine(trimmed) || trimmed.startsWith("|");
+  return !trimmed || trimmed.startsWith("```") || isHeadingLine(trimmed) || isListLine(trimmed) || trimmed.startsWith("|") || trimmed.startsWith(">");
 }
 
 export default function WikiMarkdown({ content }: { content: string }) {
@@ -130,6 +130,24 @@ export default function WikiMarkdown({ content }: { content: string }) {
           {language ? <span className="wikiCodeLanguage">{language}</span> : null}
           <code>{codeLines.join("\n")}</code>
         </pre>
+      );
+      continue;
+    }
+
+    if (trimmed.startsWith(">")) {
+      const quoteLines: string[] = [];
+      while (i < lines.length && lines[i].trim().startsWith(">")) {
+        quoteLines.push(lines[i].trim().replace(/^>\s?/u, ""));
+        i += 1;
+      }
+      blocks.push(
+        <blockquote key={`quote-${key++}`} className="wikiBlockquote">
+          {quoteLines.map((quoteLine, index) => (
+            <p key={`quote-line-${index}`} className="wikiParagraph">
+              {renderInline(quoteLine)}
+            </p>
+          ))}
+        </blockquote>
       );
       continue;
     }

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import WikiMarkdown from "../../../components/wiki/WikiMarkdown";
+import WikiSidebar from "../../../components/wiki/WikiSidebar";
 import { getWikiPageBySlug, getWikiPages } from "../../../lib/wiki";
 
 export default async function WikiDetailPage({ params }: { params: Promise<{ slug: string }> }) {
@@ -13,23 +14,7 @@ export default async function WikiDetailPage({ params }: { params: Promise<{ slu
 
   return (
     <section className="wikiLayout">
-      <aside className="card wikiSidebar">
-        <p className="eyebrow">Documentation</p>
-        <h1>Wiki</h1>
-        <p className="sectionLead">Repo-backed pages from <code>docs/wiki</code>.</p>
-        <div className="wikiLinkList">
-          {pages.map((entry) => {
-            const href = entry.slug === "home" ? "/wiki" : `/wiki/${entry.slug}`;
-            const isActive = entry.slug === page.slug;
-            return (
-              <Link key={entry.slug} href={href} className={`wikiNavLink${isActive ? " active" : ""}`}>
-                <strong>{entry.title}</strong>
-                {entry.description ? <span>{entry.description}</span> : null}
-              </Link>
-            );
-          })}
-        </div>
-      </aside>
+      <WikiSidebar pages={pages} activeSlug={page.slug} lead="Repo-backed pages from docs/wiki." />
       <article className="card wikiArticle">
         <div className="wikiArticleHeader">
           <p className="eyebrow">Wiki Page</p>

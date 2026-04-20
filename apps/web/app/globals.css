@@ -227,6 +227,29 @@ nav {
   gap: 10px;
 }
 
+.wikiSearchLabel {
+  display: grid;
+  gap: 6px;
+  color: #5b4b3f;
+  font-size: 0.92rem;
+}
+
+.wikiSearchInput {
+  width: 100%;
+  min-height: 42px;
+  padding: 10px 12px;
+  border: 1px solid #d8c4ad;
+  border-radius: 10px;
+  background: #fffdf9;
+  font: inherit;
+  color: var(--ink);
+}
+
+.wikiSearchInput:focus {
+  outline: 2px solid rgba(197, 58, 31, 0.2);
+  border-color: #8c2a14;
+}
+
 .wikiNavLink {
   display: grid;
   gap: 4px;
@@ -244,6 +267,15 @@ nav {
 .wikiNavLink.active {
   border-color: #8c2a14;
   background: #fff0df;
+}
+
+.wikiEmptyState {
+  margin: 0;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px dashed #d8c4ad;
+  color: #5b4b3f;
+  background: #fffdf9;
 }
 
 .wikiArticleHeader {
@@ -281,6 +313,14 @@ nav {
 
 .wikiList {
   padding-left: 22px;
+}
+
+.wikiBlockquote {
+  margin: 0;
+  padding: 12px 16px;
+  border-left: 4px solid #c9a986;
+  border-radius: 0 12px 12px 0;
+  background: #fff9f1;
 }
 
 .wikiInlineCode {
