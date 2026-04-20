@@ -4,7 +4,13 @@ import { getEnabledAppChains, getPrimaryAppChainId } from "./chains";
 import { getContractsConfig } from "./contracts";
 
 const DEFAULT_WALLETCONNECT_PROJECT_ID = "e63eaf5138df1d6c053f2b91cfb0ee5c";
-const projectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || DEFAULT_WALLETCONNECT_PROJECT_ID;
+const configuredWalletConnectProjectId = String(process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || "").trim();
+const isDevelopment = process.env.NODE_ENV !== "production";
+
+export const isUsingDefaultWalletConnectProjectId = !configuredWalletConnectProjectId && isDevelopment;
+export const hasConfiguredWalletConnectProjectId = Boolean(configuredWalletConnectProjectId);
+
+const projectId = configuredWalletConnectProjectId || DEFAULT_WALLETCONNECT_PROJECT_ID;
 
 const chains = getEnabledAppChains();
 
@@ -34,6 +40,8 @@ const transports = Object.fromEntries(
 
 export const wagmiConfig = getDefaultConfig({
   appName: "NFTFactory",
+  appDescription: "Mint, publish, and manage NFTs on nftfactory.eth",
+  appUrl: "https://nftfactory.org",
   projectId,
   chains: chains as [Chain, ...Chain[]],
   transports,

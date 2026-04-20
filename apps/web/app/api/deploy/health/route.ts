@@ -218,14 +218,38 @@ async function checkIpfs(): Promise<ServiceCheck> {
   };
 }
 
+function checkWalletConnect(): ServiceCheck {
+  const projectId = String(process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || "").trim();
+
+  if (!projectId) {
+    return {
+      label: "walletconnect",
+      url: null,
+      ok: false,
+      status: null,
+      message:
+        "NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID is missing. Browser extension wallets can still connect, but QR/mobile WalletConnect sessions may fail."
+    };
+  }
+
+  return {
+    label: "walletconnect",
+    url: null,
+    ok: true,
+    status: 200,
+    message: "Configured"
+  };
+}
+
 export async function GET() {
   const chainIds = getActiveChainIds();
+  const walletConnect = checkWalletConnect();
   const [ipfs, ...indexers] = await Promise.all([
     checkIpfs(),
     ...chainIds.map((chainId) => checkIndexer(chainId))
   ]);
 
-  const checks = [ipfs, ...indexers];
+  const checks = [walletConnect, ipfs, ...indexers];
   const ok = checks.every((check) => check.ok);
 
   return NextResponse.json(
