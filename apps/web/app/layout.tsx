@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import AppProviders from "../components/AppProviders";
 import DeployHealthBanner from "../components/DeployHealthBanner";
 import HeaderWalletButton from "../components/HeaderWalletButton";
+import { resolveWalletConnectProjectId } from "../lib/walletConnect";
 
 export const metadata: Metadata = {
   title: "NFTFactory",
@@ -11,10 +12,12 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  const walletConnectProjectId = resolveWalletConnectProjectId();
+
   return (
     <html lang="en">
       <body>
-        <AppProviders>
+        <AppProviders walletConnectProjectId={walletConnectProjectId}>
           <main>
             <div className="topBar">
               <nav>

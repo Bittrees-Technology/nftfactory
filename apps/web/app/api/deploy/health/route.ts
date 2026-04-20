@@ -9,6 +9,7 @@ import {
 } from "../../../../lib/ipfsUpload";
 import { resolveIndexerServerUrl } from "../../../../lib/indexerServerEnv";
 import { getLegacyChainPublicEnv, getRootPublicEnv, getScopedChainPublicEnv } from "../../../../lib/publicEnv";
+import { resolveConfiguredWalletConnectProjectId } from "../../../../lib/walletConnect";
 
 export const dynamic = "force-dynamic";
 
@@ -219,7 +220,7 @@ async function checkIpfs(): Promise<ServiceCheck> {
 }
 
 function checkWalletConnect(): ServiceCheck {
-  const projectId = String(process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || "").trim();
+  const projectId = resolveConfiguredWalletConnectProjectId(process.env);
 
   if (!projectId) {
     return {
@@ -228,7 +229,7 @@ function checkWalletConnect(): ServiceCheck {
       ok: false,
       status: null,
       message:
-        "NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID is missing. Browser extension wallets can still connect, but QR/mobile WalletConnect sessions may fail."
+        "NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID or WALLETCONNECT_PROJECT_ID is missing. Browser extension wallets can still connect, but QR/mobile WalletConnect sessions may fail."
     };
   }
 
