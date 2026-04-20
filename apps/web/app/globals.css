@@ -45,6 +45,51 @@ nav {
   background: rgba(255, 249, 241, 0.92);
 }
 
+.deployHealthBanner {
+  margin-top: 12px;
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid #e4b36a;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #fff3cf 0%, #ffe4d7 100%);
+}
+
+.deployHealthBannerHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.deployHealthBannerLink {
+  color: #7f220f;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 0.14em;
+}
+
+.deployHealthBannerList {
+  display: grid;
+  gap: 6px;
+}
+
+.deployHealthBannerItem {
+  margin: 0;
+  display: grid;
+  gap: 2px;
+  color: #4f2a18;
+}
+
+.deployHealthBannerLabel {
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #7f220f;
+}
+
 .navLinks {
   display: flex;
   gap: 16px;

@@ -2,6 +2,7 @@ import "./globals.css";
 import Link from "next/link";
 import type { Metadata } from "next";
 import AppProviders from "../components/AppProviders";
+import DeployHealthBanner from "../components/DeployHealthBanner";
 import HeaderWalletButton from "../components/HeaderWalletButton";
 
 export const metadata: Metadata = {
@@ -25,6 +26,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 </div>
                 <HeaderWalletButton />
               </nav>
+              <DeployHealthBanner />
             </div>
             {children}
           </main>
