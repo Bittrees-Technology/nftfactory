@@ -777,6 +777,9 @@ export default function ProfileClient({ name }: { name: string }) {
   const [guestbookLoadState, setGuestbookLoadState] = useState<LoadState>(idleLoadState());
   const [moderatingGuestbookEntryId, setModeratingGuestbookEntryId] = useState<string | null>(null);
   const [editState, setEditState] = useState<ActionState>(idleActionState());
+  const [publishState, setPublishState] = useState<ActionState>(idleActionState());
+  const [publishedProfileUri, setPublishedProfileUri] = useState<string | null>(null);
+  const [publishedProfileGatewayUrl, setPublishedProfileGatewayUrl] = useState<string | null>(null);
   const [transferState, setTransferState] = useState<ActionState>(idleActionState());
   const profileViewRequestIdRef = useRef(0);
   const manualSellerAddress = useMemo(() => (isAddress(sellerAddress) ? sellerAddress : null), [sellerAddress]);
@@ -1343,12 +1346,88 @@ export default function ProfileClient({ name }: { name: string }) {
     setDraggingModuleId(null);
     setDragOverModuleId(null);
     setEditState(idleActionState());
+    setPublishState(idleActionState());
+    setPublishedProfileUri(null);
+    setPublishedProfileGatewayUrl(null);
     setTransferAddress("");
     setTransferState(idleActionState());
   }, [primaryProfile]);
 
+  const buildEditableProfilePayload = useCallback(() => {
+    if (!primaryProfile) return null;
+    return {
+      name: primaryProfile.fullName,
+      source: primaryProfile.source,
+      ownerAddress: primaryProfile.ownerAddress,
+      collectionAddress: primaryProfile.collectionAddress || undefined,
+      tagline: editTagline,
+      displayName: editDisplayName,
+      bio: editBio,
+      layoutMode: editLayoutMode,
+      aboutMe: editAboutMe,
+      interests: editInterests,
+      whoIdLikeToMeet: editWhoIdLikeToMeet,
+      statusHeadline: editStatusHeadline,
+      sidebarFacts: parseSidebarFactsInput(editSidebarFactsText),
+      bannerUrl: editBannerUrl,
+      avatarUrl: editAvatarUrl,
+      featuredUrl: editFeaturedUrl,
+      accentColor: editAccentColor,
+      customCss: editCustomCss,
+      customHtml: editCustomHtml,
+      topFriends: editTopFriendsText.split("\n").map((item) => item.trim()).filter(Boolean),
+      testimonials: editTestimonialsText.split("\n\n").map((item) => item.trim()).filter(Boolean),
+      profileSongUrl: editProfileSongUrl,
+      mediaEmbeds: parseMediaEmbedsInput(editMediaEmbedsText),
+      retroBlocks: parseRetroBlocksInput(editRetroBlocksText),
+      moduleOrder: editModuleOrder,
+      heroModules: editHeroModules,
+      heroCompactModules: editHeroCompactModules.filter((moduleId) => editHeroModules.includes(moduleId)),
+      sidebarModules: editSidebarModules,
+      sidebarCompactModules: editSidebarCompactModules.filter((moduleId) => editSidebarModules.includes(moduleId)),
+      mainColumnSplitModules: editMainColumnSplitModules.filter((moduleId) => !editSidebarModules.includes(moduleId as MyspaceSidebarModuleId)),
+      mainColumnCompactModules: editMainColumnCompactModules.filter((moduleId) => !editSidebarModules.includes(moduleId as MyspaceSidebarModuleId)),
+      stamps: editStampsText.split("\n").map((item) => item.trim()).filter(Boolean),
+      customBoxes: parseCustomBoxesInput(editCustomBoxesText),
+      links: editLinksText.split("\n").map((item) => item.trim()).filter(Boolean)
+    };
+  }, [
+    primaryProfile,
+    editTagline,
+    editDisplayName,
+    editBio,
+    editLayoutMode,
+    editAboutMe,
+    editInterests,
+    editWhoIdLikeToMeet,
+    editStatusHeadline,
+    editSidebarFactsText,
+    editBannerUrl,
+    editAvatarUrl,
+    editFeaturedUrl,
+    editAccentColor,
+    editCustomCss,
+    editCustomHtml,
+    editTopFriendsText,
+    editTestimonialsText,
+    editProfileSongUrl,
+    editMediaEmbedsText,
+    editRetroBlocksText,
+    editModuleOrder,
+    editHeroModules,
+    editHeroCompactModules,
+    editSidebarModules,
+    editSidebarCompactModules,
+    editMainColumnSplitModules,
+    editMainColumnCompactModules,
+    editStampsText,
+    editCustomBoxesText,
+    editLinksText
+  ]);
+
   async function saveProfileDetails(): Promise<void> {
-    if (!primaryProfile) {
+    const payload = buildEditableProfilePayload();
+    if (!payload || !primaryProfile) {
       setEditState(errorActionState("No linked profile is available to edit yet."));
       return;
     }
@@ -1359,42 +1438,7 @@ export default function ProfileClient({ name }: { name: string }) {
 
     try {
       setEditState(pendingActionState("Saving profile details..."));
-      const response = await linkProfileIdentity({
-        name: primaryProfile.fullName,
-        source: primaryProfile.source,
-        ownerAddress: primaryProfile.ownerAddress,
-        collectionAddress: primaryProfile.collectionAddress || undefined,
-        tagline: editTagline,
-        displayName: editDisplayName,
-        bio: editBio,
-        layoutMode: editLayoutMode,
-        aboutMe: editAboutMe,
-        interests: editInterests,
-        whoIdLikeToMeet: editWhoIdLikeToMeet,
-        statusHeadline: editStatusHeadline,
-        sidebarFacts: parseSidebarFactsInput(editSidebarFactsText),
-        bannerUrl: editBannerUrl,
-        avatarUrl: editAvatarUrl,
-        featuredUrl: editFeaturedUrl,
-        accentColor: editAccentColor,
-        customCss: editCustomCss,
-        customHtml: editCustomHtml,
-        topFriends: editTopFriendsText.split("\n").map((item) => item.trim()).filter(Boolean),
-        testimonials: editTestimonialsText.split("\n\n").map((item) => item.trim()).filter(Boolean),
-        profileSongUrl: editProfileSongUrl,
-        mediaEmbeds: parseMediaEmbedsInput(editMediaEmbedsText),
-        retroBlocks: parseRetroBlocksInput(editRetroBlocksText),
-        moduleOrder: editModuleOrder,
-        heroModules: editHeroModules,
-        heroCompactModules: editHeroCompactModules.filter((moduleId) => editHeroModules.includes(moduleId)),
-        sidebarModules: editSidebarModules,
-        sidebarCompactModules: editSidebarCompactModules.filter((moduleId) => editSidebarModules.includes(moduleId)),
-        mainColumnSplitModules: editMainColumnSplitModules.filter((moduleId) => !editSidebarModules.includes(moduleId as MyspaceSidebarModuleId)),
-        mainColumnCompactModules: editMainColumnCompactModules.filter((moduleId) => !editSidebarModules.includes(moduleId as MyspaceSidebarModuleId)),
-        stamps: editStampsText.split("\n").map((item) => item.trim()).filter(Boolean),
-        customBoxes: parseCustomBoxesInput(editCustomBoxesText),
-        links: editLinksText.split("\n").map((item) => item.trim()).filter(Boolean)
-      });
+      const response = await linkProfileIdentity(payload);
 
       setProfileResolution((current) => {
         if (!current) return current;
@@ -1404,6 +1448,48 @@ export default function ProfileClient({ name }: { name: string }) {
       setEditState(successActionState("Profile details saved."));
     } catch (err) {
       setEditState(errorActionState(err instanceof Error ? err.message : "Failed to save profile details"));
+    }
+  }
+
+  async function publishProfileManifest(): Promise<void> {
+    const payload = buildEditableProfilePayload();
+    if (!payload || !primaryProfile) {
+      setPublishState(errorActionState("No linked profile is available to publish yet."));
+      return;
+    }
+    if (!canEditProfile) {
+      setPublishState(errorActionState("Connect the profile owner wallet to publish a profile manifest."));
+      return;
+    }
+
+    try {
+      setPublishState(pendingActionState("Publishing profile manifest to IPFS..."));
+      const response = await fetch("/api/profile/publish", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          profile: payload
+        })
+      });
+      const text = await response.text();
+      if (!response.ok) {
+        throw new Error(
+          sanitizeBackendErrorMessage(text, `Profile publish failed (${response.status})`, {
+            serviceLabel: "Profile publishing"
+          })
+        );
+      }
+      const parsed = JSON.parse(text) as {
+        profileUri?: string;
+        profileGatewayUrl?: string;
+      };
+      setPublishedProfileUri(parsed.profileUri || null);
+      setPublishedProfileGatewayUrl(parsed.profileGatewayUrl || null);
+      setPublishState(successActionState("Profile manifest published to IPFS."));
+    } catch (error) {
+      setPublishState(errorActionState(error instanceof Error ? error.message : "Failed to publish profile manifest."));
     }
   }
 
@@ -1797,11 +1883,18 @@ export default function ProfileClient({ name }: { name: string }) {
             <p className="eyebrow">Classic Mode</p>
             <h3>{creatorDisplayName}'s Retro Page</h3>
             <p className="sectionLead">
-              This profile is using the Myspace-style layout mode: expressive blurbs, loud colors, and a custom HTML block that can evolve independently from the marketplace sections below.
+              This profile is using the Myspace-style layout mode: expressive blurbs, loud colors, profile-song energy,
+              and creator-controlled modules that should read like a personal page first and a storefront second.
             </p>
             <div className="profileMyspaceStatusStrip">
               <span className="profileMyspaceStatusLabel">Currently</span>
               <strong>{primaryProfile?.statusHeadline?.trim() || "offline, coding the perfect profile"}</strong>
+            </div>
+            <div className="profileChipRow">
+              <span className="profileChip">{primaryProfile?.layoutMode === "myspace" ? "Myspace mode" : "Default mode"}</span>
+              <span className="profileChip">{primaryProfile?.topFriends?.length || 0} top friend{(primaryProfile?.topFriends?.length || 0) === 1 ? "" : "s"}</span>
+              <span className="profileChip">{retroBlocks.length} retro block{retroBlocks.length === 1 ? "" : "s"}</span>
+              <span className="profileChip">{mediaEmbedCards.length} media embed{mediaEmbedCards.length === 1 ? "" : "s"}</span>
             </div>
             {myspaceModuleOrder.filter((moduleId) => myspaceHeroModules.includes(moduleId)).length > 0 ? (
               <div className="profileMyspaceHeroModules">
@@ -2646,6 +2739,39 @@ export default function ProfileClient({ name }: { name: string }) {
                     <p className="hint">
                       Update the public-facing profile details for {primaryProfile.fullName}. Identity creation stays in setup; presentation details live here.
                     </p>
+                    <div className="profilePublishCard">
+                      <div>
+                        <h3>Publish Snapshot To IPFS</h3>
+                        <p className="hint">
+                          Use the current studio fields to publish a portable profile manifest. This does not replace the live indexed profile yet,
+                          but it gives the creator an IPFS-backed version of the page configuration that can be linked, archived, or used for future published-profile resolution.
+                        </p>
+                      </div>
+                      {(publishedProfileUri || publishedProfileGatewayUrl) ? (
+                        <div className="profilePublishGrid">
+                          {publishedProfileUri ? (
+                            <div className="profilePublishValue">
+                              <strong>IPFS URI</strong>
+                              <span className="mono">{publishedProfileUri}</span>
+                            </div>
+                          ) : null}
+                          {publishedProfileGatewayUrl ? (
+                            <div className="profilePublishValue">
+                              <strong>Gateway URL</strong>
+                              <a href={publishedProfileGatewayUrl} target="_blank" rel="noreferrer" className="mono">
+                                {publishedProfileGatewayUrl}
+                              </a>
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : null}
+                      <div className="row">
+                        <button type="button" onClick={() => void publishProfileManifest()} disabled={publishState.status === "pending"}>
+                          {publishState.status === "pending" ? "Publishing..." : "Publish Profile Manifest"}
+                        </button>
+                      </div>
+                      <StatusStack items={[actionStateStatusItem(publishState, "publish-profile-action")]} />
+                    </div>
                     <div className="profileStudioStarterBar">
                       <div>
                         <strong>Myspace Starter Pack</strong>

@@ -110,6 +110,12 @@ export default function ProfileHeroSections({
               : "This creator route is partially set up and still needs a stronger identity link."}
           </p>
           <p className="hint">{creatorTagline}</p>
+          {primaryProfile?.statusHeadline ? (
+            <div className="profileStatusBanner">
+              <span className="profileStatusBannerLabel">Status</span>
+              <strong>{primaryProfile.statusHeadline}</strong>
+            </div>
+          ) : null}
           <div className="profileHeroActions">
             <Link href={`/mint?view=mint&collection=shared&profile=${encodeURIComponent(mintProfileParam)}`} className="ctaLink secondaryLink">
               Mint from this profile
@@ -128,6 +134,8 @@ export default function ProfileHeroSections({
             <span className="profileChip">{stats.resolvedWallets} wallet{stats.resolvedWallets === 1 ? "" : "s"}</span>
             <span className="profileChip">{stats.uniqueCollections} collection{stats.uniqueCollections === 1 ? "" : "s"}</span>
             <span className="profileChip">{stats.listings} live listing{stats.listings === 1 ? "" : "s"}</span>
+            {primaryProfile?.profileSongUrl ? <span className="profileChip">Song enabled</span> : null}
+            {primaryProfile?.topFriends?.length ? <span className="profileChip">{primaryProfile.topFriends.length} top friend{primaryProfile.topFriends.length === 1 ? "" : "s"}</span> : null}
           </div>
           {linkedProfiles.length > 0 ? (
             <div className="compactList">
