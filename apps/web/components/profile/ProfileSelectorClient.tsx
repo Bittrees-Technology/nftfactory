@@ -71,6 +71,9 @@ function normalizeDerivedProfile(collection: ApiOwnedCollections["collections"][
     customCss: null,
     customHtml: null,
     links: [],
+    publishedProfileUri: null,
+    publishedProfileGatewayUrl: null,
+    publishedProfilePublishedAt: null,
     createdAt: "",
     updatedAt: ""
   };

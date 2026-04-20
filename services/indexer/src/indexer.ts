@@ -107,6 +107,9 @@ type ProfileLinkPayload = {
   customCss?: string;
   customHtml?: string;
   links?: string[];
+  publishedProfileUri?: string;
+  publishedProfileGatewayUrl?: string;
+  publishedProfilePublishedAt?: string;
 };
 
 type ProfileTransferPayload = {
@@ -193,6 +196,9 @@ type ProfileRecord = {
   customCss: string | null;
   customHtml: string | null;
   links: string[];
+  publishedProfileUri: string | null;
+  publishedProfileGatewayUrl: string | null;
+  publishedProfilePublishedAt: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -1945,6 +1951,21 @@ function sanitizeProfileUrl(value: string | undefined): string | null {
   return null;
 }
 
+function sanitizeProfileIpfsUri(value: string | undefined): string | null {
+  const normalized = String(value || "").trim();
+  if (!normalized) return null;
+  if (!/^ipfs:\/\/.+/i.test(normalized)) return null;
+  return normalized;
+}
+
+function sanitizeIsoDate(value: string | undefined): string | null {
+  const normalized = String(value || "").trim();
+  if (!normalized) return null;
+  const parsed = new Date(normalized);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toISOString();
+}
+
 function sanitizeAccentColor(value: string | undefined): string | null {
   const trimmed = String(value || "").trim();
   if (!trimmed) return null;
@@ -2122,6 +2143,9 @@ async function readProfileRecords(): Promise<ProfileRecord[]> {
           customCss: sanitizeProfileCss(item.customCss || undefined),
           customHtml: sanitizeProfileHtml(item.customHtml || undefined),
           links: sanitizeProfileLinks(item.links),
+          publishedProfileUri: sanitizeProfileIpfsUri((item as any).publishedProfileUri || undefined),
+          publishedProfileGatewayUrl: sanitizeProfileUrl((item as any).publishedProfileGatewayUrl || undefined),
+          publishedProfilePublishedAt: sanitizeIsoDate((item as any).publishedProfilePublishedAt || undefined),
           createdAt: item.createdAt || new Date().toISOString(),
           updatedAt: item.updatedAt || new Date().toISOString()
         };
@@ -6815,6 +6839,9 @@ async function handleRequest(
           customCss: null,
           customHtml: null,
           links: [],
+          publishedProfileUri: null,
+          publishedProfileGatewayUrl: null,
+          publishedProfilePublishedAt: null,
           createdAt: item.createdAt instanceof Date ? item.createdAt.toISOString() : new Date().toISOString(),
           updatedAt: item.updatedAt instanceof Date ? item.updatedAt.toISOString() : new Date().toISOString()
         };
@@ -7823,6 +7850,9 @@ async function handleRequest(
       customCss: sanitizeProfileCss(payload.customCss) || existingIdentity?.customCss || null,
       customHtml: sanitizeProfileHtml(payload.customHtml) || existingIdentity?.customHtml || null,
       links: sanitizeProfileLinks(payload.links).length > 0 ? sanitizeProfileLinks(payload.links) : existingIdentity?.links || [],
+      publishedProfileUri: sanitizeProfileIpfsUri(payload.publishedProfileUri) || existingIdentity?.publishedProfileUri || null,
+      publishedProfileGatewayUrl: sanitizeProfileUrl(payload.publishedProfileGatewayUrl) || existingIdentity?.publishedProfileGatewayUrl || null,
+      publishedProfilePublishedAt: sanitizeIsoDate(payload.publishedProfilePublishedAt) || existingIdentity?.publishedProfilePublishedAt || null,
       createdAt: existingIdentity?.createdAt || now,
       updatedAt: now
     });
@@ -7867,6 +7897,9 @@ async function handleRequest(
         customCss: sanitizeProfileCss(payload.customCss) || existingIdentity?.customCss || null,
         customHtml: sanitizeProfileHtml(payload.customHtml) || existingIdentity?.customHtml || null,
         links: sanitizeProfileLinks(payload.links).length > 0 ? sanitizeProfileLinks(payload.links) : existingIdentity?.links || [],
+        publishedProfileUri: sanitizeProfileIpfsUri(payload.publishedProfileUri) || existingIdentity?.publishedProfileUri || null,
+        publishedProfileGatewayUrl: sanitizeProfileUrl(payload.publishedProfileGatewayUrl) || existingIdentity?.publishedProfileGatewayUrl || null,
+        publishedProfilePublishedAt: sanitizeIsoDate(payload.publishedProfilePublishedAt) || existingIdentity?.publishedProfilePublishedAt || null,
         createdAt: existingIdentity?.createdAt || now,
         updatedAt: now
       }

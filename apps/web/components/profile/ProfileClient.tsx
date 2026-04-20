@@ -21,7 +21,7 @@ import {
 import SummaryStatCard from "../SummaryStatCard";
 import { getAppChain } from "../../lib/chains";
 import { getContractsConfig } from "../../lib/contracts";
-import { resolveIpfsGatewayBaseUrl } from "../../lib/ipfsUpload";
+import { buildGatewayUrl, resolveIpfsGatewayBaseUrl } from "../../lib/ipfsUpload";
 import {
   actionStateStatusItem,
   errorActionState,
@@ -74,6 +74,12 @@ import { sanitizeBackendErrorMessage } from "../../lib/networkErrors";
 import { fetchProfileView, type ApiProfileViewResponse } from "../../lib/profileViewApi";
 import { errorStatus, hintStatus } from "../../lib/statusItems";
 import { getWalletActionError, sendWalletTransactionAndWait } from "../../lib/walletActions";
+
+type PublishedProfileManifest = {
+  version?: number;
+  publishedAt?: string;
+  profile?: Partial<ApiProfileRecord>;
+};
 
 function isAddress(value: string): value is Address {
   return /^0x[a-fA-F0-9]{40}$/.test(value);
@@ -780,6 +786,7 @@ export default function ProfileClient({ name }: { name: string }) {
   const [publishState, setPublishState] = useState<ActionState>(idleActionState());
   const [publishedProfileUri, setPublishedProfileUri] = useState<string | null>(null);
   const [publishedProfileGatewayUrl, setPublishedProfileGatewayUrl] = useState<string | null>(null);
+  const [publishedProfileSnapshot, setPublishedProfileSnapshot] = useState<Partial<ApiProfileRecord> | null>(null);
   const [transferState, setTransferState] = useState<ActionState>(idleActionState());
   const profileViewRequestIdRef = useRef(0);
   const manualSellerAddress = useMemo(() => (isAddress(sellerAddress) ? sellerAddress : null), [sellerAddress]);
@@ -946,22 +953,44 @@ export default function ProfileClient({ name }: { name: string }) {
     return primaryProfileName;
   }, [primaryProfile, primaryProfileName]);
 
-  const creatorDisplayName = useMemo(() => primaryProfile?.displayName?.trim() || primaryProfileName, [primaryProfile, primaryProfileName]);
-  const creatorTagline = useMemo(() => primaryProfile?.tagline?.trim() || "A creator page built around ENS identity, drops, and live storefront activity.", [primaryProfile]);
+  const presentationProfile = useMemo(() => {
+    if (!primaryProfile) return null;
+    if (!publishedProfileSnapshot) return primaryProfile;
+    return {
+      ...primaryProfile,
+      ...publishedProfileSnapshot,
+      slug: primaryProfile.slug,
+      fullName: primaryProfile.fullName,
+      source: primaryProfile.source,
+      ownerAddress: primaryProfile.ownerAddress,
+      collectionAddress: primaryProfile.collectionAddress,
+      createdAt: primaryProfile.createdAt,
+      updatedAt: primaryProfile.updatedAt,
+      publishedProfileUri: primaryProfile.publishedProfileUri,
+      publishedProfileGatewayUrl: primaryProfile.publishedProfileGatewayUrl,
+      publishedProfilePublishedAt: primaryProfile.publishedProfilePublishedAt
+    } satisfies ApiProfileRecord;
+  }, [primaryProfile, publishedProfileSnapshot]);
+
+  const creatorDisplayName = useMemo(() => presentationProfile?.displayName?.trim() || primaryProfileName, [presentationProfile, primaryProfileName]);
+  const creatorTagline = useMemo(
+    () => presentationProfile?.tagline?.trim() || "A creator page built around ENS identity, drops, and live storefront activity.",
+    [presentationProfile]
+  );
   const creatorBio = useMemo(
     () =>
-      primaryProfile?.bio?.trim() ||
+      presentationProfile?.bio?.trim() ||
       "This creator page blends linked ENS identity, collections, and live listings into one storefront view.",
-    [primaryProfile]
+    [presentationProfile]
   );
   const heroStyle = useMemo(
     () =>
-      primaryProfile?.accentColor
+      presentationProfile?.accentColor
         ? {
-            borderColor: primaryProfile.accentColor
+            borderColor: presentationProfile.accentColor
           }
         : undefined,
-    [primaryProfile]
+    [presentationProfile]
   );
 
   const activeSellerAddresses = useMemo(() => {
@@ -1349,9 +1378,59 @@ export default function ProfileClient({ name }: { name: string }) {
     setPublishState(idleActionState());
     setPublishedProfileUri(null);
     setPublishedProfileGatewayUrl(null);
+    setPublishedProfileSnapshot(null);
     setTransferAddress("");
     setTransferState(idleActionState());
   }, [primaryProfile]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const gatewayBaseUrl = resolveIpfsGatewayBaseUrl(process.env);
+    const explicitGatewayUrl = primaryProfile?.publishedProfileGatewayUrl?.trim() || "";
+    const derivedGatewayUrl =
+      !explicitGatewayUrl && primaryProfile?.publishedProfileUri
+        ? buildGatewayUrl({ gatewayBaseUrl, cid: primaryProfile.publishedProfileUri })
+        : "";
+    const targetUrl = explicitGatewayUrl || derivedGatewayUrl;
+    if (!targetUrl) {
+      setPublishedProfileSnapshot(null);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+
+    fetch(targetUrl, {
+      method: "GET",
+      cache: "no-store",
+      signal: controller.signal
+    })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`Published profile manifest request failed (${response.status})`);
+        return (await response.json()) as PublishedProfileManifest;
+      })
+      .then((manifest) => {
+        if (cancelled) return;
+        setPublishedProfileSnapshot(manifest.profile || null);
+        setPublishedProfileUri(primaryProfile?.publishedProfileUri || null);
+        setPublishedProfileGatewayUrl(targetUrl);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setPublishedProfileSnapshot(null);
+      })
+      .finally(() => {
+        clearTimeout(timeout);
+      });
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [primaryProfile?.publishedProfileGatewayUrl, primaryProfile?.publishedProfileUri]);
 
   const buildEditableProfilePayload = useCallback(() => {
     if (!primaryProfile) return null;
@@ -1485,21 +1564,33 @@ export default function ProfileClient({ name }: { name: string }) {
         profileUri?: string;
         profileGatewayUrl?: string;
       };
+      const persisted = await linkProfileIdentity({
+        ...payload,
+        publishedProfileUri: parsed.profileUri || undefined,
+        publishedProfileGatewayUrl: parsed.profileGatewayUrl || undefined,
+        publishedProfilePublishedAt: new Date().toISOString()
+      });
+      setProfileResolution((current) => {
+        if (!current) return current;
+        const nextProfiles = [persisted.profile, ...(current.profiles || []).filter((item) => item.slug !== persisted.profile.slug)];
+        return { ...current, profiles: nextProfiles };
+      });
       setPublishedProfileUri(parsed.profileUri || null);
       setPublishedProfileGatewayUrl(parsed.profileGatewayUrl || null);
+      setPublishedProfileSnapshot(payload);
       setPublishState(successActionState("Profile manifest published to IPFS."));
     } catch (error) {
       setPublishState(errorActionState(error instanceof Error ? error.message : "Failed to publish profile manifest."));
     }
   }
 
-  const isMyspaceProfile = primaryProfile?.layoutMode === "myspace";
+  const isMyspaceProfile = presentationProfile?.layoutMode === "myspace";
   const retroAccentStyle = useMemo(
-    () => ({ "--profile-accent": primaryProfile?.accentColor || "#ff6a00" } as CSSProperties),
-    [primaryProfile?.accentColor]
+    () => ({ "--profile-accent": presentationProfile?.accentColor || "#ff6a00" } as CSSProperties),
+    [presentationProfile?.accentColor]
   );
   const customProfilePreview = useMemo(() => {
-    if (!primaryProfile?.customHtml && !primaryProfile?.customCss) return "";
+    if (!presentationProfile?.customHtml && !presentationProfile?.customCss) return "";
     const title = (creatorDisplayName || primaryProfileName)
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
@@ -1557,25 +1648,25 @@ export default function ProfileClient({ name }: { name: string }) {
       }
       a { color: #0f43a9; }
       img { max-width: 100%; height: auto; }
-      ${primaryProfile.customCss || ""}
+      ${presentationProfile.customCss || ""}
     </style>
   </head>
   <body>
     <div class="myspace-shell">
-      ${buildPanel("About Me", primaryProfile.aboutMe)}
-      ${buildPanel("Interests", primaryProfile.interests)}
-      ${buildPanel("Who I'd Like To Meet", primaryProfile.whoIdLikeToMeet)}
-      ${buildPanel("Current Status", primaryProfile.statusHeadline)}
-      ${buildListPanel("Top Friends", primaryProfile.topFriends)}
-      ${buildListPanel("Stamps", primaryProfile.stamps)}
-      ${buildListPanel("Testimonials", primaryProfile.testimonials)}
-      ${(primaryProfile.customBoxes || []).map((box) => `<section class="myspace-panel"><h2>${escapeText(box.title)}</h2><div class="content"><p>${escapeText(box.content)}</p></div></section>`).join("")}
-      ${primaryProfile.profileSongUrl ? `<section class="myspace-panel"><h2>Profile Song</h2><div class="content"><audio controls preload="none"><source src="${primaryProfile.profileSongUrl}" /></audio></div></section>` : ""}
-      ${primaryProfile.customHtml ? `<section class="myspace-panel"><h2>Custom HTML</h2><div class="content">${primaryProfile.customHtml}</div></section>` : ""}
+      ${buildPanel("About Me", presentationProfile.aboutMe)}
+      ${buildPanel("Interests", presentationProfile.interests)}
+      ${buildPanel("Who I'd Like To Meet", presentationProfile.whoIdLikeToMeet)}
+      ${buildPanel("Current Status", presentationProfile.statusHeadline)}
+      ${buildListPanel("Top Friends", presentationProfile.topFriends)}
+      ${buildListPanel("Stamps", presentationProfile.stamps)}
+      ${buildListPanel("Testimonials", presentationProfile.testimonials)}
+      ${(presentationProfile.customBoxes || []).map((box) => `<section class="myspace-panel"><h2>${escapeText(box.title)}</h2><div class="content"><p>${escapeText(box.content)}</p></div></section>`).join("")}
+      ${presentationProfile.profileSongUrl ? `<section class="myspace-panel"><h2>Profile Song</h2><div class="content"><audio controls preload="none"><source src="${presentationProfile.profileSongUrl}" /></audio></div></section>` : ""}
+      ${presentationProfile.customHtml ? `<section class="myspace-panel"><h2>Custom HTML</h2><div class="content">${presentationProfile.customHtml}</div></section>` : ""}
     </div>
   </body>
 </html>`;
-  }, [creatorDisplayName, primaryProfile, primaryProfileName]);
+  }, [creatorDisplayName, presentationProfile, primaryProfileName]);
 
   async function loadGuestbookEntries(): Promise<void> {
     try {
@@ -1860,7 +1951,7 @@ export default function ProfileClient({ name }: { name: string }) {
         name={name}
         mintProfileParam={mintProfileParam}
         canEditProfile={canEditProfile}
-        primaryProfile={primaryProfile}
+        primaryProfile={presentationProfile}
         linkedProfiles={linkedProfiles}
         primaryProfileName={primaryProfileName}
         creatorDisplayName={creatorDisplayName}
@@ -1888,13 +1979,14 @@ export default function ProfileClient({ name }: { name: string }) {
             </p>
             <div className="profileMyspaceStatusStrip">
               <span className="profileMyspaceStatusLabel">Currently</span>
-              <strong>{primaryProfile?.statusHeadline?.trim() || "offline, coding the perfect profile"}</strong>
+              <strong>{presentationProfile?.statusHeadline?.trim() || "offline, coding the perfect profile"}</strong>
             </div>
             <div className="profileChipRow">
-              <span className="profileChip">{primaryProfile?.layoutMode === "myspace" ? "Myspace mode" : "Default mode"}</span>
-              <span className="profileChip">{primaryProfile?.topFriends?.length || 0} top friend{(primaryProfile?.topFriends?.length || 0) === 1 ? "" : "s"}</span>
+              <span className="profileChip">{presentationProfile?.layoutMode === "myspace" ? "Myspace mode" : "Default mode"}</span>
+              <span className="profileChip">{presentationProfile?.topFriends?.length || 0} top friend{(presentationProfile?.topFriends?.length || 0) === 1 ? "" : "s"}</span>
               <span className="profileChip">{retroBlocks.length} retro block{retroBlocks.length === 1 ? "" : "s"}</span>
               <span className="profileChip">{mediaEmbedCards.length} media embed{mediaEmbedCards.length === 1 ? "" : "s"}</span>
+              {presentationProfile?.publishedProfileUri ? <span className="profileChip">Published to IPFS</span> : null}
             </div>
             {myspaceModuleOrder.filter((moduleId) => myspaceHeroModules.includes(moduleId)).length > 0 ? (
               <div className="profileMyspaceHeroModules">
@@ -1910,9 +2002,9 @@ export default function ProfileClient({ name }: { name: string }) {
             <div className="profileMyspaceSidebarLayout">
               <section className="profileMyspaceSidebarCard">
                 <h4>Details</h4>
-                {primaryProfile?.sidebarFacts?.length ? (
+                {presentationProfile?.sidebarFacts?.length ? (
                   <dl className="profileMyspaceFactList">
-                    {primaryProfile.sidebarFacts.map((fact) => (
+                    {presentationProfile.sidebarFacts.map((fact) => (
                       <div key={fact.label + ":" + fact.value} className="profileMyspaceFactRow">
                         <dt>{fact.label}</dt>
                         <dd>{fact.value}</dd>
@@ -1926,21 +2018,21 @@ export default function ProfileClient({ name }: { name: string }) {
               <div className="profileMyspaceBlurbGrid">
               <div className="profileMyspaceBlurbCard">
                 <h4>About Me</h4>
-                <p>{primaryProfile?.aboutMe?.trim() || "No About Me blurb yet."}</p>
+                <p>{presentationProfile?.aboutMe?.trim() || "No About Me blurb yet."}</p>
               </div>
               <div className="profileMyspaceBlurbCard">
                 <h4>Interests</h4>
-                <p>{primaryProfile?.interests?.trim() || "No Interests blurb yet."}</p>
+                <p>{presentationProfile?.interests?.trim() || "No Interests blurb yet."}</p>
               </div>
               <div className="profileMyspaceBlurbCard">
                 <h4>Who I'd Like To Meet</h4>
-                <p>{primaryProfile?.whoIdLikeToMeet?.trim() || "No dream collabs or friend list notes yet."}</p>
+                <p>{presentationProfile?.whoIdLikeToMeet?.trim() || "No dream collabs or friend list notes yet."}</p>
               </div>
               <div className="profileMyspaceTopCard">
                 <h4>Top Friends</h4>
-                {primaryProfile?.topFriends?.length ? (
+                {presentationProfile?.topFriends?.length ? (
                   <ol>
-                    {primaryProfile.topFriends.map((friend) => (
+                    {presentationProfile.topFriends.map((friend) => (
                       <li key={friend}>{friend}</li>
                     ))}
                   </ol>
@@ -1953,9 +2045,9 @@ export default function ProfileClient({ name }: { name: string }) {
             <div className="profileMyspaceSocialGrid" style={getMyspaceModuleOrderStyle(myspaceModuleOrder, "social")}>
               <section className="profileMyspaceSocialCard">
                 <h4>Stamps</h4>
-                {primaryProfile?.stamps?.length ? (
+                {presentationProfile?.stamps?.length ? (
                   <div className="profileMyspaceStampGrid">
-                    {primaryProfile.stamps.map((stamp) => (
+                    {presentationProfile.stamps.map((stamp) => (
                       <span key={stamp} className="profileMyspaceStamp">{stamp}</span>
                     ))}
                   </div>
@@ -1965,9 +2057,9 @@ export default function ProfileClient({ name }: { name: string }) {
               </section>
               <section className="profileMyspaceSocialCard">
                 <h4>Testimonials</h4>
-                {primaryProfile?.testimonials?.length ? (
+                {presentationProfile?.testimonials?.length ? (
                   <div className="profileMyspaceTestimonialsList">
-                    {primaryProfile.testimonials.map((testimonial) => (
+                    {presentationProfile.testimonials.map((testimonial) => (
                       <blockquote key={testimonial} className="profileMyspaceTestimonial">
                         {testimonial}
                       </blockquote>
@@ -1979,9 +2071,9 @@ export default function ProfileClient({ name }: { name: string }) {
               </section>
               <section className="profileMyspaceSocialCard">
                 <h4>Profile Song</h4>
-                {primaryProfile?.profileSongUrl ? (
+                {presentationProfile?.profileSongUrl ? (
                   <audio controls preload="none" className="profileMyspaceSongPlayer">
-                    <source src={primaryProfile.profileSongUrl} />
+                    <source src={presentationProfile.profileSongUrl} />
                   </audio>
                 ) : (
                   <p>No profile song set yet.</p>
@@ -2085,7 +2177,7 @@ export default function ProfileClient({ name }: { name: string }) {
               )}
                 </div> : null}
                 {!myspaceSidebarModules.includes("boxes") ? <div className={`profileMyspaceBoxesGrid ${getMyspaceMainColumnWidthClass(getMyspaceMainColumnWidth("boxes", myspaceMainColumnSplitModules, myspaceMainColumnCompactModules))}`.trim()} style={getMyspaceModuleOrderStyle(myspaceModuleOrder, "boxes")}>
-              {primaryProfile?.customBoxes?.length ? primaryProfile.customBoxes.map((box) => (
+              {presentationProfile?.customBoxes?.length ? presentationProfile.customBoxes.map((box) => (
                 <section key={`${box.title}:${box.content}`} className="profileMyspaceBoxCard">
                   <h4>{box.title}</h4>
                   <p>{box.content}</p>
@@ -2192,7 +2284,7 @@ export default function ProfileClient({ name }: { name: string }) {
             ) : null}
                 </section> : null}
 
-                {!myspaceSidebarModules.includes("custom") && (primaryProfile?.customHtml || primaryProfile?.customCss) ? (
+                {!myspaceSidebarModules.includes("custom") && (presentationProfile?.customHtml || presentationProfile?.customCss) ? (
                   <section className={`card formCard profileMyspaceCustomCard ${getMyspaceMainColumnWidthClass(getMyspaceMainColumnWidth("custom", myspaceMainColumnSplitModules, myspaceMainColumnCompactModules))}`.trim()} style={getMyspaceModuleOrderStyle(myspaceModuleOrder, "custom")}>
               <div className="profileMyspaceCustomHeader">
                 <div>
@@ -2251,7 +2343,7 @@ export default function ProfileClient({ name }: { name: string }) {
                     )) : <section className="profileMyspaceRetroCard"><h4>Retro Blocks</h4><p>No structured retro blocks pinned yet.</p></section>}
                   </div> : null}
                   {myspaceSidebarModules.includes("boxes") ? <div className={`profileMyspaceBoxesGrid profileMyspaceBoxesGrid--sidebar ${myspaceSidebarCompactModules.includes("boxes") ? "profileMyspaceSidebarModule--compact" : ""}`.trim()} style={getMyspaceModuleOrderStyle(myspaceModuleOrder, "boxes")}> 
-                    {primaryProfile?.customBoxes?.length ? primaryProfile.customBoxes.map((box) => (<section key={`${box.title}:${box.content}`} className="profileMyspaceBoxCard"><h4>{box.title}</h4><p>{box.content}</p></section>)) : <section className="profileMyspaceBoxCard"><h4>Custom Boxes</h4><p>No extra custom boxes pinned yet.</p></section>}
+                    {presentationProfile?.customBoxes?.length ? presentationProfile.customBoxes.map((box) => (<section key={`${box.title}:${box.content}`} className="profileMyspaceBoxCard"><h4>{box.title}</h4><p>{box.content}</p></section>)) : <section className="profileMyspaceBoxCard"><h4>Custom Boxes</h4><p>No extra custom boxes pinned yet.</p></section>}
                   </div> : null}
                   {myspaceSidebarModules.includes("guestbook") ? <section className={`card formCard profileMyspaceCustomCard profileMyspaceCustomCard--sidebar ${myspaceSidebarCompactModules.includes("guestbook") ? "profileMyspaceSidebarModule--compact" : ""}`.trim()} style={getMyspaceModuleOrderStyle(myspaceModuleOrder, "guestbook")}> 
                     <div className="profileMyspaceCustomHeader"><div><p className="eyebrow">Guestbook</p><h3>Comments + Guestbook</h3></div><span className="profileChip">{canEditProfile ? "Public posts + history" : "Public posts"}</span></div>
@@ -2260,7 +2352,7 @@ export default function ProfileClient({ name }: { name: string }) {
                     {publicGuestbookEntries.length > 0 ? <div className="profileMyspaceGuestbookList">{publicGuestbookEntries.map((entry) => (<article key={entry.id} className="profileMyspaceGuestbookEntry"><div className="profileMyspaceGuestbookMeta"><strong>{entry.authorName}</strong>{entry.authorAddress ? <span className="mono">{truncateAddress(entry.authorAddress as Address)}</span> : null}<span className="hint">{new Date(entry.createdAt).toLocaleString()}</span></div><p>{entry.message}</p>{canEditProfile ? <div className="row"><button type="button" onClick={() => void hideGuestbookEntry(entry.id)} disabled={moderatingGuestbookEntryId === entry.id}>{moderatingGuestbookEntryId === entry.id ? "Working..." : "Hide Entry"}</button><button type="button" onClick={() => void deleteGuestbookEntry(entry.id)} disabled={moderatingGuestbookEntryId === entry.id}>{moderatingGuestbookEntryId === entry.id ? "Working..." : "Delete Entry"}</button></div> : null}</article>))}</div> : <p className="hint">No public guestbook entries yet. Be the first to sign this page.</p>}
                     {canEditProfile && moderatedGuestbookEntries.length > 0 ? <div className="profileMyspaceGuestbookList">{moderatedGuestbookEntries.map((entry) => (<article key={entry.id} className="profileMyspaceGuestbookEntry"><div className="profileMyspaceGuestbookMeta"><strong>{entry.authorName}</strong>{entry.authorAddress ? <span className="mono">{truncateAddress(entry.authorAddress as Address)}</span> : null}<span className="hint">{entry.deletedAt ? "Deleted" : "Hidden"}</span></div><p>{entry.message}</p><p className="hint">Posted {new Date(entry.createdAt).toLocaleString()}{entry.hiddenAt ? " | Hidden " + new Date(entry.hiddenAt).toLocaleString() + " by " + getModerationActorLabel(entry.hiddenBy, primaryProfile?.ownerAddress) : ""}{entry.deletedAt ? " | Deleted " + new Date(entry.deletedAt).toLocaleString() + " by " + getModerationActorLabel(entry.deletedBy, primaryProfile?.ownerAddress) : ""}</p><div className="row"><button type="button" onClick={() => void restoreGuestbookEntry(entry.id)} disabled={moderatingGuestbookEntryId === entry.id}>{moderatingGuestbookEntryId === entry.id ? "Working..." : "Restore Entry"}</button></div></article>))}</div> : null}
                   </section> : null}
-                  {myspaceSidebarModules.includes("custom") && (primaryProfile?.customHtml || primaryProfile?.customCss) ? <section className={`card formCard profileMyspaceCustomCard profileMyspaceCustomCard--sidebar ${myspaceSidebarCompactModules.includes("custom") ? "profileMyspaceSidebarModule--compact" : ""}`.trim()} style={getMyspaceModuleOrderStyle(myspaceModuleOrder, "custom")}> <div className="profileMyspaceCustomHeader"><div><p className="eyebrow">Custom Module</p><h3>Independent HTML + CSS Block</h3></div><span className="profileChip">Sandboxed preview</span></div><p className="hint">Custom HTML is sanitized and rendered inside an isolated iframe so creators can style a personal module without taking over the rest of the app shell.</p><iframe key={customPreviewId} title={`${creatorDisplayName} custom profile module`} srcDoc={customProfilePreview} sandbox="allow-popups" className="profileCustomModuleFrame" /></section> : null}
+                  {myspaceSidebarModules.includes("custom") && (presentationProfile?.customHtml || presentationProfile?.customCss) ? <section className={`card formCard profileMyspaceCustomCard profileMyspaceCustomCard--sidebar ${myspaceSidebarCompactModules.includes("custom") ? "profileMyspaceSidebarModule--compact" : ""}`.trim()} style={getMyspaceModuleOrderStyle(myspaceModuleOrder, "custom")}> <div className="profileMyspaceCustomHeader"><div><p className="eyebrow">Custom Module</p><h3>Independent HTML + CSS Block</h3></div><span className="profileChip">Sandboxed preview</span></div><p className="hint">Custom HTML is sanitized and rendered inside an isolated iframe so creators can style a personal module without taking over the rest of the app shell.</p><iframe key={customPreviewId} title={`${creatorDisplayName} custom profile module`} srcDoc={customProfilePreview} sandbox="allow-popups" className="profileCustomModuleFrame" /></section> : null}
                 </aside>
               ) : null}
             </div>

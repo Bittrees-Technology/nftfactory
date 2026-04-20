@@ -386,6 +386,9 @@ function createLocalProfileRecord(args: {
     customCss: null,
     customHtml: null,
     links: [],
+    publishedProfileUri: null,
+    publishedProfileGatewayUrl: null,
+    publishedProfilePublishedAt: null,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
   };

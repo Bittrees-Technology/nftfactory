@@ -276,6 +276,9 @@ export type ApiProfileRecord = {
   customCss: string | null;
   customHtml: string | null;
   links: string[];
+  publishedProfileUri: string | null;
+  publishedProfileGatewayUrl: string | null;
+  publishedProfilePublishedAt: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -940,6 +943,9 @@ export async function linkProfileIdentity(payload: {
   customCss?: string;
   customHtml?: string;
   links?: string[];
+  publishedProfileUri?: string;
+  publishedProfileGatewayUrl?: string;
+  publishedProfilePublishedAt?: string;
 }): Promise<{ ok: boolean; profile: ApiProfileRecord }> {
   return fetchJson<{ ok: boolean; profile: ApiProfileRecord }>("/api/profiles/link", {
     method: "POST",
