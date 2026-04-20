@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { ElementType, ReactNode } from "react";
+import { slugifyWikiHeading } from "../../lib/wikiFormat";
 
 type HeadingLevel = 1 | 2 | 3 | 4 | 5 | 6;
 
@@ -102,6 +103,7 @@ function isSpecialLine(line: string): boolean {
 export default function WikiMarkdown({ content }: { content: string }) {
   const lines = content.replace(/\r\n/gu, "\n").split("\n");
   const blocks: ReactNode[] = [];
+  const seenHeadingIds = new Map<string, number>();
   let i = 0;
   let key = 0;
 
@@ -155,10 +157,16 @@ export default function WikiMarkdown({ content }: { content: string }) {
     if (isHeadingLine(trimmed)) {
       const level = trimmed.match(/^#+/u)?.[0].length as HeadingLevel;
       const text = trimmed.replace(/^#{1,6}\s+/u, "");
+      const baseId = slugifyWikiHeading(text) || "section";
+      const seenCount = seenHeadingIds.get(baseId) ?? 0;
+      seenHeadingIds.set(baseId, seenCount + 1);
+      const headingId = seenCount === 0 ? baseId : `${baseId}-${seenCount + 1}`;
       const Tag = `h${Math.min(level + 1, 6)}` as ElementType;
       blocks.push(
-        <Tag key={`heading-${key++}`} className={`wikiHeading wikiHeading${level}`}>
-          {renderInline(text)}
+        <Tag key={`heading-${key++}`} id={headingId} className={`wikiHeading wikiHeading${level}`}>
+          <a href={`#${headingId}`} className="wikiHeadingAnchor">
+            {renderInline(text)}
+          </a>
         </Tag>
       );
       i += 1;

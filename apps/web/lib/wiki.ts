@@ -1,5 +1,6 @@
 import { existsSync, promises as fs } from "node:fs";
 import path from "node:path";
+import { extractWikiHeadings, type WikiHeading } from "./wikiFormat";
 
 const wikiDirCandidates = [
   path.resolve(process.cwd(), "../../docs/wiki"),
@@ -18,6 +19,7 @@ export type WikiPageSummary = {
 
 export type WikiPage = WikiPageSummary & {
   content: string;
+  headings: WikiHeading[];
 };
 
 function slugFromFileName(fileName: string): string {
@@ -82,6 +84,7 @@ export async function getWikiPageBySlug(slug: string): Promise<WikiPage | null> 
   const content = await fs.readFile(path.join(wikiDir, page.fileName), "utf8");
   return {
     ...page,
-    content
+    content,
+    headings: extractWikiHeadings(content)
   };
 }

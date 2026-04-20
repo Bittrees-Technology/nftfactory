@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import WikiMarkdown from "../../../components/wiki/WikiMarkdown";
 import WikiSidebar from "../../../components/wiki/WikiSidebar";
+import WikiTableOfContents from "../../../components/wiki/WikiTableOfContents";
 import { getWikiPageBySlug, getWikiPages } from "../../../lib/wiki";
 
 export default async function WikiDetailPage({ params }: { params: Promise<{ slug: string }> }) {
@@ -23,6 +24,7 @@ export default async function WikiDetailPage({ params }: { params: Promise<{ slu
           </Link>
         </div>
         <h2>{page.title}</h2>
+        <WikiTableOfContents headings={page.headings} />
         <WikiMarkdown content={page.content} />
       </article>
     </section>

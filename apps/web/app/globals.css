@@ -298,11 +298,31 @@ nav {
 
 .wikiHeading {
   margin: 0;
+  scroll-margin-top: 96px;
 }
 
 .wikiHeading1,
 .wikiHeading2 {
   margin-top: 8px;
+}
+
+.wikiHeadingAnchor {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+}
+
+.wikiHeadingAnchor::after {
+  content: "#";
+  opacity: 0;
+  color: #c53a1f;
+  font-size: 0.9em;
+  transition: opacity 120ms ease;
+}
+
+.wikiHeading:hover .wikiHeadingAnchor::after {
+  opacity: 1;
 }
 
 .wikiParagraph,
@@ -321,6 +341,29 @@ nav {
   border-left: 4px solid #c9a986;
   border-radius: 0 12px 12px 0;
   background: #fff9f1;
+}
+
+.wikiToc {
+  gap: 8px;
+  background: #fff9f1;
+}
+
+.wikiTocList {
+  display: grid;
+  gap: 6px;
+}
+
+.wikiTocLink {
+  color: #5b4b3f;
+  font-size: 0.95rem;
+}
+
+.wikiTocLevel3 {
+  padding-left: 12px;
+}
+
+.wikiTocLevel4 {
+  padding-left: 24px;
 }
 
 .wikiInlineCode {
