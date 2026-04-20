@@ -1,0 +1,18 @@
+{
+  "description": "Replace the addresses below with the live chain values before creating the webhook in Alchemy.",
+  "network": "ETH_SEPOLIA",
+  "webhookType": "GRAPHQL",
+  "filters": {
+    "addresses": [
+      "0x1c8124F401Ac7A067f0c3dD39ce102D3623F4DE3",
+      "0xc0098BCC01e2179A5018EFabf64a9c74a2E6244B",
+      "0x4018dD11271CecFAbb275656631896F7A8811965",
+      "0x530C5f6F1728dCF60C3399e6D9d3aC729a7637Ce"
+    ]
+  },
+  "notes": [
+    "Use the real registry, marketplace, shared 721, and shared 1155 addresses for the target chain.",
+    "Point the destination URL at /api/webhooks/alchemy on the deployed indexer ingress.",
+    "Send INDEXER_WEBHOOK_SECRET as a bearer token or x-indexer-webhook-secret header."
+  ]
+}

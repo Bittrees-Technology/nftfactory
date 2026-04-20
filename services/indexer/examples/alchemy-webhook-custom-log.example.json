@@ -1,0 +1,24 @@
+{
+  "type": "GRAPHQL",
+  "event": {
+    "data": {
+      "block": {
+        "logs": [
+          {
+            "address": "0x1c8124F401Ac7A067f0c3dD39ce102D3623F4DE3",
+            "decoded": {
+              "name": "CreatorRegistered",
+              "args": {
+                "creator": "0xFDd45904F8f0ec01Ff3e198A96673634F3761185",
+                "contractAddress": "0xeD8F6de4Cc63D4349042D1F9051a7E0882E9eB10",
+                "ensSubname": "creator",
+                "standard": "ERC721",
+                "isNftFactoryCreated": true
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

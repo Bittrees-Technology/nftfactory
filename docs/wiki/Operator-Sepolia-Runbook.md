@@ -133,6 +133,14 @@ Expected:
 
 If health is wrong, stop and fix env or service reachability before spending time on UI debugging.
 
+If the current validation scope includes event-led indexer freshness, also confirm the indexer webhook path is configured before browser acceptance:
+
+- `INDEXER_WEBHOOK_SECRET` is set on the deployed indexer
+- `/health` reports `webhooks.configured: true`
+- Alchemy webhook destination points to `/api/webhooks/alchemy`
+
+Use [Alchemy Webhook Runbook](./Alchemy-Webhook-Runbook.md) for the exact setup and sample payloads.
+
 ## 7. Run the browser acceptance flow
 
 Use [Sepolia-Acceptance-Log.md](./Sepolia-Acceptance-Log.md) while running the current Sepolia acceptance matrix:

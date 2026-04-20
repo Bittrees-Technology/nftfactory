@@ -115,6 +115,8 @@ Note: `services/indexer/.env.example` is also a minimal example, not a full mirr
 
 For local-first Sepolia operation with your own node, use [Self-Hosted Sepolia RPC](./Self-Hosted-Sepolia-RPC.md) and `services/indexer/examples/self-hosted-sepolia.env.example`.
 
+For event-led NFTFactory ingestion with Alchemy as the primary provider, use [Alchemy Webhook Runbook](./Alchemy-Webhook-Runbook.md) and the checked-in webhook examples under `services/indexer/examples/`.
+
 ## Manual startup
 
 Use this sequence for local Sepolia-connected work:

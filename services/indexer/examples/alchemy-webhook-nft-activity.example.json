@@ -1,0 +1,13 @@
+{
+  "type": "NFT_ACTIVITY",
+  "event": {
+    "activity": [
+      {
+        "contractAddress": "0xeD8F6de4Cc63D4349042D1F9051a7E0882E9eB10",
+        "fromAddress": "0x0000000000000000000000000000000000000000",
+        "toAddress": "0xFDd45904F8f0ec01Ff3e198A96673634F3761185",
+        "category": "erc721"
+      }
+    ]
+  }
+}

@@ -49,6 +49,7 @@ Active work:
 | [Deployment and Launch](./Deployment-and-Launch.md) | Current local, Sepolia, and mainnet rollout posture |
 | [Infrastructure and Operations](./Infrastructure-and-Operations.md) | Real env wiring, process model, and troubleshooting |
 | [Operator Sepolia Runbook](./Operator-Sepolia-Runbook.md) | Single-path operator flow for root env setup, deployment verification, and Sepolia acceptance |
+| [Alchemy Webhook Runbook](./Alchemy-Webhook-Runbook.md) | Event-led indexer ingestion setup for NFTFactory contracts without broad Sepolia scanning |
 | [Self-Hosted Sepolia RPC](./Self-Hosted-Sepolia-RPC.md) | How to replace Alchemy-backed Sepolia reads with your own execution + consensus node, including the storage-first `reth` path |
 | [IPFS Upload Failure Triage](./IPFS-Upload-Failure-Triage.md) | Exact steps for diagnosing Vercel -> Cloudflare Tunnel -> Kubo upload failures |
 | [Marketplace Indexer and API Plan](./Marketplace-V2-Indexer-and-API-Plan.md) | Backend-first schema, sync, and API plan for marketplace listings and offers |
