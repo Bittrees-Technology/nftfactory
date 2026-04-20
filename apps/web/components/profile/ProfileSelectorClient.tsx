@@ -13,7 +13,6 @@ import {
 import { getContractsConfig } from "../../lib/contracts";
 import type { OnchainWalletIdentity } from "../../lib/onchainIdentity";
 import { fetchCollectionsByOwnerAcrossChains, fetchProfilesByOwnerAcrossChains } from "../../lib/ownerIdentityMultiChain";
-import { fetchWalletIdentity } from "../../lib/walletIdentityApi";
 
 function deriveProfileRouteFromName(fullName: string): string {
   const normalized = String(fullName || "")
@@ -90,6 +89,14 @@ function createPrimaryProfileKey(address: string): string {
   return `nftfactory:primary-profile:${address.toLowerCase()}`;
 }
 
+function deriveEnsNamesFromCollections(collections: ApiOwnedCollections["collections"]): string[] {
+  return [...new Set(
+    collections
+      .map((collection) => String(collection.ensSubname || "").trim().toLowerCase())
+      .filter((value) => value.endsWith(".eth"))
+  )].sort((left, right) => left.localeCompare(right));
+}
+
 function usePrevious<T>(value: T): T | undefined {
   const ref = useRef<T | undefined>(undefined);
   useEffect(() => {
@@ -133,37 +140,45 @@ export default function ProfileSelectorClient() {
     setIsLoading(true);
     setNote("");
     void (async () => {
-      await syncWalletScope(address, {
-        chainId: config.chainId,
-        force: false,
-        timeoutMs: 15_000
-      }).catch(() => null);
-      return Promise.allSettled([
+      let results = await Promise.allSettled([
         fetchProfilesByOwnerAcrossChains(address, [config.chainId]),
-        fetchCollectionsByOwnerAcrossChains(address, [config.chainId]),
-        fetchWalletIdentity({
-          chainId: config.chainId,
-          ownerAddress: address
-        })
+        fetchCollectionsByOwnerAcrossChains(address, [config.chainId])
       ]);
+      const profileResult = results[0];
+      const collectionResult = results[1];
+      const shouldRetryAfterSync =
+        (profileResult.status === "rejected" && collectionResult.status === "rejected") ||
+        ((profileResult.status === "fulfilled" ? profileResult.value.profiles.length : 0) === 0 &&
+          (collectionResult.status === "fulfilled" ? collectionResult.value.collections.length : 0) === 0);
+
+      if (shouldRetryAfterSync) {
+        await syncWalletScope(address, {
+          chainId: config.chainId,
+          force: false,
+          timeoutMs: 15_000
+        }).catch(() => null);
+        results = await Promise.allSettled([
+          fetchProfilesByOwnerAcrossChains(address, [config.chainId]),
+          fetchCollectionsByOwnerAcrossChains(address, [config.chainId])
+        ]);
+      }
+      return results;
     })()
       .then((results) => {
         if (cancelled) return;
 
         const profileResult = results[0];
         const collectionResult = results[1];
-        const onchainResult = results[2];
 
         const linkedProfiles =
           profileResult.status === "fulfilled" ? profileResult.value.profiles || [] : [];
         const indexedCollections = collectionResult.status === "fulfilled" ? collectionResult.value.collections || [] : [];
-        const onchainCollections = onchainResult.status === "fulfilled" ? onchainResult.value.collections || [] : [];
-        const discoveredEnsNames = onchainResult.status === "fulfilled" ? onchainResult.value.ensNames || [] : [];
+        const discoveredEnsNames = deriveEnsNamesFromCollections(indexedCollections);
         setOnchainIdentity({
           ensNames: discoveredEnsNames,
-          collections: onchainCollections
+          collections: indexedCollections
         });
-        const mergedCollections = dedupeCollections([...indexedCollections, ...onchainCollections]);
+        const mergedCollections = dedupeCollections(indexedCollections);
         const derivedProfiles = mergedCollections.map(normalizeDerivedProfile).filter((item): item is ApiProfileRecord => !!item);
 
         let cachedProfiles: ApiProfileRecord[] = [];
@@ -185,15 +200,12 @@ export default function ProfileSelectorClient() {
         if (nextProfiles.length === 0) {
           if (
             profileResult.status === "rejected" &&
-            collectionResult.status === "rejected" &&
-            onchainResult.status === "rejected"
+            collectionResult.status === "rejected"
           ) {
             const reason =
               profileResult.reason instanceof Error
                 ? profileResult.reason.message
-                : collectionResult.reason instanceof Error
-                  ? collectionResult.reason.message
-                  : "Indexer request failed";
+                : collectionResult.reason instanceof Error ? collectionResult.reason.message : "Indexer request failed";
             setNote(`Profile lookup is unavailable right now (${reason}). Open setup to continue with manual creator onboarding.`);
             return;
           }
@@ -209,7 +221,7 @@ export default function ProfileSelectorClient() {
 
         if (
           profileResult.status === "rejected" &&
-          (collectionResult.status === "fulfilled" || onchainResult.status === "fulfilled")
+          collectionResult.status === "fulfilled"
         ) {
           const reason =
             profileResult.reason instanceof Error ? profileResult.reason.message : "Direct profile lookup failed";

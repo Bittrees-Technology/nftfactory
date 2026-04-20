@@ -52,7 +52,6 @@ import {
   getMintStatusLabel
 } from "../../lib/nftPresentation";
 import { verifyOwnedCollectionsOnChain } from "../../lib/onchainCollections";
-import { fetchWalletIdentity } from "../../lib/walletIdentityApi";
 import {
   formatRoyaltySplitRegistryMissingMessage,
   getRoyaltySplitRegistryEnvHint
@@ -273,6 +272,16 @@ function deriveEnsRouteFromName(fullName: string): string {
   if (parts.length === 0) return "";
   if (!parts.every((part) => Boolean(part.trim()))) return "";
   return parts.reverse().join(".");
+}
+
+function deriveEnsNamesFromOwnedCollections(
+  collections: Array<{ ensSubname?: string | null }>
+): string[] {
+  return [...new Set(
+    collections
+      .map((item) => String(item.ensSubname || "").trim().toLowerCase())
+      .filter((value) => value.endsWith(".eth"))
+  )].sort((left, right) => left.localeCompare(right));
 }
 
 async function resolveEnsEffectiveOwner(
@@ -1549,40 +1558,29 @@ export default function MintClient({
 
     void (async () => {
       const shouldSyncIndexer = knownCollections.length === 0;
-      if (shouldSyncIndexer) {
+      let collectionsResult = await fetchCollectionsByOwnerAcrossChains(account, [config.chainId]).catch(() => null);
+      let profilesResult = await fetchProfilesByOwnerAcrossChains(account, [config.chainId]).catch(() => null);
+
+      const shouldRetryAfterSync =
+        shouldSyncIndexer &&
+        ((collectionsResult?.collections || []).length === 0 || (profilesResult?.profiles || []).length === 0);
+
+      if (shouldRetryAfterSync) {
         await syncWalletScope(account, {
           chainId: config.chainId,
           force: false,
           timeoutMs: 8_000
         }).catch(() => null);
+        const [nextCollections, nextProfiles] = await Promise.all([
+          fetchCollectionsByOwnerAcrossChains(account, [config.chainId]).catch(() => null),
+          fetchProfilesByOwnerAcrossChains(account, [config.chainId]).catch(() => null)
+        ]);
+        collectionsResult = nextCollections;
+        profilesResult = nextProfiles;
       }
 
-      if (isAddress(config.registry)) {
-        const result = await fetchWalletIdentity({
-          chainId: config.chainId,
-          ownerAddress: account
-        }).catch(() => null);
-        if (!cancelled) {
-          setDiscoveredEnsNames(result?.ensNames || []);
-          const owned = (result?.collections || []).map((item) => ({
-            chainId: item.chainId,
-            contractAddress: item.contractAddress,
-            ensSubname: item.ensSubname,
-            ownerAddress: item.ownerAddress,
-            createdAt: item.createdAt,
-            updatedAt: item.updatedAt
-          }));
-          if (owned.length > 0) {
-            mergeKnownCollections(owned);
-          }
-        }
-      } else if (!cancelled) {
-        setDiscoveredEnsNames([]);
-      }
-
-      const result = await fetchCollectionsByOwnerAcrossChains(account, [config.chainId]).catch(() => null);
-      if (cancelled || !result) return;
-      const owned = result.collections
+      if (cancelled) return;
+      const ownedCollections = (collectionsResult?.collections || [])
         .filter((item) => item.ownerAddress.toLowerCase() === account.toLowerCase())
         .map((item) => ({
           chainId: item.chainId,
@@ -1592,19 +1590,18 @@ export default function MintClient({
           createdAt: item.createdAt,
           updatedAt: item.updatedAt
         }));
-      if (owned.length > 0) {
-        mergeKnownCollections(owned);
+      setDiscoveredEnsNames(deriveEnsNamesFromOwnedCollections(ownedCollections));
+      if (ownedCollections.length > 0) {
+        mergeKnownCollections(ownedCollections);
       }
 
-      const profiles = await fetchProfilesByOwnerAcrossChains(account, [config.chainId]).catch(() => null);
-      if (cancelled) return;
-      setOwnedProfiles((profiles?.profiles || []).map((profile) => ({ fullName: profile.fullName })));
+      setOwnedProfiles(((profilesResult?.profiles || []).map((profile) => ({ fullName: profile.fullName }))));
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [account, config.chainId, config.registry, knownCollections.length, needsWalletCollectionLookup]);
+  }, [account, config.chainId, knownCollections.length, needsWalletCollectionLookup]);
 
   useEffect(() => {
     if (!needsWalletCollectionLookup || !account) {

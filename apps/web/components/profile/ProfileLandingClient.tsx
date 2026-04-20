@@ -25,7 +25,6 @@ import {
 } from "../../lib/indexerApi";
 import { verifyOwnedCollectionsOnChain } from "../../lib/onchainCollections";
 import { fetchCollectionsByOwnerAcrossChains, fetchProfilesByOwnerAcrossChains } from "../../lib/ownerIdentityMultiChain";
-import { fetchWalletIdentity } from "../../lib/walletIdentityApi";
 
 const SUBNAME_FEE_ETH = "0.001";
 const ENS_NAME_WRAPPER_ADDRESS = /^0x[a-fA-F0-9]{40}$/.test(process.env.NEXT_PUBLIC_ENS_NAME_WRAPPER_ADDRESS || "")
@@ -241,6 +240,16 @@ function collectExistingEnsIdentityOptions(
     }
   }
   return [...candidates].sort((a, b) => a.localeCompare(b));
+}
+
+function deriveEnsNamesFromCollections(
+  collections: Array<{ ensSubname?: string | null }>
+): string[] {
+  return [...new Set(
+    collections
+      .map((item) => String(item.ensSubname || "").trim().toLowerCase())
+      .filter((value) => value.endsWith(".eth"))
+  )].sort((left, right) => left.localeCompare(right));
 }
 
 function sourceToIdentityMode(source: ApiProfileRecord["source"]): "ens" | "external-subname" | "nftfactory-subname" {
@@ -499,19 +508,29 @@ export default function ProfileLandingClient({
 
     let cancelled = false;
     void (async () => {
-      await syncWalletScope(address, {
-        chainId: config.chainId,
-        force: false,
-        timeoutMs: 15_000
-      }).catch(() => null);
-      return Promise.allSettled([
+      let results = await Promise.allSettled([
         fetchProfilesByOwnerAcrossChains(address, [config.chainId]),
-        fetchCollectionsByOwnerAcrossChains(address, [config.chainId]),
-        fetchWalletIdentity({
-          chainId: config.chainId,
-          ownerAddress: address
-        })
+        fetchCollectionsByOwnerAcrossChains(address, [config.chainId])
       ]);
+      const profileResult = results[0];
+      const collectionResult = results[1];
+      const shouldRetryAfterSync =
+        (profileResult.status === "rejected" && collectionResult.status === "rejected") ||
+        ((profileResult.status === "fulfilled" ? profileResult.value.profiles.length : 0) === 0 &&
+          (collectionResult.status === "fulfilled" ? collectionResult.value.collections.length : 0) === 0);
+
+      if (shouldRetryAfterSync) {
+        await syncWalletScope(address, {
+          chainId: config.chainId,
+          force: false,
+          timeoutMs: 15_000
+        }).catch(() => null);
+        results = await Promise.allSettled([
+          fetchProfilesByOwnerAcrossChains(address, [config.chainId]),
+          fetchCollectionsByOwnerAcrossChains(address, [config.chainId])
+        ]);
+      }
+      return results;
     })()
       .then((results) => {
         if (cancelled) return;
@@ -525,16 +544,10 @@ export default function ProfileLandingClient({
         }
 
         const collectionResult = results[1];
-        const onchainResult = results[2];
-        if (onchainResult.status === "fulfilled") {
-          setDiscoveredEnsNames(onchainResult.value.ensNames || []);
-        } else {
-          setDiscoveredEnsNames([]);
-        }
-        if (collectionResult.status === "fulfilled" || onchainResult.status === "fulfilled") {
+        if (collectionResult.status === "fulfilled") {
+          setDiscoveredEnsNames(deriveEnsNamesFromCollections(collectionResult.value.collections || []));
           const nextCollections = dedupeCollections([
-            ...(collectionResult.status === "fulfilled" ? collectionResult.value.collections || [] : []),
-            ...(onchainResult.status === "fulfilled" ? onchainResult.value.collections || [] : [])
+            ...(collectionResult.value.collections || [])
           ]);
           setCollections(nextCollections);
           setSelectedCollection((current) => {
@@ -565,7 +578,7 @@ export default function ProfileLandingClient({
     return () => {
       cancelled = true;
     };
-  }, [address, config.chainId, config.registry, initialCollectionAddress, isConnected, publicClient]);
+  }, [address, config.chainId, initialCollectionAddress, isConnected, publicClient]);
 
   useEffect(() => {
     if (!address) {
