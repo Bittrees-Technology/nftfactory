@@ -266,6 +266,7 @@ const CHAIN_ID = Number.parseInt(process.env.CHAIN_ID || "1", 10);
 const PORT = Number.parseInt(process.env.INDEXER_PORT || "8787", 10);
 const HOST = process.env.INDEXER_HOST || "127.0.0.1";
 const ADMIN_TOKEN = process.env.INDEXER_ADMIN_TOKEN || "";
+const WEBHOOK_SECRET = process.env.INDEXER_WEBHOOK_SECRET || "";
 const TRUST_PROXY = process.env.TRUST_PROXY === "true";
 const MODERATOR_REGISTRY_ADDRESS = process.env.MODERATOR_REGISTRY_ADDRESS || "";
 const REGISTRY_ADDRESS = process.env.REGISTRY_ADDRESS || process.env.NEXT_PUBLIC_REGISTRY_ADDRESS || "";
@@ -441,6 +442,7 @@ type RequestHandlerConfig = {
   rpcUrl: string;
   rpcUrls?: string[];
   adminToken: string;
+  webhookSecret: string;
   adminAllowlist: Set<string>;
   trustProxy: boolean;
   marketplaceAddress: `0x${string}` | null;
@@ -4407,6 +4409,238 @@ async function readJsonBody<T>(req: IncomingMessage): Promise<T> {
   }
 }
 
+function assertWebhookRequest(req: IncomingMessage, config: RequestHandlerConfig): { ok: true } | { ok: false; error: string } {
+  const expected = String(config.webhookSecret || "").trim();
+  if (!expected) {
+    return { ok: false, error: "Webhook ingestion is not configured." };
+  }
+
+  const authorization = String(req.headers.authorization || "").trim();
+  const bearerToken = parseBearerToken(authorization);
+  const headerToken = String(req.headers["x-indexer-webhook-secret"] || req.headers["x-webhook-secret"] || "").trim();
+  const token = bearerToken || headerToken;
+  if (!token) {
+    return { ok: false, error: "Missing webhook secret." };
+  }
+  if (token !== expected) {
+    return { ok: false, error: "Invalid webhook secret." };
+  }
+  return { ok: true };
+}
+
+type WebhookCollectionActivity = {
+  contractAddress: string;
+  standard?: "ERC721" | "ERC1155";
+  ownerAddress?: string;
+  ensSubname?: string | null;
+  isFactoryCreated?: boolean;
+};
+
+type GenericWebhookPayload = {
+  type?: string;
+  event?: {
+    activity?: Array<{
+      contractAddress?: string;
+      fromAddress?: string;
+      toAddress?: string;
+      category?: string;
+      log?: { address?: string | null } | null;
+    }>;
+    data?: {
+      block?: {
+        logs?: Array<{
+          address?: string;
+          decoded?: {
+            name?: string;
+            args?: Record<string, unknown>;
+          };
+        }>;
+      };
+      logs?: Array<{
+        address?: string;
+        decoded?: {
+          name?: string;
+          args?: Record<string, unknown>;
+        };
+      }>;
+    };
+  };
+  activity?: Array<{
+    contractAddress?: string;
+    fromAddress?: string;
+    toAddress?: string;
+    category?: string;
+    log?: { address?: string | null } | null;
+  }>;
+  logs?: Array<{
+    address?: string;
+    decoded?: {
+      name?: string;
+      args?: Record<string, unknown>;
+    };
+  }>;
+};
+
+function normalizeWebhookStandard(category: unknown): "ERC721" | "ERC1155" | undefined {
+  const normalized = String(category || "").trim().toLowerCase();
+  if (normalized === "erc721") return "ERC721";
+  if (normalized === "erc1155") return "ERC1155";
+  return undefined;
+}
+
+async function extractWebhookCollectionActivity(
+  payload: GenericWebhookPayload,
+  deps: IndexerDeps,
+  config: RequestHandlerConfig
+): Promise<{
+  collections: WebhookCollectionActivity[];
+  registryTouched: boolean;
+  marketplaceTouched: boolean;
+}> {
+  const collectionMap = new Map<string, WebhookCollectionActivity>();
+  let registryTouched = false;
+  let marketplaceTouched = false;
+
+  const appendCollection = (input: WebhookCollectionActivity | null | undefined) => {
+    const contractAddress = String(input?.contractAddress || "").trim().toLowerCase();
+    if (!isAddress(contractAddress)) return;
+    const existing = collectionMap.get(contractAddress);
+    collectionMap.set(contractAddress, {
+      contractAddress,
+      standard: input?.standard || existing?.standard,
+      ownerAddress:
+        (input?.ownerAddress && isAddress(String(input.ownerAddress).toLowerCase())
+          ? String(input.ownerAddress).toLowerCase()
+          : undefined) || existing?.ownerAddress,
+      ensSubname: input?.ensSubname ?? existing?.ensSubname ?? null,
+      isFactoryCreated: input?.isFactoryCreated ?? existing?.isFactoryCreated
+    });
+  };
+
+  const logs = [
+    ...((payload.event?.data?.block?.logs || []) as Array<{ address?: string; decoded?: { name?: string; args?: Record<string, unknown> } }>),
+    ...((payload.event?.data?.logs || []) as Array<{ address?: string; decoded?: { name?: string; args?: Record<string, unknown> } }>),
+    ...((payload.logs || []) as Array<{ address?: string; decoded?: { name?: string; args?: Record<string, unknown> } }>)
+  ];
+
+  for (const logEntry of logs) {
+    const address = String(logEntry?.address || "").trim().toLowerCase();
+    if (!isAddress(address)) continue;
+    if (config.registryAddress && address === config.registryAddress) {
+      registryTouched = true;
+      const decodedName = String(logEntry.decoded?.name || "").trim();
+      const args = logEntry.decoded?.args || {};
+      if (decodedName === "CreatorRegistered") {
+        appendCollection({
+          contractAddress: String(args.contractAddress || ""),
+          ownerAddress: String(args.creator || ""),
+          ensSubname: String(args.ensSubname || "").trim() || null,
+          standard: normalizeWebhookStandard(args.standard) || (String(args.standard || "").trim().toUpperCase() === "ERC1155" ? "ERC1155" : "ERC721"),
+          isFactoryCreated: Boolean(args.isNftFactoryCreated)
+        });
+      }
+      continue;
+    }
+    if (config.marketplaceAddress && address === config.marketplaceAddress) {
+      marketplaceTouched = true;
+      continue;
+    }
+    appendCollection({ contractAddress: address });
+  }
+
+  const activities = [
+    ...((payload.event?.activity || []) as Array<{ contractAddress?: string; fromAddress?: string; toAddress?: string; category?: string; log?: { address?: string | null } | null }>),
+    ...((payload.activity || []) as Array<{ contractAddress?: string; fromAddress?: string; toAddress?: string; category?: string; log?: { address?: string | null } | null }>)
+  ];
+
+  for (const activity of activities) {
+    const contractAddress = String(activity.contractAddress || activity.log?.address || "").trim().toLowerCase();
+    if (!isAddress(contractAddress)) continue;
+    appendCollection({
+      contractAddress,
+      standard: normalizeWebhookStandard(activity.category)
+    });
+  }
+
+  const existingCollections = collectionMap.size > 0
+    ? await deps.prisma.collection.findMany({
+        where: {
+          contractAddress: {
+            in: Array.from(collectionMap.keys())
+          }
+        },
+        select: {
+          contractAddress: true,
+          ownerAddress: true,
+          standard: true,
+          ensSubname: true,
+          isFactoryCreated: true
+        }
+      })
+    : [];
+
+  for (const existing of existingCollections as Array<any>) {
+    appendCollection({
+      contractAddress: existing.contractAddress,
+      ownerAddress: existing.ownerAddress,
+      standard: String(existing.standard || "").trim().toUpperCase() === "ERC1155" ? "ERC1155" : "ERC721",
+      ensSubname: existing.ensSubname || null,
+      isFactoryCreated: Boolean(existing.isFactoryCreated)
+    });
+  }
+
+  return {
+    collections: Array.from(collectionMap.values()),
+    registryTouched,
+    marketplaceTouched
+  };
+}
+
+async function ingestWebhookPayload(
+  payload: GenericWebhookPayload,
+  deps: IndexerDeps,
+  config: RequestHandlerConfig
+): Promise<{
+  registryTouched: boolean;
+  marketplaceTouched: boolean;
+  collectionContracts: string[];
+}> {
+  const activity = await extractWebhookCollectionActivity(payload, deps, config);
+
+  if (activity.registryTouched) {
+    await syncRegistryCollectionsIfStale(deps, config, { bypassTtl: true });
+  }
+
+  for (const item of activity.collections) {
+    await syncCollectionTokensIfStale(
+      {
+        contractAddress: item.contractAddress,
+        ownerAddress: item.ownerAddress,
+        standard: item.standard,
+        ensSubname: item.ensSubname ?? null,
+        isFactoryCreated: item.isFactoryCreated
+      },
+      deps,
+      config,
+      { force: true }
+    );
+  }
+
+  if (activity.marketplaceTouched) {
+    await syncMarketplaceIfAllowed(deps, config, {
+      includeListings: true,
+      includeOffers: true,
+      force: true
+    });
+  }
+
+  return {
+    registryTouched: activity.registryTouched,
+    marketplaceTouched: activity.marketplaceTouched,
+    collectionContracts: activity.collections.map((item) => item.contractAddress)
+  };
+}
+
 async function ensureTokenForListing(
   payload: CreateReportPayload,
   deps: IndexerDeps,
@@ -5487,17 +5721,18 @@ async function syncParticipantContractsIfStale(
 async function syncRegistryCollectionsIfStale(
   deps: IndexerDeps,
   config: RequestHandlerConfig,
-  options?: { force?: boolean }
+  options?: { force?: boolean; bypassTtl?: boolean }
 ): Promise<void> {
   if (!String(config.rpcUrl || "").trim()) return;
   const force = options?.force === true;
+  const bypassTtl = options?.bypassTtl === true;
   const now = Date.now();
 
   if (registrySyncPromise) {
     await registrySyncPromise;
     return;
   }
-  if (!force && now - lastRegistrySyncAt < REGISTRY_SYNC_TTL_MS) {
+  if (!force && !bypassTtl && now - lastRegistrySyncAt < REGISTRY_SYNC_TTL_MS) {
     return;
   }
 
@@ -5836,7 +6071,27 @@ async function handleRequest(
         lastRegistrySyncAt: lastRegistrySyncAt > 0 ? new Date(lastRegistrySyncAt).toISOString() : null,
         registrySyncTtlMs: REGISTRY_SYNC_TTL_MS,
         collectionSyncTtlMs: COLLECTION_SYNC_TTL_MS
+      },
+      webhooks: {
+        configured: Boolean(config.webhookSecret),
+        provider: "alchemy-compatible"
       }
+    });
+    return;
+  }
+
+  if (req.method === "POST" && path === "/api/webhooks/alchemy") {
+    const auth = assertWebhookRequest(req, config);
+    if (!auth.ok) {
+      sendJson(res, config.webhookSecret ? 401 : 503, { error: auth.error });
+      return;
+    }
+
+    const payload = await readJsonBody<GenericWebhookPayload>(req);
+    const result = await ingestWebhookPayload(payload, deps, config);
+    sendJson(res, 200, {
+      ok: true,
+      ...result
     });
     return;
   }
@@ -6445,9 +6700,6 @@ async function handleRequest(
 
   if (req.method === "GET" && path === "/api/profiles") {
     const owner = String(url.searchParams.get("owner") || "").trim().toLowerCase();
-    if (owner && isAddress(owner)) {
-      await withSoftTimeout(syncOwnerCollectionsIfAllowed(owner, deps, config), 3_500, undefined);
-    }
 
     const includeListingV2 = await hasListingV2Columns(deps);
     const q = String(url.searchParams.get("q") || "").trim().toLowerCase();
@@ -8606,6 +8858,7 @@ export async function main() {
     rpcUrl,
     rpcUrls,
     adminToken: ADMIN_TOKEN,
+    webhookSecret: WEBHOOK_SECRET,
     adminAllowlist: ADMIN_ALLOWLIST,
     trustProxy: TRUST_PROXY,
     marketplaceAddress:
