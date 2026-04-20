@@ -356,6 +356,15 @@ nav {
 .wikiTocLink {
   color: #5b4b3f;
   font-size: 0.95rem;
+  border-radius: 8px;
+  padding: 4px 8px;
+  margin-left: -8px;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.wikiTocLink.active {
+  color: #7f220f;
+  background: #fff0df;
 }
 
 .wikiTocLevel3 {
