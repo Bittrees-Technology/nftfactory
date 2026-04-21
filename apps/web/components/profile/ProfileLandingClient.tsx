@@ -137,6 +137,39 @@ const SUBNAME_REGISTRAR_ABI = [
   }
 ] as const;
 
+const PROFILE_IDENTITY_ACTIONS = [
+  {
+    mode: "nftfactory-subname",
+    eyebrow: "Fastest path",
+    title: "Create nftfactory.eth subname",
+    description: "Mint a creator identity directly under nftfactory.eth and use it as the default profile route."
+  },
+  {
+    mode: "register-eth",
+    eyebrow: "Primary ENS",
+    title: "Register a new .eth name",
+    description: "Run the ENS commit and register flow, then make that name the canonical identity for this creator page."
+  },
+  {
+    mode: "register-eth-subname",
+    eyebrow: "Existing parent",
+    title: "Create a subname under your ENS",
+    description: "Use a parent ENS name you already control to mint a new creator-facing subname."
+  },
+  {
+    mode: "ens",
+    eyebrow: "Bring existing name",
+    title: "Link existing ENS",
+    description: "Attach an ENS name already owned by this wallet without creating a new onchain identity."
+  },
+  {
+    mode: "external-subname",
+    eyebrow: "Bring existing subname",
+    title: "Link existing ENS subname",
+    description: "Attach an ENS subname already owned by this wallet and use it as the public creator route."
+  }
+] as const;
+
 type PendingEnsRegistration = {
   fullName: string;
   label: string;
@@ -761,6 +794,28 @@ export default function ProfileLandingClient({
     if (lookupNote) return "Status: review the current check result";
     return "";
   }, [checkedIdentityReady, identityMode, lookupNote, normalizedFullName, slug]);
+  const primaryActionDisabled =
+    !slug ||
+    !normalizedFullName ||
+    (identityMode === "register-eth-subname" && !String(subnameParent || "").trim()) ||
+    (identityMode === "ens" && existingEnsOptions.length === 0) ||
+    (identityMode === "external-subname" && existingSubnameOptions.length === 0);
+  const primaryActionLabel = checkedIdentityReady
+    ? identityMode === "register-eth"
+      ? "Start registration"
+      : identityMode === "nftfactory-subname"
+        ? "Create now"
+        : identityMode === "register-eth-subname"
+          ? "Create now"
+          : "Link now"
+    : identityMode === "register-eth"
+      ? "Check availability"
+      : identityMode === "nftfactory-subname"
+        ? "Check label"
+        : identityMode === "register-eth-subname"
+          ? "Check parent ownership"
+          : "Check in ENS";
+  const collectionOptions = verifiedCollections.length > 0 ? verifiedCollections : collections;
 
   async function runIdentityAction(): Promise<void> {
     if (identityMode === "register-eth") {
@@ -1486,102 +1541,88 @@ export default function ProfileLandingClient({
   }
 
   return (
-    <section className="wizard">
-      <div className="card formCard">
-        <h3>Wallet</h3>
-        <p className="hint">{address || "Connect a wallet from the header to link a creator profile."}</p>
-        <p className="hint">Network: {appChain.name}</p>
-        {isConnected && discoveredEnsNames.length > 0 ? (
-          <p className="hint">
-            Onchain identities found for this wallet: {discoveredEnsNames.join(", ")}.
+    <section className="wizard profileSetupPage">
+      <div className="card formCard profileSetupHero">
+        <div className="profileSetupHeroCopy">
+          <p className="eyebrow">Creator Onboarding</p>
+          <h2>Set up the public identity for this creator page</h2>
+          <p className="sectionLead">
+            Choose whether to create a new identity or link one you already own, then attach it to a profile route and optional collection in one pass.
           </p>
-        ) : null}
-        {wrongNetwork ? (
-          <p className="hint">
-            Use the header wallet button to select {appChain.name} before registering a .eth name or creating an ENS
-            subname.
-          </p>
-        ) : null}
+        </div>
+        <div className="profileSetupHeroStats">
+          <div className="profileSetupStat">
+            <strong>Wallet</strong>
+            <span className="mono">{address || "Not connected"}</span>
+          </div>
+          <div className="profileSetupStat">
+            <strong>Network</strong>
+            <span>{appChain.name}</span>
+          </div>
+          <div className="profileSetupStat">
+            <strong>Discovered identities</strong>
+            <span>{discoveredEnsNames.length}</span>
+          </div>
+          <div className="profileSetupStat">
+            <strong>Verified collections</strong>
+            <span>{collectionOptions.length}</span>
+          </div>
+        </div>
       </div>
 
-      <div className="card formCard">
-        <h3>Creator Identity</h3>
-        <p className="sectionLead">
-          Choose how this creator identity should be created or linked. By default, NFTFactory creates a{" "}
-          <span className="mono">nftfactory.eth</span> subname unless you choose an ENS option instead.
-        </p>
-        {isConnected && profiles.length > 0 ? (
-          <p className="hint">
-            This wallet already has a linked profile. Identity actions here update the canonical name. Use{" "}
-            <Link href={`/profile/${encodeURIComponent(profiles[0].slug)}`}>the profile page</Link> to edit display details.
-          </p>
-        ) : null}
-        <div className="profileIdentityControlRow">
-          <label className="profileIdentityControlLeft">
-            Identity action
-            <select
-              value={identityMode}
-              onChange={(e) =>
-                setIdentityMode(
-                  e.target.value as
-                    | "register-eth"
-                    | "register-eth-subname"
-                    | "ens"
-                    | "external-subname"
-                    | "nftfactory-subname"
-                )
-              }
-            >
-              <optgroup label="Create New">
-                <option value="nftfactory-subname">Create nftfactory.eth subname</option>
-                <option value="register-eth">Register .eth</option>
-                <option value="register-eth-subname">Register .eth subname</option>
-              </optgroup>
-              <optgroup label="Link Existing">
-                <option value="ens">Link existing ENS</option>
-                <option value="external-subname">Link existing ENS subname</option>
-              </optgroup>
-            </select>
-          </label>
-          <label className="profileIdentityControlCenter">
-            {identityLabel}
-            {identityMode === "register-eth-subname" ? (
-              <>
-                <div className="gridMini">
-                  <label>
-                    New subname label
-                    <input value={identityName} onChange={(e) => setIdentityName(e.target.value)} />
-                  </label>
-                  <label>
-                    Parent ENS name
-                    <select
-                      value={selectedSubnameParentOption}
-                      onChange={(e) => setSubnameParent(e.target.value)}
-                      disabled={ensParentCandidates.length === 0}
-                    >
-                      <option value="">Select parent ENS name</option>
-                      {ensParentCandidates.map((candidate) => (
-                        <option key={candidate} value={candidate}>
-                          {candidate}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-                {ensParentCandidates.length === 0 ? (
-                  <p className="hint">
-                    No existing parent ENS names are available in your inventory yet. Register a parent <span className="mono">.eth</span> name first.
-                  </p>
-                ) : null}
-                {normalizedFullName ? (
-                  <p className="hint">
-                    Full subname: <span className="mono">{normalizedFullName}</span>
-                  </p>
-                ) : null}
-              </>
-            ) : (
-              <>
-                {identityMode === "ens" || identityMode === "external-subname" ? (
+      <div className="profileSetupGrid">
+        <div className="profileSetupMain">
+          <div className="card formCard profileSetupCard">
+            <SectionTitle title="1. Choose identity path" subtitle="Start with the kind of name this creator page should publish under." />
+            <div className="profileSetupModeGrid">
+              {PROFILE_IDENTITY_ACTIONS.map((option) => (
+                <button
+                  key={option.mode}
+                  type="button"
+                  className={`profileSetupModeCard ${identityMode === option.mode ? "is-active" : ""}`.trim()}
+                  onClick={() => setIdentityMode(option.mode)}
+                >
+                  <span className="eyebrow">{option.eyebrow}</span>
+                  <strong>{option.title}</strong>
+                  <span>{option.description}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="card formCard profileSetupCard">
+            <SectionTitle title="2. Configure identity" subtitle={identityHint} />
+            <div className="profileSetupFieldStack">
+              <label>
+                {identityLabel}
+                {identityMode === "register-eth-subname" ? (
+                  <>
+                    <div className="gridMini">
+                      <label>
+                        New subname label
+                        <input value={identityName} onChange={(e) => setIdentityName(e.target.value)} placeholder="artist" />
+                      </label>
+                      <label>
+                        Parent ENS name
+                        <select
+                          value={selectedSubnameParentOption}
+                          onChange={(e) => setSubnameParent(e.target.value)}
+                          disabled={ensParentCandidates.length === 0}
+                        >
+                          <option value="">Select parent ENS name</option>
+                          {ensParentCandidates.map((candidate) => (
+                            <option key={candidate} value={candidate}>
+                              {candidate}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                    {normalizedFullName ? (
+                      <p className="hint">Full subname: <span className="mono">{normalizedFullName}</span></p>
+                    ) : null}
+                  </>
+                ) : identityMode === "ens" || identityMode === "external-subname" ? (
                   <select
                     value={identityName}
                     onChange={(e) => setIdentityName(e.target.value)}
@@ -1597,158 +1638,187 @@ export default function ProfileLandingClient({
                     ))}
                   </select>
                 ) : (
-                  <input value={identityName} onChange={(e) => setIdentityName(e.target.value)} />
+                  <input value={identityName} onChange={(e) => setIdentityName(e.target.value)} placeholder="artist" />
                 )}
-                {(identityMode === "ens" || identityMode === "external-subname") &&
-                (identityMode === "ens" ? existingEnsOptions : existingSubnameOptions).length === 0 ? (
-                  <p className="hint">
-                    No {identityMode === "ens" ? "ENS names" : "ENS subnames"} exist in your inventory yet.{" "}
-                    {identityMode === "ens" ? "Register or mint one first." : "Create or mint one first."}
-                  </p>
-                ) : null}
-              </>
-            )}
-          </label>
-          <div className="profileIdentityControlRight">
-            <span className="detailLabel">{checkedIdentityReady ? "Next action" : "Name check"}</span>
-            <button
-              type="button"
-              className={checkedIdentityReady ? "profileActionReady" : undefined}
-              onClick={() =>
-                void (
-                  checkedIdentityReady
-                    ? runIdentityAction()
-                    : checkIdentityAvailability()
-                )
-              }
-              disabled={
-                !slug ||
-                !normalizedFullName ||
-                (identityMode === "register-eth-subname" && !String(subnameParent || "").trim()) ||
-                (identityMode === "ens" && existingEnsOptions.length === 0) ||
-                (identityMode === "external-subname" && existingSubnameOptions.length === 0)
-              }
-            >
-              {checkedIdentityReady
-                ? identityMode === "register-eth"
-                  ? "Start registration"
-                  : identityMode === "nftfactory-subname"
-                    ? "Create now"
-                    : identityMode === "register-eth-subname"
-                      ? "Create now"
-                      : "Link now"
-                : identityMode === "register-eth"
-                  ? "Check availability"
-                : identityMode === "nftfactory-subname"
-                  ? "Check label"
-                  : identityMode === "register-eth-subname"
-                      ? "Check parent ownership"
-                      : "Check in ENS"}
-            </button>
-          </div>
-        </div>
-        {identityMode === "register-eth" ? (
-          <div className="gridMini">
-            <label>
-              Registration length
-              <select value={registrationYears} onChange={(e) => setRegistrationYears(e.target.value)}>
-                <option value="1">1 year</option>
-                <option value="2">2 years</option>
-                <option value="3">3 years</option>
-                <option value="5">5 years</option>
-              </select>
-            </label>
-          </div>
-        ) : null}
-        {identityMode === "register-eth" ? <p className="hint">Registration step: {ensRegistrationStep}</p> : null}
-        {identityMode === "register-eth" && slug ? (
-          <p className="hint">
-            Target: <span className="mono">{normalizeLabel(identityName.replace(/\.eth$/i, ""))}.eth</span> for{" "}
-            {registrationYears} year{registrationYears === "1" ? "" : "s"}.
-          </p>
-        ) : null}
-        <div className="gridMini">
-          <label>
-            Linked collection (optional)
-            <select value={selectedCollection} onChange={(e) => setSelectedCollection(e.target.value)}>
-              <option value="">No collection linked</option>
-              {collections.map((collection) => (
-                <option key={collection.contractAddress} value={collection.contractAddress}>
-                  {collection.ensSubname?.trim() || collection.contractAddress}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-        <p className="hint">{identityHint}</p>
-        {identityMode === "register-eth" && pendingEnsRegistration ? (
-          <div className="row">
-            <button
-              type="button"
-              onClick={() => void completeEthRegistration()}
-              disabled={!isConnected || setupState.status === "pending" || wrongNetwork || registrationCountdown > 0}
-            >
-              {setupState.status === "pending"
-                ? "Working..."
-                : registrationCountdown > 0
-                  ? `Wait ${registrationCountdown}s`
-                  : "Complete registration"}
-            </button>
-            <button type="button" className="secondary" onClick={clearPendingEthRegistration}>
-              Reset pending
-            </button>
-          </div>
-        ) : null}
-        <p className="hint">
-          {derivedRouteSlug
-            ? `Profile route: /profile/${derivedRouteSlug}`
-            : "Profile routes use reversed ENS labels like /profile/eth.artist, and plain labels for nftfactory subnames."}
-        </p>
-        {identityMode === "register-eth" && pendingEnsRegistration ? (
-          <p className="hint">
-            Pending commit: {pendingEnsRegistration.fullName}.{" "}
-            Estimated register cost: {formatEther(BigInt(pendingEnsRegistration.estimatedCostWei))} ETH.{" "}
-            {registrationCountdown > 0
-              ? `You can complete registration in ${registrationCountdown}s.`
-              : "You can now complete the register transaction."}
-          </p>
-        ) : null}
-        {identityStatusText ? <p className={checkedIdentityReady ? "success" : "hint"}>{identityStatusText}</p> : null}
-        {lookupNote ? <p className="hint">{lookupNote}</p> : null}
-        {setupState.status === "error" ? <p className="error">{setupState.message}</p> : null}
-        {setupState.status === "pending" ? <p className="hint">{setupState.message}</p> : null}
-        {setupState.status === "success" ? (
-          <>
-            <p className="success">
-              {setupState.message}{" "}
-              {setupState.hash ? (
-                explorerBase ? (
-                  <a href={`${explorerBase}/tx/${setupState.hash}`} target="_blank" rel="noreferrer">
-                    {truncateHash(setupState.hash)}
-                  </a>
-                ) : (
-                  <span className="mono">{truncateHash(setupState.hash)}</span>
-                )
+              </label>
+
+              {identityMode === "register-eth" ? (
+                <div className="gridMini">
+                  <label>
+                    Registration length
+                    <select value={registrationYears} onChange={(e) => setRegistrationYears(e.target.value)}>
+                      <option value="1">1 year</option>
+                      <option value="2">2 years</option>
+                      <option value="3">3 years</option>
+                      <option value="5">5 years</option>
+                    </select>
+                  </label>
+                </div>
               ) : null}
-            </p>
-            {postLinkProfile ? (
-              <div className="row">
-                <Link href={`/profile/${encodeURIComponent(postLinkProfile.slug)}`} className="ctaLink">
-                  Open /profile/{postLinkProfile.slug}
-                </Link>
-                {postLinkMintCta ? (
-                  <Link
-                    href={`/mint?view=mint&collection=shared&profile=${encodeURIComponent(postLinkProfile.fullName)}`}
-                    className="ctaLink"
-                  >
-                    Continue to mint
-                  </Link>
-                ) : null}
+
+              <div className="gridMini">
+                <label>
+                  Linked collection (optional)
+                  <select value={selectedCollection} onChange={(e) => setSelectedCollection(e.target.value)}>
+                    <option value="">No collection linked</option>
+                    {collectionOptions.map((collection) => (
+                      <option key={collection.contractAddress} value={collection.contractAddress}>
+                        {collection.ensSubname?.trim() || collection.contractAddress}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               </div>
+
+              <div className="profileSetupActionRow">
+                <div className="profileSetupStatusBlock">
+                  <span className="detailLabel">{checkedIdentityReady ? "Next action" : "Name check"}</span>
+                  <strong>{identityStatusText || "Run a check to validate the selected name and route."}</strong>
+                </div>
+                <button
+                  type="button"
+                  className={checkedIdentityReady ? "profileActionReady" : undefined}
+                  onClick={() => void (checkedIdentityReady ? runIdentityAction() : checkIdentityAvailability())}
+                  disabled={primaryActionDisabled}
+                >
+                  {primaryActionLabel}
+                </button>
+              </div>
+
+              {identityMode === "register-eth" && pendingEnsRegistration ? (
+                <div className="profileSetupPendingRow">
+                  <button
+                    type="button"
+                    onClick={() => void completeEthRegistration()}
+                    disabled={!isConnected || setupState.status === "pending" || wrongNetwork || registrationCountdown > 0}
+                  >
+                    {setupState.status === "pending"
+                      ? "Working..."
+                      : registrationCountdown > 0
+                        ? `Wait ${registrationCountdown}s`
+                        : "Complete registration"}
+                  </button>
+                  <button type="button" className="secondary" onClick={clearPendingEthRegistration}>
+                    Reset pending
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="card formCard profileSetupCard">
+            <SectionTitle title="3. Status and next steps" subtitle="Keep the route, name check, and transaction state visible while you work." />
+            <div className="profileSetupStatusStack">
+              <p className="hint">
+                {derivedRouteSlug
+                  ? `Profile route: /profile/${derivedRouteSlug}`
+                  : "Profile routes use reversed ENS labels like /profile/eth.artist, and plain labels for nftfactory subnames."}
+              </p>
+              {identityMode === "register-eth" ? <p className="hint">Registration step: {ensRegistrationStep}</p> : null}
+              {identityMode === "register-eth" && slug ? (
+                <p className="hint">
+                  Target: <span className="mono">{normalizeLabel(identityName.replace(/\.eth$/i, ""))}.eth</span> for {registrationYears} year{registrationYears === "1" ? "" : "s"}.
+                </p>
+              ) : null}
+              {identityMode === "register-eth" && pendingEnsRegistration ? (
+                <p className="hint">
+                  Pending commit: {pendingEnsRegistration.fullName}. Estimated register cost: {formatEther(BigInt(pendingEnsRegistration.estimatedCostWei))} ETH.{" "}
+                  {registrationCountdown > 0 ? `You can complete registration in ${registrationCountdown}s.` : "You can now complete the register transaction."}
+                </p>
+              ) : null}
+              {lookupNote ? <p className="hint">{lookupNote}</p> : null}
+              {setupState.status === "error" ? <p className="error">{setupState.message}</p> : null}
+              {setupState.status === "pending" ? <p className="hint">{setupState.message}</p> : null}
+              {setupState.status === "success" ? (
+                <>
+                  <p className="success">
+                    {setupState.message}{" "}
+                    {setupState.hash ? (
+                      explorerBase ? (
+                        <a href={`${explorerBase}/tx/${setupState.hash}`} target="_blank" rel="noreferrer">
+                          {truncateHash(setupState.hash)}
+                        </a>
+                      ) : (
+                        <span className="mono">{truncateHash(setupState.hash)}</span>
+                      )
+                    ) : null}
+                  </p>
+                  {postLinkProfile ? (
+                    <div className="row">
+                      <Link href={`/profile/${encodeURIComponent(postLinkProfile.slug)}`} className="ctaLink">
+                        Open /profile/{postLinkProfile.slug}
+                      </Link>
+                      {postLinkMintCta ? (
+                        <Link
+                          href={`/mint?view=mint&collection=shared&profile=${encodeURIComponent(postLinkProfile.fullName)}`}
+                          className="ctaLink"
+                        >
+                          Continue to mint
+                        </Link>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </>
+              ) : null}
+            </div>
+          </div>
+        </div>
+
+        <aside className="profileSetupSidebar">
+          <div className="card formCard profileSetupSidebarCard">
+            <SectionTitle title="Route Preview" subtitle="How this identity will map into NFTFactory once it is linked or created." />
+            <div className="profileSetupPreviewBlock">
+              <strong>{normalizedFullName || "No identity selected yet"}</strong>
+              <span className="mono">{derivedRouteSlug ? `/profile/${derivedRouteSlug}` : "/profile/..."}</span>
+            </div>
+            <div className="detailGrid">
+              <DetailItem label="Action" value={identityLabel} />
+              <DetailItem label="Wallet state" value={isConnected ? "Connected" : "Connect wallet"} />
+              <DetailItem label="Network" value={wrongNetwork ? `Switch to ${appChain.name}` : appChain.name} />
+              <DetailItem label="Collection" value={selectedCollection ? truncateHash(selectedCollection) : "Optional"} />
+            </div>
+          </div>
+
+          <div className="card formCard profileSetupSidebarCard">
+            <SectionTitle title="Inventory Snapshot" subtitle="Useful context from the currently connected wallet." />
+            <div className="detailGrid">
+              <DetailItem label="Linked profiles" value={profiles.length} />
+              <DetailItem label="Verified collections" value={verifiedCollections.length} />
+              <DetailItem label="Indexed collections" value={collections.length} />
+              <DetailItem label="ENS names found" value={discoveredEnsNames.length} />
+            </div>
+            {isConnected && profiles.length > 0 ? (
+              <p className="hint">
+                This wallet already has a linked profile. Use <Link href={`/profile/${encodeURIComponent(profiles[0].slug)}`}>the profile page</Link> to edit published presentation details.
+              </p>
             ) : null}
-          </>
-        ) : null}
+            {isConnected && discoveredEnsNames.length > 0 ? (
+              <p className="hint">Onchain identities found for this wallet: {discoveredEnsNames.join(", ")}.</p>
+            ) : null}
+            {wrongNetwork ? (
+              <p className="hint">Use the header wallet button to select {appChain.name} before registering a .eth name or creating an ENS subname.</p>
+            ) : null}
+          </div>
+        </aside>
       </div>
     </section>
+  );
+}
+
+function SectionTitle({ title, subtitle }: { title: string; subtitle: string }) {
+  return (
+    <div className="profileSetupSectionHeader">
+      <h3>{title}</h3>
+      <p className="sectionLead">{subtitle}</p>
+    </div>
+  );
+}
+
+function DetailItem({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="detailItem">
+      <span className="detailLabel">{label}</span>
+      <span className="detailValue">{value}</span>
+    </div>
   );
 }
