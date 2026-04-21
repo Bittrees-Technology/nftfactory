@@ -2019,6 +2019,10 @@ button:disabled {
   min-width: 0;
 }
 
+.profileIdentityControlLeft {
+  align-self: start;
+}
+
 .profileIdentityControlRight {
   display: grid;
   gap: 8px;
