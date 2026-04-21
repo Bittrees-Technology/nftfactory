@@ -33,7 +33,7 @@ export default function WikiSidebar({
 
   return (
     <aside className="card wikiSidebar">
-      <p className="eyebrow">Documentation</p>
+      <p className="eyebrow">Creator Guide</p>
       <h1>Wiki</h1>
       <p className="sectionLead">{lead}</p>
       <label className="wikiSearchLabel">
@@ -43,7 +43,7 @@ export default function WikiSidebar({
           type="search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search wiki pages"
+          placeholder="Search creator guides"
         />
       </label>
       <div className="wikiLinkList">

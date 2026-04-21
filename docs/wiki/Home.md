@@ -1,66 +1,45 @@
-# NFTFactory Wiki
+# NFTFactory Guide
 
-## Current build scope
+NFTFactory lets creators publish from shared mint contracts or their own collection contracts, then attach ENS-based identity and a public profile page on top.
 
-The current live product is a mainnet-targeting creator flow that is still validated on Sepolia before release, with these active surfaces:
-
-1. **Landing**
-   - root entry at `/`
-   - links into mint and profile flows
-2. **Mint and collection management**
-   - publish through shared mint contracts or a creator-owned collection from `/mint`
-   - upload media and metadata from the web app
-   - view and manage collection royalty, split-policy, and identity state from the same workspace
-3. **Profiles and identity**
-   - resolve a connected wallet at `/profile`
-   - create or link identity at `/profile/setup`
-   - render the public creator page at `/profile/[name]`
-4. **Operations**
-   - the indexer mirrors chain state and serves read APIs
-   - deploy health is exposed through `/api/deploy/health` and reports the live IPFS auth posture
-   - wiki docs are maintained in `docs/wiki/`
-
-## Release focus
-
-The focus is hardening the current build, not broad feature expansion.
-
-Active work:
-
-- tightening Mint and Profile UX before full mainnet promotion
-- keeping indexer-backed profile routes, collection identity flows, and automatic backfills reliable on both Sepolia and mainnet
-- hardening the live Vercel + Cloudflare Tunnel + Kubo deployment path
-- validating the exact env wiring and contract addresses used by the live build
+This in-app wiki is intentionally trimmed to the pages that matter most to a creator or collector using the live product. It does not include internal operator runbooks, deployment notes, or infrastructure troubleshooting.
 
 ## Start Here
 
 | Page | Purpose |
 |------|---------|
-| [Architecture](./Architecture.md) | Real route surface, service boundaries, and indexer API shape |
-| [Contracts](./Contracts.md) | Contract roles and the current app-wired Sepolia addresses |
-| [Profiles and Identity](./Profiles-and-Identity.md) | What `/profile`, `/profile/setup`, and `/profile/[name]` actually do |
-| [ENS Integration](./ENS-Integration.md) | What NFTFactory creates on-chain vs what it only links |
-| [Finality](./Finality.md) | What is and is not irreversible in creator-owned collections |
+| [Profiles and Identity](./Profiles-and-Identity.md) | What `/profile`, `/profile/setup`, and `/profile/[name]` do today |
+| [ENS Integration](./ENS-Integration.md) | What NFTFactory creates onchain vs what it only links |
+| [Contracts](./Contracts.md) | The contract groups behind shared publishing and creator-owned collections |
+| [Finality](./Finality.md) | What becomes permanent when a creator finalizes upgrades or locks metadata |
 
-## Operations
+## Product Surface
 
-| Page | Purpose |
-|------|---------|
-| [Operations and Governance](./Operations-and-Governance.md) | Ownership boundaries, auth model, moderator flow, and admin controls |
-| [Deployment and Launch](./Deployment-and-Launch.md) | Current local, Sepolia, and mainnet rollout posture |
-| [Infrastructure and Operations](./Infrastructure-and-Operations.md) | Real env wiring, process model, and troubleshooting |
-| [Operator Sepolia Runbook](./Operator-Sepolia-Runbook.md) | Single-path operator flow for root env setup, deployment verification, and Sepolia acceptance |
-| [Alchemy Webhook Runbook](./Alchemy-Webhook-Runbook.md) | Event-led indexer ingestion setup for NFTFactory contracts without broad Sepolia scanning |
-| [Self-Hosted Sepolia RPC](./Self-Hosted-Sepolia-RPC.md) | How to replace Alchemy-backed Sepolia reads with your own execution + consensus node, including the storage-first `reth` path |
-| [IPFS Upload Failure Triage](./IPFS-Upload-Failure-Triage.md) | Exact steps for diagnosing Vercel -> Cloudflare Tunnel -> Kubo upload failures |
-| [Marketplace Indexer and API Plan](./Marketplace-V2-Indexer-and-API-Plan.md) | Backend-first schema, sync, and API plan for marketplace listings and offers |
-| [UI Lockdown Plan](./UI-Lockdown-Plan.md) | Route-group lock criteria for Mint, profile setup, public profile, and moderation/profile-linked operations |
-| [Upgrade Runbook](./Upgrade-Runbook.md) | UUPS upgrade path for creator-owned collections |
-| [Testing and Validation](./Testing-and-Validation.md) | Practical validation order for contracts, web, indexer, and post-deploy checks |
+NFTFactory currently has three user-facing surfaces:
 
-## Reference
+1. **Landing**
+   - the brand entry at `/`
+2. **Mint and collection management**
+   - publish through shared mint contracts or creator-owned collections from `/mint`
+3. **Profiles and identity**
+   - resolve a connected wallet at `/profile`
+   - create or link identity at `/profile/setup`
+   - render a public creator page at `/profile/[name]`
 
-| Page | Purpose |
-|------|---------|
-| [Security and Audit](./Security-and-Audit.md) | Current contract and operational risk posture |
-| [Contract Dependencies](./Contract-Dependencies.md) | High-level contract relationships that matter operationally |
-| [Archive](./Archive.md) | Historical notes and superseded docs |
+## How To Read The Product
+
+- A wallet proves ownership.
+- ENS gives the profile a public identity.
+- The collection contract controls minting and ownership rules.
+- The public profile page is the presentation layer on top.
+
+## What Is Not In This In-App Wiki
+
+The repo still contains internal documentation for:
+
+- infrastructure and deployment
+- indexer operations
+- webhook and RPC setup
+- validation and release runbooks
+
+Those pages remain in `docs/wiki` for maintainers, but they are intentionally hidden from the in-app wiki surface.

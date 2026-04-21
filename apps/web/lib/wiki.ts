@@ -9,6 +9,13 @@ const wikiDirCandidates = [
 ];
 
 const wikiDir = wikiDirCandidates.find((candidate) => existsSync(candidate)) || wikiDirCandidates[0];
+const publicWikiSlugs = new Set([
+  "home",
+  "profiles-and-identity",
+  "ens-integration",
+  "contracts",
+  "finality"
+]);
 
 export type WikiPageSummary = {
   slug: string;
@@ -46,6 +53,7 @@ async function readWikiFiles(): Promise<string[]> {
   const entries = await fs.readdir(wikiDir, { withFileTypes: true });
   return entries
     .filter((entry) => entry.isFile() && entry.name.endsWith(".md"))
+    .filter((entry) => publicWikiSlugs.has(slugFromFileName(entry.name)))
     .map((entry) => entry.name)
     .sort((left, right) => {
       if (left === "Home.md") {

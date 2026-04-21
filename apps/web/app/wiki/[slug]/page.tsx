@@ -15,7 +15,7 @@ export default async function WikiDetailPage({ params }: { params: Promise<{ slu
 
   return (
     <section className="wikiLayout">
-      <WikiSidebar pages={pages} activeSlug={page.slug} lead="Repo-backed pages from docs/wiki." />
+      <WikiSidebar pages={pages} activeSlug={page.slug} lead="Creator-facing docs pulled from the repo wiki." />
       <article className="card wikiArticle">
         <div className="wikiArticleHeader">
           <p className="eyebrow">Wiki Page</p>

@@ -816,6 +816,11 @@ export default function ProfileLandingClient({
           ? "Check parent ownership"
           : "Check in ENS";
   const collectionOptions = verifiedCollections.length > 0 ? verifiedCollections : collections;
+  const recommendedIdentityMode = useMemo(() => {
+    if (existingEnsOptions.length > 0) return "ens" as const;
+    if (ensParentCandidates.length > 0) return "register-eth-subname" as const;
+    return "nftfactory-subname" as const;
+  }, [ensParentCandidates.length, existingEnsOptions.length]);
 
   async function runIdentityAction(): Promise<void> {
     if (identityMode === "register-eth") {
@@ -1574,6 +1579,17 @@ export default function ProfileLandingClient({
         <div className="profileSetupMain">
           <div className="card formCard profileSetupCard">
             <SectionTitle title="1. Choose identity path" subtitle="Start with the kind of name this creator page should publish under." />
+            <p className="hint">
+              Recommended path:{" "}
+              <strong>
+                {recommendedIdentityMode === "ens"
+                  ? "Link an existing ENS name"
+                  : recommendedIdentityMode === "register-eth-subname"
+                    ? "Create a subname under your ENS"
+                    : "Create an nftfactory.eth subname"}
+              </strong>
+              . This is based on the identities already visible in the connected wallet.
+            </p>
             <div className="profileSetupModeGrid">
               {PROFILE_IDENTITY_ACTIONS.map((option) => (
                 <button
@@ -1582,7 +1598,10 @@ export default function ProfileLandingClient({
                   className={`profileSetupModeCard ${identityMode === option.mode ? "is-active" : ""}`.trim()}
                   onClick={() => setIdentityMode(option.mode)}
                 >
-                  <span className="eyebrow">{option.eyebrow}</span>
+                  <div className="profileSetupModeCardHeader">
+                    <span className="eyebrow">{option.eyebrow}</span>
+                    {option.mode === recommendedIdentityMode ? <span className="profileChip">Recommended</span> : null}
+                  </div>
                   <strong>{option.title}</strong>
                   <span>{option.description}</span>
                 </button>

@@ -15,7 +15,7 @@ export default async function WikiHomePage() {
       <WikiSidebar
         pages={pages}
         activeSlug="home"
-        lead="Operational notes, route documentation, and project runbooks sourced from the repo wiki."
+        lead="Creator-facing guides for profile identity, ENS behavior, collection ownership, and what becomes permanent onchain."
       />
       <article className="card wikiArticle">
         <p className="eyebrow">Home</p>

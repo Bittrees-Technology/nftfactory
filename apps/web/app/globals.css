@@ -790,6 +790,14 @@ nav {
   color: inherit;
 }
 
+.profileSetupModeCardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .profileSetupModeCard.is-active {
   border-color: rgba(255, 90, 54, 0.55);
   box-shadow: 0 18px 40px rgba(185, 50, 24, 0.12);
