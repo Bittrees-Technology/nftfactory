@@ -1588,6 +1588,7 @@ export default function MintClient({
           contractAddress: item.contractAddress,
           ensSubname: item.ensSubname,
           ownerAddress: item.ownerAddress,
+          standard: item.standard,
           createdAt: item.createdAt,
           updatedAt: item.updatedAt
         }));
