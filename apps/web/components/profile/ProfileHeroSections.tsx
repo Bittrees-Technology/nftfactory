@@ -81,7 +81,7 @@ export default function ProfileHeroSections({
     <>
       <div className="profileHeroShell">
         <section className="card profileIdentityCard profileIdentityHeroCard">
-          <p className="eyebrow">Profile Card</p>
+          <p className="eyebrow">Creator Identity</p>
           <div className="profileBannerShell" style={heroStyle}>
             {primaryProfile?.bannerUrl ? (
               <div className="profileBannerFrame">
@@ -107,7 +107,7 @@ export default function ProfileHeroSections({
           <p className="sectionLead">
             {hasResolvedIdentity
               ? "This creator identity is linked and ready for storefront traffic."
-              : "This creator route is partially set up and still needs a stronger identity link."}
+              : "This creator route is live, but still needs a stronger identity link."}
           </p>
           <p className="hint">{creatorTagline}</p>
           {primaryProfile?.statusHeadline ? (
@@ -118,14 +118,14 @@ export default function ProfileHeroSections({
           ) : null}
           <div className="profileHeroActions">
             <Link href={`/mint?view=mint&collection=shared&profile=${encodeURIComponent(mintProfileParam)}`} className="ctaLink secondaryLink">
-              Mint from this profile
+              Start a drop from this profile
             </Link>
             <Link href={`/mint?view=view&profile=${encodeURIComponent(mintProfileParam)}`} className="ctaLink secondaryLink">
-              View collection tools
+              Inspect collection
             </Link>
             {canEditProfile ? (
               <Link href={`${canonicalRoute}#listing-management`} className="ctaLink secondaryLink">
-                Jump to listing management
+                Jump to storefront controls
               </Link>
             ) : null}
           </div>
@@ -160,7 +160,7 @@ export default function ProfileHeroSections({
         </section>
 
         <section className="card profileFeatureCard profileFeatureSpotlightCard">
-          <p className="eyebrow">Featured Drop</p>
+          <p className="eyebrow">Featured Storefront</p>
           {primaryProfile?.featuredUrl ? (
             <div className="profileFeatureMedia">
               {featuredMediaKind === "image" ? (
@@ -187,7 +187,7 @@ export default function ProfileHeroSections({
           ) : null}
           {featuredListing ? (
             <>
-              <h3>{featuredListingPresentation?.listingLabel || `Listing #${featuredListing.id}`}</h3>
+              <h3>{featuredListingPresentation?.listingLabel || `Live Listing #${featuredListing.id}`}</h3>
               <p className="sectionLead">
                 {featuredListingPresentation?.title || `Token #${featuredListing.tokenId.toString()}`}
               </p>
@@ -222,16 +222,16 @@ export default function ProfileHeroSections({
             </>
           ) : (
             <>
-              <h3>No Featured Listing Yet</h3>
+              <h3>No Live Listing Yet</h3>
               <p className="sectionLead">
                 This creator page does not have a live listing to spotlight yet. Mint and list under this identity to give the storefront something to feature.
               </p>
               <div className="row">
                 <Link href={`/mint?view=mint&collection=shared&profile=${encodeURIComponent(mintProfileParam)}`} className="ctaLink secondaryLink">
-                  Mint from this profile
+                  Start a drop from this profile
                 </Link>
                 <Link href={`${canonicalRoute}#listing-management`} className="ctaLink secondaryLink">
-                  Create a listing
+                  Open storefront controls
                 </Link>
               </div>
             </>
@@ -242,7 +242,7 @@ export default function ProfileHeroSections({
       <div className="profileStoryShell">
         <section className="card profileFeatureCard profileStoryCard">
           <p className="eyebrow">About</p>
-          <h3>Creator Wall</h3>
+          <h3>Creator Story</h3>
           <p className="sectionLead">{creatorBio}</p>
           <div className="detailGrid">
             <DetailGridItem label="Primary Route" value={`/profile/${name}`} valueClassName="detailValue mono" />
@@ -258,7 +258,7 @@ export default function ProfileHeroSections({
 
         <section className="card profileIdentityCard profileLinksCard">
           <p className="eyebrow">Links</p>
-          <h3>Elsewhere</h3>
+          <h3>External Links</h3>
           {primaryProfile?.links?.length ? (
             <div className="compactList">
               {primaryProfile.links.map((link) => (
@@ -310,7 +310,7 @@ export default function ProfileHeroSections({
             </div>
           </>
         ) : (
-          <p className="hint">No creator collection is pinned yet. Link a collection during profile setup to feature it here.</p>
+          <p className="hint">No creator collection is pinned yet. Link a collection during profile setup to feature it on this page.</p>
         )}
       </div>
     </>
