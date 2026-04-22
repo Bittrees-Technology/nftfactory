@@ -4,6 +4,14 @@ Use this when preparing the first Ethereum mainnet deployment for NFTFactory.
 
 This page is intentionally mainnet-only. Do not substitute checked-in Sepolia values.
 
+Quick helper:
+
+```bash
+npm run print:mainnet-cutover
+```
+
+That command prints the deploy-day env block, post-deploy commands, and Safe-transfer sequence in one place.
+
 ## 1. Inputs To Finalize Before Deploy
 
 Required operator inputs:

@@ -114,6 +114,7 @@ After deployment:
 - seed the moderator set in `ModeratorRegistry` if using the on-chain moderator path
 - update web and indexer env files to the exact deployed addresses
 - use `npm run print:deployment-env -- web` and `npm run print:deployment-env -- indexer` to scaffold the current app-wired Sepolia env blocks before filling RPC, indexer, and IPFS values
+- use `npm run print:mainnet-cutover` on deploy day to print the full mainnet env block, post-deploy checks, and Safe-transfer sequence in one place
 
 ## Current service wiring
 
