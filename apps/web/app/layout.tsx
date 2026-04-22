@@ -21,11 +21,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <main>
             <div className="topBar">
               <nav>
-                <div className="navLinks">
+                <div className="brandCluster">
                   <Link href="/" className="brandLink">NFTFactory</Link>
-                  <Link href="/mint">Mint</Link>
-                  <Link href="/profile">Profile</Link>
-                  <Link href="/wiki">Wiki</Link>
+                  <p className="brandMeta">Creator-owned mint, profile, and collection operations in one surface.</p>
+                </div>
+                <div className="navLinks">
+                  <Link href="/" className="navPill">Home</Link>
+                  <Link href="/mint" className="navPill">Mint</Link>
+                  <Link href="/profile" className="navPill">Profile</Link>
+                  <Link href="/wiki" className="navPill">Wiki</Link>
                 </div>
                 <HeaderWalletButton />
               </nav>

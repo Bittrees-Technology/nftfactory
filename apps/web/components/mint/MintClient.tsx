@@ -3276,6 +3276,22 @@ export default function MintClient({
                 ? "Inspect a creator collection, its indexed tokens, and the storefront state around it."
                 : "Create onchain media inside the shared contract or one of your own creator collections."}
           </p>
+          <div className="mintWorkspaceHeroMeta">
+            <span className="mintWorkspaceHeroPill">
+              {pageMode === "manage"
+                ? "Verification + ownership controls"
+                : pageMode === "view"
+                  ? "Indexed collection reads"
+                  : "Shared and creator-owned minting"}
+            </span>
+            <span className="mintWorkspaceHeroPill">
+              {pageMode === "manage"
+                ? "Factory collections"
+                : pageMode === "view"
+                  ? "Storefront inspection"
+                  : "IPFS-backed metadata"}
+            </span>
+          </div>
         </div>
         <div className="row mintWorkspaceModes">
           <button type="button" className={pageMode === "mint" ? "presetButton presetActive" : "presetButton"} onClick={() => setPageMode("mint")}>

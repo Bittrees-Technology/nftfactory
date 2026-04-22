@@ -47,6 +47,12 @@ export default function HeaderWalletButton() {
               ? "Open network selector"
               : "Open wallet account";
 
+        const buttonLabel = !connected
+          ? "Connect"
+          : unsupportedConfiguredNetwork || chain?.unsupported
+              ? "Wrong network"
+              : account?.displayName || "Wallet";
+
         return (
           <button
             type="button"
@@ -59,6 +65,7 @@ export default function HeaderWalletButton() {
               <span className="walletDot" />
               <span className="walletStem" />
             </span>
+            <span className="walletButtonLabel">{buttonLabel}</span>
           </button>
         );
       }}

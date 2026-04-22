@@ -44,13 +44,20 @@ main {
 nav {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 14px 16px;
+  gap: 18px;
+  padding: 16px 18px;
   border: 1px solid rgba(44, 32, 52, 0.12);
-  border-radius: 18px;
+  border-radius: 22px;
   background: rgba(255, 249, 241, 0.82);
   box-shadow: 0 16px 48px rgba(64, 35, 20, 0.08);
   backdrop-filter: blur(12px);
+  flex-wrap: wrap;
+}
+
+.brandCluster {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
 }
 
 .deployHealthBanner {
@@ -100,7 +107,7 @@ nav {
 
 .navLinks {
   display: flex;
-  gap: 16px;
+  gap: 10px;
   align-items: center;
   flex-wrap: wrap;
   flex: 1;
@@ -109,19 +116,40 @@ nav {
 .brandLink {
   font-weight: 700;
   letter-spacing: 0.03em;
+  font-size: 1.02rem;
+}
+
+.brandMeta {
+  margin: 0;
+  color: #6c5648;
+  font-size: 0.88rem;
+}
+
+.navPill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 38px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(44, 32, 52, 0.1);
+  background: rgba(255, 255, 255, 0.54);
+  color: #3f3028;
+  font-size: 0.94rem;
+  font-weight: 600;
 }
 
 .headerWalletButton {
-  width: 44px;
-  height: 44px;
-  min-width: 44px;
-  padding: 0;
+  min-height: 44px;
+  padding: 0 14px;
   display: inline-flex;
   align-items: center;
+  gap: 10px;
   justify-content: center;
   border-radius: 999px;
   border: 1px solid #8c2a14;
   background: var(--accent);
+  color: #fff;
+  font-weight: 700;
 }
 
 .headerWalletButton.walletConnected {
@@ -153,6 +181,11 @@ nav {
   width: 2px;
   height: 7px;
   background: #fff;
+}
+
+.walletButtonLabel {
+  white-space: nowrap;
+  font-size: 0.94rem;
 }
 
 .card {
@@ -1010,7 +1043,8 @@ nav {
   display: grid;
   gap: 14px;
   background:
-    radial-gradient(circle at top right, rgba(0, 194, 168, 0.12), transparent 32%),
+    radial-gradient(circle at top right, rgba(0, 194, 168, 0.16), transparent 32%),
+    radial-gradient(circle at bottom left, rgba(255, 90, 54, 0.12), transparent 28%),
     linear-gradient(180deg, #fff7ed 0%, #ffe6cf 100%);
   border: 1px solid rgba(185, 50, 24, 0.16);
 }
@@ -1023,6 +1057,25 @@ nav {
 .mintWorkspaceHeroCopy h2 {
   margin: 0;
   color: var(--ink);
+}
+
+.mintWorkspaceHeroMeta {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.mintWorkspaceHeroPill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(140, 42, 20, 0.14);
+  background: rgba(255, 255, 255, 0.74);
+  color: #5d3324;
+  font-size: 0.9rem;
+  font-weight: 600;
 }
 
 .mintWorkspaceModes {
@@ -2241,10 +2294,15 @@ button:disabled {
 
   .navLinks {
     width: 100%;
+    order: 3;
   }
 
   .headerWalletButton {
     align-self: flex-end;
+  }
+
+  .brandMeta {
+    font-size: 0.82rem;
   }
 
   .profileShell,
