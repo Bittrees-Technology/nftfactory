@@ -3269,16 +3269,16 @@ export default function MintClient({
           <p className="eyebrow">Creator Studio</p>
           <h2>
             {pageMode === "manage"
-              ? "Operate collection"
+              ? "Manager"
               : pageMode === "view"
-                ? "Inspect collection"
-                : "Start a Drop"}
+                ? "View"
+                : "Mint"}
           </h2>
           <p className="hint">
             {pageMode === "manage"
-              ? "Handle ownership, identity, verification, and collection settings from one studio."
+              ? "Handle ownership, identity, verification, and collection settings from one workspace."
               : pageMode === "view"
-                ? "Review a creator collection, its indexed inventory, and the storefront state around it."
+                ? "Review a collection contract, its indexed inventory, and the storefront state around it."
                 : "Create onchain media inside the shared collection or one of your collection contracts."}
           </p>
           <div className="mintWorkspaceHeroMeta">
@@ -3300,13 +3300,13 @@ export default function MintClient({
         </div>
         <div className="row mintWorkspaceModes">
           <button type="button" className={pageMode === "mint" ? "presetButton presetActive" : "presetButton"} onClick={() => setPageMode("mint")}>
-            Start a drop
+            Mint
           </button>
           <button type="button" className={pageMode === "view" ? "presetButton presetActive" : "presetButton"} onClick={() => setPageMode("view")}>
-            Inspect collection
+            View
           </button>
           <button type="button" className={pageMode === "manage" ? "presetButton presetActive" : "presetButton"} onClick={() => setPageMode("manage")}>
-            Operate collection
+            Manager
           </button>
         </div>
       </div>
@@ -3318,7 +3318,7 @@ export default function MintClient({
       {pageMode === "mint" && (
         <form className="wizard" onSubmit={onPublish}>
           <div className="card actionCardStatic">
-            <h3>Start a drop</h3>
+            <h3>Mint</h3>
             <p>
               Mint into the shared collection or one of your collection contracts. This is the fastest path to creating a new ERC-721 or ERC-1155.
             </p>
@@ -3565,7 +3565,7 @@ export default function MintClient({
                     </button>
                     <TxStatus state={deployTx} kind="deploy" />
                     <p className="hint">
-                      New collection contracts automatically submit explorer proxy verification after deployment. You can retry or inspect verification from <strong>Operate collection → Verification</strong>.
+                      New collection contracts automatically submit explorer proxy verification after deployment. You can retry or inspect verification from <strong>Manager → Verification</strong>.
                     </p>
                   </div>
                 </details>
@@ -3773,8 +3773,8 @@ export default function MintClient({
         <div className="wizard">
 
           <div className="card formCard">
-            <h3>Inspect collection</h3>
-            <p className="hint">Inspect a collection contract, its royalty policy, and its indexed tokens without opening the operate controls.</p>
+            <h3>View</h3>
+            <p className="hint">Review a collection contract, its royalty policy, and its indexed tokens without opening the manager controls.</p>
           </div>
 
           <div className="card formCard">
@@ -3980,7 +3980,7 @@ export default function MintClient({
         <div className="wizard">
 
           <div className="card formCard">
-            <h3>Operate collection</h3>
+            <h3>Manager</h3>
             <p className="hint">Choose a collection, verify it, then update identity or contract settings.</p>
           </div>
 
