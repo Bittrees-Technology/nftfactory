@@ -20,6 +20,7 @@ import {
   getOfferRecipientBalance,
   getOfferRecipients
 } from "./profileOffers";
+import SectionStatePanel from "../SectionStatePanel";
 
 type ProfileOffersSectionProps = {
   offerMarketplace: Address | null;
@@ -58,9 +59,10 @@ export default function ProfileOffersSection({
     <div className="card formCard">
       <h3>Offers</h3>
       {!offerMarketplace ? (
-        <p className="sectionLead">
-          Wallet-to-wallet offers need `NEXT_PUBLIC_MARKETPLACE_ADDRESS`. No marketplace address is configured.
-        </p>
+        <SectionStatePanel
+          message="Wallet-to-wallet offers are unavailable because the marketplace contract is not configured for this deployment. Set NEXT_PUBLIC_MARKETPLACE_ADDRESS and redeploy before treating the offers rail as live."
+          messageClassName="sectionLead"
+        />
       ) : (
         <>
           <p className="sectionLead">
@@ -81,7 +83,9 @@ export default function ProfileOffersSection({
               <p className="eyebrow">Received</p>
               <h3>Received Offers</h3>
               {creatorOffersReceived.length === 0 ? (
-                <p className="hint">No active offers currently target tokens owned by this profile’s resolved wallets.</p>
+                <SectionStatePanel
+                  message="No active offers currently target tokens owned by this profile’s resolved wallets. If you expected offers here, confirm the wallet mapping above and wait for the latest marketplace activity to index."
+                />
               ) : (
                 <div className="listTable">
                   {creatorOffersReceived.map((offer) => {
@@ -173,7 +177,9 @@ export default function ProfileOffersSection({
               <p className="eyebrow">Made</p>
               <h3>Offers Made</h3>
               {creatorOffersMade.length === 0 ? (
-                <p className="hint">No active offers have been created from this profile’s resolved wallets yet.</p>
+                <SectionStatePanel
+                  message="No active offers have been created from this profile’s resolved wallets yet. New offers will appear here after the marketplace scan catches up."
+                />
               ) : (
                 <div className="listTable">
                   {creatorOffersMade.map((offer) => {

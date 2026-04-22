@@ -3,6 +3,7 @@
 import Link from "next/link";
 import ListingManagementClient from "./ListingManagementClient";
 import SectionCardHeader from "../SectionCardHeader";
+import SectionStatePanel from "../SectionStatePanel";
 import StatusStack from "../StatusStack";
 import { getAppChain } from "../../lib/chains";
 import type { LoadState } from "../../lib/loadState";
@@ -55,7 +56,25 @@ export default function ProfileHoldingsSection({
           })}
         />
         {!isLoadStateLoading(holdingsLoadState) && filteredCreatorHoldings.length === 0 ? (
-          <p className="hint">No indexed holdings were found for the resolved wallets yet.</p>
+          <SectionStatePanel
+            message="No indexed holdings are visible for the resolved wallets yet. This usually means the creator route is new, the indexer is still catching up, or the selected chain filter is excluding the inventory you expect."
+            actions={
+              <>
+                <Link
+                  href={`/mint?view=view&profile=${encodeURIComponent(mintProfileParam)}`}
+                  className="ctaLink secondaryLink"
+                >
+                  Inspect collection tools
+                </Link>
+                <Link
+                  href={`/mint?view=mint&collection=shared&profile=${encodeURIComponent(mintProfileParam)}`}
+                  className="ctaLink secondaryLink"
+                >
+                  Start a shared drop
+                </Link>
+              </>
+            }
+          />
         ) : null}
         {filteredCreatorHoldings.length > 0 ? (
           <div className="listTable">

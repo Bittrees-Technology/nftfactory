@@ -910,8 +910,8 @@ export default function ProfileClient({ name }: { name: string }) {
         setResolutionError(result.resolutionError);
         setResolutionNote(
           result.activeSellerAddresses.length > 0
-            ? "Profile resolution unavailable. Manual wallet lookup still works."
-            : "Profile resolution unavailable. Enter wallet manually."
+            ? "Profile resolution is unavailable right now, but the last known wallet mapping still allows a manual storefront lookup."
+            : "Profile resolution is unavailable right now. Enter a creator wallet manually to keep inspecting holdings and storefront activity."
         );
       } else if (result.resolution) {
         const failureMessage = summarizeChainFailures(result.resolutionFailures || []);
@@ -919,14 +919,14 @@ export default function ProfileClient({ name }: { name: string }) {
         if (hasResolvedSeller) {
           setResolutionNote(
             result.resolution.collections.length > 0
-              ? `Resolved from indexer profile mapping (${result.resolution.name}) with ${result.resolution.collections.length} indexed collection${result.resolution.collections.length === 1 ? "" : "s"}.${failureMessage ? ` Partial chain failures: ${failureMessage}` : ""}`
-              : `Resolved from indexer profile mapping (${result.resolution.name}).${failureMessage ? ` Partial chain failures: ${failureMessage}` : ""}`
+              ? `Resolved this creator route from indexer mapping (${result.resolution.name}) with ${result.resolution.collections.length} indexed collection${result.resolution.collections.length === 1 ? "" : "s"}.${failureMessage ? ` Some chain lookups are still unavailable: ${failureMessage}` : ""}`
+              : `Resolved this creator route from indexer mapping (${result.resolution.name}).${failureMessage ? ` Some chain lookups are still unavailable: ${failureMessage}` : ""}`
           );
         } else {
-          setResolutionNote("No backend mapping found yet. Enter wallet manually.");
+          setResolutionNote("No published wallet mapping is indexed for this route yet. Enter a creator wallet manually to keep working.");
         }
       } else {
-        setResolutionNote("No backend mapping found yet. Enter wallet manually.");
+        setResolutionNote("No published wallet mapping is indexed for this route yet. Enter a creator wallet manually to keep working.");
       }
 
       if (result.listingError) {
@@ -941,12 +941,12 @@ export default function ProfileClient({ name }: { name: string }) {
         setModerationFilterStatus(result.hiddenListingError);
       } else if (listingFailureMessage && hiddenFailureMessage) {
         setModerationFilterStatus(
-          `Some chain listing data is unavailable. ${listingFailureMessage} | Hidden filters unavailable on some chains. ${hiddenFailureMessage}`
+          `Storefront coverage is partial. Listing data is missing on some chains: ${listingFailureMessage} Hidden moderation filters are also unavailable on some chains: ${hiddenFailureMessage}`
         );
       } else if (listingFailureMessage) {
-        setModerationFilterStatus(`Some chain listing data is unavailable. ${listingFailureMessage}`);
+        setModerationFilterStatus(`Storefront coverage is partial. Listing data is missing on some chains: ${listingFailureMessage}`);
       } else if (hiddenFailureMessage) {
-        setModerationFilterStatus(`Hidden filters unavailable on some chains. ${hiddenFailureMessage}`);
+        setModerationFilterStatus(`Moderation filters are unavailable on some chains: ${hiddenFailureMessage}`);
       } else {
         setModerationFilterStatus("");
       }
@@ -957,7 +957,9 @@ export default function ProfileClient({ name }: { name: string }) {
         setHoldingsLoadState(result.activeSellerAddresses.length > 0 ? readyLoadState() : idleLoadState());
       }
       const holdingsFailureMessage = summarizeChainFailures(result.holdingsFailures || []);
-      setHoldingsStatus(holdingsFailureMessage ? `Some chain holdings data is unavailable. ${holdingsFailureMessage}` : "");
+      setHoldingsStatus(
+        holdingsFailureMessage ? `Holdings coverage is partial. Some chain snapshots did not finish loading: ${holdingsFailureMessage}` : ""
+      );
 
       if (!offerMarketplace) {
         setOfferLoadState(idleLoadState());
@@ -968,7 +970,9 @@ export default function ProfileClient({ name }: { name: string }) {
       } else {
         setOfferLoadState(result.activeSellerAddresses.length > 0 ? readyLoadState() : idleLoadState());
         const offerFailureMessage = summarizeChainFailures(result.offerFailures || []);
-        setOfferLoadHint(offerFailureMessage ? `Some chain offer data is unavailable. ${offerFailureMessage}` : "");
+        setOfferLoadHint(
+          offerFailureMessage ? `Offer coverage is partial. Some chain offer scans did not complete: ${offerFailureMessage}` : ""
+        );
       }
     } catch (err) {
       if (requestId !== profileViewRequestIdRef.current) return;
