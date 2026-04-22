@@ -48,11 +48,11 @@ const sharedEnv = [
 
 console.log("# NFTFactory Mainnet Cutover");
 console.log("");
-console.log("Use this after the mainnet broadcast is complete and before calling the stack production-ready.");
+console.log("Use this after mainnet broadcast and before calling the stack live.");
 console.log("");
 
 printSection("Pre-broadcast checks", [
-  "1. Export the intended root .env values except the deployed contract addresses.",
+  "1. Export the root .env values except deployed contract addresses.",
   "2. Run: npm run typecheck:web",
   "3. Run: npm run test:web",
   "4. Run: npm run typecheck:indexer",
@@ -97,7 +97,7 @@ printSection("Post-deploy env fill", [
   "2. Set NEXT_PUBLIC_*_ADDRESS_1 for the web app.",
   "3. Set REGISTRY_ADDRESS, MARKETPLACE_ADDRESS, and MODERATOR_REGISTRY_ADDRESS for the indexer.",
   "4. Populate OWNABLE_ADDRESSES with the protocol-owned contracts.",
-  "5. Re-export the env with: set -a && source .env && set +a"
+  "5. Re-export with: set -a && source .env && set +a"
 ]);
 
 printSection("Post-deploy commands", [
@@ -121,8 +121,8 @@ printSection("Follow-up contract actions", [
 
 printSection("Production validation", [
   "1. Check https://nftfactory.org/api/deploy/health",
-  "2. Validate /, /mint, /profile, /profile/setup, /profile/[name], and /profile/moderation if moderation is in scope",
+  "2. Validate /, /mint, /profile, /profile/setup, /profile/[name], and /profile/moderation if in scope",
   "3. Confirm IPFS upload, shared mint, creator collection deploy, collection verification, listing management, and profile resolution",
-  "4. Confirm the live web app and live indexer use the same mainnet address set that passed the release gate",
-  "5. Archive the final addresses, tx hashes, and owner posture in the deployment log"
+  "4. Confirm the live web app and indexer use the same address set that passed the release gate",
+  "5. Archive final addresses, tx hashes, and owner posture in the deployment log"
 ]);

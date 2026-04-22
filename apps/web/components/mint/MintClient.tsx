@@ -2350,7 +2350,7 @@ export default function MintClient({
         setDeployTx({
           status: "success",
           hash: txHash,
-          message: "Collection deployment confirmed. Inspect the explorer receipt to recover the new collection address, then load it into the workspace."
+          message: "Deployment confirmed. Recover the new collection address from the explorer receipt, then load it into the workspace."
         });
       }
     } catch (err) {
@@ -3953,7 +3953,7 @@ export default function MintClient({
             ) : viewCollectionError ? (
               <p className="error">{viewCollectionError}</p>
             ) : viewCollectionCount === 0 ? (
-              <p className="hint">No indexed tokens are visible for this collection yet. Mint activity may still be propagating, or the indexer may need another sync pass.</p>
+              <p className="hint">No indexed tokens are visible yet. Mint activity may still be propagating, or the indexer may need another sync pass.</p>
             ) : (
               <div className="stack">
                 <p className="hint">
@@ -4459,7 +4459,7 @@ export default function MintClient({
                           {" "}or the legacy primary-chain alias <code>{royaltySplitRegistryEnvHint.legacyEnvVarName}</code>
                         </>
                       ) : null}
-                      {" "}and redeploy before treating collaborator payouts as production-ready on this chain.
+                      {" "}and redeploy before using collaborator payouts on this chain.
                     </p>
                     <p className="hint">Once configured, this panel stores collaborator royalty weights for the selected collection in the on-chain split registry.</p>
                   </>
@@ -4605,7 +4605,7 @@ export default function MintClient({
             ) : (
               <>
                 <p className="hint">
-                  This collection still uses the legacy one-step ownership flow. Pending acceptance is unavailable until the collection moves to the latest implementation.
+                  This collection still uses the legacy one-step ownership flow. Pending acceptance is unavailable until it moves to the latest implementation.
                 </p>
                 <label>
                   New owner address
@@ -4685,27 +4685,27 @@ function getTxGuidance(kind: TxStatusKind, state: TxState): string | null {
   if (state.status === "idle") return null;
 
   if (kind === "deploy") {
-    if (state.status === "pending") return "Keep the wallet window open until the factory transaction confirms and the new collection address is returned.";
+    if (state.status === "pending") return "Keep the wallet open until the factory transaction confirms.";
     if (state.status === "error") return "Verify the connected wallet, selected chain, royalty inputs, and factory configuration before retrying deployment.";
-    return "Next step: continue into asset setup or open Manage Collection to inspect verification and collection controls.";
+    return "Next: continue into asset setup or open Manage Collection.";
   }
 
   if (kind === "upload") {
-    if (state.status === "pending") return "This step depends on the IPFS route, auth proxy, and tunnel staying healthy through the full upload.";
+    if (state.status === "pending") return "This step depends on the IPFS route and tunnel staying healthy through the upload.";
     if (state.status === "error") return "Check the deploy health banner, IPFS recovery notes, and gateway/backend availability before retrying the upload.";
-    return "Metadata is ready. Review the preview below, then continue to the onchain publish step.";
+    return "Metadata is ready. Review the preview, then publish onchain.";
   }
 
   if (kind === "mint") {
     if (state.status === "pending") return "Wait for the wallet confirmation and chain receipt before assuming the release is live.";
     if (state.status === "error") return "Recheck the collection selection, metadata URI, wallet network, and any IPFS prerequisites before retrying publish.";
-    return "Publish completed. Use the receipts below to inspect the transaction, metadata JSON, and uploaded assets.";
+    return "Publish completed. Use the receipts below to inspect the transaction and assets.";
   }
 
   if (kind === "identity") {
     if (state.status === "pending") return "ENS and profile identity actions can take a moment to propagate after the transaction confirms.";
     if (state.status === "error") return "Verify the collection address, wallet ownership, and ENS configuration before retrying this identity step.";
-    return "Identity changes are recorded. Refresh indexed views if the creator route does not update immediately.";
+    return "Identity updated. Refresh indexed views if the creator route does not update immediately.";
   }
 
   if (kind === "royalty") {
@@ -4717,7 +4717,7 @@ function getTxGuidance(kind: TxStatusKind, state: TxState): string | null {
   if (kind === "split") {
     if (state.status === "pending") return "The split registry write is in progress. Keep the wallet open until the collaborator policy confirms.";
     if (state.status === "error") return "Confirm the split registry is configured, every collaborator address is valid, and the split total equals 100%.";
-    return "Collaborator split policy saved. Re-open this panel if you want to validate the stored weights.";
+    return "Collaborator split policy saved. Re-open this panel to validate the stored weights.";
   }
 
   if (kind === "transfer") {
@@ -4729,7 +4729,7 @@ function getTxGuidance(kind: TxStatusKind, state: TxState): string | null {
   if (kind === "finalize") {
     if (state.status === "pending") return "This freeze is permanent once confirmed. Wait for the chain receipt before treating upgrades as disabled.";
     if (state.status === "error") return "Only the collection owner can finalize upgrades. Recheck the connected wallet, network, and confirmation state.";
-    return "Upgradeability is now permanently disabled for this collection. Treat this contract as frozen at its current implementation.";
+    return "Upgrades are now permanently disabled for this collection.";
   }
 
   return null;

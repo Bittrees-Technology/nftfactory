@@ -60,7 +60,7 @@ export default function ProfileOffersSection({
       <h3>Offers</h3>
       {!offerMarketplace ? (
         <SectionStatePanel
-          message="Wallet-to-wallet offers are unavailable because the marketplace contract is not configured for this deployment. Set NEXT_PUBLIC_MARKETPLACE_ADDRESS and redeploy before treating the offers rail as live."
+          message="Offers are unavailable because the marketplace contract is not configured for this deployment. Set NEXT_PUBLIC_MARKETPLACE_ADDRESS before treating this rail as live."
           messageClassName="sectionLead"
         />
       ) : (
@@ -84,7 +84,7 @@ export default function ProfileOffersSection({
               <h3>Received Offers</h3>
               {creatorOffersReceived.length === 0 ? (
                 <SectionStatePanel
-                  message="No active offers currently target tokens owned by this profile’s resolved wallets. If you expected offers here, confirm the wallet mapping above and wait for the latest marketplace activity to index."
+                  message="No active offers currently target this profile. If you expected offers here, confirm the wallet mapping above and wait for the latest activity to index."
                 />
               ) : (
                 <div className="listTable">
@@ -178,7 +178,7 @@ export default function ProfileOffersSection({
               <h3>Offers Made</h3>
               {creatorOffersMade.length === 0 ? (
                 <SectionStatePanel
-                  message="No active offers have been created from this profile’s resolved wallets yet. New offers will appear here after the marketplace scan catches up."
+                  message="No active offers have been created from this profile yet. New offers will appear here after the marketplace scan catches up."
                 />
               ) : (
                 <div className="listTable">

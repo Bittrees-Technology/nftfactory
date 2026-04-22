@@ -57,7 +57,7 @@ export default function ProfileHoldingsSection({
         />
         {!isLoadStateLoading(holdingsLoadState) && filteredCreatorHoldings.length === 0 ? (
           <SectionStatePanel
-            message="No indexed holdings are visible for the resolved wallets yet. This usually means the creator route is new, the indexer is still catching up, or the selected chain filter is excluding the inventory you expect."
+            message="No indexed holdings are visible yet. The route may be new, the indexer may still be catching up, or the current chain filter may be excluding them."
             actions={
               <>
                 <Link

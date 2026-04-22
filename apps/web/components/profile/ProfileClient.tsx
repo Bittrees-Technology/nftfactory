@@ -910,8 +910,8 @@ export default function ProfileClient({ name }: { name: string }) {
         setResolutionError(result.resolutionError);
         setResolutionNote(
           result.activeSellerAddresses.length > 0
-            ? "Profile resolution is unavailable right now, but the last known wallet mapping still allows a manual storefront lookup."
-            : "Profile resolution is unavailable right now. Enter a creator wallet manually to keep inspecting holdings and storefront activity."
+            ? "Profile resolution is down, but the last wallet mapping still allows a manual lookup."
+            : "Profile resolution is down. Enter a creator wallet manually to continue."
         );
       } else if (result.resolution) {
         const failureMessage = summarizeChainFailures(result.resolutionFailures || []);
@@ -919,8 +919,8 @@ export default function ProfileClient({ name }: { name: string }) {
         if (hasResolvedSeller) {
           setResolutionNote(
             result.resolution.collections.length > 0
-              ? `Resolved this creator route from indexer mapping (${result.resolution.name}) with ${result.resolution.collections.length} indexed collection${result.resolution.collections.length === 1 ? "" : "s"}.${failureMessage ? ` Some chain lookups are still unavailable: ${failureMessage}` : ""}`
-              : `Resolved this creator route from indexer mapping (${result.resolution.name}).${failureMessage ? ` Some chain lookups are still unavailable: ${failureMessage}` : ""}`
+              ? `Resolved from indexer mapping (${result.resolution.name}) with ${result.resolution.collections.length} indexed collection${result.resolution.collections.length === 1 ? "" : "s"}.${failureMessage ? ` Partial chain coverage: ${failureMessage}` : ""}`
+              : `Resolved from indexer mapping (${result.resolution.name}).${failureMessage ? ` Partial chain coverage: ${failureMessage}` : ""}`
           );
         } else {
           setResolutionNote("No published wallet mapping is indexed for this route yet. Enter a creator wallet manually to keep working.");
@@ -941,10 +941,10 @@ export default function ProfileClient({ name }: { name: string }) {
         setModerationFilterStatus(result.hiddenListingError);
       } else if (listingFailureMessage && hiddenFailureMessage) {
         setModerationFilterStatus(
-          `Storefront coverage is partial. Listing data is missing on some chains: ${listingFailureMessage} Hidden moderation filters are also unavailable on some chains: ${hiddenFailureMessage}`
+          `Partial storefront coverage. Listings missing on some chains: ${listingFailureMessage} Hidden filters missing on some chains: ${hiddenFailureMessage}`
         );
       } else if (listingFailureMessage) {
-        setModerationFilterStatus(`Storefront coverage is partial. Listing data is missing on some chains: ${listingFailureMessage}`);
+        setModerationFilterStatus(`Partial storefront coverage. Listings missing on some chains: ${listingFailureMessage}`);
       } else if (hiddenFailureMessage) {
         setModerationFilterStatus(`Moderation filters are unavailable on some chains: ${hiddenFailureMessage}`);
       } else {
@@ -958,7 +958,7 @@ export default function ProfileClient({ name }: { name: string }) {
       }
       const holdingsFailureMessage = summarizeChainFailures(result.holdingsFailures || []);
       setHoldingsStatus(
-        holdingsFailureMessage ? `Holdings coverage is partial. Some chain snapshots did not finish loading: ${holdingsFailureMessage}` : ""
+        holdingsFailureMessage ? `Partial holdings coverage: ${holdingsFailureMessage}` : ""
       );
 
       if (!offerMarketplace) {
@@ -971,7 +971,7 @@ export default function ProfileClient({ name }: { name: string }) {
         setOfferLoadState(result.activeSellerAddresses.length > 0 ? readyLoadState() : idleLoadState());
         const offerFailureMessage = summarizeChainFailures(result.offerFailures || []);
         setOfferLoadHint(
-          offerFailureMessage ? `Offer coverage is partial. Some chain offer scans did not complete: ${offerFailureMessage}` : ""
+          offerFailureMessage ? `Partial offer coverage: ${offerFailureMessage}` : ""
         );
       }
     } catch (err) {
