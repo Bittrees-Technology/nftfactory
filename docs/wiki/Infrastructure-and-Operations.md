@@ -36,7 +36,8 @@ Service layout:
   - primary proving chain is Ethereum Sepolia (`11155111`)
 - **IPFS**
   - local Kubo API on `127.0.0.1:5001`
-  - production ingress is currently `https://ipfs.nftfactory.org` through Cloudflare Tunnel
+  - writable production ingress is currently `https://ipfs-api.nftfactory.org` through Cloudflare Tunnel
+  - public gateway is currently `https://ipfs.nftfactory.org`
 
 ## Active app surfaces
 

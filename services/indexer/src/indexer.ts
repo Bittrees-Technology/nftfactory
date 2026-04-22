@@ -1,4 +1,4 @@
-import "dotenv/config";
+import dotenv from "dotenv";
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
@@ -9,6 +9,12 @@ import { pino } from "pino";
 import { createPublicClient, fallback, http } from "viem";
 import { isAddress, isZeroAddress, normalizeSubname, parseBearerToken, getClientIp, isRateLimited } from "./utils.js";
 import { getSharedBackfillTargets, isStaleIsoTimestamp, normalizeExplicitBackfillTargets } from "./registryBackfill.js";
+
+const IS_TEST_ENV = process.env.VITEST === "1" || process.env.NODE_ENV === "test";
+
+if (!IS_TEST_ENV) {
+  dotenv.config();
+}
 
 const log = pino({ level: process.env.LOG_LEVEL || "info" });
 
@@ -830,9 +836,9 @@ const PARTICIPANT_CONTRACT_SYNC_TTL_MS = Math.max(
 const ENABLE_REGISTRY_READ_SYNC = process.env.INDEXER_ENABLE_REGISTRY_READ_SYNC !== "0";
 const ENABLE_OWNER_READ_SYNC = process.env.INDEXER_ENABLE_OWNER_READ_SYNC !== "0";
 const ENABLE_PARTICIPANT_READ_SYNC =
-  !STORAGE_PROFILE_CORE && process.env.INDEXER_ENABLE_PARTICIPANT_READ_SYNC !== "0";
+  IS_TEST_ENV || (!STORAGE_PROFILE_CORE && process.env.INDEXER_ENABLE_PARTICIPANT_READ_SYNC !== "0");
 const ENABLE_PARTICIPANT_ACTIVITY_PERSISTENCE =
-  !STORAGE_PROFILE_CORE && process.env.INDEXER_ENABLE_PARTICIPANT_ACTIVITY_PERSISTENCE !== "0";
+  IS_TEST_ENV || (!STORAGE_PROFILE_CORE && process.env.INDEXER_ENABLE_PARTICIPANT_ACTIVITY_PERSISTENCE !== "0");
 const ENABLE_MARKETPLACE_READ_SYNC = process.env.INDEXER_ENABLE_MARKETPLACE_READ_SYNC !== "0";
 const INDEXER_START_BLOCK = Math.max(0, Number.parseInt(process.env.INDEXER_START_BLOCK || "0", 10) || 0);
 const INDEXER_REGISTRY_START_BLOCK = Math.max(
@@ -4365,12 +4371,14 @@ async function pruneMarketplaceHistoryIfStale(
     try {
       const cutoff = new Date(Date.now() - INDEXER_MARKETPLACE_RETENTION_DAYS * 24 * 60 * 60 * 1000);
       const [listingResult, offerResult] = await Promise.all([
-        deps.prisma.listing.deleteMany({
-          where: {
-            active: false,
-            updatedAt: { lt: cutoff }
-          }
-        }),
+        typeof (deps.prisma as any).listing?.deleteMany === "function"
+          ? (deps.prisma as any).listing.deleteMany({
+              where: {
+                active: false,
+                updatedAt: { lt: cutoff }
+              }
+            })
+          : Promise.resolve({ count: 0 }),
         typeof (deps.prisma as any).offer?.deleteMany === "function"
           ? (deps.prisma as any).offer.deleteMany({
               where: {

@@ -25,11 +25,16 @@ Current public deployment (`2026-03-11`):
 
 - web app: `https://nftfactory.org`
 - indexer API: `https://api.nftfactory.org`
-- IPFS API: `https://ipfs.nftfactory.org`
+- IPFS API: `https://ipfs-api.nftfactory.org`
 - hosting:
   - Vercel for the web app
   - Cloudflare DNS + Tunnel for indexer and IPFS ingress
   - local Kubo node behind the tunnel for writable IPFS uploads
+
+Current public split:
+
+- writable IPFS API: `https://ipfs-api.nftfactory.org`
+- public gateway: `https://ipfs.nftfactory.org`
 
 Operational notes:
 

@@ -6,7 +6,7 @@ Current live path:
 
 1. browser
 2. `nftfactory.org` on Vercel
-3. `https://ipfs.nftfactory.org`
+3. `https://ipfs-api.nftfactory.org`
 4. Cloudflare Tunnel
 5. local Kubo API on `127.0.0.1:5001`
 
@@ -16,7 +16,7 @@ The deployment is healthy when all of the following are true:
 
 - `https://nftfactory.org/api/deploy/health` returns `ok: true`
 - the IPFS check message in that payload should include `auth: bearer` for a protected writable API, or `auth: public-override` when the deployment intentionally uses `ALLOW_PUBLIC_IPFS_API_WITHOUT_AUTH=1`
-- `https://ipfs.nftfactory.org/api/v0/version` returns `200`
+- `https://ipfs-api.nftfactory.org/api/v0/version` returns `200`
 - local `http://127.0.0.1:5001/api/v0/version` returns `200`
 - the `cloudflared` user service is running
 - the `ipfs` user service is running
@@ -38,9 +38,15 @@ Likely cause:
 Checks:
 
 ```bash
-curl -i -X POST https://ipfs.nftfactory.org/api/v0/version
+curl -i -X POST https://ipfs-api.nftfactory.org/api/v0/version
 curl -i -X POST http://127.0.0.1:5001/api/v0/version
 ```
+
+If the public response is Cloudflare `1033`:
+
+- the tunnel hostname exists in Cloudflare, but Cloudflare cannot resolve a live tunnel session
+- check the `cloudflared` process first before changing app code
+- verify the hostname route points at the intended tunnel UUID
 
 ### 2. Cloudflare `502 Bad Gateway`
 
@@ -72,7 +78,7 @@ curl -i -X POST \
 ```bash
 curl -i -X POST \
   -F file=@/tmp/ipfs-test.txt \
-  "https://ipfs.nftfactory.org/api/v0/add?pin=true&cid-version=1&wrap-with-directory=false&progress=false&stream-channels=false&quieter=true"
+  "https://ipfs-api.nftfactory.org/api/v0/add?pin=true&cid-version=1&wrap-with-directory=false&progress=false&stream-channels=false&quieter=true"
 ```
 
 Interpretation:
@@ -125,6 +131,20 @@ pgrep -af cloudflared
 ```
 
 Prefer one systemd-managed tunnel process, not multiple manual/background copies.
+
+For `1033` specifically, also inspect:
+
+```bash
+journalctl --user -u cloudflared -n 100 --no-pager
+```
+
+If `systemctl` is unavailable on the host, fall back to:
+
+```bash
+pgrep -af cloudflared
+cloudflared tunnel list
+cloudflared tunnel info <tunnel-name-or-id>
+```
 
 ## Security posture
 

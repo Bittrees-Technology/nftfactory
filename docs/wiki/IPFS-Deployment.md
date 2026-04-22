@@ -25,7 +25,7 @@ Current production upload path:
 
 1. browser
 2. Vercel web app at `https://nftfactory.org`
-3. `https://ipfs.nftfactory.org`
+3. `https://ipfs-api.nftfactory.org`
 4. Cloudflare Tunnel
 5. Kubo API on `127.0.0.1:5001`
 
@@ -108,6 +108,7 @@ Important caveat:
 
 - if the public `IPFS_API_URL` is exposed through a reverse proxy, tunnel, or gateway layer outside Kubo, that ingress may impose a lower upload/body-size or timeout limit than Kubo itself
 - if `IPFS_API_URL` is public, protect it with a bearer token by default, using basic auth only as a fallback
+- keep the writable API hostname separate from the read-only gateway hostname
 - if the endpoint is intentionally public, set `ALLOW_PUBLIC_IPFS_API_WITHOUT_AUTH=1` in the web deployment so build-time and release-time checks treat that exposure as deliberate rather than accidental
 - do not expose the raw Kubo API publicly unless that write surface is an intentional operational choice
 
