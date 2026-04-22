@@ -3563,7 +3563,7 @@ export default function MintClient({
                     >
                       {deployTx.status === "pending" ? "Deploying…" : `Deploy ${standard} Collection`}
                     </button>
-                    <TxStatus state={deployTx} />
+                    <TxStatus state={deployTx} kind="deploy" />
                     <p className="hint">
                       New creator collections automatically submit explorer proxy verification after deployment. You can retry or inspect verification from <strong>Manage Collection → Verification</strong>.
                     </p>
@@ -3660,7 +3660,7 @@ export default function MintClient({
                 </p>
               )}
             </div>
-            <TxStatus state={uploadTx} />
+            <TxStatus state={uploadTx} kind="upload" />
           </div>
 
           {/* Step 4: Mint settings */}
@@ -3731,7 +3731,7 @@ export default function MintClient({
                     ? "Upload and Mint"
                     : "Mint Now"}
             </button>
-            <TxStatus state={mintTx} />
+            <TxStatus state={mintTx} kind="mint" />
             {(uploadReceipt.metadataUri || mintTx.hash) ? (
               <div className="selectionCard">
                 <span className="detailLabel">Publish Receipts</span>
@@ -4279,7 +4279,7 @@ export default function MintClient({
             >
               {collectionIdentityButtonLabel}
             </button>
-            <TxStatus state={subnameTx} />
+            <TxStatus state={subnameTx} kind="identity" />
           </div>
 
           <div className="card formCard">
@@ -4326,7 +4326,7 @@ export default function MintClient({
                 >
                   {royaltyTx.status === "pending" ? "Saving royalty…" : "Save Default Royalty"}
                 </button>
-                <TxStatus state={royaltyTx} />
+                <TxStatus state={royaltyTx} kind="royalty" />
               </div>
 
               <div className="selectionCard mintRoyaltyPanel">
@@ -4464,7 +4464,7 @@ export default function MintClient({
                     <p className="hint">Once configured, this stores collaborator royalty weights for the selected collection in the on-chain split registry.</p>
                   </>
                 )}
-                <TxStatus state={royaltySplitTx} />
+                <TxStatus state={royaltySplitTx} kind="split" />
               </div>
             </div>
           </div>
@@ -4631,7 +4631,7 @@ export default function MintClient({
                 </button>
               </>
             )}
-            <TxStatus state={transferTx} />
+            <TxStatus state={transferTx} kind="transfer" />
           </div>
 
           {/* Finalize upgrades */}
@@ -4669,7 +4669,7 @@ export default function MintClient({
             >
               {finalizeTx.status === "pending" ? "Finalizing…" : "Permanently Finalize Upgrades"}
             </button>
-            <TxStatus state={finalizeTx} />
+            <TxStatus state={finalizeTx} kind="finalize" />
           </div>
         </div>
       )}
@@ -4679,23 +4679,102 @@ export default function MintClient({
 
 // ── Shared status display ─────────────────────────────────────────────────────
 
-function TxStatus({ state }: { state: TxState }) {
+type TxStatusKind = "deploy" | "upload" | "mint" | "identity" | "royalty" | "split" | "transfer" | "finalize";
+
+function getTxGuidance(kind: TxStatusKind, state: TxState): string | null {
   if (state.status === "idle") return null;
-  if (state.status === "pending") return <p className="hint">{state.message}</p>;
-  if (state.status === "error") return <p className="error">{state.message}</p>;
-  if (state.status === "success" && state.hash) {
+
+  if (kind === "deploy") {
+    if (state.status === "pending") return "Keep the wallet window open until the factory transaction confirms and the new collection address is returned.";
+    if (state.status === "error") return "Verify the connected wallet, selected chain, royalty inputs, and factory configuration before retrying deployment.";
+    return "Next step: continue into asset setup or open Manage Collection to inspect verification and collection controls.";
+  }
+
+  if (kind === "upload") {
+    if (state.status === "pending") return "This step depends on the IPFS route, auth proxy, and tunnel staying healthy through the full upload.";
+    if (state.status === "error") return "Check the deploy health banner, IPFS recovery notes, and gateway/backend availability before retrying the upload.";
+    return "Metadata is ready. Review the preview below, then continue to the onchain publish step.";
+  }
+
+  if (kind === "mint") {
+    if (state.status === "pending") return "Wait for the wallet confirmation and chain receipt before assuming the release is live.";
+    if (state.status === "error") return "Recheck the collection selection, metadata URI, wallet network, and any IPFS prerequisites before retrying publish.";
+    return "Publish completed. Use the receipts below to inspect the transaction, metadata JSON, and uploaded assets.";
+  }
+
+  if (kind === "identity") {
+    if (state.status === "pending") return "ENS and profile identity actions can take a moment to propagate after the transaction confirms.";
+    if (state.status === "error") return "Verify the collection address, wallet ownership, and ENS configuration before retrying this identity step.";
+    return "Identity changes are recorded. Refresh indexed views if the creator route does not update immediately.";
+  }
+
+  if (kind === "royalty") {
+    if (state.status === "pending") return "Wait for the royalty update to confirm before relying on the new payout target.";
+    if (state.status === "error") return "Check the collection address, connected owner wallet, receiver address, and basis points before retrying.";
+    return "Default royalty updated. Verify secondary-sale settings again before moving to production.";
+  }
+
+  if (kind === "split") {
+    if (state.status === "pending") return "The split registry write is in progress. Keep the wallet open until the collaborator policy confirms.";
+    if (state.status === "error") return "Confirm the split registry is configured, every collaborator address is valid, and the split total equals 100%.";
+    return "Collaborator split policy saved. Re-open this panel if you want to validate the stored weights.";
+  }
+
+  if (kind === "transfer") {
+    if (state.status === "pending") return "Ownership handoff is in progress. Do not assume control changed until the transfer transaction confirms.";
+    if (state.status === "error") return "Verify the connected owner or pending-owner wallet, target address, and collection network before retrying.";
+    return "Ownership state changed. Refresh collection details if the new owner or pending owner does not appear immediately.";
+  }
+
+  if (kind === "finalize") {
+    if (state.status === "pending") return "This freeze is permanent once confirmed. Wait for the chain receipt before treating upgrades as disabled.";
+    if (state.status === "error") return "Only the collection owner can finalize upgrades. Recheck the connected wallet, network, and confirmation state.";
+    return "Upgradeability is now permanently disabled for this collection. Treat this contract as frozen at its current implementation.";
+  }
+
+  return null;
+}
+
+function TxStatus({ state, kind }: { state: TxState; kind: TxStatusKind }) {
+  if (state.status === "idle") return null;
+  const guidance = getTxGuidance(kind, state);
+  if (state.status === "pending") {
     return (
-      <p className="success">
-        {state.message || "Success"}{" "}
-        {toExplorerTx(getContractsConfig().chainId, state.hash) ? (
-          <a href={toExplorerTx(getContractsConfig().chainId, state.hash)!} target="_blank" rel="noreferrer">
-            {truncateHash(state.hash)}
-          </a>
-        ) : (
-          <span className="mono">{truncateHash(state.hash)}</span>
-        )}
-      </p>
+      <>
+        <p className="hint">{state.message}</p>
+        {guidance ? <p className="hint">{guidance}</p> : null}
+      </>
     );
   }
-  return <p className="success">{state.message}</p>;
+  if (state.status === "error") {
+    return (
+      <>
+        <p className="error">{state.message}</p>
+        {guidance ? <p className="hint">{guidance}</p> : null}
+      </>
+    );
+  }
+  if (state.status === "success" && state.hash) {
+    return (
+      <>
+        <p className="success">
+          {state.message || "Success"}{" "}
+          {toExplorerTx(getContractsConfig().chainId, state.hash) ? (
+            <a href={toExplorerTx(getContractsConfig().chainId, state.hash)!} target="_blank" rel="noreferrer">
+              {truncateHash(state.hash)}
+            </a>
+          ) : (
+            <span className="mono">{truncateHash(state.hash)}</span>
+          )}
+        </p>
+        {guidance ? <p className="hint">{guidance}</p> : null}
+      </>
+    );
+  }
+  return (
+    <>
+      <p className="success">{state.message}</p>
+      {guidance ? <p className="hint">{guidance}</p> : null}
+    </>
+  );
 }
