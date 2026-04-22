@@ -899,11 +899,50 @@ nav {
 }
 
 @media (max-width: 900px) {
+  main {
+    padding: 18px;
+  }
+
+  nav {
+    padding: 14px 16px;
+  }
+
+  .brandCluster,
+  .navLinks {
+    width: 100%;
+  }
+
+  .navLinks {
+    justify-content: flex-start;
+  }
+
+  .headerWalletButton {
+    margin-left: auto;
+  }
+
   .wikiLayout {
     grid-template-columns: 1fr;
   }
 
   .homeHero {
+    grid-template-columns: 1fr;
+  }
+
+  .homeHeroCopy h1 {
+    max-width: none;
+    font-size: clamp(2.2rem, 7vw, 3.8rem);
+  }
+
+  .homeSignalRow,
+  .homeHeroActions,
+  .profileSelectorHeroPills,
+  .mintWorkspaceHeroMeta {
+    gap: 8px;
+  }
+
+  .homeOpsGrid,
+  .homeMetricsGrid,
+  .profileDirectoryGrid {
     grid-template-columns: 1fr;
   }
 
@@ -2411,22 +2450,75 @@ button:disabled {
 }
 
 @media (max-width: 720px) {
+  main {
+    padding: 14px;
+  }
+
   nav {
     align-items: flex-start;
     flex-direction: column;
+    padding: 14px;
   }
 
   .navLinks {
     width: 100%;
     order: 3;
+    gap: 8px;
   }
 
   .headerWalletButton {
     align-self: flex-end;
+    width: 100%;
+    justify-content: center;
   }
 
   .brandMeta {
     font-size: 0.82rem;
+  }
+
+  .navPill,
+  .homeSignalPill,
+  .profileSelectorPill,
+  .mintWorkspaceHeroPill {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .heroCard,
+  .homeOpsBand,
+  .homeShowcaseCard,
+  .profileSelectorHero,
+  .profileSelectorPanel,
+  .profileDirectoryPanel,
+  .mintWorkspaceHero {
+    padding: 16px;
+  }
+
+  .homeHeroPanelBody,
+  .homeHeroStatusCard,
+  .homeHeroPanelCard,
+  .homeMetricCard,
+  .homeOpsCard,
+  .profileSelectorEmptyCard,
+  .profileSelectorProfileCard,
+  .profileSelectorDiscoveryCard,
+  .profileDirectoryProfileCard {
+    padding: 14px;
+  }
+
+  .homeHeroActions .ctaLink,
+  .profileSelectorQuickActions .ctaLink,
+  .profileSelectorActions .ctaLink,
+  .profileSelectorActions button,
+  .row .ctaLink {
+    width: 100%;
+  }
+
+  .flowStrip,
+  .grid,
+  .profileDirectoryFilters,
+  .profileSelectorMetaGrid {
+    grid-template-columns: 1fr;
   }
 
   .profileSelectorHeroCopy h2 {
@@ -2435,6 +2527,17 @@ button:disabled {
 
   .profileSelectorPanelHeader {
     flex-direction: column;
+  }
+
+  .homeShowcaseCard h3,
+  .homeOpsBandHeader h2,
+  .homeSectionHeader h2 {
+    max-width: none;
+  }
+
+  .homeHeroPanelHeader,
+  .homeShowcasePanelHeader {
+    flex-wrap: wrap;
   }
 
   .profileShell,
