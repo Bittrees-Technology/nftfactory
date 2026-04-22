@@ -3264,16 +3264,16 @@ export default function MintClient({
           <p className="eyebrow">Creator Studio</p>
           <h2>
             {pageMode === "manage"
-              ? "Manage Collection"
+              ? "Operate Collection"
               : pageMode === "view"
-                ? "View Collection"
-                : "Mint and Publish"}
+                ? "Inspect Collection"
+                : "Start a Drop"}
           </h2>
           <p className="hint">
             {pageMode === "manage"
-              ? "Tune collection settings, identity, verification, and token inventory from one studio."
+              ? "Handle ownership, identity, verification, and collection settings from one studio."
               : pageMode === "view"
-                ? "Inspect a creator collection, its indexed tokens, and the storefront state around it."
+                ? "Review a creator collection, its indexed inventory, and the storefront state around it."
                 : "Create onchain media inside the shared contract or one of your own creator collections."}
           </p>
           <div className="mintWorkspaceHeroMeta">
@@ -3295,13 +3295,13 @@ export default function MintClient({
         </div>
         <div className="row mintWorkspaceModes">
           <button type="button" className={pageMode === "mint" ? "presetButton presetActive" : "presetButton"} onClick={() => setPageMode("mint")}>
-            Mint and publish
+            Start a drop
           </button>
           <button type="button" className={pageMode === "view" ? "presetButton presetActive" : "presetButton"} onClick={() => setPageMode("view")}>
-            View collection
+            Inspect collection
           </button>
           <button type="button" className={pageMode === "manage" ? "presetButton presetActive" : "presetButton"} onClick={() => setPageMode("manage")}>
-            Manage collection
+            Operate collection
           </button>
         </div>
       </div>
@@ -3313,7 +3313,7 @@ export default function MintClient({
       {pageMode === "mint" && (
         <form className="wizard" onSubmit={onPublish}>
           <div className="card actionCardStatic">
-            <h3>Mint and publish</h3>
+            <h3>Start a drop</h3>
             <p>
               Mint into the shared contract or one of your creator collections. This is the fastest path to creating a new ERC-721 or ERC-1155.
             </p>
@@ -3708,7 +3708,7 @@ export default function MintClient({
 
           {/* Step 5: Publish */}
           <div className="card formCard">
-            <h3>5. Mint and Publish</h3>
+            <h3>5. Publish Onchain</h3>
             <p className="hint">
               This is the final blockchain transaction for the flow above. Make sure your metadata URI
               and collection choice are correct before you submit. If you selected an image above, this
@@ -3768,7 +3768,7 @@ export default function MintClient({
         <div className="wizard">
 
           <div className="card formCard">
-            <h3>View Collection</h3>
+            <h3>Inspect Collection</h3>
             <p className="hint">Inspect a creator collection, its royalty policy, and its indexed tokens without opening the management controls.</p>
           </div>
 
@@ -3975,7 +3975,7 @@ export default function MintClient({
         <div className="wizard">
 
           <div className="card formCard">
-            <h3>Manage Collection</h3>
+            <h3>Operate Collection</h3>
             <p className="hint">Choose a collection, verify it, then update identity or contract settings.</p>
           </div>
 

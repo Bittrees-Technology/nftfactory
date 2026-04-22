@@ -393,15 +393,15 @@ export default function ProfileSelectorClient() {
       <div className="card formCard profileSelectorPanel">
         <div className="profileSelectorPanelHeader">
           <div>
-            <h3>Select Profile</h3>
-            <p className="hint">Load the linked creator route for this wallet, or start a new setup flow.</p>
+            <h3>Creator Routes</h3>
+            <p className="hint">Open the linked creator route for this wallet, or start a new identity setup flow.</p>
           </div>
           <div className="profileSelectorQuickActions">
             <Link href="/profile/setup" className="ctaLink">
-              Open setup
+              Open profile setup
             </Link>
             <Link href="/mint?view=manage" className="ctaLink secondaryLink">
-              Manage collection
+              Operate collection
             </Link>
           </div>
         </div>
@@ -439,7 +439,7 @@ export default function ProfileSelectorClient() {
                       href={`/mint?view=manage&address=${encodeURIComponent(profile.collectionAddress)}`}
                       className="ctaLink secondaryLink"
                     >
-                      Manage collection
+                      Operate collection
                     </Link>
                   ) : null}
                 </div>
@@ -481,7 +481,7 @@ export default function ProfileSelectorClient() {
                     </p>
                     <div className="row profileSelectorActions">
                       <Link href={item.href} className="ctaLink secondaryLink">
-                        Manage collection
+                        Operate collection
                       </Link>
                     </div>
                   </div>
@@ -496,7 +496,7 @@ export default function ProfileSelectorClient() {
         <div className="card formCard profileDirectoryPanel">
           <div className="profileSelectorPanelHeader">
             <div>
-              <h3>Popular Profiles</h3>
+              <h3>Browse Creator Directory</h3>
               <p className="hint">
                 Browse creator pages directly. The default ordering prioritizes profiles with live collection and storefront activity.
               </p>
@@ -574,7 +574,7 @@ export default function ProfileSelectorClient() {
                           href={`/mint?view=manage&address=${encodeURIComponent(profile.collectionAddress)}`}
                           className="ctaLink secondaryLink"
                         >
-                          View collection
+                          Inspect collection
                         </Link>
                       ) : null}
                     </div>

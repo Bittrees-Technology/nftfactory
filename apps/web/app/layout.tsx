@@ -8,7 +8,7 @@ import { resolveWalletConnectProjectId } from "../lib/walletConnect";
 
 export const metadata: Metadata = {
   title: "NFTFactory",
-  description: "Mint, publish, and manage NFTs on nftfactory.eth"
+  description: "Launch collections, creator pages, and NFT storefronts on nftfactory.eth"
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
