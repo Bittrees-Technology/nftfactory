@@ -3269,9 +3269,9 @@ export default function MintClient({
           <p className="eyebrow">Creator Studio</p>
           <h2>
             {pageMode === "manage"
-              ? "Operate Collection"
+              ? "Operate collection"
               : pageMode === "view"
-                ? "Inspect Collection"
+                ? "Inspect collection"
                 : "Start a Drop"}
           </h2>
           <p className="hint">
@@ -3279,7 +3279,7 @@ export default function MintClient({
               ? "Handle ownership, identity, verification, and collection settings from one studio."
               : pageMode === "view"
                 ? "Review a creator collection, its indexed inventory, and the storefront state around it."
-                : "Create onchain media inside the shared contract or one of your own creator collections."}
+                : "Create onchain media inside the shared collection or one of your collection contracts."}
           </p>
           <div className="mintWorkspaceHeroMeta">
             <span className="mintWorkspaceHeroPill">
@@ -3287,7 +3287,7 @@ export default function MintClient({
                 ? "Verification + ownership controls"
                 : pageMode === "view"
                   ? "Indexed collection reads"
-                  : "Shared and creator-owned minting"}
+                  : "Shared and owned collection minting"}
             </span>
             <span className="mintWorkspaceHeroPill">
               {pageMode === "manage"
@@ -3320,7 +3320,7 @@ export default function MintClient({
           <div className="card actionCardStatic">
             <h3>Start a drop</h3>
             <p>
-              Mint into the shared contract or one of your creator collections. This is the fastest path to creating a new ERC-721 or ERC-1155.
+              Mint into the shared collection or one of your collection contracts. This is the fastest path to creating a new ERC-721 or ERC-1155.
             </p>
           </div>
 
@@ -3352,9 +3352,9 @@ export default function MintClient({
 
           {/* Step 2: Collection selection */}
           <div className="card formCard">
-            <h3>2. Collection Target</h3>
+            <h3>2. Collection target</h3>
             <p className="hint">
-              Pick the shared contract for the fastest path, or use your own collection for more control.
+              Pick the shared collection for the fastest path, or use your own collection contract for more control.
             </p>
 
             <label>
@@ -3382,7 +3382,7 @@ export default function MintClient({
                   Shared collection — mint instantly, no setup required
                 </option>
                 <option value="custom">
-                  My collection — your own contract, full control
+                  Owned collection — your own contract, full control
                 </option>
               </select>
             </label>
@@ -3390,13 +3390,13 @@ export default function MintClient({
             {mintMode === "shared" && (
               <div>
                 <p className="hint">
-                  <strong>Shared collection:</strong> your token mints into the common NFTFactory contract.
+                  <strong>Shared collection:</strong> your token mints into the common NFTFactory collection contract.
                 </p>
                 <p className="mono">
                   {standard === "ERC721" ? config.shared721 : config.shared1155}
                 </p>
                 <p className="hint">
-                  Shared mint publishes immediately. Switch to your own collection if you want a dedicated contract.
+                  Shared mint publishes immediately. Switch to an owned collection if you want a dedicated contract.
                 </p>
               </div>
             )}
@@ -3404,25 +3404,25 @@ export default function MintClient({
             {mintMode === "custom" && (
               <>
                 <p className="hint">
-                  <strong>Your collection:</strong> a contract you own and mint into directly.
+                  <strong>Owned collection:</strong> a contract you own and mint into directly.
                 </p>
                 <p className="hint">
                   This sets the collection contract. The NFT name is set in the next step.
                 </p>
                 <div className="selectionCard">
                   <label>
-                    Collection source
+                      Collection source
                     <select
                       value={collectionSelector}
                       onChange={(e) => setCollectionSelector(e.target.value as "saved" | "manual")}
                     >
-                      {mintFilteredKnownCollections.length > 0 ? <option value="saved">Select one of my on-chain collections</option> : null}
+                      {mintFilteredKnownCollections.length > 0 ? <option value="saved">Select one of my collection contracts</option> : null}
                       <option value="manual">Enter collection address manually</option>
                     </select>
                   </label>
                   {collectionSelector === "saved" && mintFilteredKnownCollections.length > 0 ? (
                     <label>
-                      Creator collection
+                      Collection contract
                       <select
                         value={customCollectionAddress}
                         onChange={(e) => setCustomCollectionAddress(e.target.value)}
@@ -3445,7 +3445,7 @@ export default function MintClient({
                   )}
                   {mintFilteredKnownCollections.length === 0 ? (
                     <p className="hint">
-                      No indexed {standard} creator collections are available for this wallet on the selected network yet. Switch token type, wait for indexer discovery, or enter a collection address manually.
+                      No indexed {standard} collection contracts are available for this wallet on the selected network yet. Switch token type, wait for indexer discovery, or enter a collection address manually.
                     </p>
                   ) : null}
                 </div>
@@ -3505,7 +3505,7 @@ export default function MintClient({
                   </summary>
                   <div className="formCard inset" style={{ marginTop: "0.75rem" }}>
                     <p className="hint">
-                      Create a new creator collection, then mint into it in this same flow. This step sets the
+                      Create a new collection contract, then mint into it in this same flow. This step sets the
                       collection contract identity and ownership. NFT title and description are set in step 3.
                     </p>
                     <label>
@@ -3561,11 +3561,11 @@ export default function MintClient({
                       onClick={onDeployCollection}
                       disabled={!isConnected || wrongNetwork || deployTx.status === "pending"}
                     >
-                      {deployTx.status === "pending" ? "Deploying…" : `Deploy ${standard} Collection`}
+                      {deployTx.status === "pending" ? "Deploying…" : `Deploy ${standard} collection`}
                     </button>
                     <TxStatus state={deployTx} kind="deploy" />
                     <p className="hint">
-                      New creator collections automatically submit explorer proxy verification after deployment. You can retry or inspect verification from <strong>Manage Collection → Verification</strong>.
+                      New collection contracts automatically submit explorer proxy verification after deployment. You can retry or inspect verification from <strong>Operate collection → Verification</strong>.
                     </p>
                   </div>
                 </details>
@@ -3665,10 +3665,10 @@ export default function MintClient({
 
           {/* Step 4: Mint settings */}
           <div className="card formCard">
-            <h3>4. Mint Preview</h3>
+            <h3>4. Drop preview</h3>
             {mintMode === "custom" ? (
               <p className="hint">
-                Custom collections use the collection identity you already set.
+                Owned collections use the collection identity you already set.
               </p>
             ) : null}
 
@@ -3679,7 +3679,7 @@ export default function MintClient({
                   <p className="nftPreviewName">{name || "Untitled NFT"}</p>
                   {description && <p className="nftPreviewDesc">{description}</p>}
                   <div className="compactList">
-                    <p className="hint"><strong>Collection:</strong> {mintMode === "shared" ? "Shared contract" : "Creator collection"}</p>
+                    <p className="hint"><strong>Collection:</strong> {mintMode === "shared" ? "Shared collection" : "Owned collection"}</p>
                     {mintMode === "custom" ? (
                       <p className="hint">
                         <strong>Collection contract name:</strong>
@@ -3713,7 +3713,7 @@ export default function MintClient({
 
           {/* Step 5: Publish */}
           <div className="card formCard">
-            <h3>5. Publish Onchain</h3>
+            <h3>5. Publish onchain</h3>
             <p className="hint">
               This is the final blockchain transaction for the flow above. Make sure your metadata URI
               and collection choice are correct before you submit. If you selected an image above, this
@@ -3773,14 +3773,14 @@ export default function MintClient({
         <div className="wizard">
 
           <div className="card formCard">
-            <h3>Inspect Collection</h3>
-            <p className="hint">Inspect a creator collection, its royalty policy, and its indexed tokens without opening the management controls.</p>
+            <h3>Inspect collection</h3>
+            <p className="hint">Inspect a collection contract, its royalty policy, and its indexed tokens without opening the operate controls.</p>
           </div>
 
           <div className="card formCard">
-            <h3>1. Choose Collection</h3>
+            <h3>1. Choose collection</h3>
             <p className="hint">
-              This view is read-only. Use it to inspect an existing <strong>CreatorCollection</strong> contract and its indexed inventory.
+              This view is read-only. Use it to inspect an existing collection contract and its indexed inventory.
             </p>
             {verifiedKnownCollections.length > 0 ? (
               <label>
@@ -3789,19 +3789,19 @@ export default function MintClient({
                   value={manageSelector}
                   onChange={(e) => setManageSelector(e.target.value as "saved" | "manual")}
                 >
-                  <option value="saved">Choose from my on-chain collections</option>
+                  <option value="saved">Choose from my collection contracts</option>
                   <option value="manual">Enter an address manually</option>
                 </select>
               </label>
             ) : null}
             {verifiedKnownCollections.length > 0 && manageSelector === "saved" ? (
               <label>
-                Your collection
+                Collection contract
                 <select
                   value={manageAddress}
                   onChange={(e) => setManageAddress(e.target.value)}
                 >
-                  <option value="">Select an on-chain collection</option>
+                  <option value="">Select a collection contract</option>
                   {verifiedKnownCollections.map((item) => (
                     <option key={`view-${item.contractAddress}`} value={item.contractAddress}>
                       {formatCollectionIdentity(item.ensSubname) || shortenAddress(item.contractAddress)} - {shortenAddress(item.contractAddress)}
@@ -3811,7 +3811,7 @@ export default function MintClient({
               </label>
             ) : (
               <label>
-                {verifiedKnownCollections.length > 0 ? "Collection contract address" : "Your collection contract address"}
+                {verifiedKnownCollections.length > 0 ? "Collection contract address" : "Collection contract address"}
                 <input
                   value={manageAddress}
                   onChange={(e) => setManageAddress(e.target.value)}
@@ -3821,7 +3821,7 @@ export default function MintClient({
           </div>
 
           <div className="card formCard">
-            <h3>2. Collection Overview</h3>
+            <h3>2. Collection overview</h3>
             {!isAddress(manageAddress) ? (
               <p className="hint">Select or enter a valid collection address to load details.</p>
             ) : (
@@ -3888,7 +3888,7 @@ export default function MintClient({
           </div>
 
           <div className="card formCard">
-            <h3>3. Indexed Tokens</h3>
+            <h3>3. Indexed tokens</h3>
             <div className="row" style={{ justifyContent: "space-between", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
               <p className="hint" style={{ margin: 0 }}>
                 This view reads indexed tokens directly. Use re-sync to run a targeted collection refresh.
@@ -3980,7 +3980,7 @@ export default function MintClient({
         <div className="wizard">
 
           <div className="card formCard">
-            <h3>Operate Collection</h3>
+            <h3>Operate collection</h3>
             <p className="hint">Choose a collection, verify it, then update identity or contract settings.</p>
           </div>
 
@@ -3996,10 +3996,9 @@ export default function MintClient({
           </div>
 
           <div className="card formCard">
-            <h3>1. Choose Collection</h3>
+            <h3>1. Choose collection</h3>
             <p className="hint">
-              These actions apply to <strong>CreatorCollection</strong> contracts (the ones deployed via
-              the factory). You must be the current <code>owner</code> of the contract to call them.
+              These actions apply to collection contracts deployed through the factory. You must be the current <code>owner</code> to call them.
             </p>
             {verifiedKnownCollections.length > 0 ? (
               <label>
@@ -4008,19 +4007,19 @@ export default function MintClient({
                   value={manageSelector}
                   onChange={(e) => setManageSelector(e.target.value as "saved" | "manual")}
                 >
-                  <option value="saved">Choose from my on-chain collections</option>
+                  <option value="saved">Choose from my collection contracts</option>
                   <option value="manual">Enter an address manually</option>
                 </select>
               </label>
             ) : null}
             {verifiedKnownCollections.length > 0 && manageSelector === "saved" ? (
               <label>
-                Your collection
+                Collection contract
                 <select
                   value={manageAddress}
                   onChange={(e) => setManageAddress(e.target.value)}
                 >
-                  <option value="">Select an on-chain collection</option>
+                  <option value="">Select a collection contract</option>
                   {verifiedKnownCollections.map((item) => (
                     <option key={`manage-${item.contractAddress}`} value={item.contractAddress}>
                       {formatCollectionIdentity(item.ensSubname) || shortenAddress(item.contractAddress)} - {shortenAddress(item.contractAddress)}
@@ -4030,7 +4029,7 @@ export default function MintClient({
               </label>
             ) : (
               <label>
-                {verifiedKnownCollections.length > 0 ? "Collection contract address" : "Your collection contract address"}
+                {verifiedKnownCollections.length > 0 ? "Collection contract address" : "Collection contract address"}
                 <input
                   value={manageAddress}
                   onChange={(e) => setManageAddress(e.target.value)}
@@ -4054,7 +4053,7 @@ export default function MintClient({
           <div className="card formCard">
             <h3>2. Verification</h3>
             <p className="hint">
-              Creator collections are deployed as ERC-1967 proxies. This action submits proxy verification to the explorer
+              Collection contracts are deployed as ERC-1967 proxies. This action submits proxy verification to the explorer
               so the collection address resolves to verified source instead of only showing the raw proxy shell.
             </p>
             <div className="selectionCard">
