@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import { verifyCollectionProxy } from "./etherscanVerification";
+import { probeCollectionVerificationStatus, verifyCollectionProxy } from "./etherscanVerification";
 
 describe("verifyCollectionProxy", () => {
   const originalFetch = global.fetch;
@@ -54,5 +54,22 @@ describe("verifyCollectionProxy", () => {
 
     expect(result.state).toBe("pending");
     expect(result.guid).toBe("guid-123");
+  });
+
+  it("reports unverified when the ABI is not available yet", async () => {
+    global.fetch = vi.fn(async () =>
+      new Response(
+        JSON.stringify({ status: "0", message: "NOTOK", result: "Contract source code not verified" }),
+        { status: 200 }
+      )
+    ) as typeof fetch;
+
+    const result = await probeCollectionVerificationStatus({
+      chainId: 11155111,
+      collectionAddress: "0x1111111111111111111111111111111111111111"
+    });
+
+    expect(result.state).toBe("error");
+    expect(result.message).toContain("not verified");
   });
 });

@@ -143,6 +143,32 @@ async function checkAlreadyVerified(
   };
 }
 
+export async function probeCollectionVerificationStatus(params: {
+  chainId: number;
+  collectionAddress: `0x${string}`;
+}): Promise<CollectionVerificationResult> {
+  const { chainId, collectionAddress } = params;
+
+  if (!getEtherscanApiKey()) {
+    return {
+      state: "unsupported",
+      message: "ETHERSCAN_API_KEY is not configured for this deployment.",
+      explorerUrl: buildExplorerCodeUrl(chainId, collectionAddress)
+    };
+  }
+
+  const existing = await checkAlreadyVerified(chainId, collectionAddress);
+  if (existing) {
+    return existing;
+  }
+
+  return {
+    state: "error",
+    message: "This collection contract is not verified on the explorer yet.",
+    explorerUrl: buildExplorerCodeUrl(chainId, collectionAddress)
+  };
+}
+
 async function submitProxyVerification(
   chainId: number,
   collectionAddress: `0x${string}`,

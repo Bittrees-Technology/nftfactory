@@ -2,7 +2,7 @@ import { createPublicClient, http, isAddress, type Address } from "viem";
 import { NextRequest, NextResponse } from "next/server";
 import { getAppChain } from "../../../../lib/chains";
 import { getContractsConfig } from "../../../../lib/contracts";
-import { verifyCollectionProxy } from "../../../../lib/etherscanVerification";
+import { probeCollectionVerificationStatus, verifyCollectionProxy } from "../../../../lib/etherscanVerification";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -81,6 +81,35 @@ export async function POST(request: NextRequest): Promise<Response> {
     return NextResponse.json(
       {
         error: error instanceof Error ? error.message : "Collection verification failed."
+      },
+      { status: 500 }
+    );
+  }
+}
+
+export async function GET(request: NextRequest): Promise<Response> {
+  const search = request.nextUrl.searchParams;
+  const chainId = Number(search.get("chainId"));
+  const collectionAddress = search.get("collectionAddress");
+
+  if (!Number.isInteger(chainId) || chainId <= 0) {
+    return NextResponse.json({ error: "Invalid chainId." }, { status: 400 });
+  }
+  if (!collectionAddress || !isAddress(collectionAddress)) {
+    return NextResponse.json({ error: "Invalid collectionAddress." }, { status: 400 });
+  }
+
+  try {
+    const result = await probeCollectionVerificationStatus({
+      chainId,
+      collectionAddress: collectionAddress as Address
+    });
+
+    return NextResponse.json(result);
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error: error instanceof Error ? error.message : "Collection verification check failed."
       },
       { status: 500 }
     );

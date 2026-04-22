@@ -27,7 +27,7 @@ import {
   type DeployCollectionArgs,
   type RoyaltySplitArgs
 } from "../../lib/creatorCollection";
-import { verifyCollectionContract } from "../../lib/collectionVerificationApi";
+import { probeCollectionVerification, verifyCollectionContract } from "../../lib/collectionVerificationApi";
 import { getContractsConfig } from "../../lib/contracts";
 import { anvil, getAppChain, getExplorerBaseUrl, getPrimaryAppChainId } from "../../lib/chains";
 import {
@@ -2191,6 +2191,38 @@ export default function MintClient({
     }
   }
 
+  async function checkCollectionVerificationStatus(collectionAddress: `0x${string}`): Promise<void> {
+    const pendingState: CollectionVerificationTxState = {
+      status: "pending",
+      state: "pending",
+      message: "Checking explorer verification status…"
+    };
+    setCollectionVerificationTx(pendingState);
+    persistCollectionVerification(config.chainId, collectionAddress, pendingState);
+
+    try {
+      const result = await probeCollectionVerification(config.chainId, collectionAddress);
+      const nextState: CollectionVerificationTxState = {
+        status: result.state === "verified" ? "success" : result.state === "pending" ? "pending" : "error",
+        state: result.state,
+        message: result.message,
+        explorerUrl: result.explorerUrl,
+        checkedAt: Date.now()
+      };
+      setCollectionVerificationTx(nextState);
+      persistCollectionVerification(config.chainId, collectionAddress, nextState);
+    } catch (error) {
+      const failedState: CollectionVerificationTxState = {
+        status: "error",
+        state: "error",
+        message: error instanceof Error ? error.message : "Collection verification status check failed.",
+        checkedAt: Date.now()
+      };
+      setCollectionVerificationTx(failedState);
+      persistCollectionVerification(config.chainId, collectionAddress, failedState);
+    }
+  }
+
   // ── Upload metadata to IPFS ───────────────────────────────────────────────
 
   async function uploadMetadata(): Promise<string> {
@@ -4043,6 +4075,17 @@ export default function MintClient({
                   }}
                 >
                   {collectionVerificationActionLabel}
+                </button>
+                <button
+                  type="button"
+                  className="secondaryButton"
+                  disabled={!isAddress(manageAddress) || collectionVerificationTx.status === "pending"}
+                  onClick={() => {
+                    if (!isAddress(manageAddress)) return;
+                    void checkCollectionVerificationStatus(manageAddress);
+                  }}
+                >
+                  Check Current Status
                 </button>
                 {collectionVerificationTx.explorerUrl ? (
                   <a href={collectionVerificationTx.explorerUrl} target="_blank" rel="noreferrer" className="ctaLink secondaryLink">
