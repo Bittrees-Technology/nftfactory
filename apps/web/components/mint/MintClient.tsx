@@ -69,9 +69,11 @@ type TxState = {
 
 type CollectionVerificationTxState = {
   status: "idle" | "pending" | "success" | "error";
+  state?: "verified" | "pending" | "unsupported" | "error";
   message?: string;
   explorerUrl?: string | null;
   implementationAddress?: string | null;
+  checkedAt?: number;
 };
 
 type UploadReceipt = {
@@ -111,6 +113,7 @@ const ENS_ETH_REGISTRAR_CONTROLLER_ADDRESS = /^0x[a-fA-F0-9]{40}$/.test(
   ? (process.env.NEXT_PUBLIC_ENS_ETH_REGISTRAR_CONTROLLER_ADDRESS as Address)
   : null;
 const ENS_RESOLUTION_DEBOUNCE_MS = 450;
+const COLLECTION_VERIFICATION_STORAGE_PREFIX = "nftfactory:collection-verification";
 
 const ENS_REGISTRY_ABI = [
   {
@@ -346,6 +349,39 @@ function metadataDraftKey(ownerAddress: string): string {
 
 function collectionEnsPendingKey(ownerAddress: string): string {
   return `nftfactory:collection-ens-registration:${ownerAddress.toLowerCase()}`;
+}
+
+function collectionVerificationStorageKey(chainId: number, collectionAddress: string): string {
+  return `${COLLECTION_VERIFICATION_STORAGE_PREFIX}:${chainId}:${collectionAddress.toLowerCase()}`;
+}
+
+function readStoredCollectionVerification(
+  chainId: number,
+  collectionAddress: string
+): CollectionVerificationTxState | null {
+  if (typeof window === "undefined" || !collectionAddress) return null;
+  try {
+    const raw = window.localStorage.getItem(collectionVerificationStorageKey(chainId, collectionAddress));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as CollectionVerificationTxState | null;
+    if (!parsed || typeof parsed !== "object") return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function persistCollectionVerification(
+  chainId: number,
+  collectionAddress: string,
+  value: CollectionVerificationTxState
+): void {
+  if (typeof window === "undefined" || !collectionAddress) return;
+  try {
+    window.localStorage.setItem(collectionVerificationStorageKey(chainId, collectionAddress), JSON.stringify(value));
+  } catch {
+    // Ignore storage failures in the browser.
+  }
 }
 
 function clearMetadataDraft(ownerAddress: string): void {
@@ -2061,8 +2097,36 @@ export default function MintClient({
   }, [account, config.chainId, manageAddress, manageCollectionOwner, manageCollectionStandard, pageMode, publicClient, verifiedKnownCollections]);
 
   useEffect(() => {
-    setCollectionVerificationTx({ status: "idle" });
-  }, [config.chainId, manageAddress, manageCollectionStandard]);
+    if (!isAddress(manageAddress)) {
+      setCollectionVerificationTx({ status: "idle" });
+      return;
+    }
+
+    const cached = readStoredCollectionVerification(config.chainId, manageAddress);
+    setCollectionVerificationTx(cached || { status: "idle" });
+  }, [config.chainId, manageAddress]);
+
+  const collectionVerificationActionLabel = useMemo(() => {
+    if (collectionVerificationTx.status === "pending") return "Submitting Verification…";
+    if (collectionVerificationTx.state === "verified") return "Check Verification Again";
+    if (collectionVerificationTx.state === "pending") return "Check Verification Status";
+    if (collectionVerificationTx.state === "error" || collectionVerificationTx.state === "unsupported") {
+      return "Retry Verification";
+    }
+    return "Verify on Explorer";
+  }, [collectionVerificationTx.state, collectionVerificationTx.status]);
+
+  const collectionVerificationStatusSummary = useMemo(() => {
+    if (collectionVerificationTx.status === "idle") return "";
+    if (collectionVerificationTx.state === "verified") return "Explorer status: verified";
+    if (collectionVerificationTx.state === "pending") return "Explorer status: pending";
+    if (collectionVerificationTx.state === "unsupported") return "Explorer status: unsupported";
+    if (collectionVerificationTx.state === "error") return "Explorer status: needs retry";
+    if (collectionVerificationTx.status === "pending") return "Explorer status: submitting";
+    if (collectionVerificationTx.status === "success") return "Explorer status: verified";
+    if (collectionVerificationTx.status === "error") return "Explorer status: needs retry";
+    return "";
+  }, [collectionVerificationTx.state, collectionVerificationTx.status]);
 
   // ── Utilities ─────────────────────────────────────────────────────────────
 
@@ -2090,10 +2154,13 @@ export default function MintClient({
     collectionAddress: `0x${string}`,
     standardToVerify: Standard
   ): Promise<void> {
-    setCollectionVerificationTx({
+    const pendingState: CollectionVerificationTxState = {
       status: "pending",
+      state: "pending",
       message: "Submitting proxy verification to the explorer…"
-    });
+    };
+    setCollectionVerificationTx(pendingState);
+    persistCollectionVerification(config.chainId, collectionAddress, pendingState);
 
     try {
       const result = await verifyCollectionContract({
@@ -2102,17 +2169,25 @@ export default function MintClient({
         standard: standardToVerify
       });
 
-      setCollectionVerificationTx({
+      const nextState: CollectionVerificationTxState = {
         status: result.state === "verified" ? "success" : result.state === "pending" ? "pending" : "error",
+        state: result.state,
         message: result.message,
         explorerUrl: result.explorerUrl,
-        implementationAddress: result.implementationAddress || null
-      });
+        implementationAddress: result.implementationAddress || null,
+        checkedAt: Date.now()
+      };
+      setCollectionVerificationTx(nextState);
+      persistCollectionVerification(config.chainId, collectionAddress, nextState);
     } catch (error) {
-      setCollectionVerificationTx({
+      const failedState: CollectionVerificationTxState = {
         status: "error",
-        message: error instanceof Error ? error.message : "Collection verification failed."
-      });
+        state: "error",
+        message: error instanceof Error ? error.message : "Collection verification failed.",
+        checkedAt: Date.now()
+      };
+      setCollectionVerificationTx(failedState);
+      persistCollectionVerification(config.chainId, collectionAddress, failedState);
     }
   }
 
@@ -3967,7 +4042,7 @@ export default function MintClient({
                     void runCollectionVerification(manageAddress, manageCollectionStandard);
                   }}
                 >
-                  {collectionVerificationTx.status === "pending" ? "Submitting Verification…" : "Verify on Explorer"}
+                  {collectionVerificationActionLabel}
                 </button>
                 {collectionVerificationTx.explorerUrl ? (
                   <a href={collectionVerificationTx.explorerUrl} target="_blank" rel="noreferrer" className="ctaLink secondaryLink">
@@ -3975,6 +4050,14 @@ export default function MintClient({
                   </a>
                 ) : null}
               </div>
+              {collectionVerificationStatusSummary ? (
+                <p className="hint">
+                  <strong>{collectionVerificationStatusSummary}</strong>
+                  {collectionVerificationTx.checkedAt
+                    ? ` · last checked ${new Date(collectionVerificationTx.checkedAt).toLocaleString()}`
+                    : ""}
+                </p>
+              ) : null}
               {collectionVerificationTx.message ? (
                 <p className={collectionVerificationTx.status === "error" ? "error" : "hint"}>
                   {collectionVerificationTx.message}

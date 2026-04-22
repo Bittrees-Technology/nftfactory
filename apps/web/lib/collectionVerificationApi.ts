@@ -1,4 +1,4 @@
-import { parseJsonResponse } from "./networkErrors";
+import { parseJsonResponse, sanitizeBackendErrorMessage } from "./networkErrors";
 
 export type VerifyCollectionContractParams = {
   chainId: number;
@@ -26,11 +26,24 @@ export async function verifyCollectionContract(
   });
   const text = await response.text();
   if (!response.ok) {
-    throw new Error(text || "Collection verification request failed.");
+    const parsedError = (() => {
+      try {
+        const json = JSON.parse(text) as { error?: string };
+        return typeof json.error === "string" ? json.error : "";
+      } catch {
+        return "";
+      }
+    })();
+    throw new Error(
+      sanitizeBackendErrorMessage(
+        parsedError || text,
+        "Collection verification request failed.",
+        { serviceLabel: "Collection verification backend" }
+      )
+    );
   }
   return parseJsonResponse<VerifyCollectionContractResponse>(
     text,
     "Collection verification response was not valid JSON."
   );
 }
-
