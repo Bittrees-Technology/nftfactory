@@ -43,7 +43,7 @@ import {
   syncWalletScope,
   syncMintedToken
 } from "../../lib/indexerApi";
-import { normalizeBackendFetchError, parseJsonResponse } from "../../lib/networkErrors";
+import { normalizeBackendFetchError, parseJsonResponse, sanitizeBackendErrorMessage } from "../../lib/networkErrors";
 import { fetchCollectionsByOwnerAcrossChains, fetchProfilesByOwnerAcrossChains } from "../../lib/ownerIdentityMultiChain";
 import {
   getMintAmountLabel,
@@ -2256,11 +2256,16 @@ export default function MintClient({
       }
       const res = await fetch("/api/ipfs/metadata", { method: "POST", body: form });
       const responseText = await res.text();
+      if (!res.ok) {
+        const fallbackMessage = `IPFS upload route returned ${res.status}. Check the deployment logs, tunnel, and backend health before retrying.`;
+        const safeMessage = sanitizeBackendErrorMessage(responseText, fallbackMessage, {
+          serviceLabel: "IPFS upload route"
+        });
+        throw new Error(safeMessage);
+      }
       const payload = parseJsonResponse<UploadReceipt & { error?: string }>(
         responseText,
-        res.ok
-          ? "IPFS upload route returned an invalid response."
-          : `IPFS upload route returned ${res.status}. Check the deployment logs for the backend error.`
+        "IPFS upload route returned an invalid response."
       );
       if (!res.ok || !payload.metadataUri) throw new Error(payload.error || "Upload failed");
       setImageUri(payload.imageUri || "");

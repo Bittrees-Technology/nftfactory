@@ -1,5 +1,8 @@
 "use client";
 
+import Link from "next/link";
+import SectionStatePanel from "../../../components/SectionStatePanel";
+
 function sanitizeProfilePageErrorMessage(message: string | undefined): string {
   const normalized = String(message || "").trim().toLowerCase();
   if (
@@ -20,12 +23,26 @@ export default function ProfileError({
   reset: () => void;
 }) {
   return (
-    <section>
-      <h2>Profile Error</h2>
-      <p className="error">{sanitizeProfilePageErrorMessage(error.message)}</p>
-      <button type="button" onClick={reset}>
-        Try again
-      </button>
+    <section className="grid">
+      <SectionStatePanel
+        className="card formCard"
+        title="Creator Route Unavailable"
+        message={sanitizeProfilePageErrorMessage(error.message)}
+        messageClassName="error"
+        actions={
+          <>
+            <button type="button" onClick={reset}>
+              Retry route
+            </button>
+            <Link href="/profile" className="ctaLink secondaryLink">
+              Open creator directory
+            </Link>
+            <Link href="/wiki/infrastructure-and-operations" className="ctaLink secondaryLink">
+              Ops notes
+            </Link>
+          </>
+        }
+      />
     </section>
   );
 }
