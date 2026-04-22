@@ -292,6 +292,25 @@ nav {
   flex-wrap: wrap;
 }
 
+.homeSignalRow {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.homeSignalPill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(127, 34, 15, 0.14);
+  background: rgba(255, 250, 243, 0.92);
+  color: #693220;
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
 .homeHeroPanel {
   border-radius: 24px;
   border: 1px solid rgba(44, 32, 52, 0.16);
@@ -325,6 +344,28 @@ nav {
   padding: 14px;
 }
 
+.homeHeroStatusCard {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.09);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.homeHeroChecklist {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 8px;
+  color: rgba(255, 244, 238, 0.88);
+}
+
+.homeHeroPanelGrid {
+  display: grid;
+  gap: 12px;
+}
+
 .homeHeroPanelCard {
   border-radius: 18px;
   padding: 14px;
@@ -339,6 +380,58 @@ nav {
 
 .homeStrip {
   background: linear-gradient(180deg, rgba(255, 251, 244, 0.8) 0%, rgba(255, 243, 222, 0.94) 100%);
+}
+
+.homeOpsBand {
+  display: grid;
+  gap: 18px;
+  background:
+    radial-gradient(circle at top right, rgba(0, 184, 161, 0.12), transparent 34%),
+    linear-gradient(180deg, rgba(255, 249, 239, 0.92) 0%, rgba(255, 239, 214, 0.98) 100%);
+}
+
+.homeOpsBandHeader {
+  display: grid;
+  gap: 12px;
+}
+
+.homeOpsBandHeader h2,
+.homeSectionHeader h2 {
+  margin: 0;
+  font-size: clamp(1.6rem, 2.6vw, 2.5rem);
+  line-height: 1.02;
+  letter-spacing: -0.03em;
+  max-width: 14ch;
+}
+
+.homeOpsGrid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.homeOpsCard {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(44, 32, 52, 0.1);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.homeOpsCard p {
+  margin: 0;
+  color: #4a382d;
+}
+
+.homeSectionHeader {
+  display: grid;
+  gap: 10px;
+  align-items: end;
+}
+
+.homeSectionHeader p {
+  margin: 0;
 }
 
 .profilePage--myspace {
@@ -684,6 +777,11 @@ nav {
 
   .homeHero {
     grid-template-columns: 1fr;
+  }
+
+  .homeOpsBandHeader h2,
+  .homeSectionHeader h2 {
+    max-width: none;
   }
 }
 
