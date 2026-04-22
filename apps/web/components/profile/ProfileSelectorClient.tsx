@@ -373,24 +373,64 @@ export default function ProfileSelectorClient() {
   const shouldShowDirectory = !isConnected || (!isLoading && profiles.length === 0);
 
   return (
-    <section className="wizard">
-      <div className="card formCard">
-        <h3>Select Profile</h3>
+    <section className="wizard profileSelectorPage">
+      <section className="card formCard profileSelectorHero">
+        <div className="profileSelectorHeroCopy">
+          <p className="eyebrow">Creator Portal</p>
+          <h2>Open the creator page, link the identity, or browse the live directory.</h2>
+          <p className="sectionLead">
+            NFTFactory profiles are the public-facing layer for collections, identity, and storefront state. This route should help
+            you get into the right profile quickly, or start from zero without guessing where the setup path lives.
+          </p>
+          <div className="profileSelectorHeroPills">
+            <span className="profileSelectorPill">ENS and subname identity</span>
+            <span className="profileSelectorPill">Creator page routing</span>
+            <span className="profileSelectorPill">Collection-linked profiles</span>
+          </div>
+        </div>
+      </section>
+
+      <div className="card formCard profileSelectorPanel">
+        <div className="profileSelectorPanelHeader">
+          <div>
+            <h3>Select Profile</h3>
+            <p className="hint">Load the linked creator route for this wallet, or start a new setup flow.</p>
+          </div>
+          <div className="profileSelectorQuickActions">
+            <Link href="/profile/setup" className="ctaLink">
+              Open setup
+            </Link>
+            <Link href="/mint?view=manage" className="ctaLink secondaryLink">
+              Manage collection
+            </Link>
+          </div>
+        </div>
         {!isConnected ? (
-          <p className="hint">Connect a wallet from the header to load linked creator profiles.</p>
+          <div className="profileSelectorEmptyCard">
+            <strong>Connect a wallet to load linked creator profiles.</strong>
+            <p className="hint">Use the header wallet control to load the creator routes already tied to this account.</p>
+          </div>
         ) : isLoading ? (
-          <p className="hint">Loading linked profiles...</p>
+          <div className="profileSelectorEmptyCard">
+            <strong>Loading linked profiles...</strong>
+            <p className="hint">Checking indexed profiles, discovered ENS identities, and creator-owned collections.</p>
+          </div>
         ) : linkedProfiles.length > 0 ? (
-          <div className="stack">
+          <div className="stack profileSelectorStack">
             <p className="hint">Linked profiles found. Redirecting to the primary profile now.</p>
             {linkedProfiles.map((profile) => (
-              <div key={`${profile.slug}:${profile.ownerAddress}:${profile.collectionAddress || ""}`} className="card">
+              <div key={`${profile.slug}:${profile.ownerAddress}:${profile.collectionAddress || ""}`} className="card profileSelectorProfileCard">
                 <strong>{profile.displayName || profile.fullName}</strong>
                 <p className="hint">{profile.tagline || profile.fullName}</p>
-                <p className="hint">
-                  Route: <span className="mono">/profile/{profile.slug}</span>
-                </p>
-                <div className="row">
+                <div className="profileSelectorMetaGrid">
+                  <p className="hint">
+                    Route: <span className="mono">/profile/{profile.slug}</span>
+                  </p>
+                  <p className="hint">
+                    Owner: <span className="mono">{profile.ownerAddress}</span>
+                  </p>
+                </div>
+                <div className="row profileSelectorActions">
                   <Link href={`/profile/${encodeURIComponent(profile.slug)}`} className="ctaLink">
                     Open profile now
                   </Link>
@@ -407,18 +447,21 @@ export default function ProfileSelectorClient() {
             ))}
           </div>
         ) : (
-          <div className="stack">
-            <p className="hint">No creator profile is linked to this wallet yet.</p>
-            <div className="row">
+          <div className="stack profileSelectorStack">
+            <div className="profileSelectorEmptyCard">
+              <strong>No creator profile is linked to this wallet yet.</strong>
+              <p className="hint">Start from setup, then link ENS identity or mint an nftfactory.eth subname before publishing the creator page.</p>
+            </div>
+            <div className="row profileSelectorActions">
               <Link href="/profile/setup" className="ctaLink">Create or link profile</Link>
             </div>
             {discoveredIdentityLinks.length > 0 ? (
-              <div className="stack">
+              <div className="stack profileSelectorDiscoveryBlock">
                 <p className="hint">Onchain ENS identities found for this wallet.</p>
                 {discoveredIdentityLinks.map((item) => (
-                  <div key={item.fullName} className="card">
+                  <div key={item.fullName} className="card profileSelectorDiscoveryCard">
                     <strong>{item.fullName}</strong>
-                    <div className="row">
+                    <div className="row profileSelectorActions">
                       <Link href={item.href} className="ctaLink">
                         Link this identity
                       </Link>
@@ -428,15 +471,15 @@ export default function ProfileSelectorClient() {
               </div>
             ) : null}
             {discoveredCollectionLinks.length > 0 ? (
-              <div className="stack">
+              <div className="stack profileSelectorDiscoveryBlock">
                 <p className="hint">Creator collections already owned by this wallet.</p>
                 {discoveredCollectionLinks.map((item) => (
-                  <div key={item.contractAddress} className="card">
+                  <div key={item.contractAddress} className="card profileSelectorDiscoveryCard">
                     <strong>{item.ensSubname || item.contractAddress}</strong>
                     <p className="hint">
                       <span className="mono">{item.contractAddress}</span>
                     </p>
-                    <div className="row">
+                    <div className="row profileSelectorActions">
                       <Link href={item.href} className="ctaLink secondaryLink">
                         Manage collection
                       </Link>
@@ -450,12 +493,16 @@ export default function ProfileSelectorClient() {
         {note ? <p className="hint">{note}</p> : null}
       </div>
       {shouldShowDirectory ? (
-        <div className="card formCard">
-          <h3>Popular Profiles</h3>
-          <p className="hint">
-            Browse creator pages directly. The default ordering prioritizes profiles with live collection and storefront activity.
-          </p>
-          <div className="row">
+        <div className="card formCard profileDirectoryPanel">
+          <div className="profileSelectorPanelHeader">
+            <div>
+              <h3>Popular Profiles</h3>
+              <p className="hint">
+                Browse creator pages directly. The default ordering prioritizes profiles with live collection and storefront activity.
+              </p>
+            </div>
+          </div>
+          <div className="profileDirectoryFilters">
             <label>
               Search
               <input
@@ -494,42 +541,48 @@ export default function ProfileSelectorClient() {
           {directoryLoading && directoryProfiles.length === 0 ? <p className="hint">Loading popular profiles...</p> : null}
           {directoryError ? <p className="hint">{directoryError}</p> : null}
           {!directoryError ? (
-            <div className="stack">
+            <div className="stack profileSelectorStack">
               <p className="hint">
                 {directoryTotal === 0
                   ? "No profiles match the current filters."
                   : `Showing ${directoryProfiles.length} of ${directoryTotal} matching profiles.`}
               </p>
-              {directoryProfiles.map((profile) => (
-                <div key={`${profile.slug}:${profile.ownerAddress}:${profile.collectionAddress || ""}:${profile.source}`} className="card">
-                  <strong>{profile.displayName || profile.fullName}</strong>
-                  <p className="hint">{profile.tagline || profile.fullName}</p>
-                  <p className="hint">
-                    <span className="mono">/profile/{profile.slug}</span>
-                    {" · "}
-                    {profile.source}
-                    {profile.layoutMode ? " · creator page" : ""}
-                  </p>
-                  <p className="hint">
-                    Owner <span className="mono">{profile.ownerAddress}</span>
-                  </p>
-                  <div className="row">
-                    <Link href={`/profile/${encodeURIComponent(profile.slug)}`} className="ctaLink">
-                      Open profile
-                    </Link>
-                    {profile.collectionAddress ? (
-                      <Link
-                        href={`/mint?view=manage&address=${encodeURIComponent(profile.collectionAddress)}`}
-                        className="ctaLink secondaryLink"
-                      >
-                        View collection
+              <div className="profileDirectoryGrid">
+                {directoryProfiles.map((profile) => (
+                  <div key={`${profile.slug}:${profile.ownerAddress}:${profile.collectionAddress || ""}:${profile.source}`} className="card profileDirectoryProfileCard">
+                    <strong>{profile.displayName || profile.fullName}</strong>
+                    <p className="hint">{profile.tagline || profile.fullName}</p>
+                    <div className="profileChipRow">
+                      <span className="profileChip">{profile.source}</span>
+                      {profile.collectionAddress ? <span className="profileChip">with collection</span> : null}
+                      {profile.layoutMode ? <span className="profileChip">{profile.layoutMode} layout</span> : null}
+                    </div>
+                    <div className="profileSelectorMetaGrid">
+                      <p className="hint">
+                        <span className="mono">/profile/{profile.slug}</span>
+                      </p>
+                      <p className="hint">
+                        Owner <span className="mono">{profile.ownerAddress}</span>
+                      </p>
+                    </div>
+                    <div className="row profileSelectorActions">
+                      <Link href={`/profile/${encodeURIComponent(profile.slug)}`} className="ctaLink">
+                        Open profile
                       </Link>
-                    ) : null}
+                      {profile.collectionAddress ? (
+                        <Link
+                          href={`/mint?view=manage&address=${encodeURIComponent(profile.collectionAddress)}`}
+                          className="ctaLink secondaryLink"
+                        >
+                          View collection
+                        </Link>
+                      ) : null}
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
               {directoryCanLoadMore ? (
-                <div ref={loadMoreRef} className="row">
+                <div ref={loadMoreRef} className="row profileSelectorActions">
                   <button type="button" onClick={loadMoreProfiles} disabled={directoryLoading}>
                     {directoryLoading ? "Loading more profiles..." : "Load more profiles"}
                   </button>

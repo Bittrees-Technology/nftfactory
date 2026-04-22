@@ -942,6 +942,130 @@ nav {
   gap: 14px;
 }
 
+.profileSelectorPage {
+  gap: 16px;
+}
+
+.profileSelectorHero {
+  display: grid;
+  gap: 14px;
+  background:
+    radial-gradient(circle at top right, rgba(255, 90, 54, 0.14), transparent 34%),
+    radial-gradient(circle at bottom left, rgba(0, 184, 161, 0.12), transparent 26%),
+    linear-gradient(180deg, #fff8ef 0%, #fff0dc 100%);
+  border: 1px solid rgba(185, 50, 24, 0.14);
+}
+
+.profileSelectorHeroCopy {
+  display: grid;
+  gap: 10px;
+}
+
+.profileSelectorHeroCopy h2 {
+  margin: 0;
+  font-size: clamp(1.9rem, 3vw, 3rem);
+  line-height: 1;
+  letter-spacing: -0.04em;
+  max-width: 14ch;
+}
+
+.profileSelectorHeroPills {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.profileSelectorPill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(127, 34, 15, 0.12);
+  background: rgba(255, 255, 255, 0.7);
+  color: #673322;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.profileSelectorPanel,
+.profileDirectoryPanel {
+  gap: 14px;
+}
+
+.profileSelectorPanelHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.profileSelectorPanelHeader h3 {
+  margin: 0;
+}
+
+.profileSelectorQuickActions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.profileSelectorStack {
+  gap: 12px;
+}
+
+.profileSelectorProfileCard,
+.profileSelectorDiscoveryCard,
+.profileDirectoryProfileCard {
+  display: grid;
+  gap: 10px;
+}
+
+.profileSelectorEmptyCard {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(44, 32, 52, 0.1);
+  background: linear-gradient(180deg, #fffaf3 0%, #fff3e5 100%);
+}
+
+.profileSelectorEmptyCard p {
+  margin: 0;
+}
+
+.profileSelectorDiscoveryBlock {
+  gap: 10px;
+}
+
+.profileSelectorActions {
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.profileSelectorMetaGrid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.profileSelectorMetaGrid p {
+  margin: 0;
+}
+
+.profileDirectoryFilters {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.profileDirectoryGrid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
 .profileSetupHero {
   display: grid;
   gap: 10px;
@@ -2303,6 +2427,14 @@ button:disabled {
 
   .brandMeta {
     font-size: 0.82rem;
+  }
+
+  .profileSelectorHeroCopy h2 {
+    max-width: none;
+  }
+
+  .profileSelectorPanelHeader {
+    flex-direction: column;
   }
 
   .profileShell,
