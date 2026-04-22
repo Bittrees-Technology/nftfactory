@@ -18,8 +18,24 @@ type DeployHealthResponse = {
 
 const HEALTH_REFRESH_MS = 60_000;
 
+function getCheckGuidance(check: ServiceCheck): string {
+  const label = String(check.label || "").toLowerCase();
+  const message = String(check.message || "").toLowerCase();
+
+  if (label.includes("ipfs") || message.includes("ipfs")) {
+    return "Check the IPFS node, local auth proxy, and cloudflared tunnel before retrying uploads.";
+  }
+
+  if (label.includes("indexer") || label.includes("api") || message.includes("indexer")) {
+    return "Confirm the indexer API is reachable on its public URL and that the tunnel can still reach the local upstream.";
+  }
+
+  return "Check the deploy health route, origin service, and tunnel status before treating the app as healthy.";
+}
+
 export default function DeployHealthBanner() {
   const [payload, setPayload] = useState<DeployHealthResponse | null>(null);
+  const [updatedAt, setUpdatedAt] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -33,6 +49,7 @@ export default function DeployHealthBanner() {
         const nextPayload = (await response.json()) as DeployHealthResponse;
         if (!cancelled) {
           setPayload(nextPayload);
+          setUpdatedAt(Date.now());
         }
       } catch {
         if (!cancelled) {
@@ -48,6 +65,7 @@ export default function DeployHealthBanner() {
               }
             ]
           });
+          setUpdatedAt(Date.now());
         }
       }
     }
@@ -72,16 +90,27 @@ export default function DeployHealthBanner() {
   return (
     <div className="deployHealthBanner" role="status" aria-live="polite">
       <div className="deployHealthBannerHeader">
-        <strong>Service interruption</strong>
-        <Link href="/wiki/infrastructure-and-operations" className="deployHealthBannerLink">
-          Ops notes
-        </Link>
+        <div className="deployHealthBannerTitleGroup">
+          <strong>Service interruption</strong>
+          <span className="deployHealthBannerMeta">
+            {updatedAt ? `Last checked ${new Date(updatedAt).toLocaleTimeString()}` : `Checks refresh every ${HEALTH_REFRESH_MS / 1000}s`}
+          </span>
+        </div>
+        <div className="deployHealthBannerActions">
+          <Link href="/wiki/infrastructure-and-operations" className="deployHealthBannerLink">
+            Ops notes
+          </Link>
+          <Link href="/wiki/ipfs-upload-failure-triage" className="deployHealthBannerLink">
+            IPFS
+          </Link>
+        </div>
       </div>
       <div className="deployHealthBannerList">
         {failingChecks.map((check) => (
           <p key={check.label} className="deployHealthBannerItem">
             <span className="deployHealthBannerLabel">{check.label}</span>
             <span>{check.message}</span>
+            <span className="deployHealthBannerGuidance">{getCheckGuidance(check)}</span>
           </p>
         ))}
       </div>

@@ -11,9 +11,9 @@ export default function StatusStack({
   if (visible.length === 0) return null;
 
   return (
-    <div className={className}>
+    <div className={`statusStack ${className}`.trim()}>
       {visible.map((item, index) => (
-        <p key={item.key || `${item.tone}:${index}`} className={item.tone}>
+        <p key={item.key || `${item.tone}:${index}`} className={`statusStackItem ${item.tone}`.trim()}>
           {item.message}
         </p>
       ))}

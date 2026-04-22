@@ -16,8 +16,10 @@ describe("SectionStatePanel", () => {
 
     expect(html).toContain("class=\"card formCard\"");
     expect(html).toContain("<h3>Admin Feed Is Clear</h3>");
-    expect(html).toContain("<p class=\"hint\">There are no open reports.</p>");
-    expect(html).toContain("<div class=\"row\"><button type=\"button\">Refresh</button></div>");
+    expect(html).toContain("class=\"hint\"");
+    expect(html).toContain("There are no open reports.");
+    expect(html).toContain("<button type=\"button\">Refresh</button>");
+    expect(html).toContain("class=\"row sectionStatePanelActions\"");
   });
 
   it("supports sectionLead copy without forcing hint styling", () => {
@@ -29,6 +31,7 @@ describe("SectionStatePanel", () => {
       />
     );
 
-    expect(html).toContain("<p class=\"sectionLead\">Finish setup before publishing.</p>");
+    expect(html).toContain("class=\"sectionLead\"");
+    expect(html).toContain("Finish setup before publishing.");
   });
 });

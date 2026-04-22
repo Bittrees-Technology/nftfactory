@@ -19,14 +19,18 @@ export default function SectionStatePanel({
   messageClassName = "hint"
 }: Props) {
   return (
-    <div className={className}>
+    <div className={className} data-section-state-panel="true">
       {title ? <h3>{title}</h3> : null}
       {typeof message === "string" || typeof message === "number" ? (
-        <p className={messageClassName}>{message}</p>
+        <p className={messageClassName} data-section-state-panel-message="true">
+          {message}
+        </p>
       ) : (
-        <div className={messageClassName}>{message}</div>
+        <div className={messageClassName} data-section-state-panel-message="true">
+          {message}
+        </div>
       )}
-      {actions ? <div className="row">{actions}</div> : null}
+      {actions ? <div className="row sectionStatePanelActions">{actions}</div> : null}
     </div>
   );
 }
