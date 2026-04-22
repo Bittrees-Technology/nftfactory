@@ -15,7 +15,7 @@ In plain terms, NFTFactory is a creator storefront plus discovery marketplace fo
 Production-grade monorepo scaffold for `nftfactory.eth`, now organized around a mainnet-first operator flow with Sepolia retained as the proving ground.
 
 ## Workspace
-- `apps/web`: Next.js frontend (`/mint`, `/profile/[name]`, `/discover`, `/admin`)
+- `apps/web`: Next.js frontend (`/mint`, `/discover`, `/profile`, `/profile/[name]`, `/wiki`)
 - `packages/contracts`: Solidity contracts (factory, shared mint, marketplace, registrar, royalties)
 - `services/indexer`: Postgres/Prisma-based indexer + moderation data model
 - `docs`: architecture, deployment, and ops docs
@@ -244,7 +244,7 @@ Use [docs/wiki/Deployment-and-Launch.md](/workspace/projects/nftfactory/docs/wik
 1. Deploy and verify the full contract suite on mainnet.
 2. Fill the mainnet-scoped web and indexer env vars explicitly.
 3. Restart the indexer against mainnet and let the automatic registry/collection sync warm the database.
-4. Confirm `https://nftfactory.org/api/deploy/health`, `/mint`, `/profile`, `/profile/[name]`, and collection token reads against the live indexer.
+4. Confirm `https://nftfactory.org/api/deploy/health`, `/mint`, `/discover`, `/profile`, `/profile/[name]`, and collection token reads against the live indexer.
 5. Only then disable or deprioritize Sepolia in the public app config.
 
 ## Population verification

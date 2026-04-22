@@ -3269,7 +3269,7 @@ export default function MintClient({
           <p className="eyebrow">Creator Studio</p>
           <h2>
             {pageMode === "manage"
-              ? "Manager"
+              ? "Manage"
               : pageMode === "view"
                 ? "View"
                 : "Mint"}
@@ -3306,7 +3306,7 @@ export default function MintClient({
             View
           </button>
           <button type="button" className={pageMode === "manage" ? "presetButton presetActive" : "presetButton"} onClick={() => setPageMode("manage")}>
-            Manager
+            Manage
           </button>
         </div>
       </div>
@@ -3565,7 +3565,7 @@ export default function MintClient({
                     </button>
                     <TxStatus state={deployTx} kind="deploy" />
                     <p className="hint">
-                      New collection contracts automatically submit explorer proxy verification after deployment. You can retry or inspect verification from <strong>Manager → Verification</strong>.
+                      New collection contracts automatically submit explorer proxy verification after deployment. You can retry or inspect verification from <strong>Manage → Verification</strong>.
                     </p>
                   </div>
                 </details>
@@ -3980,7 +3980,7 @@ export default function MintClient({
         <div className="wizard">
 
           <div className="card formCard">
-            <h3>Manager</h3>
+            <h3>Manage</h3>
             <p className="hint">Choose a collection, verify it, then update identity or contract settings.</p>
           </div>
 
@@ -4686,7 +4686,7 @@ function getTxGuidance(kind: TxStatusKind, state: TxState): string | null {
   if (kind === "deploy") {
     if (state.status === "pending") return "Keep the wallet open until the factory transaction confirms.";
     if (state.status === "error") return "Verify the connected wallet, selected chain, royalty inputs, and factory configuration before retrying deployment.";
-    return "Next: continue into asset setup or open Manage Collection.";
+    return "Next: continue into asset setup or open Manage.";
   }
 
   if (kind === "upload") {

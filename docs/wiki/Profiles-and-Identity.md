@@ -13,7 +13,8 @@ The key distinction is:
 
 | Route | Role |
 |-------|------|
-| `/profile` | Resolves a primary profile for the connected wallet or routes into setup |
+| `/discover` | Public browse surface for profiles, collections, and NFTs |
+| `/profile` | Creator portal for the connected wallet and profile setup handoff |
 | `/profile/setup` | Register `.eth`, link existing ENS, or create `nftfactory.eth` identity |
 | `/profile/[name]` | Public creator page resolved by slug or linked identity |
 

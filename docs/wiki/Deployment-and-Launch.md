@@ -75,6 +75,7 @@ Before calling a release candidate stable, validate on Sepolia against the curre
 
 - `https://nftfactory.org/api/deploy/health`
 - `/mint`
+- `/discover`
 - `/profile`
 - `/profile/setup`
 - `/profile/[name]`
@@ -86,9 +87,10 @@ Core acceptance flow:
 - shared mint publish
 - creator collection deploy and mint
 - creator collection implementation verification
-- creator collection proxy verification from `Manage Collection -> Verification`
+- creator collection proxy verification from `Manage -> Verification`
 - collection management actions and royalty split policy writes
 - profile setup and public profile resolution
+- public discovery views for profiles, collections, and NFTs
 - profile-linked listing management behavior
 - moderation visibility and guestbook controls when those controls are in release scope
 

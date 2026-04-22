@@ -64,7 +64,7 @@ export default function ProfileHoldingsSection({
                   href={`/mint?view=view&profile=${encodeURIComponent(mintProfileParam)}`}
                   className="ctaLink secondaryLink"
                 >
-                  Inspect collection tools
+                  View collection
                 </Link>
                 <Link
                   href={`/mint?view=mint&collection=shared&profile=${encodeURIComponent(mintProfileParam)}`}

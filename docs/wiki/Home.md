@@ -8,7 +8,7 @@ This in-app wiki is intentionally trimmed to the pages that matter most to a cre
 
 | Page | Purpose |
 |------|---------|
-| [Profiles and Identity](./Profiles-and-Identity.md) | What `/profile`, `/profile/setup`, and `/profile/[name]` do today |
+| [Profiles and Identity](./Profiles-and-Identity.md) | What `/discover`, `/profile`, `/profile/setup`, and `/profile/[name]` do today |
 | [ENS Integration](./ENS-Integration.md) | What NFTFactory creates onchain vs what it only links |
 | [Contracts](./Contracts.md) | The contract groups behind shared publishing and creator-owned collections |
 | [Finality](./Finality.md) | What becomes permanent when a creator finalizes upgrades or locks metadata |
@@ -23,6 +23,7 @@ NFTFactory currently has three user-facing surfaces:
    - publish through shared mint contracts or creator-owned collections from `/mint`
 3. **Profiles and identity**
    - resolve a connected wallet at `/profile`
+   - browse public profiles, collections, and NFTs at `/discover`
    - create or link identity at `/profile/setup`
    - render a public creator page at `/profile/[name]`
 

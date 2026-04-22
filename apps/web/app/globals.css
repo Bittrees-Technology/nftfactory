@@ -1007,6 +1007,10 @@ nav {
   gap: 16px;
 }
 
+.discoverPage {
+  gap: 16px;
+}
+
 .profileSelectorHero {
   display: grid;
   gap: 14px;
@@ -1017,7 +1021,22 @@ nav {
   border: 1px solid rgba(185, 50, 24, 0.14);
 }
 
+.discoverHero {
+  display: grid;
+  gap: 14px;
+  background:
+    radial-gradient(circle at top right, rgba(0, 184, 161, 0.12), transparent 32%),
+    radial-gradient(circle at bottom left, rgba(255, 90, 54, 0.14), transparent 28%),
+    linear-gradient(180deg, #fff8ef 0%, #fff0dc 100%);
+  border: 1px solid rgba(44, 32, 52, 0.12);
+}
+
 .profileSelectorHeroCopy {
+  display: grid;
+  gap: 10px;
+}
+
+.discoverHeroCopy {
   display: grid;
   gap: 10px;
 }
@@ -1028,6 +1047,14 @@ nav {
   line-height: 1;
   letter-spacing: -0.04em;
   max-width: 14ch;
+}
+
+.discoverHeroCopy h2 {
+  margin: 0;
+  font-size: clamp(1.9rem, 3vw, 3rem);
+  line-height: 1;
+  letter-spacing: -0.04em;
+  max-width: 15ch;
 }
 
 .profileSelectorHeroPills {
@@ -1051,6 +1078,10 @@ nav {
 
 .profileSelectorPanel,
 .profileDirectoryPanel {
+  gap: 14px;
+}
+
+.discoverPanel {
   gap: 14px;
 }
 
@@ -1125,6 +1156,57 @@ nav {
   display: grid;
   gap: 14px;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.discoverToolbar {
+  display: grid;
+  gap: 14px;
+}
+
+.discoverTabs {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.discoverTab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(44, 32, 52, 0.12);
+  background: rgba(255, 255, 255, 0.74);
+  color: #3f3028;
+  font-weight: 700;
+}
+
+.discoverTabActive {
+  border-color: #8c2a14;
+  background: #ff5a36;
+  color: #fff;
+}
+
+.discoverToolbarActions {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.discoverStack {
+  gap: 12px;
+}
+
+.discoverGrid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.discoverCard {
+  display: grid;
+  gap: 10px;
 }
 
 .profileSetupHero {
@@ -2554,6 +2636,7 @@ button:disabled {
   }
 
   .navPill,
+  .discoverTab,
   .homeSignalPill,
   .profileSelectorPill,
   .mintWorkspaceHeroPill {
@@ -2608,6 +2691,8 @@ button:disabled {
 
   .flowStrip,
   .grid,
+  .discoverToolbarActions,
+  .discoverGrid,
   .profileDirectoryFilters,
   .profileSelectorMetaGrid {
     grid-template-columns: 1fr;

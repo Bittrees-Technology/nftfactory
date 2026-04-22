@@ -34,7 +34,7 @@ export default function ProfileError({
             <button type="button" onClick={reset}>
               Retry route
             </button>
-            <Link href="/profile" className="ctaLink secondaryLink">
+            <Link href="/discover" className="ctaLink secondaryLink">
               Open creator directory
             </Link>
             <Link href="/wiki/infrastructure-and-operations" className="ctaLink secondaryLink">

@@ -1,11 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAccount, usePublicClient } from "wagmi";
 import {
-  fetchProfileDirectory,
   syncWalletScope,
   type ApiOwnedCollections,
   type ApiProfileRecord
@@ -100,14 +99,6 @@ function deriveEnsNamesFromCollections(collections: ApiOwnedCollections["collect
   )].sort((left, right) => left.localeCompare(right));
 }
 
-function usePrevious<T>(value: T): T | undefined {
-  const ref = useRef<T | undefined>(undefined);
-  useEffect(() => {
-    ref.current = value;
-  }, [value]);
-  return ref.current;
-}
-
 export default function ProfileSelectorClient() {
   const router = useRouter();
   const { address, isConnected } = useAccount();
@@ -117,19 +108,6 @@ export default function ProfileSelectorClient() {
   const [onchainIdentity, setOnchainIdentity] = useState<OnchainWalletIdentity>({ ensNames: [], collections: [] });
   const [isLoading, setIsLoading] = useState(false);
   const [note, setNote] = useState("");
-
-  const [directoryProfiles, setDirectoryProfiles] = useState<ApiProfileRecord[]>([]);
-  const [directoryTotal, setDirectoryTotal] = useState(0);
-  const [directoryLoading, setDirectoryLoading] = useState(false);
-  const [directoryError, setDirectoryError] = useState("");
-  const [directoryCanLoadMore, setDirectoryCanLoadMore] = useState(false);
-  const [nextCursor, setNextCursor] = useState(0);
-  const [requestCursor, setRequestCursor] = useState(0);
-  const [searchValue, setSearchValue] = useState("");
-  const [sourceFilter, setSourceFilter] = useState<"all" | ApiProfileRecord["source"]>("all");
-  const [collectionFilter, setCollectionFilter] = useState<"all" | "with-collection" | "without-collection">("all");
-  const [sortFilter, setSortFilter] = useState<"popular" | "name-asc" | "updated-desc" | "created-desc">("popular");
-  const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!address || !isConnected) {
@@ -268,85 +246,6 @@ export default function ProfileSelectorClient() {
     router.replace(`/profile/${encodeURIComponent(profiles[0].slug)}`);
   }, [isConnected, isLoading, profiles, router]);
 
-  const previousFilters = usePrevious(
-    `${searchValue}::${sourceFilter}::${collectionFilter}::${sortFilter}`
-  );
-
-  useEffect(() => {
-    const currentFilters = `${searchValue}::${sourceFilter}::${collectionFilter}::${sortFilter}`;
-    if (previousFilters === undefined || previousFilters === currentFilters) return;
-    setDirectoryProfiles([]);
-    setDirectoryTotal(0);
-    setDirectoryCanLoadMore(false);
-    setNextCursor(0);
-    setRequestCursor(0);
-  }, [searchValue, sourceFilter, collectionFilter, sortFilter, previousFilters]);
-
-  useEffect(() => {
-    let cancelled = false;
-    const timeout = setTimeout(() => {
-      setDirectoryLoading(true);
-      setDirectoryError("");
-      void fetchProfileDirectory({
-        cursor: requestCursor,
-        q: searchValue,
-        source: sourceFilter,
-        layoutMode: "all",
-        hasCollection:
-          collectionFilter === "with-collection"
-            ? true
-            : collectionFilter === "without-collection"
-              ? false
-              : null,
-        sort: sortFilter,
-        limit: 24
-      })
-        .then((response) => {
-          if (cancelled) return;
-          setDirectoryProfiles((current) => (
-            requestCursor === 0 ? response.profiles || [] : [...current, ...(response.profiles || [])]
-          ));
-          setDirectoryTotal(response.total || 0);
-          setDirectoryCanLoadMore(Boolean(response.canLoadMore));
-          setNextCursor(response.nextCursor || 0);
-        })
-        .catch((error) => {
-          if (cancelled) return;
-          if (requestCursor === 0) {
-            setDirectoryProfiles([]);
-            setDirectoryTotal(0);
-          }
-          setDirectoryCanLoadMore(false);
-          setDirectoryError(error instanceof Error ? error.message : "Failed to load the public profile directory.");
-        })
-        .finally(() => {
-          if (!cancelled) setDirectoryLoading(false);
-        });
-    }, requestCursor === 0 ? 250 : 0);
-
-    return () => {
-      cancelled = true;
-      clearTimeout(timeout);
-    };
-  }, [requestCursor, searchValue, sourceFilter, collectionFilter, sortFilter]);
-
-  useEffect(() => {
-    const target = loadMoreRef.current;
-    if (!target || !directoryCanLoadMore || directoryLoading) return;
-    const observer = new IntersectionObserver((entries) => {
-      if (entries[0]?.isIntersecting) {
-        setRequestCursor((current) => (current === nextCursor ? current : nextCursor));
-      }
-    }, { rootMargin: "320px 0px" });
-    observer.observe(target);
-    return () => observer.disconnect();
-  }, [directoryCanLoadMore, directoryLoading, nextCursor]);
-
-  function loadMoreProfiles(): void {
-    if (directoryLoading || !directoryCanLoadMore) return;
-    setRequestCursor((current) => (current === nextCursor ? current : nextCursor));
-  }
-
   const linkedProfiles = useMemo(() => profiles.slice(0, 12), [profiles]);
   const discoveredIdentityLinks = useMemo(
     () =>
@@ -370,7 +269,6 @@ export default function ProfileSelectorClient() {
       })),
     [onchainIdentity.collections]
   );
-  const shouldShowDirectory = !isConnected || (!isLoading && profiles.length === 0);
 
   return (
     <section className="wizard profileSelectorPage">
@@ -400,8 +298,11 @@ export default function ProfileSelectorClient() {
             <Link href="/profile/setup" className="ctaLink">
               Open profile setup
             </Link>
+            <Link href="/discover" className="ctaLink secondaryLink">
+              Open discover
+            </Link>
             <Link href="/mint?view=manage" className="ctaLink secondaryLink">
-              Operate collection
+              Manage collection
             </Link>
           </div>
         </div>
@@ -439,7 +340,7 @@ export default function ProfileSelectorClient() {
                       href={`/mint?view=manage&address=${encodeURIComponent(profile.collectionAddress)}`}
                       className="ctaLink secondaryLink"
                     >
-                      Operate collection
+                      Manage collection
                     </Link>
                   ) : null}
                 </div>
@@ -481,7 +382,7 @@ export default function ProfileSelectorClient() {
                     </p>
                     <div className="row profileSelectorActions">
                       <Link href={item.href} className="ctaLink secondaryLink">
-                        Operate collection
+                        Manage collection
                       </Link>
                     </div>
                   </div>
@@ -492,106 +393,6 @@ export default function ProfileSelectorClient() {
         )}
         {note ? <p className="hint">{note}</p> : null}
       </div>
-      {shouldShowDirectory ? (
-        <div className="card formCard profileDirectoryPanel">
-          <div className="profileSelectorPanelHeader">
-            <div>
-              <h3>Browse Creator Directory</h3>
-              <p className="hint">
-                Browse creator pages directly. The default ordering prioritizes profiles with live collection and storefront activity.
-              </p>
-            </div>
-          </div>
-          <div className="profileDirectoryFilters">
-            <label>
-              Search
-              <input
-                value={searchValue}
-                onChange={(event) => setSearchValue(event.target.value)}
-                placeholder="name, slug, tagline, wallet"
-              />
-            </label>
-            <label>
-              Source
-              <select value={sourceFilter} onChange={(event) => setSourceFilter(event.target.value as "all" | ApiProfileRecord["source"])}>
-                <option value="all">All sources</option>
-                <option value="nftfactory-subname">NFTFactory subnames</option>
-                <option value="ens">ENS names</option>
-                <option value="external-subname">External subnames</option>
-              </select>
-            </label>
-            <label>
-              Collection
-              <select value={collectionFilter} onChange={(event) => setCollectionFilter(event.target.value as "all" | "with-collection" | "without-collection")}>
-                <option value="all">All profiles</option>
-                <option value="with-collection">With collection</option>
-                <option value="without-collection">Without collection</option>
-              </select>
-            </label>
-            <label>
-              Order
-              <select value={sortFilter} onChange={(event) => setSortFilter(event.target.value as "popular" | "name-asc" | "updated-desc" | "created-desc")}>
-                <option value="popular">Popular</option>
-                <option value="updated-desc">Recently updated</option>
-                <option value="created-desc">Recently created</option>
-                <option value="name-asc">Name A-Z</option>
-              </select>
-            </label>
-          </div>
-          {directoryLoading && directoryProfiles.length === 0 ? <p className="hint">Loading popular profiles...</p> : null}
-          {directoryError ? <p className="hint">{directoryError}</p> : null}
-          {!directoryError ? (
-            <div className="stack profileSelectorStack">
-              <p className="hint">
-                {directoryTotal === 0
-                  ? "No profiles match the current filters."
-                  : `Showing ${directoryProfiles.length} of ${directoryTotal} matching profiles.`}
-              </p>
-              <div className="profileDirectoryGrid">
-                {directoryProfiles.map((profile) => (
-                  <div key={`${profile.slug}:${profile.ownerAddress}:${profile.collectionAddress || ""}:${profile.source}`} className="card profileDirectoryProfileCard">
-                    <strong>{profile.displayName || profile.fullName}</strong>
-                    <p className="hint">{profile.tagline || profile.fullName}</p>
-                    <div className="profileChipRow">
-                      <span className="profileChip">{profile.source}</span>
-                      {profile.collectionAddress ? <span className="profileChip">with collection</span> : null}
-                      {profile.layoutMode ? <span className="profileChip">{profile.layoutMode} layout</span> : null}
-                    </div>
-                    <div className="profileSelectorMetaGrid">
-                      <p className="hint">
-                        <span className="mono">/profile/{profile.slug}</span>
-                      </p>
-                      <p className="hint">
-                        Owner <span className="mono">{profile.ownerAddress}</span>
-                      </p>
-                    </div>
-                    <div className="row profileSelectorActions">
-                      <Link href={`/profile/${encodeURIComponent(profile.slug)}`} className="ctaLink">
-                        Open profile
-                      </Link>
-                      {profile.collectionAddress ? (
-                        <Link
-                          href={`/mint?view=manage&address=${encodeURIComponent(profile.collectionAddress)}`}
-                          className="ctaLink secondaryLink"
-                        >
-                          Inspect collection
-                        </Link>
-                      ) : null}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              {directoryCanLoadMore ? (
-                <div ref={loadMoreRef} className="row profileSelectorActions">
-                  <button type="button" onClick={loadMoreProfiles} disabled={directoryLoading}>
-                    {directoryLoading ? "Loading more profiles..." : "Load more profiles"}
-                  </button>
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
-      ) : null}
     </section>
   );
 }

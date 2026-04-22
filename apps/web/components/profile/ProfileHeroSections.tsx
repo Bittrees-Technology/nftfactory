@@ -121,7 +121,7 @@ export default function ProfileHeroSections({
               Start a drop from this profile
             </Link>
             <Link href={`/mint?view=view&profile=${encodeURIComponent(mintProfileParam)}`} className="ctaLink secondaryLink">
-              Inspect collection
+              View collection
             </Link>
             {canEditProfile ? (
               <Link href={`${canonicalRoute}#listing-management`} className="ctaLink secondaryLink">

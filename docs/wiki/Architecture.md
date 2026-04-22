@@ -46,8 +46,8 @@ Only the creator-owned collection path is upgradeable. Shared mint contracts are
 | `/` | Landing page and high-level entry point |
 | `/mint` | Mint, publish, collection setup, and collection management |
 | `/list` | Seller-side listing creation and management |
-| `/discover` | Public indexed feed and listing discovery |
-| `/profile` | Resolve a profile for the connected wallet |
+| `/discover` | Public browse surface for profiles, collections, and NFTs |
+| `/profile` | Creator portal for the connected wallet |
 | `/profile/setup` | Register `.eth`, link ENS, or create `nftfactory.eth` identity |
 | `/profile/[name]` | Public creator page |
 | `/mod` | Moderation review surface |

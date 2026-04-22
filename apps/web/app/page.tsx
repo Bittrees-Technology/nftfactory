@@ -22,7 +22,7 @@ export default function HomePage() {
               Start a drop
             </Link>
             <Link href="/mint?view=manage" className="ctaLink secondaryLink">
-              Open operator workspace
+              Open manage workspace
             </Link>
           </div>
         </div>
@@ -225,15 +225,15 @@ export default function HomePage() {
           <p>
             Attach identity, transfer ownership, verify contracts, and finalize upgrades when the collection is ready to lock down.
           </p>
-          <p className="actionHint">Open the management workspace.</p>
+          <p className="actionHint">Open the manage workspace.</p>
         </Link>
 
-        <Link href="/profile" className="card actionCard">
-          <h3>Explore Creator Pages</h3>
+        <Link href="/discover" className="card actionCard">
+          <h3>Discover Profiles, Collections, and NFTs</h3>
           <p>
-            Browse the public profile surface and use it as the branded end-state for collections, drops, and creator identity.
+            Browse public creator pages, collection contracts, and live NFTs from one public discovery surface.
           </p>
-          <p className="actionHint">Open the creator page surface.</p>
+          <p className="actionHint">Open public discovery.</p>
         </Link>
       </div>
 

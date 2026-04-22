@@ -149,7 +149,7 @@ Use [Sepolia-Acceptance-Log.md](./Sepolia-Acceptance-Log.md) while running the c
 2. connect wallet on Sepolia
 3. publish through shared mint from `/mint`
 4. deploy a creator collection from `/mint`
-5. run `Manage Collection -> Verification`
+5. run `Manage -> Verification`
 6. mint into the creator collection
 7. confirm collection state and indexed token visibility
 8. create or link identity at `/profile/setup`
