@@ -424,6 +424,101 @@ nav {
   color: #4a382d;
 }
 
+.homeMetricsGrid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.homeMetricCard {
+  display: grid;
+  gap: 8px;
+  padding: 18px;
+  background:
+    linear-gradient(180deg, rgba(255, 249, 240, 0.95) 0%, rgba(255, 238, 214, 0.98) 100%);
+}
+
+.homeMetricCard strong {
+  font-size: clamp(1.35rem, 2vw, 2rem);
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: #2c2034;
+}
+
+.homeMetricCard p {
+  margin: 0;
+  color: #4a382d;
+}
+
+.homeShowcaseGrid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1.05fr) minmax(300px, 0.95fr);
+}
+
+.homeShowcaseCard {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+}
+
+.homeShowcaseCard h3 {
+  margin: 0;
+  font-size: clamp(1.45rem, 2.2vw, 2.2rem);
+  line-height: 1.02;
+  letter-spacing: -0.03em;
+}
+
+.homeShowcaseCard p {
+  margin: 0;
+}
+
+.homeShowcaseCard--warm {
+  background:
+    radial-gradient(circle at top right, rgba(255, 90, 54, 0.16), transparent 32%),
+    linear-gradient(180deg, rgba(255, 247, 235, 0.98) 0%, rgba(255, 231, 203, 0.98) 100%);
+}
+
+.homeShowcaseCard--dark {
+  border: 1px solid rgba(44, 32, 52, 0.18);
+  background:
+    linear-gradient(180deg, rgba(44, 32, 52, 0.96) 0%, rgba(26, 18, 38, 0.96) 100%);
+  color: #fff4ee;
+}
+
+.homeShowcasePanelHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.92rem;
+}
+
+.homeShowcaseRail {
+  display: grid;
+  gap: 12px;
+}
+
+.homeShowcaseRailItem {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.homeShowcaseRailItem p {
+  color: rgba(255, 244, 238, 0.86);
+}
+
+.homeShowcaseList {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 8px;
+  color: #4a382d;
+}
+
 .homeSectionHeader {
   display: grid;
   gap: 10px;
@@ -776,6 +871,10 @@ nav {
   }
 
   .homeHero {
+    grid-template-columns: 1fr;
+  }
+
+  .homeShowcaseGrid {
     grid-template-columns: 1fr;
   }
 

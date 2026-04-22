@@ -87,6 +87,24 @@ export default function HomePage() {
         </div>
       </section>
 
+      <section className="homeMetricsGrid" aria-label="Platform capabilities">
+        <article className="card homeMetricCard">
+          <span className="flowLabel">Release models</span>
+          <strong>2 lanes</strong>
+          <p>Use the shared contract for speed, then graduate to creator-owned contracts when the project needs its own governance and upgrade posture.</p>
+        </article>
+        <article className="card homeMetricCard">
+          <span className="flowLabel">Creator route</span>
+          <strong>1 identity surface</strong>
+          <p>Collections, profile presentation, and ENS naming resolve through the same creator-facing route instead of being split across separate tools.</p>
+        </article>
+        <article className="card homeMetricCard">
+          <span className="flowLabel">Operator controls</span>
+          <strong>Live inside the app</strong>
+          <p>Verification, ownership transfer, upgrade freeze, profile moderation, and collection management stay reachable from the production surface.</p>
+        </article>
+      </section>
+
       <section className="card homeStrip">
         <div className="flowStrip">
           <div className="flowCell">
@@ -116,6 +134,45 @@ export default function HomePage() {
         <p className="sectionLead">
           The front page should route you into the right tool quickly instead of making every creator begin from the same generic panel.
         </p>
+      </section>
+
+      <section className="homeShowcaseGrid">
+        <article className="card homeShowcaseCard homeShowcaseCard--warm">
+          <p className="eyebrow">For creators</p>
+          <h3>Ship the release without losing the long-term structure.</h3>
+          <p>
+            NFTFactory is for the creator who wants the first drop live quickly, but does not want to rebuild identity,
+            royalties, and collection operations somewhere else later.
+          </p>
+          <ul className="homeShowcaseList">
+            <li>Start shared when speed matters</li>
+            <li>Move into creator-owned contracts when the audience grows</li>
+            <li>Keep the public page and the contract story aligned</li>
+          </ul>
+        </article>
+
+        <article className="card homeShowcaseCard homeShowcaseCard--dark">
+          <div className="homeShowcasePanelHeader">
+            <span className="homeHeroPanelDot" />
+            <span className="homeHeroPanelDot" />
+            <span className="homeHeroPanelDot" />
+            <strong>Launch stack</strong>
+          </div>
+          <div className="homeShowcaseRail">
+            <div className="homeShowcaseRailItem">
+              <span className="flowLabel">Collection</span>
+              <p>ERC-721 or ERC-1155 through shared or creator-owned flows.</p>
+            </div>
+            <div className="homeShowcaseRailItem">
+              <span className="flowLabel">Identity</span>
+              <p>ENS-linked profile route with retro customization and public creator framing.</p>
+            </div>
+            <div className="homeShowcaseRailItem">
+              <span className="flowLabel">Distribution</span>
+              <p>IPFS-backed metadata and indexed collection reads that feed the live app.</p>
+            </div>
+          </div>
+        </article>
       </section>
 
       <div className="grid">
@@ -149,6 +206,9 @@ export default function HomePage() {
           <p className="eyebrow">Operator Surfaces</p>
           <h2>Use the live app as the control room, not just the launch form.</h2>
         </div>
+        <p className="sectionLead">
+          Once the release is live, the product should still help with verification, ownership changes, moderation, and production sanity checks.
+        </p>
       </section>
 
       <div className="grid">
