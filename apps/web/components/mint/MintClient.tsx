@@ -2350,7 +2350,7 @@ export default function MintClient({
         setDeployTx({
           status: "success",
           hash: txHash,
-          message: "Deployed! Check the transaction on Etherscan to find your collection address and paste it above."
+          message: "Collection deployment confirmed. Inspect the explorer receipt to recover the new collection address, then load it into the workspace."
         });
       }
     } catch (err) {
@@ -3445,7 +3445,7 @@ export default function MintClient({
                   )}
                   {mintFilteredKnownCollections.length === 0 ? (
                     <p className="hint">
-                      No {standard} creator collections are available yet for this wallet on the current network. Switch token type or enter an address manually.
+                      No indexed {standard} creator collections are available for this wallet on the selected network yet. Switch token type, wait for indexer discovery, or enter a collection address manually.
                     </p>
                   ) : null}
                 </div>
@@ -3953,7 +3953,7 @@ export default function MintClient({
             ) : viewCollectionError ? (
               <p className="error">{viewCollectionError}</p>
             ) : viewCollectionCount === 0 ? (
-              <p className="hint">No indexed tokens found for this collection yet.</p>
+              <p className="hint">No indexed tokens are visible for this collection yet. Mint activity may still be propagating, or the indexer may need another sync pass.</p>
             ) : (
               <div className="stack">
                 <p className="hint">
@@ -4186,7 +4186,7 @@ export default function MintClient({
                   </div>
                   {collectionEnsParentCandidates.length === 0 ? (
                     <p className="hint">
-                      No existing parent ENS names are available in your inventory yet. Register a parent <span className="mono">.eth</span> name first, then come back to create a subname for this collection.
+                      No parent ENS names are available in this wallet inventory yet. Register or transfer in a parent <span className="mono">.eth</span> name first, then return here to create the collection subname.
                     </p>
                   ) : null}
                   {String(collectionSubnameParent || "").trim() && normalizeSubname(registerSubnameLabel) ? (
@@ -4378,7 +4378,7 @@ export default function MintClient({
                         </strong>
                       </div>
                     </div>
-                    {manageRoyaltySplits.length === 0 ? <p className="hint">No split rows configured yet.</p> : null}
+                    {manageRoyaltySplits.length === 0 ? <p className="hint">No collaborator split rows are configured yet. Add recipients here before saving a payout policy to the registry.</p> : null}
                     {manageRoyaltySplits.map((split, index) => (
                       <div key={`royalty-split-${index}`} className="selectionCard mintRoyaltySplitRow">
                         <label className="mintField">
@@ -4452,16 +4452,16 @@ export default function MintClient({
                 ) : (
                   <>
                     <p className="hint">
-                      Royalty split registry is not configured for {appChain.name}. Add{" "}
+                      Royalty split storage is not configured for {appChain.name}. Add{" "}
                       <code>{royaltySplitRegistryEnvHint.scopedEnvVarName}</code>
                       {royaltySplitRegistryEnvHint.legacyEnvVarName ? (
                         <>
                           {" "}or the legacy primary-chain alias <code>{royaltySplitRegistryEnvHint.legacyEnvVarName}</code>
                         </>
                       ) : null}
-                      {" "}and redeploy to enable collaborator split storage here.
+                      {" "}and redeploy before treating collaborator payouts as production-ready on this chain.
                     </p>
-                    <p className="hint">Once configured, this stores collaborator royalty weights for the selected collection in the on-chain split registry.</p>
+                    <p className="hint">Once configured, this panel stores collaborator royalty weights for the selected collection in the on-chain split registry.</p>
                   </>
                 )}
                 <TxStatus state={royaltySplitTx} kind="split" />
@@ -4490,7 +4490,7 @@ export default function MintClient({
                     <span className="mono">{manageCollectionOwner}</span>
                   )
                 ) : (
-                  <span className="hint">Loading…</span>
+                  <span className="hint">Checking owner…</span>
                 )}
               </p>
               <p>
@@ -4505,7 +4505,7 @@ export default function MintClient({
               <p>
                 <strong>Transfer mode</strong>
                 <br />
-                {manageSupportsTwoStepOwnership ? "Two-step" : "Legacy immediate transfer"}
+                {manageSupportsTwoStepOwnership ? "Two-step acceptance" : "Legacy immediate transfer"}
               </p>
             </div>
             {manageSupportsTwoStepOwnership ? (
@@ -4605,7 +4605,7 @@ export default function MintClient({
             ) : (
               <>
                 <p className="hint">
-                  This collection still uses the legacy one-step ownership flow. A pending accept/reject path is only available after upgrading to the latest collection implementation.
+                  This collection still uses the legacy one-step ownership flow. Pending acceptance is unavailable until the collection moves to the latest implementation.
                 </p>
                 <label>
                   New owner address
