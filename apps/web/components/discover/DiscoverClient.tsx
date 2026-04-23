@@ -14,7 +14,6 @@ type ProfileSort = "popular" | "name-asc" | "updated-desc" | "created-desc";
 type ProfileSourceFilter = "all" | ApiProfileRecord["source"];
 type ProfileCollectionFilter = "all" | "with-collection" | "without-collection";
 type StandardFilter = "all" | "ERC-721" | "ERC-1155";
-type OriginFilter = "all" | "factory" | "external";
 type ListingFilter = "all" | "listed" | "unlisted";
 type MediaFilter = "all" | "with-media" | "metadata-only";
 
@@ -52,10 +51,8 @@ export default function DiscoverClient() {
   const [profileSourceFilter, setProfileSourceFilter] = useState<ProfileSourceFilter>("all");
   const [profileCollectionFilter, setProfileCollectionFilter] = useState<ProfileCollectionFilter>("all");
   const [collectionStandardFilter, setCollectionStandardFilter] = useState<StandardFilter>("all");
-  const [collectionOriginFilter, setCollectionOriginFilter] = useState<OriginFilter>("all");
   const [collectionListingFilter, setCollectionListingFilter] = useState<ListingFilter>("all");
   const [nftStandardFilter, setNftStandardFilter] = useState<StandardFilter>("all");
-  const [nftOriginFilter, setNftOriginFilter] = useState<OriginFilter>("all");
   const [nftListingFilter, setNftListingFilter] = useState<ListingFilter>("all");
   const [nftMediaFilter, setNftMediaFilter] = useState<MediaFilter>("all");
 
@@ -230,26 +227,22 @@ export default function DiscoverClient() {
   const filteredCollectionCards = useMemo(() => {
     return collectionCards.filter((item) => {
       if (collectionStandardFilter !== "all" && item.standard !== collectionStandardFilter) return false;
-      if (collectionOriginFilter === "factory" && !item.isFactoryCreated) return false;
-      if (collectionOriginFilter === "external" && item.isFactoryCreated) return false;
       if (collectionListingFilter === "listed" && item.activeListingCount === 0) return false;
       if (collectionListingFilter === "unlisted" && item.activeListingCount > 0) return false;
       return true;
     });
-  }, [collectionCards, collectionListingFilter, collectionOriginFilter, collectionStandardFilter]);
+  }, [collectionCards, collectionListingFilter, collectionStandardFilter]);
 
   const filteredNftItems = useMemo(() => {
     return searchedFeedItems.filter((item) => {
       if (nftStandardFilter !== "all" && item.collection.standard !== nftStandardFilter) return false;
-      if (nftOriginFilter === "factory" && !item.collection.isFactoryCreated) return false;
-      if (nftOriginFilter === "external" && item.collection.isFactoryCreated) return false;
       if (nftListingFilter === "listed" && !item.activeListing) return false;
       if (nftListingFilter === "unlisted" && item.activeListing) return false;
       if (nftMediaFilter === "with-media" && !item.mediaUrl) return false;
       if (nftMediaFilter === "metadata-only" && item.mediaUrl) return false;
       return true;
     });
-  }, [nftListingFilter, nftMediaFilter, nftOriginFilter, nftStandardFilter, searchedFeedItems]);
+  }, [nftListingFilter, nftMediaFilter, nftStandardFilter, searchedFeedItems]);
 
   function loadMoreProfiles(): void {
     if (directoryLoading || !directoryCanLoadMore) return;
@@ -345,17 +338,6 @@ export default function DiscoverClient() {
                   </select>
                 </label>
                 <label>
-                  Origin
-                  <select
-                    value={collectionOriginFilter}
-                    onChange={(event) => setCollectionOriginFilter(event.target.value as OriginFilter)}
-                  >
-                    <option value="all">All origins</option>
-                    <option value="factory">NFTFactory contracts</option>
-                    <option value="external">External imports</option>
-                  </select>
-                </label>
-                <label>
                   Listings
                   <select
                     value={collectionListingFilter}
@@ -379,17 +361,6 @@ export default function DiscoverClient() {
                     <option value="all">All standards</option>
                     <option value="ERC-721">ERC-721</option>
                     <option value="ERC-1155">ERC-1155</option>
-                  </select>
-                </label>
-                <label>
-                  Origin
-                  <select
-                    value={nftOriginFilter}
-                    onChange={(event) => setNftOriginFilter(event.target.value as OriginFilter)}
-                  >
-                    <option value="all">All origins</option>
-                    <option value="factory">NFTFactory contracts</option>
-                    <option value="external">External imports</option>
                   </select>
                 </label>
                 <label>
