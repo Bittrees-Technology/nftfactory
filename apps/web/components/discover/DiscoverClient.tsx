@@ -11,6 +11,12 @@ import {
 
 type DiscoverView = "profiles" | "collections" | "nfts";
 type ProfileSort = "popular" | "name-asc" | "updated-desc" | "created-desc";
+type ProfileSourceFilter = "all" | ApiProfileRecord["source"];
+type ProfileCollectionFilter = "all" | "with-collection" | "without-collection";
+type StandardFilter = "all" | "ERC-721" | "ERC-1155";
+type OriginFilter = "all" | "factory" | "external";
+type ListingFilter = "all" | "listed" | "unlisted";
+type MediaFilter = "all" | "with-media" | "metadata-only";
 
 type CollectionCard = {
   contractAddress: string;
@@ -20,6 +26,7 @@ type CollectionCard = {
   tokenSampleCount: number;
   activeListingCount: number;
   latestMintedAt: string;
+  isFactoryCreated: boolean;
 };
 
 function collectionLabel(item: CollectionCard): string {
@@ -42,6 +49,15 @@ export default function DiscoverClient() {
   const [view, setView] = useState<DiscoverView>("profiles");
   const [searchValue, setSearchValue] = useState("");
   const [profileSort, setProfileSort] = useState<ProfileSort>("popular");
+  const [profileSourceFilter, setProfileSourceFilter] = useState<ProfileSourceFilter>("all");
+  const [profileCollectionFilter, setProfileCollectionFilter] = useState<ProfileCollectionFilter>("all");
+  const [collectionStandardFilter, setCollectionStandardFilter] = useState<StandardFilter>("all");
+  const [collectionOriginFilter, setCollectionOriginFilter] = useState<OriginFilter>("all");
+  const [collectionListingFilter, setCollectionListingFilter] = useState<ListingFilter>("all");
+  const [nftStandardFilter, setNftStandardFilter] = useState<StandardFilter>("all");
+  const [nftOriginFilter, setNftOriginFilter] = useState<OriginFilter>("all");
+  const [nftListingFilter, setNftListingFilter] = useState<ListingFilter>("all");
+  const [nftMediaFilter, setNftMediaFilter] = useState<MediaFilter>("all");
 
   const [directoryProfiles, setDirectoryProfiles] = useState<ApiProfileRecord[]>([]);
   const [directoryTotal, setDirectoryTotal] = useState(0);
@@ -58,19 +74,21 @@ export default function DiscoverClient() {
   const [nextFeedCursor, setNextFeedCursor] = useState(0);
   const [feedCursor, setFeedCursor] = useState(0);
 
-  const previousProfileFilters = usePrevious(`${searchValue}::${profileSort}`);
+  const previousProfileFilters = usePrevious(
+    `${searchValue}::${profileSort}::${profileSourceFilter}::${profileCollectionFilter}`
+  );
   const previousView = usePrevious(view);
 
   useEffect(() => {
     if (view !== "profiles") return;
-    const currentFilters = `${searchValue}::${profileSort}`;
+    const currentFilters = `${searchValue}::${profileSort}::${profileSourceFilter}::${profileCollectionFilter}`;
     if (previousProfileFilters === undefined || previousProfileFilters === currentFilters) return;
     setDirectoryProfiles([]);
     setDirectoryTotal(0);
     setDirectoryCanLoadMore(false);
     setNextProfileCursor(0);
     setProfileCursor(0);
-  }, [searchValue, profileSort, previousProfileFilters, view]);
+  }, [profileCollectionFilter, profileSort, profileSourceFilter, previousProfileFilters, searchValue, view]);
 
   useEffect(() => {
     if (view === "profiles") return;
@@ -88,9 +106,14 @@ export default function DiscoverClient() {
       void fetchProfileDirectory({
         cursor: profileCursor,
         q: searchValue,
-        source: "all",
+        source: profileSourceFilter,
         layoutMode: "all",
-        hasCollection: null,
+        hasCollection:
+          profileCollectionFilter === "with-collection"
+            ? true
+            : profileCollectionFilter === "without-collection"
+              ? false
+              : null,
         sort: profileSort,
         limit: 24
       })
@@ -121,10 +144,9 @@ export default function DiscoverClient() {
       cancelled = true;
       clearTimeout(timeout);
     };
-  }, [profileCursor, profileSort, searchValue, view]);
+  }, [profileCollectionFilter, profileCursor, profileSort, profileSourceFilter, searchValue, view]);
 
   useEffect(() => {
-    if (view === "profiles" && feedItems.length > 0) return;
     if (view === "profiles") return;
     let cancelled = false;
     setFeedLoading(true);
@@ -153,9 +175,9 @@ export default function DiscoverClient() {
     return () => {
       cancelled = true;
     };
-  }, [feedCursor, feedItems.length, view]);
+  }, [feedCursor, view]);
 
-  const filteredFeedItems = useMemo(() => {
+  const searchedFeedItems = useMemo(() => {
     const query = searchValue.trim().toLowerCase();
     if (!query) return feedItems;
     return feedItems.filter((item) => {
@@ -178,7 +200,7 @@ export default function DiscoverClient() {
 
   const collectionCards = useMemo(() => {
     const byContract = new Map<string, CollectionCard>();
-    for (const item of filteredFeedItems) {
+    for (const item of searchedFeedItems) {
       const contract = item.collection.contractAddress.toLowerCase();
       const existing = byContract.get(contract);
       if (existing) {
@@ -196,13 +218,38 @@ export default function DiscoverClient() {
         ownerAddress: item.collection.ownerAddress,
         tokenSampleCount: 1,
         activeListingCount: item.activeListing ? 1 : 0,
-        latestMintedAt: item.mintedAt
+        latestMintedAt: item.mintedAt,
+        isFactoryCreated: item.collection.isFactoryCreated
       });
     }
     return [...byContract.values()].sort((left, right) => (
       new Date(right.latestMintedAt).getTime() - new Date(left.latestMintedAt).getTime()
     ));
-  }, [filteredFeedItems]);
+  }, [searchedFeedItems]);
+
+  const filteredCollectionCards = useMemo(() => {
+    return collectionCards.filter((item) => {
+      if (collectionStandardFilter !== "all" && item.standard !== collectionStandardFilter) return false;
+      if (collectionOriginFilter === "factory" && !item.isFactoryCreated) return false;
+      if (collectionOriginFilter === "external" && item.isFactoryCreated) return false;
+      if (collectionListingFilter === "listed" && item.activeListingCount === 0) return false;
+      if (collectionListingFilter === "unlisted" && item.activeListingCount > 0) return false;
+      return true;
+    });
+  }, [collectionCards, collectionListingFilter, collectionOriginFilter, collectionStandardFilter]);
+
+  const filteredNftItems = useMemo(() => {
+    return searchedFeedItems.filter((item) => {
+      if (nftStandardFilter !== "all" && item.collection.standard !== nftStandardFilter) return false;
+      if (nftOriginFilter === "factory" && !item.collection.isFactoryCreated) return false;
+      if (nftOriginFilter === "external" && item.collection.isFactoryCreated) return false;
+      if (nftListingFilter === "listed" && !item.activeListing) return false;
+      if (nftListingFilter === "unlisted" && item.activeListing) return false;
+      if (nftMediaFilter === "with-media" && !item.mediaUrl) return false;
+      if (nftMediaFilter === "metadata-only" && item.mediaUrl) return false;
+      return true;
+    });
+  }, [nftListingFilter, nftMediaFilter, nftOriginFilter, nftStandardFilter, searchedFeedItems]);
 
   function loadMoreProfiles(): void {
     if (directoryLoading || !directoryCanLoadMore) return;
@@ -219,9 +266,9 @@ export default function DiscoverClient() {
       <section className="card formCard discoverHero">
         <div className="discoverHeroCopy">
           <p className="eyebrow">Discover</p>
-          <h2>Browse profiles, collection contracts, and live NFTs from one public index.</h2>
+          <h2>Browse NFTFactory profiles, collection contracts, and live NFTs from one public index.</h2>
           <p className="sectionLead">
-            This route separates public discovery from creator setup so browse traffic does not have to start inside the profile portal.
+            This route stays scoped to NFTFactory identity records and NFTFactory-related collections so public browsing does not have to start inside the creator portal.
           </p>
         </div>
       </section>
@@ -249,15 +296,125 @@ export default function DiscoverClient() {
               />
             </label>
             {view === "profiles" ? (
-              <label>
-                Order
-                <select value={profileSort} onChange={(event) => setProfileSort(event.target.value as ProfileSort)}>
-                  <option value="popular">Popular</option>
-                  <option value="updated-desc">Recently updated</option>
-                  <option value="created-desc">Recently created</option>
-                  <option value="name-asc">Name A-Z</option>
-                </select>
-              </label>
+              <>
+                <label>
+                  Source
+                  <select
+                    value={profileSourceFilter}
+                    onChange={(event) => setProfileSourceFilter(event.target.value as ProfileSourceFilter)}
+                  >
+                    <option value="all">All profiles</option>
+                    <option value="nftfactory-subname">NFTFactory subnames</option>
+                    <option value="ens">ENS names</option>
+                    <option value="external-subname">External subnames</option>
+                  </select>
+                </label>
+                <label>
+                  Collection
+                  <select
+                    value={profileCollectionFilter}
+                    onChange={(event) => setProfileCollectionFilter(event.target.value as ProfileCollectionFilter)}
+                  >
+                    <option value="all">All profiles</option>
+                    <option value="with-collection">With collection</option>
+                    <option value="without-collection">Without collection</option>
+                  </select>
+                </label>
+                <label>
+                  Order
+                  <select value={profileSort} onChange={(event) => setProfileSort(event.target.value as ProfileSort)}>
+                    <option value="popular">Popular</option>
+                    <option value="updated-desc">Recently updated</option>
+                    <option value="created-desc">Recently created</option>
+                    <option value="name-asc">Name A-Z</option>
+                  </select>
+                </label>
+              </>
+            ) : null}
+            {view === "collections" ? (
+              <>
+                <label>
+                  Standard
+                  <select
+                    value={collectionStandardFilter}
+                    onChange={(event) => setCollectionStandardFilter(event.target.value as StandardFilter)}
+                  >
+                    <option value="all">All standards</option>
+                    <option value="ERC-721">ERC-721</option>
+                    <option value="ERC-1155">ERC-1155</option>
+                  </select>
+                </label>
+                <label>
+                  Origin
+                  <select
+                    value={collectionOriginFilter}
+                    onChange={(event) => setCollectionOriginFilter(event.target.value as OriginFilter)}
+                  >
+                    <option value="all">All origins</option>
+                    <option value="factory">NFTFactory contracts</option>
+                    <option value="external">External imports</option>
+                  </select>
+                </label>
+                <label>
+                  Listings
+                  <select
+                    value={collectionListingFilter}
+                    onChange={(event) => setCollectionListingFilter(event.target.value as ListingFilter)}
+                  >
+                    <option value="all">All collections</option>
+                    <option value="listed">Listed only</option>
+                    <option value="unlisted">Unlisted only</option>
+                  </select>
+                </label>
+              </>
+            ) : null}
+            {view === "nfts" ? (
+              <>
+                <label>
+                  Standard
+                  <select
+                    value={nftStandardFilter}
+                    onChange={(event) => setNftStandardFilter(event.target.value as StandardFilter)}
+                  >
+                    <option value="all">All standards</option>
+                    <option value="ERC-721">ERC-721</option>
+                    <option value="ERC-1155">ERC-1155</option>
+                  </select>
+                </label>
+                <label>
+                  Origin
+                  <select
+                    value={nftOriginFilter}
+                    onChange={(event) => setNftOriginFilter(event.target.value as OriginFilter)}
+                  >
+                    <option value="all">All origins</option>
+                    <option value="factory">NFTFactory contracts</option>
+                    <option value="external">External imports</option>
+                  </select>
+                </label>
+                <label>
+                  Listings
+                  <select
+                    value={nftListingFilter}
+                    onChange={(event) => setNftListingFilter(event.target.value as ListingFilter)}
+                  >
+                    <option value="all">All NFTs</option>
+                    <option value="listed">Listed only</option>
+                    <option value="unlisted">Unlisted only</option>
+                  </select>
+                </label>
+                <label>
+                  Media
+                  <select
+                    value={nftMediaFilter}
+                    onChange={(event) => setNftMediaFilter(event.target.value as MediaFilter)}
+                  >
+                    <option value="all">All media states</option>
+                    <option value="with-media">With media</option>
+                    <option value="metadata-only">Metadata only</option>
+                  </select>
+                </label>
+              </>
             ) : null}
           </div>
         </div>
@@ -319,16 +476,17 @@ export default function DiscoverClient() {
             {!feedError ? (
               <>
                 <p className="hint">
-                  {collectionCards.length === 0
+                  {filteredCollectionCards.length === 0
                     ? "No collections match the current filters."
-                    : `Showing ${collectionCards.length} collection contracts from the public mint feed.`}
+                    : `Showing ${filteredCollectionCards.length} NFTFactory-related collection contracts from the public mint feed.`}
                 </p>
                 <div className="profileDirectoryGrid">
-                  {collectionCards.map((item) => (
+                  {filteredCollectionCards.map((item) => (
                     <div key={item.contractAddress} className="card profileDirectoryProfileCard">
                       <strong>{collectionLabel(item)}</strong>
                       <div className="profileChipRow">
                         <span className="profileChip">{item.standard}</span>
+                        <span className="profileChip">{item.isFactoryCreated ? "factory" : "external"}</span>
                         {item.activeListingCount > 0 ? <span className="profileChip">{item.activeListingCount} listings</span> : null}
                         <span className="profileChip">{item.tokenSampleCount} tokens</span>
                       </div>
@@ -367,19 +525,21 @@ export default function DiscoverClient() {
             {!feedError ? (
               <>
                 <p className="hint">
-                  {filteredFeedItems.length === 0
+                  {filteredNftItems.length === 0
                     ? "No NFTs match the current filters."
-                    : `Showing ${filteredFeedItems.length} NFTs from the public mint feed.`}
+                    : `Showing ${filteredNftItems.length} NFTs from NFTFactory-related collections.`}
                 </p>
                 <div className="discoverGrid">
-                  {filteredFeedItems.map((item) => (
+                  {filteredNftItems.map((item) => (
                     <div key={item.id} className="card discoverCard">
                       <strong>{tokenLabel(item)}</strong>
                       <p className="hint">{item.collection.ensSubname || item.collection.contractAddress}</p>
                       <div className="profileChipRow">
                         <span className="profileChip">{item.collection.standard}</span>
+                        <span className="profileChip">{item.collection.isFactoryCreated ? "factory" : "external"}</span>
                         <span className="profileChip">Token #{item.tokenId}</span>
                         {item.activeListing ? <span className="profileChip">listed</span> : null}
+                        {!item.mediaUrl ? <span className="profileChip">metadata only</span> : null}
                       </div>
                       <div className="profileSelectorMetaGrid">
                         <p className="hint">Creator <span className="mono">{item.creatorAddress}</span></p>
