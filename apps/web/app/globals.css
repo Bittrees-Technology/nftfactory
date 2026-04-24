@@ -1581,6 +1581,63 @@ nav {
   margin: 0;
 }
 
+.mintStepCard {
+  gap: 12px;
+}
+
+.mintStepStack {
+  gap: 10px;
+}
+
+.mintStepSummaryGrid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.mintStepSummaryCard {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(44, 32, 52, 0.08);
+  background: rgba(255, 255, 255, 0.66);
+}
+
+.mintStepSummaryCard strong {
+  font-size: 1rem;
+  line-height: 1.1;
+}
+
+.mintStepSummaryCard p {
+  margin: 0;
+  color: #5b4b3f;
+}
+
+.mintStepInlineField {
+  display: grid;
+  gap: 8px;
+}
+
+.mintStepFieldGrid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.mintStepSelectionCard {
+  gap: 10px;
+  background: linear-gradient(180deg, rgba(255, 251, 244, 0.98) 0%, rgba(255, 244, 231, 0.98) 100%);
+}
+
+.mintStepSelectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .mintWorkspace .mintRoyaltySection {
   display: grid;
   gap: 10px;

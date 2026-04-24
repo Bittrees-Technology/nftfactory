@@ -3344,10 +3344,22 @@ export default function MintClient({
           </div>
 
           {/* Step 1: Wallet */}
-          <div className="card formCard">
+          <div className="card formCard mintStepCard">
             <h3>1. Wallet</h3>
-            <div className="stack">
-              <label className="row" style={{ alignItems: "center" }}>
+            <div className="mintStepSummaryGrid">
+              <div className="mintStepSummaryCard">
+                <span className="flowLabel">Wallet</span>
+                <strong>{isConnected && account ? shortenAddress(account) : "Not connected"}</strong>
+                <p>{isConnected ? "Connected for signing" : "Connect wallet to continue"}</p>
+              </div>
+              <div className="mintStepSummaryCard">
+                <span className="flowLabel">Active network</span>
+                <strong>{appChain.name}</strong>
+                <p>Chain ID {selectedWalletNetworkId}</p>
+              </div>
+            </div>
+            <div className="stack mintStepStack">
+              <label className="mintStepInlineField">
                 <span>Network</span>
                 <select
                   value={selectedWalletNetworkId}
@@ -3361,7 +3373,6 @@ export default function MintClient({
                   ))}
                 </select>
               </label>
-              <p className="mono">Account: {account || "Not connected"}</p>
             </div>
             {isSwitchingChain ? (
               <p className="hint">Switching wallet network…</p>
@@ -3370,67 +3381,66 @@ export default function MintClient({
           </div>
 
           {/* Step 2: Collection selection */}
-          <div className="card formCard">
+          <div className="card formCard mintStepCard">
             <h3>2. Collection target</h3>
             <p className="hint">
               Pick the shared collection for the fastest path, or use your own collection contract for more control.
             </p>
 
-            <label>
-              Token type
-              <select value={standard} onChange={(e) => setStandard(e.target.value as Standard)}>
-                <option value="ERC721">
-                  ERC-721 — Unique / one-of-one (each token is distinct)
-                </option>
-                <option value="ERC1155">
-                  ERC-1155 — Multi-edition (multiple copies of the same token)
-                </option>
-              </select>
-            </label>
+            <div className="mintStepFieldGrid">
+              <label>
+                Token type
+                <select value={standard} onChange={(e) => setStandard(e.target.value as Standard)}>
+                  <option value="ERC721">
+                    ERC-721 — Unique / one-of-one (each token is distinct)
+                  </option>
+                  <option value="ERC1155">
+                    ERC-1155 — Multi-edition (multiple copies of the same token)
+                  </option>
+                </select>
+              </label>
 
-            <label>
-              Collection type
-              <select
-                value={mintMode}
-                onChange={(e) => {
-                  setMintMode(e.target.value as MintMode);
-                  setShowDeployForm(false);
-                }}
-              >
-                <option value="shared">
-                  Shared collection — mint instantly, no setup required
-                </option>
-                <option value="custom">
-                  Owned collection — your own contract, full control
-                </option>
-              </select>
-            </label>
+              <label>
+                Collection type
+                <select
+                  value={mintMode}
+                  onChange={(e) => {
+                    setMintMode(e.target.value as MintMode);
+                    setShowDeployForm(false);
+                  }}
+                >
+                  <option value="shared">
+                    Shared collection — mint instantly, no setup required
+                  </option>
+                  <option value="custom">
+                    Owned collection — your own contract, full control
+                  </option>
+                </select>
+              </label>
+            </div>
 
             {mintMode === "shared" && (
-              <div>
-                <p className="hint">
-                  <strong>Shared collection:</strong> your token mints into the common NFTFactory collection contract.
-                </p>
-                <p className="mono">
-                  {standard === "ERC721" ? config.shared721 : config.shared1155}
-                </p>
-                <p className="hint">
-                  Shared mint publishes immediately. Switch to an owned collection if you want a dedicated contract.
-                </p>
+              <div className="selectionCard mintStepSelectionCard">
+                <div className="mintStepSelectionHeader">
+                  <strong>Shared collection</strong>
+                  <span className="profileChip">{standard}</span>
+                </div>
+                <p className="hint">Your token mints into the NFTFactory shared contract for the fastest publish path.</p>
+                <p className="mono">{standard === "ERC721" ? config.shared721 : config.shared1155}</p>
+                <p className="hint">Switch to an owned collection when the release needs a dedicated contract.</p>
               </div>
             )}
 
             {mintMode === "custom" && (
               <>
-                <p className="hint">
-                  <strong>Owned collection:</strong> a contract you own and mint into directly.
-                </p>
-                <p className="hint">
-                  This sets the collection contract. The NFT name is set in the next step.
-                </p>
-                <div className="selectionCard">
+                <div className="selectionCard mintStepSelectionCard">
+                  <div className="mintStepSelectionHeader">
+                    <strong>Owned collection</strong>
+                    <span className="profileChip">{standard}</span>
+                  </div>
+                  <p className="hint">Use a contract you own and mint into directly. The NFT name and metadata are set in the next step.</p>
                   <label>
-                      Collection source
+                    Collection source
                     <select
                       value={collectionSelector}
                       onChange={(e) => setCollectionSelector(e.target.value as "saved" | "manual")}
@@ -3469,22 +3479,20 @@ export default function MintClient({
                   ) : null}
                 </div>
                 {isAddress(customCollectionAddress) && (
-                  <div className="hint">
-                    <p className="hint">
-                      Using collection contract:
-                      {" "}
+                  <div className="selectionCard mintStepSelectionCard">
+                    <div className="mintStepSelectionHeader">
                       <strong>{selectedCollectionName || formatCollectionIdentity(selectedKnownCollection?.ensSubname ?? null) || "Selected collection"}</strong>
                       {selectedCollectionSymbol ? ` (${selectedCollectionSymbol})` : ""}
-                    </p>
+                    </div>
                     <p className="hint mono">
                       {formatCollectionIdentity(selectedKnownCollection?.ensSubname ?? null) ? `${formatCollectionIdentity(selectedKnownCollection?.ensSubname ?? null)} ` : ""}
-                    {toExplorerAddress(config.chainId, customCollectionAddress) ? (
-                      <a href={toExplorerAddress(config.chainId, customCollectionAddress)!} target="_blank" rel="noreferrer">
-                        {customCollectionAddress.slice(0, 10)}…{customCollectionAddress.slice(-8)}
-                      </a>
-                    ) : (
-                      <span>{customCollectionAddress.slice(0, 10)}…{customCollectionAddress.slice(-8)}</span>
-                    )}
+                      {toExplorerAddress(config.chainId, customCollectionAddress) ? (
+                        <a href={toExplorerAddress(config.chainId, customCollectionAddress)!} target="_blank" rel="noreferrer">
+                          {customCollectionAddress.slice(0, 10)}…{customCollectionAddress.slice(-8)}
+                        </a>
+                      ) : (
+                        <span>{customCollectionAddress.slice(0, 10)}…{customCollectionAddress.slice(-8)}</span>
+                      )}
                     </p>
                   </div>
                 )}
