@@ -25,7 +25,6 @@ type CollectionCard = {
   tokenSampleCount: number;
   activeListingCount: number;
   latestMintedAt: string;
-  isFactoryCreated: boolean;
 };
 
 function collectionLabel(item: CollectionCard): string {
@@ -34,6 +33,12 @@ function collectionLabel(item: CollectionCard): string {
 
 function tokenLabel(item: ApiMintFeedItem): string {
   return item.draftName?.trim() || `Token #${item.tokenId}`;
+}
+
+function profileSourceLabel(source: ApiProfileRecord["source"]): string {
+  if (source === "nftfactory-subname") return "NFTFactory subname";
+  if (source === "external-subname") return "External subname";
+  return "ENS";
 }
 
 function usePrevious<T>(value: T): T | undefined {
@@ -215,8 +220,7 @@ export default function DiscoverClient() {
         ownerAddress: item.collection.ownerAddress,
         tokenSampleCount: 1,
         activeListingCount: item.activeListing ? 1 : 0,
-        latestMintedAt: item.mintedAt,
-        isFactoryCreated: item.collection.isFactoryCreated
+        latestMintedAt: item.mintedAt
       });
     }
     return [...byContract.values()].sort((left, right) => (
@@ -244,6 +248,22 @@ export default function DiscoverClient() {
     });
   }, [nftListingFilter, nftMediaFilter, nftStandardFilter, searchedFeedItems]);
 
+  const activeResultLabel = useMemo(() => {
+    if (view === "profiles") {
+      return directoryTotal === 0
+        ? "No profiles match the current filters."
+        : `Showing ${directoryProfiles.length} of ${directoryTotal} matching profiles.`;
+    }
+    if (view === "collections") {
+      return filteredCollectionCards.length === 0
+        ? "No collections match the current filters."
+        : `Showing ${filteredCollectionCards.length} collection contracts from the NFTFactory public feed.`;
+    }
+    return filteredNftItems.length === 0
+      ? "No NFTs match the current filters."
+      : `Showing ${filteredNftItems.length} NFTs from NFTFactory-related collections.`;
+  }, [directoryProfiles.length, directoryTotal, filteredCollectionCards.length, filteredNftItems.length, view]);
+
   function loadMoreProfiles(): void {
     if (directoryLoading || !directoryCanLoadMore) return;
     setProfileCursor((current) => (current === nextProfileCursor ? current : nextProfileCursor));
@@ -264,9 +284,33 @@ export default function DiscoverClient() {
             This route stays scoped to NFTFactory identity records and NFTFactory-related collections so public browsing does not have to start inside the creator portal.
           </p>
         </div>
+        <div className="discoverHeroStats" aria-label="Discover index summary">
+          <div className="discoverHeroStat">
+            <span className="flowLabel">Profiles</span>
+            <strong>{directoryTotal}</strong>
+            <p>Indexed creator pages</p>
+          </div>
+          <div className="discoverHeroStat">
+            <span className="flowLabel">Collections</span>
+            <strong>{collectionCards.length}</strong>
+            <p>Contracts surfaced</p>
+          </div>
+          <div className="discoverHeroStat">
+            <span className="flowLabel">NFTs</span>
+            <strong>{searchedFeedItems.length}</strong>
+            <p>Feed items loaded</p>
+          </div>
+        </div>
       </section>
 
       <section className="card formCard discoverPanel">
+        <div className="discoverPanelHeader">
+          <div>
+            <p className="eyebrow">Public Index</p>
+            <h3>{view === "profiles" ? "Profiles" : view === "collections" ? "Collection Contracts" : "NFTs"}</h3>
+          </div>
+          <p className="hint">{activeResultLabel}</p>
+        </div>
         <div className="discoverToolbar">
           <div className="discoverTabs" role="tablist" aria-label="Discover views">
             <button type="button" className={view === "profiles" ? "discoverTab discoverTabActive" : "discoverTab"} onClick={() => setView("profiles")}>
@@ -280,9 +324,10 @@ export default function DiscoverClient() {
             </button>
           </div>
           <div className="discoverToolbarActions">
-            <label>
+            <label className="discoverField">
               Search
               <input
+                className="discoverFieldControl"
                 value={searchValue}
                 onChange={(event) => setSearchValue(event.target.value)}
                 placeholder={view === "profiles" ? "name, slug, tagline, wallet" : "name, contract, token, wallet"}
@@ -290,9 +335,10 @@ export default function DiscoverClient() {
             </label>
             {view === "profiles" ? (
               <>
-                <label>
+                <label className="discoverField">
                   Source
                   <select
+                    className="discoverFieldControl"
                     value={profileSourceFilter}
                     onChange={(event) => setProfileSourceFilter(event.target.value as ProfileSourceFilter)}
                   >
@@ -302,9 +348,10 @@ export default function DiscoverClient() {
                     <option value="external-subname">External subnames</option>
                   </select>
                 </label>
-                <label>
+                <label className="discoverField">
                   Collection
                   <select
+                    className="discoverFieldControl"
                     value={profileCollectionFilter}
                     onChange={(event) => setProfileCollectionFilter(event.target.value as ProfileCollectionFilter)}
                   >
@@ -313,9 +360,9 @@ export default function DiscoverClient() {
                     <option value="without-collection">Without collection</option>
                   </select>
                 </label>
-                <label>
+                <label className="discoverField">
                   Order
-                  <select value={profileSort} onChange={(event) => setProfileSort(event.target.value as ProfileSort)}>
+                  <select className="discoverFieldControl" value={profileSort} onChange={(event) => setProfileSort(event.target.value as ProfileSort)}>
                     <option value="popular">Popular</option>
                     <option value="updated-desc">Recently updated</option>
                     <option value="created-desc">Recently created</option>
@@ -326,9 +373,10 @@ export default function DiscoverClient() {
             ) : null}
             {view === "collections" ? (
               <>
-                <label>
+                <label className="discoverField">
                   Standard
                   <select
+                    className="discoverFieldControl"
                     value={collectionStandardFilter}
                     onChange={(event) => setCollectionStandardFilter(event.target.value as StandardFilter)}
                   >
@@ -337,9 +385,10 @@ export default function DiscoverClient() {
                     <option value="ERC-1155">ERC-1155</option>
                   </select>
                 </label>
-                <label>
+                <label className="discoverField">
                   Listings
                   <select
+                    className="discoverFieldControl"
                     value={collectionListingFilter}
                     onChange={(event) => setCollectionListingFilter(event.target.value as ListingFilter)}
                   >
@@ -352,9 +401,10 @@ export default function DiscoverClient() {
             ) : null}
             {view === "nfts" ? (
               <>
-                <label>
+                <label className="discoverField">
                   Standard
                   <select
+                    className="discoverFieldControl"
                     value={nftStandardFilter}
                     onChange={(event) => setNftStandardFilter(event.target.value as StandardFilter)}
                   >
@@ -363,9 +413,10 @@ export default function DiscoverClient() {
                     <option value="ERC-1155">ERC-1155</option>
                   </select>
                 </label>
-                <label>
+                <label className="discoverField">
                   Listings
                   <select
+                    className="discoverFieldControl"
                     value={nftListingFilter}
                     onChange={(event) => setNftListingFilter(event.target.value as ListingFilter)}
                   >
@@ -374,9 +425,10 @@ export default function DiscoverClient() {
                     <option value="unlisted">Unlisted only</option>
                   </select>
                 </label>
-                <label>
+                <label className="discoverField">
                   Media
                   <select
+                    className="discoverFieldControl"
                     value={nftMediaFilter}
                     onChange={(event) => setNftMediaFilter(event.target.value as MediaFilter)}
                   >
@@ -396,22 +448,19 @@ export default function DiscoverClient() {
             {directoryError ? <p className="hint">{directoryError}</p> : null}
             {!directoryError ? (
               <>
-                <p className="hint">
-                  {directoryTotal === 0
-                    ? "No profiles match the current filters."
-                    : `Showing ${directoryProfiles.length} of ${directoryTotal} matching profiles.`}
-                </p>
                 <div className="profileDirectoryGrid">
                   {directoryProfiles.map((profile) => (
-                    <div key={`${profile.slug}:${profile.ownerAddress}:${profile.collectionAddress || ""}:${profile.source}`} className="card profileDirectoryProfileCard">
-                      <strong>{profile.displayName || profile.fullName}</strong>
+                    <div key={`${profile.slug}:${profile.ownerAddress}:${profile.collectionAddress || ""}:${profile.source}`} className="card profileDirectoryProfileCard discoverRecordCard">
+                      <div className="discoverRecordHeader">
+                        <strong className="discoverRecordTitle">{profile.displayName || profile.fullName}</strong>
+                        <span className="profileChip">{profileSourceLabel(profile.source)}</span>
+                      </div>
                       <p className="hint">{profile.tagline || profile.fullName}</p>
                       <div className="profileChipRow">
-                        <span className="profileChip">{profile.source}</span>
                         {profile.collectionAddress ? <span className="profileChip">with collection</span> : null}
                         {profile.layoutMode ? <span className="profileChip">{profile.layoutMode} layout</span> : null}
                       </div>
-                      <div className="profileSelectorMetaGrid">
+                      <div className="profileSelectorMetaGrid discoverRecordMeta">
                         <p className="hint"><span className="mono">/profile/{profile.slug}</span></p>
                         <p className="hint">Owner <span className="mono">{profile.ownerAddress}</span></p>
                       </div>
@@ -429,7 +478,7 @@ export default function DiscoverClient() {
                   ))}
                 </div>
                 {directoryCanLoadMore ? (
-                  <div className="row profileSelectorActions">
+                  <div className="row profileSelectorActions discoverLoadMore">
                     <button type="button" onClick={loadMoreProfiles} disabled={directoryLoading}>
                       {directoryLoading ? "Loading more profiles..." : "Load more profiles"}
                     </button>
@@ -446,22 +495,18 @@ export default function DiscoverClient() {
             {feedError ? <p className="hint">{feedError}</p> : null}
             {!feedError ? (
               <>
-                <p className="hint">
-                  {filteredCollectionCards.length === 0
-                    ? "No collections match the current filters."
-                    : `Showing ${filteredCollectionCards.length} NFTFactory-related collection contracts from the public mint feed.`}
-                </p>
                 <div className="profileDirectoryGrid">
                   {filteredCollectionCards.map((item) => (
-                    <div key={item.contractAddress} className="card profileDirectoryProfileCard">
-                      <strong>{collectionLabel(item)}</strong>
-                      <div className="profileChipRow">
+                    <div key={item.contractAddress} className="card profileDirectoryProfileCard discoverRecordCard">
+                      <div className="discoverRecordHeader">
+                        <strong className="discoverRecordTitle">{collectionLabel(item)}</strong>
                         <span className="profileChip">{item.standard}</span>
-                        <span className="profileChip">{item.isFactoryCreated ? "factory" : "external"}</span>
+                      </div>
+                      <div className="profileChipRow">
                         {item.activeListingCount > 0 ? <span className="profileChip">{item.activeListingCount} listings</span> : null}
                         <span className="profileChip">{item.tokenSampleCount} tokens</span>
                       </div>
-                      <div className="profileSelectorMetaGrid">
+                      <div className="profileSelectorMetaGrid discoverRecordMeta">
                         <p className="hint"><span className="mono">{item.contractAddress}</span></p>
                         <p className="hint">Owner <span className="mono">{item.ownerAddress}</span></p>
                       </div>
@@ -478,7 +523,7 @@ export default function DiscoverClient() {
                   ))}
                 </div>
                 {feedCanLoadMore ? (
-                  <div className="row profileSelectorActions">
+                  <div className="row profileSelectorActions discoverLoadMore">
                     <button type="button" onClick={loadMoreFeed} disabled={feedLoading}>
                       {feedLoading ? "Loading more collections..." : "Load more collections"}
                     </button>
@@ -495,24 +540,20 @@ export default function DiscoverClient() {
             {feedError ? <p className="hint">{feedError}</p> : null}
             {!feedError ? (
               <>
-                <p className="hint">
-                  {filteredNftItems.length === 0
-                    ? "No NFTs match the current filters."
-                    : `Showing ${filteredNftItems.length} NFTs from NFTFactory-related collections.`}
-                </p>
                 <div className="discoverGrid">
                   {filteredNftItems.map((item) => (
-                    <div key={item.id} className="card discoverCard">
-                      <strong>{tokenLabel(item)}</strong>
+                    <div key={item.id} className="card discoverCard discoverRecordCard">
+                      <div className="discoverRecordHeader">
+                        <strong className="discoverRecordTitle">{tokenLabel(item)}</strong>
+                        <span className="profileChip">{item.collection.standard}</span>
+                      </div>
                       <p className="hint">{item.collection.ensSubname || item.collection.contractAddress}</p>
                       <div className="profileChipRow">
-                        <span className="profileChip">{item.collection.standard}</span>
-                        <span className="profileChip">{item.collection.isFactoryCreated ? "factory" : "external"}</span>
                         <span className="profileChip">Token #{item.tokenId}</span>
                         {item.activeListing ? <span className="profileChip">listed</span> : null}
                         {!item.mediaUrl ? <span className="profileChip">metadata only</span> : null}
                       </div>
-                      <div className="profileSelectorMetaGrid">
+                      <div className="profileSelectorMetaGrid discoverRecordMeta">
                         <p className="hint">Creator <span className="mono">{item.creatorAddress}</span></p>
                         <p className="hint">Owner <span className="mono">{item.ownerAddress}</span></p>
                       </div>
@@ -531,7 +572,7 @@ export default function DiscoverClient() {
                   ))}
                 </div>
                 {feedCanLoadMore ? (
-                  <div className="row profileSelectorActions">
+                  <div className="row profileSelectorActions discoverLoadMore">
                     <button type="button" onClick={loadMoreFeed} disabled={feedLoading}>
                       {feedLoading ? "Loading more NFTs..." : "Load more NFTs"}
                     </button>

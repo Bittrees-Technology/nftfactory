@@ -950,6 +950,10 @@ nav {
     grid-template-columns: 1fr;
   }
 
+  .discoverHero {
+    grid-template-columns: 1fr;
+  }
+
   .homeHeroCopy h1 {
     max-width: none;
     font-size: clamp(2.2rem, 7vw, 3.8rem);
@@ -973,7 +977,8 @@ nav {
   }
 
   .homeOpsBandHeader h2,
-  .homeSectionHeader h2 {
+  .homeSectionHeader h2,
+  .discoverPanelHeader .hint {
     max-width: none;
   }
 }
@@ -1024,6 +1029,8 @@ nav {
 .discoverHero {
   display: grid;
   gap: 14px;
+  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+  align-items: stretch;
   background:
     radial-gradient(circle at top right, rgba(0, 184, 161, 0.12), transparent 32%),
     radial-gradient(circle at bottom left, rgba(255, 90, 54, 0.14), transparent 28%),
@@ -1039,6 +1046,32 @@ nav {
 .discoverHeroCopy {
   display: grid;
   gap: 10px;
+}
+
+.discoverHeroStats {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.discoverHeroStat {
+  display: grid;
+  gap: 6px;
+  padding: 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(44, 32, 52, 0.1);
+  background: rgba(255, 255, 255, 0.68);
+}
+
+.discoverHeroStat strong {
+  font-size: clamp(1.5rem, 2.2vw, 2.4rem);
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+
+.discoverHeroStat p {
+  margin: 0;
+  color: #5b4b3f;
 }
 
 .profileSelectorHeroCopy h2 {
@@ -1083,6 +1116,25 @@ nav {
 
 .discoverPanel {
   gap: 14px;
+}
+
+.discoverPanelHeader {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.discoverPanelHeader h3 {
+  margin: 0;
+  font-size: clamp(1.4rem, 2.2vw, 2rem);
+  line-height: 1.02;
+  letter-spacing: -0.03em;
+}
+
+.discoverPanelHeader .hint {
+  max-width: 48ch;
 }
 
 .profileSelectorPanelHeader {
@@ -1161,6 +1213,10 @@ nav {
 .discoverToolbar {
   display: grid;
   gap: 14px;
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(44, 32, 52, 0.08);
+  background: rgba(255, 255, 255, 0.54);
 }
 
 .discoverTabs {
@@ -1194,6 +1250,30 @@ nav {
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
+.discoverField {
+  display: grid;
+  gap: 6px;
+  color: #5b4b3f;
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.discoverFieldControl {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid #d8c4ad;
+  background: #fffdf9;
+  font: inherit;
+  color: var(--ink);
+}
+
+.discoverFieldControl:focus {
+  outline: 2px solid rgba(197, 58, 31, 0.18);
+  border-color: #8c2a14;
+}
+
 .discoverStack {
   gap: 12px;
 }
@@ -1207,6 +1287,34 @@ nav {
 .discoverCard {
   display: grid;
   gap: 10px;
+}
+
+.discoverRecordCard {
+  gap: 12px;
+  padding: 18px;
+  background: linear-gradient(180deg, rgba(255, 251, 244, 0.98) 0%, rgba(255, 241, 223, 0.98) 100%);
+}
+
+.discoverRecordHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.discoverRecordTitle {
+  font-size: 1.02rem;
+  line-height: 1.2;
+}
+
+.discoverRecordMeta {
+  padding-top: 4px;
+  border-top: 1px solid rgba(44, 32, 52, 0.08);
+}
+
+.discoverLoadMore {
+  justify-content: center;
 }
 
 .profileSetupHero {
