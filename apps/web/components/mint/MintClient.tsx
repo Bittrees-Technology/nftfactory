@@ -3340,7 +3340,7 @@ export default function MintClient({
           <div className="card actionCardStatic mintWorkspaceIntroCard">
             <span className="flowLabel">Mint Flow</span>
             <h3>Publish into the shared collection or one of your collection contracts.</h3>
-            <p>Use the shared path for speed, or switch to a dedicated contract when the release needs its own control surface.</p>
+            <p>Use the shared path for speed, or switch to a dedicated contract when the release needs its own control.</p>
           </div>
 
           {/* Step 1: Wallet */}
@@ -3438,7 +3438,7 @@ export default function MintClient({
                     <strong>Owned collection</strong>
                     <span className="profileChip">{standard}</span>
                   </div>
-                  <p className="hint">Use a contract you own and mint into directly. The NFT name and metadata are set in the next step.</p>
+                  <p className="hint">Mint into a contract you own. Set the NFT name and metadata in the next step.</p>
                   <label>
                     Collection source
                     <select
@@ -3474,7 +3474,7 @@ export default function MintClient({
                   )}
                   {mintFilteredKnownCollections.length === 0 ? (
                     <p className="hint">
-                      No indexed {standard} collection contracts are available for this wallet on the selected network yet. Switch token type, wait for indexer discovery, or enter a collection address manually.
+                      No indexed {standard} collection contracts are available for this wallet on this network yet. Switch token type, wait for indexing, or enter an address manually.
                     </p>
                   ) : null}
                 </div>
@@ -3804,13 +3804,13 @@ export default function MintClient({
           <div className="card formCard mintWorkspaceIntroCard">
             <span className="flowLabel">View Flow</span>
             <h3>Inspect a collection contract, its live settings, and its indexed tokens.</h3>
-            <p>Use this route to review collection state without opening the manager controls.</p>
+              <p>Review collection state without opening manager controls.</p>
           </div>
 
           <div className="card formCard mintStepCard">
             <h3>1. Choose collection</h3>
             <p className="hint">
-              This view is read-only. Use it to inspect an existing collection contract and its indexed inventory.
+              Read-only view for an existing collection contract and its indexed inventory.
             </p>
             <div className="mintStepSummaryGrid">
               <div className="mintStepSummaryCard">
@@ -3933,7 +3933,7 @@ export default function MintClient({
             <h3>3. Indexed tokens</h3>
             <div className="row" style={{ justifyContent: "space-between", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
               <p className="hint" style={{ margin: 0 }}>
-                This view reads indexed tokens directly. Use re-sync to run a targeted collection refresh.
+                This view reads indexed tokens directly. Re-sync runs a targeted collection refresh.
                 {viewCollectionLastSyncedAt
                   ? ` Last synced ${new Date(viewCollectionLastSyncedAt).toLocaleTimeString()}.`
                   : ""}
@@ -4024,7 +4024,7 @@ export default function MintClient({
           <div className="card formCard mintWorkspaceIntroCard">
             <span className="flowLabel">Manage Flow</span>
             <h3>Choose a collection, verify it, then update identity or contract settings.</h3>
-            <p>This route is for live contract operations after the collection exists.</p>
+            <p>Use this route for live contract operations after the collection exists.</p>
           </div>
 
           <div className="card formCard mintStepCard">
@@ -4193,13 +4193,11 @@ export default function MintClient({
           <div className="card formCard mintStepCard">
             <h3>3. Collection Identity</h3>
             <p className="hint">
-              Manage the human-readable identity shown for this collection. This is collection-only setup. Profile ENS
-              setup stays in <strong>Profile Setup</strong> and does not drive this tile.
+              Manage the human-readable identity for this collection. Profile ENS setup stays in <strong>Profile Setup</strong>.
             </p>
             {!selectedManageCollection && isAddress(manageAddress) ? (
               <p className="hint">
-                This collection is not indexed yet. Identity attachment only persists once the collection shows up in
-                your indexed collections above.
+                This collection is not indexed yet. Attach identity after it appears in your indexed collections above.
               </p>
             ) : null}
             <label className="mintStepInlineField">
@@ -4286,7 +4284,7 @@ export default function MintClient({
                         </p>
                       ) : (
                         <p className="hint">
-                          Suggestions are listed from indexed and onchain discovery, but you can also enter an owned{" "}
+                          Suggestions come from indexed and onchain discovery, but you can also enter an owned{" "}
                           {identityMode === "ens" ? ".eth" : " ENS subname"} manually.
                         </p>
                       )}
@@ -4349,7 +4347,7 @@ export default function MintClient({
                 <div className="mintRoyaltyHeader">
                   <div>
                     <p><strong>Default royalty</strong></p>
-                    <p className="hint">This is the collection contract&apos;s EIP-2981 royalty receiver and basis points.</p>
+                    <p className="hint">Set the collection contract&apos;s EIP-2981 royalty receiver and basis points.</p>
                   </div>
                   <p className="hint mintRoyaltyMeta">
                     Current target: <strong>{manageRoyaltyPercent}</strong>
@@ -4375,7 +4373,7 @@ export default function MintClient({
                     <span className="hint">{manageRoyaltyPercent}</span>
                   </label>
                 </div>
-                <p className="hint">Use 0 bps to disable the collection contract&apos;s default royalty.</p>
+                <p className="hint">Set 0 bps to disable the default royalty.</p>
                 <button
                   type="button"
                   onClick={onSaveDefaultRoyalty}
@@ -4391,7 +4389,7 @@ export default function MintClient({
                   <div>
                     <p><strong>Collaborator payout splits</strong></p>
                     <p className="hint">
-                      Optional payout weights stored in the protocol split registry for {appChain.name}. This does <strong>not</strong> change the collection contract&apos;s default royalty above.
+                      Optional payout weights stored in the split registry for {appChain.name}. This does <strong>not</strong> change the default royalty above.
                     </p>
                   </div>
                   <p className={`hint mintRoyaltyMeta${manageRoyaltySplitReady ? "" : " error"}`}>
@@ -4415,7 +4413,7 @@ export default function MintClient({
                       )}
                     </p>
                     <p className="hint">
-                      Save an empty split list to clear the stored collaborator policy. New rows automatically use any unallocated share, and once you are already at 100%, adding another row splits the largest existing share to give you a starting point.
+                      Save an empty split list to clear the collaborator policy. New rows use any unallocated share, and once you reach 100%, another row splits the largest share for a starting point.
                     </p>
                     <div className="mintRoyaltyStats">
                       <div className="selectionCard mintRoyaltyStat">
@@ -4435,7 +4433,7 @@ export default function MintClient({
                         </strong>
                       </div>
                     </div>
-                    {manageRoyaltySplits.length === 0 ? <p className="hint">No collaborator split rows are configured yet. Add recipients here before saving a payout policy to the registry.</p> : null}
+                    {manageRoyaltySplits.length === 0 ? <p className="hint">No collaborator rows are configured yet. Add recipients before saving a payout policy.</p> : null}
                     {manageRoyaltySplits.map((split, index) => (
                       <div key={`royalty-split-${index}`} className="selectionCard mintRoyaltySplitRow">
                         <label className="mintField">
@@ -4518,7 +4516,7 @@ export default function MintClient({
                       ) : null}
                       {" "}and redeploy before using collaborator payouts on this chain.
                     </p>
-                    <p className="hint">Once configured, this panel stores collaborator royalty weights for the selected collection in the on-chain split registry.</p>
+                    <p className="hint">Once configured, this panel stores collaborator royalty weights in the on-chain split registry.</p>
                   </>
                 )}
                 <TxStatus state={royaltySplitTx} kind="split" />
@@ -4570,7 +4568,7 @@ export default function MintClient({
                 <>
                   <div className="selectionCard mintStepSelectionCard">
                     <p className="hint">
-                      This transfer is waiting for the pending owner to accept it. The current owner can reject it before it is finalized.
+                      This transfer is waiting for the pending owner to accept it. The current owner can still reject it.
                     </p>
                   </div>
                   {connectedWalletOwnsCollection ? (
@@ -4702,11 +4700,10 @@ export default function MintClient({
             <h3>6. Finalize Upgrades ⚠️</h3>
             <div className="selectionCard mintStepSelectionCard mintDangerCard">
               <p className="hint">
-                Permanently disables the UUPS upgrade path for this collection contract. Once finalized,
-                the logic contract can <strong>never</strong> be replaced.
+                Permanently disables the UUPS upgrade path for this collection contract. After finalization, the logic contract can <strong>never</strong> be replaced.
               </p>
               <p className="hint">
-                Only the collection owner can call this, and it affects all future mints and interactions with the collection.
+                Only the collection owner can call this. It affects all future mints and interactions with the collection.
               </p>
               <label className="row" style={{ alignItems: "center", gap: "0.5rem", cursor: "pointer" }}>
                 <input
