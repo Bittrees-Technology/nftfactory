@@ -175,87 +175,92 @@ export default function HomePage() {
         </article>
       </section>
 
-      <div className="grid">
-        <Link href="/mint?view=mint" className="card actionCard">
-          <h3>Start a Drop</h3>
-          <p>
-            Open the unified mint flow to upload media, pin metadata, choose the collection path, and publish a release from one workspace.
-          </p>
-          <p className="actionHint">Go to mint and publish.</p>
-        </Link>
-
-        <Link href="/mint?view=mint&collection=custom" className="card actionCard">
-          <h3>Deploy a Creator Collection</h3>
-          <p>
-            Deploy your own ERC-721 or ERC-1155 contract through the factory when the project needs separate ownership, royalty policy, and upgrade controls.
-          </p>
-          <p className="actionHint">Open mint in creator-owned mode.</p>
-        </Link>
-
-        <Link href="/profile/setup" className="card actionCard">
-          <h3>Set Up Identity</h3>
-          <p>
-            Link an ENS name, connect a subname, or mint an <strong>nftfactory.eth</strong> subname before publishing the public creator route.
-          </p>
-          <p className="actionHint">Open creator onboarding.</p>
-        </Link>
-      </div>
-
-      <section className="homeSectionHeader">
-        <div>
-          <p className="eyebrow">Operator Surfaces</p>
-          <h2>Use the live app as the control room, not just the launch form.</h2>
+      <section className="homeActionSection">
+        <div className="homeActionSectionHeader">
+          <p className="eyebrow">Primary Routes</p>
+          <p className="sectionLead">Start with the path that moves the release forward right now.</p>
         </div>
-        <p className="sectionLead">
-          Once the release is live, the product should still help with verification, ownership changes, moderation, and production sanity checks.
-        </p>
+        <div className="grid homeActionGrid">
+          <Link href="/mint?view=mint" className="card actionCard">
+            <span className="flowLabel">Mint</span>
+            <h3>Start a Drop</h3>
+            <p>Upload media, pin metadata, choose the collection path, and publish from one workspace.</p>
+            <p className="actionHint">Open mint workspace</p>
+          </Link>
+
+          <Link href="/mint?view=mint&collection=custom" className="card actionCard">
+            <span className="flowLabel">Custom Contract</span>
+            <h3>Deploy a Creator Collection</h3>
+            <p>Deploy your own ERC-721 or ERC-1155 contract when the project needs separate ownership and policy.</p>
+            <p className="actionHint">Open creator-owned path</p>
+          </Link>
+
+          <Link href="/profile/setup" className="card actionCard">
+            <span className="flowLabel">Identity</span>
+            <h3>Set Up Identity</h3>
+            <p>Link ENS, connect a subname, or mint an <strong>nftfactory.eth</strong> subname before publishing the public route.</p>
+            <p className="actionHint">Open creator onboarding</p>
+          </Link>
+        </div>
       </section>
 
-      <div className="grid">
-        <Link href="/mint?view=view" className="card actionCard">
-          <h3>Inspect a Collection</h3>
-          <p>
-            Review contract details, royalty defaults, split policy, indexed tokens, and listing state from one collection workspace.
-          </p>
-          <p className="actionHint">Open the collection overview.</p>
-        </Link>
+      <section className="homeActionSection">
+        <div className="homeActionSectionHeader">
+          <p className="eyebrow">Operator Routes</p>
+          <p className="sectionLead">Use the live app as the collection control room after launch.</p>
+        </div>
+        <div className="grid homeActionGrid">
+          <Link href="/mint?view=view" className="card actionCard">
+            <span className="flowLabel">View</span>
+            <h3>Inspect a Collection</h3>
+            <p>Review contract details, royalty defaults, indexed tokens, and listing state from one workspace.</p>
+            <p className="actionHint">Open collection overview</p>
+          </Link>
 
-        <Link href="/mint?view=manage" className="card actionCard">
-          <h3>Manage Ownership and Verification</h3>
-          <p>
-            Attach identity, transfer ownership, verify contracts, and finalize upgrades when the collection is ready to lock down.
-          </p>
-          <p className="actionHint">Open the manage workspace.</p>
-        </Link>
+          <Link href="/mint?view=manage" className="card actionCard">
+            <span className="flowLabel">Manage</span>
+            <h3>Manage Ownership and Verification</h3>
+            <p>Attach identity, transfer ownership, verify contracts, and finalize upgrades when the collection is ready.</p>
+            <p className="actionHint">Open manage workspace</p>
+          </Link>
 
-        <Link href="/discover" className="card actionCard">
-          <h3>Discover Profiles, Collections, and NFTs</h3>
-          <p>
-            Browse public creator pages, collection contracts, and live NFTs from one public discovery surface.
-          </p>
-          <p className="actionHint">Open public discovery.</p>
-        </Link>
-      </div>
+          <Link href="/discover" className="card actionCard">
+            <span className="flowLabel">Discover</span>
+            <h3>Browse Public Index</h3>
+            <p>Browse public creator pages, collection contracts, and live NFTs from one discovery surface.</p>
+            <p className="actionHint">Open public discovery</p>
+          </Link>
+        </div>
+      </section>
 
-      <div className="grid">
-        <Link href="/profile/moderation" className="card actionCard">
-          <h3>Moderate Guestbook</h3>
-          <p>Review guestbook entries, hide abuse, and keep creator pages usable without opening each profile one by one.</p>
-          <p className="actionHint">Open profile moderation.</p>
-        </Link>
+      <section className="homeActionSection">
+        <div className="homeActionSectionHeader">
+          <p className="eyebrow">Support Routes</p>
+          <p className="sectionLead">Keep moderation, runbooks, and live-read checks close to the release flow.</p>
+        </div>
+        <div className="grid homeActionGrid">
+          <Link href="/profile/moderation" className="card actionCard">
+            <span className="flowLabel">Moderation</span>
+            <h3>Moderate Guestbook</h3>
+            <p>Review guestbook entries, hide abuse, and keep creator pages usable without opening each profile one by one.</p>
+            <p className="actionHint">Open profile moderation</p>
+          </Link>
 
-        <Link href="/wiki" className="card actionCard">
-          <h3>Read the Runbooks</h3>
-          <p>Jump into the live documentation for deployment, operations, IPFS, testing, and governance before production cutover.</p>
-          <p className="actionHint">Open the wiki and operator docs.</p>
-        </Link>
+          <Link href="/wiki" className="card actionCard">
+            <span className="flowLabel">Docs</span>
+            <h3>Read the Runbooks</h3>
+            <p>Jump into deployment, operations, IPFS, testing, and governance documentation before production cutover.</p>
+            <p className="actionHint">Open wiki and operator docs</p>
+          </Link>
 
-        <Link href="/mint?view=view" className="card actionCard">
-          <h3>Review Live Token Reads</h3>
-          <p>Use the indexed collection surface to confirm how tokens, listings, and creator-owned collections appear to the real app.</p>
-          <p className="actionHint">Open indexed collection reads.</p>
-        </Link>
-      </div>
+          <Link href="/mint?view=view" className="card actionCard">
+            <span className="flowLabel">Reads</span>
+            <h3>Review Live Token Reads</h3>
+            <p>Use the indexed collection surface to confirm how tokens, listings, and creator-owned collections appear in the real app.</p>
+            <p className="actionHint">Open indexed collection reads</p>
+          </Link>
+        </div>
+      </section>
     </section>
   );
 }

@@ -299,8 +299,24 @@ nav {
 .actionCard {
   display: grid;
   gap: 10px;
+  align-content: start;
   cursor: pointer;
   transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
+  min-height: 100%;
+  padding: 18px;
+  background: linear-gradient(180deg, rgba(255, 251, 244, 0.98) 0%, rgba(255, 241, 223, 0.98) 100%);
+}
+
+.actionCard h3 {
+  margin: 0;
+  font-size: 1.18rem;
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+}
+
+.actionCard p {
+  margin: 0;
+  color: #4a382d;
 }
 
 .actionCardButton {
@@ -581,6 +597,20 @@ nav {
 }
 
 .homeSectionHeader p {
+  margin: 0;
+}
+
+.homeActionSection {
+  display: grid;
+  gap: 14px;
+}
+
+.homeActionSectionHeader {
+  display: grid;
+  gap: 6px;
+}
+
+.homeActionSectionHeader p {
   margin: 0;
 }
 
@@ -984,15 +1014,20 @@ nav {
 }
 
 .actionHint {
-  margin: 0;
   color: #7f220f;
   font-weight: 600;
+  margin-top: auto;
+  padding-top: 8px;
 }
 
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 16px;
+}
+
+.homeActionGrid {
+  align-items: stretch;
 }
 
 .wizard {
