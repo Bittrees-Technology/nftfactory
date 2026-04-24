@@ -1452,6 +1452,8 @@ nav {
 .mintWorkspaceHero {
   display: grid;
   gap: 14px;
+  grid-template-columns: minmax(0, 1.2fr) minmax(260px, 0.8fr);
+  align-items: stretch;
   background:
     radial-gradient(circle at top right, rgba(0, 194, 168, 0.16), transparent 32%),
     radial-gradient(circle at bottom left, rgba(255, 90, 54, 0.12), transparent 28%),
@@ -1475,6 +1477,31 @@ nav {
   flex-wrap: wrap;
 }
 
+.mintWorkspaceHeroSummary {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.mintWorkspaceHeroSummaryCard {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(44, 32, 52, 0.08);
+  background: rgba(255, 255, 255, 0.66);
+}
+
+.mintWorkspaceHeroSummaryCard strong {
+  font-size: 1.05rem;
+  line-height: 1.1;
+}
+
+.mintWorkspaceHeroSummaryCard p {
+  margin: 0;
+  color: #5b4b3f;
+}
+
 .mintWorkspaceHeroPill {
   display: inline-flex;
   align-items: center;
@@ -1489,7 +1516,29 @@ nav {
 }
 
 .mintWorkspaceModes {
+  display: grid;
+  gap: 10px;
+  align-content: start;
   flex-wrap: wrap;
+}
+
+.mintWorkspaceModeButton {
+  display: grid;
+  gap: 2px;
+  justify-items: start;
+  min-width: 0;
+  padding: 12px 14px;
+  border-radius: 16px;
+}
+
+.mintWorkspaceModeLabel {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.mintWorkspaceModeHint {
+  font-size: 0.82rem;
+  opacity: 0.82;
 }
 
 .mintWorkspace .card {
@@ -1520,6 +1569,16 @@ nav {
 
 .mintWorkspace .actionCardStatic {
   gap: 8px;
+}
+
+.mintWorkspaceIntroCard {
+  gap: 8px;
+  background: linear-gradient(180deg, rgba(255, 251, 244, 0.98) 0%, rgba(255, 241, 223, 0.98) 100%);
+}
+
+.mintWorkspaceIntroCard h3,
+.mintWorkspaceIntroCard p {
+  margin: 0;
 }
 
 .mintWorkspace .mintRoyaltySection {
@@ -2795,6 +2854,22 @@ button:disabled {
   .profileDirectoryPanel,
   .mintWorkspaceHero {
     padding: 16px;
+  }
+
+  .mintWorkspaceHero {
+    grid-template-columns: 1fr;
+  }
+
+  .mintWorkspaceModes {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  }
+
+  .mintWorkspaceModeButton {
+    width: 100%;
+  }
+
+  .mintWorkspaceHeroSummary {
+    grid-template-columns: 1fr;
   }
 
   .homeHeroPanelBody,

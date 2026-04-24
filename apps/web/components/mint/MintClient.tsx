@@ -3297,16 +3297,36 @@ export default function MintClient({
                   : "IPFS-backed metadata"}
             </span>
           </div>
+          <div className="mintWorkspaceHeroSummary">
+            <div className="mintWorkspaceHeroSummaryCard">
+              <span className="flowLabel">Mode</span>
+              <strong>{pageMode === "mint" ? "Mint" : pageMode === "view" ? "View" : "Manage"}</strong>
+              <p>{pageMode === "mint" ? "Publish new tokens" : pageMode === "view" ? "Inspect live collection state" : "Operate a collection contract"}</p>
+            </div>
+            <div className="mintWorkspaceHeroSummaryCard">
+              <span className="flowLabel">Network</span>
+              <strong>{appChain.name}</strong>
+              <p>Chain ID {config.chainId}</p>
+            </div>
+            <div className="mintWorkspaceHeroSummaryCard">
+              <span className="flowLabel">Wallet</span>
+              <strong>{isConnected && account ? shortenAddress(account) : "Not connected"}</strong>
+              <p>{isConnected ? "Ready for wallet actions" : "Connect wallet to begin"}</p>
+            </div>
+          </div>
         </div>
         <div className="row mintWorkspaceModes">
-          <button type="button" className={pageMode === "mint" ? "presetButton presetActive" : "presetButton"} onClick={() => setPageMode("mint")}>
-            Mint
+          <button type="button" className={pageMode === "mint" ? "presetButton presetActive mintWorkspaceModeButton" : "presetButton mintWorkspaceModeButton"} onClick={() => setPageMode("mint")}>
+            <span className="mintWorkspaceModeLabel">Mint</span>
+            <span className="mintWorkspaceModeHint">Publish</span>
           </button>
-          <button type="button" className={pageMode === "view" ? "presetButton presetActive" : "presetButton"} onClick={() => setPageMode("view")}>
-            View
+          <button type="button" className={pageMode === "view" ? "presetButton presetActive mintWorkspaceModeButton" : "presetButton mintWorkspaceModeButton"} onClick={() => setPageMode("view")}>
+            <span className="mintWorkspaceModeLabel">View</span>
+            <span className="mintWorkspaceModeHint">Inspect</span>
           </button>
-          <button type="button" className={pageMode === "manage" ? "presetButton presetActive" : "presetButton"} onClick={() => setPageMode("manage")}>
-            Manage
+          <button type="button" className={pageMode === "manage" ? "presetButton presetActive mintWorkspaceModeButton" : "presetButton mintWorkspaceModeButton"} onClick={() => setPageMode("manage")}>
+            <span className="mintWorkspaceModeLabel">Manage</span>
+            <span className="mintWorkspaceModeHint">Operate</span>
           </button>
         </div>
       </div>
@@ -3317,11 +3337,10 @@ export default function MintClient({
 
       {pageMode === "mint" && (
         <form className="wizard" onSubmit={onPublish}>
-          <div className="card actionCardStatic">
-            <h3>Mint</h3>
-            <p>
-              Mint into the shared collection or one of your collection contracts. This is the fastest path to creating a new ERC-721 or ERC-1155.
-            </p>
+          <div className="card actionCardStatic mintWorkspaceIntroCard">
+            <span className="flowLabel">Mint Flow</span>
+            <h3>Publish into the shared collection or one of your collection contracts.</h3>
+            <p>Use the shared path for speed, or switch to a dedicated contract when the release needs its own control surface.</p>
           </div>
 
           {/* Step 1: Wallet */}
