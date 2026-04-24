@@ -1650,6 +1650,11 @@ nav {
   padding-top: 4px;
 }
 
+.mintDangerCard {
+  border-color: rgba(185, 35, 24, 0.2);
+  background: linear-gradient(180deg, rgba(255, 245, 242, 0.98) 0%, rgba(255, 235, 228, 0.98) 100%);
+}
+
 .mintPreviewWrap {
   min-height: 260px;
   border-radius: 16px;

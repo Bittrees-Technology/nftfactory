@@ -4190,7 +4190,7 @@ export default function MintClient({
             </div>
           </div>
 
-          <div className="card formCard">
+          <div className="card formCard mintStepCard">
             <h3>3. Collection Identity</h3>
             <p className="hint">
               Manage the human-readable identity shown for this collection. This is collection-only setup. Profile ENS
@@ -4202,7 +4202,7 @@ export default function MintClient({
                 your indexed collections above.
               </p>
             ) : null}
-            <label>
+            <label className="mintStepInlineField">
               Identity mode
               <select value={identityMode} onChange={(e) => setIdentityMode(e.target.value as CollectionIdentityMode)}>
                 <option value="nftfactory-subname">Create under nftfactory.eth</option>
@@ -4212,7 +4212,7 @@ export default function MintClient({
                 <option value="external-subname">Use an existing ENS subname</option>
               </select>
             </label>
-            <label>
+            <label className="mintStepInlineField">
               {identityMode === "register-eth-subname" ? (
                 <>
                   <div className="gridMini">
@@ -4303,16 +4303,18 @@ export default function MintClient({
                 </>
               )}
             </label>
-            <p className="hint">
-              {collectionIdentityHint}
-            </p>
+            <div className="selectionCard mintStepSelectionCard">
+              <p className="hint">{collectionIdentityHint}</p>
+            </div>
             {identityMode === "register-eth" && pendingCollectionEnsRegistration ? (
-              <p className="hint">
+              <div className="selectionCard mintStepSelectionCard">
+                <p className="hint">
                 Pending registration: <strong>{pendingCollectionEnsRegistration.fullName}</strong>.{" "}
                 {collectionRegistrationCountdown > 0
                   ? `Wait ${collectionRegistrationCountdown}s, then complete registration from this tile.`
                   : "The wait period is over. Complete registration from this tile now."}
-              </p>
+                </p>
+              </div>
             ) : null}
             <button
               type="button"
@@ -4337,13 +4339,13 @@ export default function MintClient({
             <TxStatus state={subnameTx} kind="identity" />
           </div>
 
-          <div className="card formCard">
+          <div className="card formCard mintStepCard">
             <h3>4. Royalties and Splits</h3>
             <p className="hint">
               Manage the collection contract&apos;s default royalty and, if needed, store a collaborator split policy in the protocol split registry.
             </p>
             <div className="mintRoyaltySection">
-              <div className="selectionCard mintRoyaltyPanel">
+              <div className="selectionCard mintRoyaltyPanel mintStepSelectionCard">
                 <div className="mintRoyaltyHeader">
                   <div>
                     <p><strong>Default royalty</strong></p>
@@ -4384,7 +4386,7 @@ export default function MintClient({
                 <TxStatus state={royaltyTx} kind="royalty" />
               </div>
 
-              <div className="selectionCard mintRoyaltyPanel">
+              <div className="selectionCard mintRoyaltyPanel mintStepSelectionCard">
                 <div className="mintRoyaltyHeader">
                   <div>
                     <p><strong>Collaborator payout splits</strong></p>
@@ -4525,14 +4527,14 @@ export default function MintClient({
           </div>
 
           {/* Transfer ownership */}
-          <div className="card formCard">
+          <div className="card formCard mintStepCard">
             <h3>5. Transfer Ownership</h3>
             <p className="hint">
               Passes full control of this collection to a new address. New collection implementations use a
               pending acceptance flow: the next owner must accept ownership, and the current owner can reject
               the pending transfer before it is accepted.
             </p>
-            <div className="gridMini">
+            <div className="gridMini mintOverviewGrid">
               <p>
                 <strong>Current owner</strong>
                 <br />
@@ -4566,9 +4568,11 @@ export default function MintClient({
             {manageSupportsTwoStepOwnership ? (
               hasPendingOwnershipTransfer ? (
                 <>
-                  <p className="hint">
-                    This transfer is waiting for the pending owner to accept it. The current owner can reject it before it is finalized.
-                  </p>
+                  <div className="selectionCard mintStepSelectionCard">
+                    <p className="hint">
+                      This transfer is waiting for the pending owner to accept it. The current owner can reject it before it is finalized.
+                    </p>
+                  </div>
                   {connectedWalletOwnsCollection ? (
                     <>
                       <label>
@@ -4579,7 +4583,7 @@ export default function MintClient({
                           placeholder="0x..."
                         />
                       </label>
-                      <div className="row">
+                      <div className="row mintVerificationActions">
                         <button
                           type="button"
                           onClick={onCancelPendingOwnershipTransfer}
@@ -4626,9 +4630,11 @@ export default function MintClient({
                     </button>
                   ) : null}
                   {!connectedWalletOwnsCollection && !connectedWalletIsPendingOwner ? (
-                    <p className="hint">
-                      Only the current owner can reject this transfer, and only the pending owner can accept it.
-                    </p>
+                    <div className="selectionCard mintStepSelectionCard">
+                      <p className="hint">
+                        Only the current owner can reject this transfer, and only the pending owner can accept it.
+                      </p>
+                    </div>
                   ) : null}
                 </>
               ) : (
@@ -4659,9 +4665,11 @@ export default function MintClient({
               )
             ) : (
               <>
-                <p className="hint">
-                  This collection still uses the legacy one-step ownership flow. Pending acceptance is unavailable until it moves to the latest implementation.
-                </p>
+                <div className="selectionCard mintStepSelectionCard">
+                  <p className="hint">
+                    This collection still uses the legacy one-step ownership flow. Pending acceptance is unavailable until it moves to the latest implementation.
+                  </p>
+                </div>
                 <label>
                   New owner address
                   <input
@@ -4690,26 +4698,25 @@ export default function MintClient({
           </div>
 
           {/* Finalize upgrades */}
-          <div className="card formCard">
+          <div className="card formCard mintStepCard">
             <h3>6. Finalize Upgrades ⚠️</h3>
-            <p className="hint">
-              Permanently disables the UUPS upgrade path for this collection contract. Once finalized,
-              the logic contract can <strong>never</strong> be replaced — the contract is frozen exactly
-              as it is. This is useful for provability and collector trust, but{" "}
-              <strong>cannot be undone</strong>.
-            </p>
-            <p className="hint">
-              Who can call this: <strong>the collection owner only</strong>.<br />
-              Who it affects: all future mints and interactions with this collection.
-            </p>
-            <label className="row" style={{ alignItems: "center", gap: "0.5rem", cursor: "pointer" }}>
-              <input
-                type="checkbox"
-                checked={finalizeConfirmed}
-                onChange={(e) => setFinalizeConfirmed(e.target.checked)}
-              />
-              <span>I understand this is permanent and cannot be reversed.</span>
-            </label>
+            <div className="selectionCard mintStepSelectionCard mintDangerCard">
+              <p className="hint">
+                Permanently disables the UUPS upgrade path for this collection contract. Once finalized,
+                the logic contract can <strong>never</strong> be replaced.
+              </p>
+              <p className="hint">
+                Only the collection owner can call this, and it affects all future mints and interactions with the collection.
+              </p>
+              <label className="row" style={{ alignItems: "center", gap: "0.5rem", cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={finalizeConfirmed}
+                  onChange={(e) => setFinalizeConfirmed(e.target.checked)}
+                />
+                <span>I understand this is permanent and cannot be reversed.</span>
+              </label>
+            </div>
             <button
               type="button"
               onClick={onFinalizeUpgrades}
