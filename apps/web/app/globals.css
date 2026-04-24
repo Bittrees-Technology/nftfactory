@@ -1638,6 +1638,18 @@ nav {
   flex-wrap: wrap;
 }
 
+.mintOverviewGrid p {
+  margin: 0;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(44, 32, 52, 0.08);
+  background: rgba(255, 255, 255, 0.66);
+}
+
+.mintVerificationActions {
+  padding-top: 4px;
+}
+
 .mintPreviewWrap {
   min-height: 260px;
   border-radius: 16px;

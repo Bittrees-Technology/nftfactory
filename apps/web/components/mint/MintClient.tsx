@@ -3801,16 +3801,29 @@ export default function MintClient({
       {pageMode === "view" && (
         <div className="wizard">
 
-          <div className="card formCard">
-            <h3>View</h3>
-            <p className="hint">Review a collection contract, its royalty policy, and its indexed tokens without opening the manager controls.</p>
+          <div className="card formCard mintWorkspaceIntroCard">
+            <span className="flowLabel">View Flow</span>
+            <h3>Inspect a collection contract, its live settings, and its indexed tokens.</h3>
+            <p>Use this route to review collection state without opening the manager controls.</p>
           </div>
 
-          <div className="card formCard">
+          <div className="card formCard mintStepCard">
             <h3>1. Choose collection</h3>
             <p className="hint">
               This view is read-only. Use it to inspect an existing collection contract and its indexed inventory.
             </p>
+            <div className="mintStepSummaryGrid">
+              <div className="mintStepSummaryCard">
+                <span className="flowLabel">Network</span>
+                <strong>{appChain.name}</strong>
+                <p>Chain ID {config.chainId}</p>
+              </div>
+              <div className="mintStepSummaryCard">
+                <span className="flowLabel">Wallet</span>
+                <strong>{isConnected && account ? shortenAddress(account) : "Not connected"}</strong>
+                <p>{isConnected ? "Ready for collection reads" : "Connect wallet to inspect faster"}</p>
+              </div>
+            </div>
             {verifiedKnownCollections.length > 0 ? (
               <label>
                 Collection source
@@ -3849,13 +3862,13 @@ export default function MintClient({
             )}
           </div>
 
-          <div className="card formCard">
+          <div className="card formCard mintStepCard">
             <h3>2. Collection overview</h3>
             {!isAddress(manageAddress) ? (
               <p className="hint">Select or enter a valid collection address to load details.</p>
             ) : (
               <div className="stack">
-                <div className="gridMini">
+                <div className="gridMini mintOverviewGrid">
                   <p>
                     <strong>Identity</strong><br />
                     {formatCollectionIdentity(selectedManageCollection?.ensSubname ?? null) || "No ENS identity saved"}
@@ -3877,7 +3890,7 @@ export default function MintClient({
                     {manageRoyaltySplits.length === 0 ? "No splits stored" : `${manageRoyaltySplits.length} split row${manageRoyaltySplits.length === 1 ? "" : "s"}`}
                   </p>
                 </div>
-                <div className="gridMini">
+                <div className="gridMini mintOverviewGrid">
                   <p className="mono">
                     <strong>Collection</strong><br />
                     {toExplorerAddress(config.chainId, manageAddress) ? (
@@ -3902,7 +3915,7 @@ export default function MintClient({
                   </p>
                 </div>
                 {manageRoyaltySplits.length > 0 ? (
-                  <div className="selectionCard">
+                  <div className="selectionCard mintStepSelectionCard">
                     <p><strong>Collection split policy</strong></p>
                     {manageRoyaltySplits.map((split, index) => (
                       <p key={`view-split-${index}`} className="mono">
@@ -4008,23 +4021,32 @@ export default function MintClient({
       {pageMode === "manage" && (
         <div className="wizard">
 
-          <div className="card formCard">
-            <h3>Manage</h3>
-            <p className="hint">Choose a collection, verify it, then update identity or contract settings.</p>
+          <div className="card formCard mintWorkspaceIntroCard">
+            <span className="flowLabel">Manage Flow</span>
+            <h3>Choose a collection, verify it, then update identity or contract settings.</h3>
+            <p>This route is for live contract operations after the collection exists.</p>
           </div>
 
-          <div className="card formCard">
+          <div className="card formCard mintStepCard">
             <h3>Wallet</h3>
             {wrongNetwork ? (
               <p className="hint">Select {appChain.name} in the header wallet menu to continue.</p>
             ) : null}
-            <div className="gridMini">
-              <p className="mono">Account: {account || "Not connected"}</p>
-              <p className="mono">Network: {appChain.name}</p>
+            <div className="mintStepSummaryGrid">
+              <div className="mintStepSummaryCard">
+                <span className="flowLabel">Wallet</span>
+                <strong>{isConnected && account ? shortenAddress(account) : "Not connected"}</strong>
+                <p>{connectedWalletOwnsCollection ? "Current owner detected" : "Owner wallet required for writes"}</p>
+              </div>
+              <div className="mintStepSummaryCard">
+                <span className="flowLabel">Network</span>
+                <strong>{appChain.name}</strong>
+                <p>{wrongNetwork ? "Switch network to continue" : "Ready for contract actions"}</p>
+              </div>
             </div>
           </div>
 
-          <div className="card formCard">
+          <div className="card formCard mintStepCard">
             <h3>1. Choose collection</h3>
             <p className="hint">
               These actions apply to collection contracts deployed through the factory. You must be the current <code>owner</code> to call them.
@@ -4065,28 +4087,36 @@ export default function MintClient({
                 />
               </label>
             )}
-            {isAddress(manageAddress) && (
-              <p className="hint mono">
-                {formatCollectionIdentity(selectedManageCollection?.ensSubname ?? null) ? `${formatCollectionIdentity(selectedManageCollection?.ensSubname ?? null)} ` : ""}
-                {toExplorerAddress(config.chainId, manageAddress) ? (
-                  <a href={toExplorerAddress(config.chainId, manageAddress)!} target="_blank" rel="noreferrer">
-                    View on explorer ↗
-                  </a>
-                ) : (
-                  <span>Local chain address loaded</span>
-                )}
-              </p>
-            )}
+            {isAddress(manageAddress) ? (
+              <div className="selectionCard mintStepSelectionCard">
+                <div className="mintStepSelectionHeader">
+                  <strong>{formatCollectionIdentity(selectedManageCollection?.ensSubname ?? null) || "Selected collection"}</strong>
+                  <span className="profileChip">{manageCollectionStandard || "Unknown"}</span>
+                </div>
+                <p className="hint mono">
+                  {toExplorerAddress(config.chainId, manageAddress) ? (
+                    <a href={toExplorerAddress(config.chainId, manageAddress)!} target="_blank" rel="noreferrer">
+                      {manageAddress}
+                    </a>
+                  ) : (
+                    <span>{manageAddress}</span>
+                  )}
+                </p>
+              </div>
+            ) : null}
           </div>
 
-          <div className="card formCard">
+          <div className="card formCard mintStepCard">
             <h3>2. Verification</h3>
             <p className="hint">
               Collection contracts are deployed as ERC-1967 proxies. This action submits proxy verification to the explorer
               so the collection address resolves to verified source instead of only showing the raw proxy shell.
             </p>
-            <div className="selectionCard">
-              <p><strong>Collection proxy</strong></p>
+            <div className="selectionCard mintStepSelectionCard">
+              <div className="mintStepSelectionHeader">
+                <strong>Collection proxy</strong>
+                <span className="profileChip">{manageCollectionStandard || "Unknown"}</span>
+              </div>
               {isAddress(manageAddress) && toExplorerAddress(config.chainId, manageAddress) ? (
                 <p className="hint mono">
                   <a href={toExplorerAddress(config.chainId, manageAddress)!} target="_blank" rel="noreferrer">
@@ -4096,9 +4126,6 @@ export default function MintClient({
               ) : (
                 <p className="hint">Select a collection above to inspect it on the explorer.</p>
               )}
-              <p className="hint">
-                Detected standard: <strong>{manageCollectionStandard || "Unknown"}</strong>
-              </p>
               {manageImplementationAddress && toExplorerAddress(config.chainId, manageImplementationAddress) ? (
                 <>
                   <p><strong>Current factory implementation</strong></p>
