@@ -1638,6 +1638,17 @@ nav {
   flex-wrap: wrap;
 }
 
+.mintPreviewWrap {
+  min-height: 260px;
+  border-radius: 16px;
+}
+
+.mintPreviewCard {
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(255, 251, 244, 0.98) 0%, rgba(255, 241, 223, 0.98) 100%);
+  box-shadow: 0 10px 28px rgba(111, 63, 24, 0.06);
+}
+
 .mintWorkspace .mintRoyaltySection {
   display: grid;
   gap: 10px;

@@ -3601,26 +3601,28 @@ export default function MintClient({
           </div>
 
           {/* Step 3: Asset + metadata */}
-          <div className="card formCard">
+          <div className="card formCard mintStepCard">
             <h3>3. Asset and Metadata</h3>
             <p className="hint">
               This step sets the NFT metadata that will be uploaded and minted.
             </p>
-            <label>
-              Name (required)
-              <input value={name} onChange={(e) => setName(e.target.value)} />
-            </label>
-            <label>
-              Description (optional)
-              <input value={description} onChange={(e) => setDescription(e.target.value)} />
-            </label>
-            {standard === "ERC1155" && (
+            <div className="mintStepFieldGrid">
               <label>
-                Number of copies
-                <input value={copies} onChange={(e) => setCopies(e.target.value)} inputMode="numeric" />
+                Name (required)
+                <input value={name} onChange={(e) => setName(e.target.value)} />
               </label>
-            )}
-            <div className="selectionCard">
+              <label>
+                Description (optional)
+                <input value={description} onChange={(e) => setDescription(e.target.value)} />
+              </label>
+              {standard === "ERC1155" && (
+                <label>
+                  Number of copies
+                  <input value={copies} onChange={(e) => setCopies(e.target.value)} inputMode="numeric" />
+                </label>
+              )}
+            </div>
+            <div className="selectionCard mintStepSelectionCard">
               <span className="detailLabel">Media Inputs</span>
               <label>
                 Upload image
@@ -3645,11 +3647,11 @@ export default function MintClient({
               ) : null}
             </div>
             {previewUrl && (
-              <div className="previewWrap">
+              <div className="previewWrap mintPreviewWrap">
                 <img src={previewUrl} alt={name || "NFT preview"} className="previewImage" />
               </div>
             )}
-            <div className="selectionCard">
+            <div className="selectionCard mintStepSelectionCard">
               <span className="detailLabel">Metadata Options</span>
               <label className="inlineCheck">
                 <input
@@ -3691,7 +3693,7 @@ export default function MintClient({
           </div>
 
           {/* Step 4: Mint settings */}
-          <div className="card formCard">
+          <div className="card formCard mintStepCard">
             <h3>4. Drop preview</h3>
             {mintMode === "custom" ? (
               <p className="hint">
@@ -3700,7 +3702,7 @@ export default function MintClient({
             ) : null}
 
             {(previewUrl || name || audioFile || metadataUri || uploadReceipt.metadataUri) ? (
-              <div className="nftPreviewCard">
+              <div className="nftPreviewCard mintPreviewCard">
                 {previewUrl && <img src={previewUrl} alt={name || "NFT preview"} className="nftPreviewThumb" />}
                 <div className="nftPreviewMeta">
                   <p className="nftPreviewName">{name || "Untitled NFT"}</p>
