@@ -4,7 +4,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { Readable } from "node:stream";
 import { describe, expect, it, vi } from "vitest";
 import type { PrismaClient } from "@prisma/client";
-import { createRequestHandler } from "./indexer.js";
+import { createRequestHandler, summarizeAdminProtection } from "./indexer.js";
 
 function createMockPrisma(): PrismaClient {
   return {
@@ -121,6 +121,37 @@ async function runHandler(
 }
 
 describe("indexer handler", () => {
+  it("summarizes an unprotected admin override explicitly", () => {
+    expect(
+      summarizeAdminProtection({
+        adminToken: "",
+        adminAllowlist: new Set(),
+        allowUnprotectedAdmin: true
+      })
+    ).toEqual({
+      protected: false,
+      mode: "unprotected-override",
+      tokenConfigured: false,
+      allowlistCount: 0,
+      allowUnprotectedAdmin: true
+    });
+  });
+
+  it("summarizes token and allowlist protection", () => {
+    expect(
+      summarizeAdminProtection({
+        adminToken: "secret-token",
+        adminAllowlist: new Set(["0x00000000000000000000000000000000000000aa"])
+      })
+    ).toEqual({
+      protected: true,
+      mode: "token+allowlist",
+      tokenConfigured: true,
+      allowlistCount: 1,
+      allowUnprotectedAdmin: false
+    });
+  });
+
   it("returns 400 for invalid moderation report status query", async () => {
     const handler = createRequestHandler(
       {

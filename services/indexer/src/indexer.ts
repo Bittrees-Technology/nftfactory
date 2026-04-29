@@ -280,6 +280,7 @@ const HOST = process.env.INDEXER_HOST || "127.0.0.1";
 const ADMIN_TOKEN = process.env.INDEXER_ADMIN_TOKEN || "";
 const WEBHOOK_SECRET = process.env.INDEXER_WEBHOOK_SECRET || "";
 const TRUST_PROXY = process.env.TRUST_PROXY === "true";
+const ALLOW_UNPROTECTED_ADMIN = /^(1|true|yes|on)$/i.test(process.env.INDEXER_ALLOW_UNPROTECTED_ADMIN || "");
 const MODERATOR_REGISTRY_ADDRESS = process.env.MODERATOR_REGISTRY_ADDRESS || "";
 const REGISTRY_ADDRESS = process.env.REGISTRY_ADDRESS || process.env.NEXT_PUBLIC_REGISTRY_ADDRESS || "";
 const MARKETPLACE_ADDRESS = process.env.MARKETPLACE_ADDRESS || process.env.NEXT_PUBLIC_MARKETPLACE_ADDRESS || "";
@@ -456,6 +457,7 @@ type RequestHandlerConfig = {
   adminToken: string;
   webhookSecret: string;
   adminAllowlist: Set<string>;
+  allowUnprotectedAdmin?: boolean;
   trustProxy: boolean;
   marketplaceAddress: `0x${string}` | null;
   registryAddress: `0x${string}` | null;
@@ -482,6 +484,62 @@ function assertEnv(name: string): string {
     throw new Error(`Missing env var: ${name}`);
   }
   return value;
+}
+
+type AdminProtectionSummary = {
+  protected: boolean;
+  mode: "token+allowlist" | "token" | "allowlist" | "unprotected-override" | "unprotected";
+  tokenConfigured: boolean;
+  allowlistCount: number;
+  allowUnprotectedAdmin: boolean;
+};
+
+export function summarizeAdminProtection(config: {
+  adminToken: string;
+  adminAllowlist: Set<string>;
+  allowUnprotectedAdmin?: boolean;
+}): AdminProtectionSummary {
+  const tokenConfigured = Boolean(String(config.adminToken || "").trim());
+  const allowlistCount = config.adminAllowlist.size;
+  const allowUnprotectedAdmin = Boolean(config.allowUnprotectedAdmin);
+
+  if (tokenConfigured && allowlistCount > 0) {
+    return {
+      protected: true,
+      mode: "token+allowlist",
+      tokenConfigured,
+      allowlistCount,
+      allowUnprotectedAdmin
+    };
+  }
+
+  if (tokenConfigured) {
+    return {
+      protected: true,
+      mode: "token",
+      tokenConfigured,
+      allowlistCount,
+      allowUnprotectedAdmin
+    };
+  }
+
+  if (allowlistCount > 0) {
+    return {
+      protected: true,
+      mode: "allowlist",
+      tokenConfigured,
+      allowlistCount,
+      allowUnprotectedAdmin
+    };
+  }
+
+  return {
+    protected: false,
+    mode: allowUnprotectedAdmin ? "unprotected-override" : "unprotected",
+    tokenConfigured,
+    allowlistCount,
+    allowUnprotectedAdmin
+  };
 }
 
 function parseEnvList(value: string | undefined): string[] {
@@ -6018,6 +6076,7 @@ async function handleRequest(
   const path = url.pathname;
 
   if (req.method === "GET" && path === "/health") {
+    const adminProtection = summarizeAdminProtection(config);
     const [mintTxHashColumnAvailable, tokenPresentationColumnsAvailable, listingV2ColumnsAvailable, offerTableAvailable, tokenHoldingTableAvailable] =
       await Promise.all([
         hasMintTxHashColumn(deps),
@@ -6045,6 +6104,7 @@ async function handleRequest(
         moderatorRegistryAddress: config.moderatorRegistryAddress,
         marketplaceAddress: config.marketplaceAddress
       },
+      adminProtection,
       indexingSources: {
         registry: {
           configured: Boolean(config.registryAddress)
@@ -8888,8 +8948,22 @@ export async function main() {
     throw new Error("Missing RPC_URL or RPC_URLS");
   }
 
-  if (!ADMIN_TOKEN && ADMIN_ALLOWLIST.size === 0) {
-    log.warn("No INDEXER_ADMIN_TOKEN or INDEXER_ADMIN_ALLOWLIST configured — admin endpoints are unprotected");
+  const adminProtection = summarizeAdminProtection({
+    adminToken: ADMIN_TOKEN,
+    adminAllowlist: ADMIN_ALLOWLIST,
+    allowUnprotectedAdmin: ALLOW_UNPROTECTED_ADMIN
+  });
+
+  if (!adminProtection.protected && !adminProtection.allowUnprotectedAdmin) {
+    throw new Error(
+      "Unsafe indexer config: set INDEXER_ADMIN_TOKEN or INDEXER_ADMIN_ALLOWLIST. Use INDEXER_ALLOW_UNPROTECTED_ADMIN=1 only for local/dev environments."
+    );
+  }
+
+  if (!adminProtection.protected) {
+    log.warn(
+      "INDEXER_ALLOW_UNPROTECTED_ADMIN is enabled — admin endpoints are unprotected and this should only be used for local/dev environments"
+    );
   }
 
   log.info({ rpcUrl, rpcUrls, db: dbUrl.slice(0, 18) + "..." }, "Indexer booting");
@@ -8901,6 +8975,7 @@ export async function main() {
     adminToken: ADMIN_TOKEN,
     webhookSecret: WEBHOOK_SECRET,
     adminAllowlist: ADMIN_ALLOWLIST,
+    allowUnprotectedAdmin: ALLOW_UNPROTECTED_ADMIN,
     trustProxy: TRUST_PROXY,
     marketplaceAddress:
       MARKETPLACE_ADDRESS && isAddress(MARKETPLACE_ADDRESS.toLowerCase())

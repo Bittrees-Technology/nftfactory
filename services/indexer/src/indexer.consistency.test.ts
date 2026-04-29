@@ -2334,6 +2334,13 @@ describe("indexer consistency hardening", () => {
       registryAddress: "0x1111111111111111111111111111111111111111",
       moderatorRegistryAddress: "0x2222222222222222222222222222222222222222"
     });
+    expect(healthResponse.body.adminProtection).toEqual({
+      protected: false,
+      mode: "unprotected",
+      tokenConfigured: false,
+      allowlistCount: 0,
+      allowUnprotectedAdmin: false
+    });
   });
 
   it("stores and reuses listing-scoped moderation refs when moderation columns are available", async () => {

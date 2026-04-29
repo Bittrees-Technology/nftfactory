@@ -63,7 +63,7 @@ npm run test:indexer
 Then confirm:
 
 - the service starts
-- `/health` returns `{"ok":true}`
+- `/health` returns `{"ok":true}` and `adminProtection.protected: true` unless you intentionally enabled the local/dev override
 - collection, profile, and feed routes behave as expected
 - admin auth behaves as expected
 - listing sync and backfill endpoints work with the configured env

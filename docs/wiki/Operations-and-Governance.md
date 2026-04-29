@@ -57,10 +57,11 @@ Admin mutation paths in the indexer can be gated with:
 
 - `INDEXER_ADMIN_TOKEN`: bearer-token check on admin writes
 - `INDEXER_ADMIN_ALLOWLIST`: address-based allowlist checked against `x-admin-address` or payload actor
+- `INDEXER_ALLOW_UNPROTECTED_ADMIN=1`: explicit local/dev-only escape hatch when you need to boot without either control
 
 This is **not** an IP allowlist.
 
-If both are unset, the indexer logs a warning and admin routes are effectively unprotected.
+If both auth controls are unset, the indexer now fails closed at startup unless `INDEXER_ALLOW_UNPROTECTED_ADMIN=1` is explicitly enabled. When the service is running, `/health` reports the active `adminProtection` mode so operators can verify that admin writes are actually protected.
 
 ## Moderator model
 

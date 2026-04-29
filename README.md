@@ -100,6 +100,7 @@ Shared IPFS publishing commands in this repo use `projects/ipfs-evm-system`. Con
   - `INDEXER_COLLECTION_START_BLOCK=...` (optional; first-run lower bound for collection transfer scans)
   - `INDEXER_ADMIN_TOKEN=...` (recommended; required for admin mutation routes when set)
   - `INDEXER_ADMIN_ALLOWLIST=0xabc...,0xdef...` (optional; wallet addresses allowed to perform admin actions)
+  - `INDEXER_ALLOW_UNPROTECTED_ADMIN=1` (optional local/dev-only escape hatch; the indexer now refuses to boot without admin auth unless this is set)
   - `REGISTRY_ADDRESS=...`
   - `MARKETPLACE_ADDRESS=...`
   - `MODERATOR_REGISTRY_ADDRESS=...` (if using on-chain moderator reads)
@@ -224,6 +225,8 @@ That installs PostgreSQL into `services/indexer/.tools/postgres15` and starts it
 - If `INDEXER_ADMIN_ALLOWLIST` is set, admin mutation endpoints require an allowlisted wallet address:
   - via `x-admin-address` header, or
   - via request `actor` field (must be a valid allowlisted wallet address).
+- If neither is set, the indexer now fails to start unless `INDEXER_ALLOW_UNPROTECTED_ADMIN=1` is explicitly set for local/dev use.
+- `/health` exposes `adminProtection` so deployed checks can confirm whether admin writes are actually protected.
 - In the web Admin panel, use `Actor label`, `Admin address`, and `Admin token` fields to satisfy auth.
 - Rate limiting keys off socket IP by default; set `TRUST_PROXY=true` only when deployed behind trusted infra.
 
