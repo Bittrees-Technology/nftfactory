@@ -6,8 +6,8 @@ import {
   buildIpfsAuthRequirementError,
   buildIpfsReachabilityError,
   buildIpfsTerminatedError,
-  hasIpfsApiAuthConfigured,
   isPrivateOrLocalUrl,
+  isPublicIpfsApiMissingRequiredAuth,
   isRetryableIpfsUploadErrorMessage,
   isRetryableIpfsUploadStatus,
   parseIpfsAddResponse,
@@ -118,7 +118,7 @@ export async function POST(request: Request) {
       : [buildIpfsAddUrl(resolveIpfsApiUrl(process.env) || requireEnv("IPFS_API_URL"))];
     const primaryApiUrl = apiUrls[0];
 
-    if (!isPrivateOrLocalUrl(primaryApiUrl) && !hasIpfsApiAuthConfigured(process.env)) {
+    if (isPublicIpfsApiMissingRequiredAuth(primaryApiUrl, process.env)) {
       throw new Error(buildIpfsAuthRequirementError(primaryApiUrl));
     }
 

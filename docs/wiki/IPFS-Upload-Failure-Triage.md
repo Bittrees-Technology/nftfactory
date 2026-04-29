@@ -42,6 +42,15 @@ curl -i -X POST https://ipfs-api.nftfactory.org/api/v0/version
 curl -i -X POST http://127.0.0.1:5001/api/v0/version
 ```
 
+From the repo, after exporting the root env:
+
+```bash
+set -a
+source .env
+set +a
+npm run check:ipfs:backend
+```
+
 If the public response is Cloudflare `1033`:
 
 - the tunnel hostname exists in Cloudflare, but Cloudflare cannot resolve a live tunnel session

@@ -42,6 +42,7 @@ This repo includes build-ready scaffolding and first-pass contract/backend code.
 Profile pages can now be snapshotted from the public web route and published through the shared IPFS project tooling with `npm run ipfs:publish:profile-snapshot -- <profile-name> --source <public-web-origin>`. Use `--skip-publish` to export the JSON locally first. For password-protected deployments, pass `--basic-auth-user` and `--basic-auth-password` or set `PROFILE_SNAPSHOT_BASIC_AUTH_USERNAME` and `PROFILE_SNAPSHOT_BASIC_AUTH_PASSWORD`. The web app can also fall back to published snapshots when `NEXT_PUBLIC_PROFILE_SNAPSHOT_URL_TEMPLATE` or `NEXT_PUBLIC_PROFILE_SNAPSHOT_MANIFEST_URL` is configured.
 
 Before a production web build or release check, validate the required public build env set with `npm run check:web-env`.
+For the live writable IPFS path itself, run `npm run check:ipfs:backend` after exporting the repo env so the script can probe `/api/v0/version` with the configured auth mode and surface tunnel-specific failures like Cloudflare `1033`.
 For deployed-network verification, run `npm run check:deployments` with the real target-chain RPC and explicit deployed addresses. If you run it with no contract env values set, it still falls back to `docs/deployments.sepolia-app-wired.json`, but that fallback should be treated as Sepolia-only scaffolding, not a production source of truth.
 The repo-root `.env.example` is now mainnet-first and should be filled with the exact live deployment values for RPC, indexer, wallet, explorer, and IPFS.
 

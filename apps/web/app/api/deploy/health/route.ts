@@ -8,6 +8,7 @@ import {
   resolveIpfsApiUrls
 } from "../../../../lib/ipfsUpload";
 import { resolveIndexerServerUrl } from "../../../../lib/indexerServerEnv";
+import { sanitizeBackendErrorMessage } from "../../../../lib/networkErrors";
 import { getLegacyChainPublicEnv, getRootPublicEnv, getScopedChainPublicEnv } from "../../../../lib/publicEnv";
 import { resolveConfiguredWalletConnectProjectId } from "../../../../lib/walletConnect";
 
@@ -192,12 +193,16 @@ async function checkIpfs(): Promise<ServiceCheck> {
           details: versionUrls.length > 1 ? { checkedUrls: versionUrls.map((url) => maskUrl(url)) } : undefined
         };
       }
+      const fallbackMessage = `IPFS request failed (HTTP ${response.status}).`;
+      const sanitizedMessage = sanitizeBackendErrorMessage(text, fallbackMessage, {
+        serviceLabel: "IPFS upload backend"
+      });
       lastFailure = {
         label: "ipfs",
         url: maskUrl(versionUrl),
         ok: false,
         status: response.status,
-        message: text || `HTTP ${response.status} (auth: ${authMode})`
+        message: `${sanitizedMessage} (auth: ${authMode})`
       };
     } catch (error) {
       lastFailure = {

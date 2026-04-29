@@ -4,9 +4,8 @@ import { resolveBasicAuthConfig } from "./lib/basicAuth";
 import {
   buildIpfsAuthRequirementError,
   buildIpfsReachabilityError,
-  hasIpfsApiAuthConfigured,
   isPrivateOrLocalUrl,
-  allowsUnauthenticatedPublicIpfsApi,
+  isPublicIpfsApiMissingRequiredAuth,
   resolveIpfsApiUrl
 } from "./lib/ipfsUpload";
 
@@ -68,7 +67,7 @@ if (process.env.NODE_ENV === "production") {
       throw new Error("Missing required env var for production build: IPFS_API_URL or IPFS_API_BASE_URL");
     }
 
-    if (!isPrivateOrLocalUrl(ipfsApiUrl) && !hasIpfsApiAuthConfigured(process.env) && !allowsUnauthenticatedPublicIpfsApi(process.env)) {
+    if (isPublicIpfsApiMissingRequiredAuth(ipfsApiUrl, process.env)) {
       throw new Error(buildIpfsAuthRequirementError(ipfsApiUrl));
     }
 
