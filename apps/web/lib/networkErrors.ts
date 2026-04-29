@@ -30,7 +30,8 @@ function looksLikeCloudflareTunnelError(text: string): boolean {
   return (
     normalized.includes("cloudflare tunnel error") ||
     (normalized.includes("cloudflare") && normalized.includes("error 1033")) ||
-    normalized.includes("configured as a cloudflare tunnel")
+    normalized.includes("configured as a cloudflare tunnel") ||
+    /\berror(?:\s+code)?\s*:?\s*1033\b/.test(normalized)
   );
 }
 

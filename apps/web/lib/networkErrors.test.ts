@@ -75,4 +75,14 @@ describe("networkErrors", () => {
 
     expect(message).toBe("IPFS upload backend is temporarily unavailable because the upstream tunnel is down.");
   });
+
+  it("collapses plain Cloudflare 1033 text into a safe backend message", () => {
+    const message = sanitizeBackendErrorMessage(
+      "error code: 1033",
+      "IPFS upload failed (HTTP 530).",
+      { serviceLabel: "IPFS upload backend" }
+    );
+
+    expect(message).toBe("IPFS upload backend is temporarily unavailable because the upstream tunnel is down.");
+  });
 });

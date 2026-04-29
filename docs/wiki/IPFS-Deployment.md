@@ -118,6 +118,17 @@ Use the dedicated runbook:
 
 - [IPFS Upload Failure Triage](./IPFS-Upload-Failure-Triage.md)
 
+For a direct repo-side probe of the live writable API, run:
+
+```bash
+set -a
+source .env
+set +a
+npm run check:ipfs:backend
+```
+
+That command checks the configured `IPFS_API_URL`, `IPFS_API_URLS`, or `IPFS_API_BASE_URL` targets with the current auth mode and reports tunnel-specific failures such as Cloudflare `1033`.
+
 ## Historical recovery
 
 If older collections or tokens are missing from the indexer, or historical metadata needs to be re-pinned into Kubo, use the exact recovery commands in:

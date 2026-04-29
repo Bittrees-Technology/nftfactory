@@ -10,6 +10,7 @@ import {
   buildIpfsTerminatedError,
   buildIpfsVersionUrl,
   hasIpfsApiAuthConfigured,
+  isPublicIpfsApiMissingRequiredAuth,
   isRetryableIpfsUploadErrorMessage,
   isRetryableIpfsUploadStatus,
   isPrivateOrLocalUrl,
@@ -100,6 +101,21 @@ describe("ipfsUpload", () => {
       })
     ).toBe(true);
     expect(hasIpfsApiAuthConfigured({})).toBe(false);
+  });
+
+  it("allows intentionally public IPFS APIs only when explicitly configured", () => {
+    expect(isPublicIpfsApiMissingRequiredAuth("https://ipfs.example.com/api/v0", {})).toBe(true);
+    expect(
+      isPublicIpfsApiMissingRequiredAuth("https://ipfs.example.com/api/v0", {
+        ALLOW_PUBLIC_IPFS_API_WITHOUT_AUTH: "1"
+      })
+    ).toBe(false);
+    expect(
+      isPublicIpfsApiMissingRequiredAuth("https://ipfs.example.com/api/v0", {
+        IPFS_API_BEARER_TOKEN: "token"
+      })
+    ).toBe(false);
+    expect(isPublicIpfsApiMissingRequiredAuth("http://127.0.0.1:5001", {})).toBe(false);
   });
 
   it("parses a standard Kubo add response", () => {

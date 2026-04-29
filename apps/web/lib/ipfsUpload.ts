@@ -153,6 +153,10 @@ export function allowsUnauthenticatedPublicIpfsApi(env: EnvLike = process.env): 
   return isTruthyEnvFlag(env.ALLOW_PUBLIC_IPFS_API_WITHOUT_AUTH);
 }
 
+export function isPublicIpfsApiMissingRequiredAuth(urlLike: string, env: EnvLike = process.env): boolean {
+  return !isPrivateOrLocalUrl(urlLike) && !hasIpfsApiAuthConfigured(env) && !allowsUnauthenticatedPublicIpfsApi(env);
+}
+
 export function getIpfsApiAuthMode(env: EnvLike = process.env): "bearer" | "basic" | "public-override" | "none" {
   const sharedConfig = resolveSharedIpfsStorageConfig(env);
   const bearerToken = sharedConfig.apiBearerToken;
