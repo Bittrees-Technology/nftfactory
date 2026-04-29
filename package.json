@@ -50,6 +50,7 @@
     "check:ensv2": "node scripts/check-ensv2-readiness.mjs",
     "check:ipfs": "bash scripts/ipfs-readiness.sh",
     "check:ipfs:backend": "node scripts/check-ipfs-backend.mjs",
+    "check:runtime-health": "node scripts/check-runtime-health.mjs",
     "check:web-env": "node scripts/check-web-build-env.mjs",
     "check:deployments": "node scripts/check-deployment-addresses.mjs",
     "verify:population": "node scripts/verify-population.mjs",

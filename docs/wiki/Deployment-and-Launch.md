@@ -197,11 +197,12 @@ Before deployment or release validation:
 - [ ] `NEXT_PUBLIC_INDEXER_API_URL` points to a reachable host
 - [ ] IPFS upload service is configured (`IPFS_API_URL`, plus bearer auth for public endpoints, or `ALLOW_PUBLIC_IPFS_API_WITHOUT_AUTH=1` if the public endpoint is intentionally unauthenticated)
 - [ ] `https://nftfactory.org/api/deploy/health` returns `ok: true`
+- [ ] indexer `/health` reports `adminProtection.protected: true`
 - [ ] `npm run verify:population -- --config ./path/to/config.json` passes for one shared-mint case and one custom-collection case
 
 ## Operational launch gates
 
-- [ ] `npm run check:release` passes (aggregates typechecks, tests, web build, secret scan, and env presence checks)
+- [ ] `npm run check:release` passes (aggregates typechecks, tests, web build, secret scan, env checks, IPFS backend reachability, and runtime health when configured)
 - [ ] `npm run typecheck:web` passes
 - [ ] `npm run build:web` passes
 - [ ] `npm run typecheck:indexer` passes

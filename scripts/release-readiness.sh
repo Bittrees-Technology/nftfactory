@@ -98,6 +98,29 @@ normalize_truthy_env_flag() {
   [[ "$value" == "1" || "$value" == "true" || "$value" == "yes" || "$value" == "on" ]]
 }
 
+resolve_primary_ipfs_url() {
+  local configured_urls="${IPFS_API_URLS:-}"
+  if [[ -n "$configured_urls" ]]; then
+    local first_url
+    IFS=',' read -r first_url _ <<< "$configured_urls"
+    first_url="$(echo "$first_url" | xargs)"
+    if [[ -n "$first_url" ]]; then
+      echo "$first_url"
+      return
+    fi
+  fi
+
+  if [[ -n "${IPFS_API_URL:-}" ]]; then
+    echo "${IPFS_API_URL}"
+    return
+  fi
+
+  if [[ -n "${IPFS_API_BASE_URL:-}" ]]; then
+    echo "${IPFS_API_BASE_URL}"
+    return
+  fi
+}
+
 ipfs_auth_mode="none"
 if [[ -n "${IPFS_API_BEARER_TOKEN:-}" ]]; then
   ipfs_auth_mode="bearer"
@@ -128,18 +151,32 @@ is_private_or_local_url() {
 echo "Environment reachability sanity"
 echo "IPFS auth mode: ${ipfs_auth_mode}"
 reachability_failed=0
+primary_ipfs_url="$(resolve_primary_ipfs_url)"
 
-if is_private_or_local_url "${IPFS_API_URL:-}"; then
-  echo "IPFS_API_URL is private/local and will not work from Vercel: ${IPFS_API_URL}"
+if [[ -z "$primary_ipfs_url" ]]; then
+  echo "Missing env: IPFS_API_URL, IPFS_API_URLS, or IPFS_API_BASE_URL"
+  reachability_failed=1
+elif is_private_or_local_url "$primary_ipfs_url"; then
+  echo "Primary IPFS API URL is private/local and will not work from Vercel: ${primary_ipfs_url}"
   reachability_failed=1
 fi
 
-if [[ -n "${IPFS_API_URL:-}" ]] && ! is_private_or_local_url "${IPFS_API_URL:-}"; then
+if [[ -n "$primary_ipfs_url" ]] && ! is_private_or_local_url "$primary_ipfs_url"; then
   allow_public_ipfs_without_auth="$(echo "${ALLOW_PUBLIC_IPFS_API_WITHOUT_AUTH:-}" | tr "[:upper:]" "[:lower:]")"
   if [[ "$allow_public_ipfs_without_auth" != "1" && "$allow_public_ipfs_without_auth" != "true" && "$allow_public_ipfs_without_auth" != "yes" && "$allow_public_ipfs_without_auth" != "on" ]]     && [[ -z "${IPFS_API_BEARER_TOKEN:-}" && ( -z "${IPFS_API_BASIC_AUTH_USERNAME:-}" || -z "${IPFS_API_BASIC_AUTH_PASSWORD:-}" ) ]]; then
-    echo "Public IPFS_API_URL requires IPFS_API_BEARER_TOKEN, both IPFS_API_BASIC_AUTH variables, or ALLOW_PUBLIC_IPFS_API_WITHOUT_AUTH=1"
+    echo "Public IPFS API URL requires IPFS_API_BEARER_TOKEN, both IPFS_API_BASIC_AUTH variables, or ALLOW_PUBLIC_IPFS_API_WITHOUT_AUTH=1"
     reachability_failed=1
   fi
+fi
+
+if normalize_truthy_env_flag "${INDEXER_ALLOW_UNPROTECTED_ADMIN:-}"; then
+  echo "INDEXER_ALLOW_UNPROTECTED_ADMIN must be unset for release readiness."
+  reachability_failed=1
+fi
+
+if [[ -z "${INDEXER_ADMIN_TOKEN:-}" && -z "${INDEXER_ADMIN_ALLOWLIST:-}" ]]; then
+  echo "Release readiness requires INDEXER_ADMIN_TOKEN or INDEXER_ADMIN_ALLOWLIST."
+  reachability_failed=1
 fi
 
 if is_private_or_local_url "${NEXT_PUBLIC_INDEXER_API_URL:-}"; then
@@ -167,8 +204,14 @@ fi
 echo "Environment reachability check passed."
 
 echo ""
-echo "5) Deployment verification"
-if [[ -n "${RPC_URL:-}" || -n "${SEPOLIA_RPC_URL:-}" || -n "${NEXT_PUBLIC_RPC_URL:-}" || -n "${NEXT_PUBLIC_RPC_URL_${primary_chain_id}:-}" ]]; then
+echo "5) Writable IPFS backend health"
+npm run check:ipfs:backend
+
+echo ""
+echo "6) Deployment verification"
+scoped_primary_rpc_key="NEXT_PUBLIC_RPC_URL_${primary_chain_id}"
+scoped_primary_rpc_value="${!scoped_primary_rpc_key:-}"
+if [[ -n "${RPC_URL:-}" || -n "${SEPOLIA_RPC_URL:-}" || -n "${NEXT_PUBLIC_RPC_URL:-}" || -n "$scoped_primary_rpc_value" ]]; then
   npm run check:deployments
 else
   echo "Skipping npm run check:deployments because no chain RPC env is set."
@@ -176,10 +219,21 @@ else
 fi
 
 echo ""
-echo "6) Manual release checklist"
+echo "7) Runtime deployment health"
+runtime_health_base_url="${RELEASE_WEB_BASE_URL:-${NEXT_PUBLIC_APP_URL:-${NEXT_PUBLIC_SITE_URL:-}}}"
+if [[ -n "$runtime_health_base_url" || -n "${INDEXER_API_URL:-}" || -n "${NEXT_PUBLIC_INDEXER_API_URL:-}" ]]; then
+  npm run check:runtime-health
+else
+  echo "Skipping npm run check:runtime-health because no public web origin or runtime indexer URL is configured."
+  echo "Set RELEASE_WEB_BASE_URL, NEXT_PUBLIC_APP_URL, NEXT_PUBLIC_SITE_URL, INDEXER_API_URL, or NEXT_PUBLIC_INDEXER_API_URL to enable it."
+fi
+
+echo ""
+echo "8) Manual release checklist"
 echo "- Validate /, /mint, /profile, /profile/setup, and /profile/<name> in browser."
 echo "- Validate the Mint workspace tabs: Mint and publish, View collection, and Manage collection."
-echo "- Run local indexer + Postgres and verify /health plus profile/listing-management API responses."
+echo "- Verify indexer /health reports adminProtection.protected=true."
+echo "- Verify /api/deploy/health returns ok=true with walletconnect, ipfs, and indexer checks all green."
 echo "- Execute wallet flow on the configured primary chain: publish, deploy collection, manage collection, and profile resolution."
 echo "- Verify deployed contract addresses and owner/admin posture."
 echo "- Confirm .org deployment uses the same env/address set as validated above."

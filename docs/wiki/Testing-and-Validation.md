@@ -67,6 +67,7 @@ Then confirm:
 - collection, profile, and feed routes behave as expected
 - admin auth behaves as expected
 - listing sync and backfill endpoints work with the configured env
+- `npm run check:runtime-health` passes when `RELEASE_WEB_BASE_URL` or the public app URL env is set
 
 If Prisma is unavailable locally, also confirm the degraded startup mode still supports the local testing path you need.
 

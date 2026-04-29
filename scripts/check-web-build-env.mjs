@@ -26,6 +26,19 @@ function isTruthyEnvFlag(value) {
   return ["1", "true", "yes", "on"].includes(String(value || "").trim().toLowerCase());
 }
 
+function resolveIpfsApiUrls(env = process.env) {
+  const configured = [
+    ...String(env.IPFS_API_URLS || "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean),
+    String(env.IPFS_API_URL || "").trim(),
+    String(env.IPFS_API_BASE_URL || "").trim()
+  ].filter(Boolean);
+
+  return [...new Set(configured)];
+}
+
 function parseEnabledChainIds() {
   const raw = String(process.env.NEXT_PUBLIC_ENABLED_CHAIN_IDS || "").trim();
   if (!raw) return [PRIMARY_CHAIN_ID].filter(Boolean);
@@ -65,12 +78,13 @@ function validate() {
     }
   }
 
-  const ipfsApiUrl = String(process.env.IPFS_API_URL || process.env.IPFS_API_BASE_URL || "").trim();
+  const ipfsApiUrls = resolveIpfsApiUrls(process.env);
+  const ipfsApiUrl = ipfsApiUrls[0] || "";
   if (process.env.VERCEL) {
     if (!ipfsApiUrl) {
-      missing.push("IPFS_API_URL (or IPFS_API_BASE_URL)");
+      missing.push("IPFS_API_URL, IPFS_API_URLS, or IPFS_API_BASE_URL");
     } else if (isPrivateOrLocalUrl(ipfsApiUrl)) {
-      warnings.push(`IPFS_API_URL/IPFS_API_BASE_URL is private/local: ${ipfsApiUrl}`);
+      warnings.push(`IPFS API URL is private/local: ${ipfsApiUrl}`);
     } else if (!isTruthyEnvFlag(process.env.ALLOW_PUBLIC_IPFS_API_WITHOUT_AUTH)
       && !String(process.env.IPFS_API_BEARER_TOKEN || "").trim()
       && !(String(process.env.IPFS_API_BASIC_AUTH_USERNAME || "").trim()
