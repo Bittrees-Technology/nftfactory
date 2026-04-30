@@ -16,6 +16,7 @@ import {
   resolveIpfsGatewayBaseUrl
 } from "../../../../lib/ipfsUpload";
 import { sanitizeBackendErrorMessage } from "../../../../lib/networkErrors";
+import { parseFormDataRequestBody } from "../../../../lib/requestBody";
 import { validateRequestContentType } from "../../../../lib/requestContentType";
 import { rateLimitRequest, resolveRequestRateLimitConfig } from "../../../../lib/requestRateLimit";
 import { validateRequestContentLength } from "../../../../lib/requestSize";
@@ -156,7 +157,12 @@ export async function POST(request: Request) {
     const authHeaders = buildIpfsAuthHeaders(process.env);
     const gateway = resolveIpfsGatewayBaseUrl(process.env);
 
-    const formData = await request.formData();
+    const formDataResult = await parseFormDataRequestBody(request, "Upload payload");
+    if (!formDataResult.ok) {
+      return NextResponse.json({ error: formDataResult.error }, { status: formDataResult.status });
+    }
+
+    const formData = formDataResult.value;
     const image = formData.get("image");
     const audio = formData.get("audio");
     const name = String(formData.get("name") || "").trim();

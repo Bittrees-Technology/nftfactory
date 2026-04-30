@@ -16,6 +16,7 @@ import {
   resolveIpfsGatewayBaseUrl
 } from "../../../../lib/ipfsUpload";
 import { sanitizeBackendErrorMessage } from "../../../../lib/networkErrors";
+import { parseJsonRequestBody } from "../../../../lib/requestBody";
 import { validateRequestContentType } from "../../../../lib/requestContentType";
 import { rateLimitRequest, resolveRequestRateLimitConfig } from "../../../../lib/requestRateLimit";
 import { validateRequestContentLength } from "../../../../lib/requestSize";
@@ -134,7 +135,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: contentLengthError.error }, { status: contentLengthError.status });
     }
 
-    const payload = await request.json();
+    const payloadResult = await parseJsonRequestBody<{ profile?: unknown }>(request, "Profile payload");
+    if (!payloadResult.ok) {
+      return NextResponse.json({ error: payloadResult.error }, { status: payloadResult.status });
+    }
+
+    const payload = payloadResult.value;
     if (!payload || typeof payload !== "object" || !payload.profile || typeof payload.profile !== "object") {
       return NextResponse.json({ error: "Missing profile manifest payload." }, { status: 400 });
     }

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAppChain } from "../../../../lib/chains";
 import { getContractsConfig } from "../../../../lib/contracts";
 import { probeCollectionVerificationStatus, verifyCollectionProxy } from "../../../../lib/etherscanVerification";
+import { parseJsonRequestBody } from "../../../../lib/requestBody";
 import { validateRequestContentType } from "../../../../lib/requestContentType";
 import { rateLimitRequest, resolveRequestRateLimitConfig } from "../../../../lib/requestRateLimit";
 import { validateRequestContentLength } from "../../../../lib/requestSize";
@@ -52,13 +53,16 @@ export async function POST(request: NextRequest): Promise<Response> {
     return NextResponse.json({ error: contentLengthError.error }, { status: contentLengthError.status });
   }
 
-  const body = (await request.json().catch(() => null)) as
-    | {
-        chainId?: number;
-        collectionAddress?: string;
-        standard?: "ERC721" | "ERC1155";
-      }
-    | null;
+  const bodyResult = await parseJsonRequestBody<{
+    chainId?: number;
+    collectionAddress?: string;
+    standard?: "ERC721" | "ERC1155";
+  } | null>(request, "Verification payload");
+  if (!bodyResult.ok) {
+    return NextResponse.json({ error: bodyResult.error }, { status: bodyResult.status });
+  }
+
+  const body = bodyResult.value;
 
   const chainId = Number(body?.chainId);
   const collectionAddress = body?.collectionAddress;
