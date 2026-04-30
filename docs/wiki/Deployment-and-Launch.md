@@ -197,6 +197,7 @@ Before deployment or release validation:
 - [ ] `NEXT_PUBLIC_INDEXER_API_URL` points to a reachable host
 - [ ] web `/api/indexer/*` proxy is only being used for app-facing routes; admin and webhook indexer operations stay on the direct indexer host
 - [ ] IPFS upload service is configured (`IPFS_API_URL`, plus bearer auth for public endpoints, or `ALLOW_PUBLIC_IPFS_API_WITHOUT_AUTH=1` if the public endpoint is intentionally unauthenticated)
+- [ ] public write-route rate limits are reviewed for expected launch traffic (`IPFS_METADATA_RATE_LIMIT_*`, `PROFILE_PUBLISH_RATE_LIMIT_*`, and `COLLECTION_VERIFY_RATE_LIMIT_*`)
 - [ ] `https://nftfactory.org/api/deploy/health` returns `ok: true`
 - [ ] indexer `/health` reports `adminProtection.protected: true`
 - [ ] `npm run check:audit` passes and only reports the known RainbowKit/wagmi wallet-stack migration debt

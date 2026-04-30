@@ -51,7 +51,7 @@ The repo-root `.env.example` is now mainnet-first and should be filled with the 
 
 ## Local development
 
-Shared IPFS publishing commands in this repo use `projects/ipfs-evm-system`. Configure `IPFS_API_BASE_URL`, `IPFS_GATEWAY_BASE_URL`, and either `IPFS_API_BEARER_TOKEN` or both `IPFS_API_BASIC_AUTH_USERNAME` and `IPFS_API_BASIC_AUTH_PASSWORD` in the root environment for `npm run ipfs:publish`, `npm run ipfs:publish:metadata`, and `npm run ipfs:publish:profile-snapshot`. The web backend now resolves that same shared config through `@workspace/ipfs-storage`, so `IPFS_API_URL` is only needed when the deployed web app should override the shared IPFS API base URL. If `IPFS_API_URL` points at a public writable endpoint like `https://ipfs-api.nftfactory.org`, protect it with `IPFS_API_BEARER_TOKEN` or full basic auth unless the endpoint is intentionally public. The web API rejects oversized upload and proxy bodies up front; tune the `/api/indexer` proxy ceiling with `INDEXER_PROXY_MAX_BODY_BYTES` if your app-facing payloads need more than the default 1MB. The public web proxy now forwards only the app-facing indexer routes used by the UI; admin and webhook indexer endpoints should stay on the direct indexer host.
+Shared IPFS publishing commands in this repo use `projects/ipfs-evm-system`. Configure `IPFS_API_BASE_URL`, `IPFS_GATEWAY_BASE_URL`, and either `IPFS_API_BEARER_TOKEN` or both `IPFS_API_BASIC_AUTH_USERNAME` and `IPFS_API_BASIC_AUTH_PASSWORD` in the root environment for `npm run ipfs:publish`, `npm run ipfs:publish:metadata`, and `npm run ipfs:publish:profile-snapshot`. The web backend now resolves that same shared config through `@workspace/ipfs-storage`, so `IPFS_API_URL` is only needed when the deployed web app should override the shared IPFS API base URL. If `IPFS_API_URL` points at a public writable endpoint like `https://ipfs-api.nftfactory.org`, protect it with `IPFS_API_BEARER_TOKEN` or full basic auth unless the endpoint is intentionally public. The web API rejects oversized upload and proxy bodies up front; tune the `/api/indexer` proxy ceiling with `INDEXER_PROXY_MAX_BODY_BYTES` if your app-facing payloads need more than the default 1MB. The public `/api/ipfs/metadata`, `/api/profile/publish`, and `/api/collections/verify` routes now also enforce best-effort in-memory per-IP rate limits; tune them with `IPFS_METADATA_RATE_LIMIT_*`, `PROFILE_PUBLISH_RATE_LIMIT_*`, and `COLLECTION_VERIFY_RATE_LIMIT_*` if launch traffic needs different thresholds. The public web proxy now forwards only the app-facing indexer routes used by the UI; admin and webhook indexer endpoints should stay on the direct indexer host.
 1. `npm install`
 2. Start indexer API: `npm run dev:indexer`
 3. Start web app: `npm run dev:web`
@@ -137,6 +137,9 @@ Shared IPFS publishing commands in this repo use `projects/ipfs-evm-system`. Con
   - `NEXT_PUBLIC_INDEXER_API_URL=http://127.0.0.1:8787`
   - `INDEXER_API_URL=http://127.0.0.1:8787` (optional server-side override for app routes/proxies)
   - `INDEXER_PROXY_MAX_BODY_BYTES=1048576` (optional server-side cap for `/api/indexer` request bodies)
+  - `IPFS_METADATA_RATE_LIMIT_MAX_REQUESTS=10` and `IPFS_METADATA_RATE_LIMIT_WINDOW_MS=300000` (optional best-effort per-IP cap for `/api/ipfs/metadata`)
+  - `PROFILE_PUBLISH_RATE_LIMIT_MAX_REQUESTS=10` and `PROFILE_PUBLISH_RATE_LIMIT_WINDOW_MS=300000` (optional best-effort per-IP cap for `/api/profile/publish`)
+  - `COLLECTION_VERIFY_RATE_LIMIT_MAX_REQUESTS=30` and `COLLECTION_VERIFY_RATE_LIMIT_WINDOW_MS=60000` (optional best-effort per-IP cap for `/api/collections/verify`)
   - existing contract and wallet env vars already used by mint/list flows
 
 ### Local indexer bootstrap

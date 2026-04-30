@@ -3,11 +3,20 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAppChain } from "../../../../lib/chains";
 import { getContractsConfig } from "../../../../lib/contracts";
 import { probeCollectionVerificationStatus, verifyCollectionProxy } from "../../../../lib/etherscanVerification";
+import { rateLimitRequest, resolveRequestRateLimitConfig } from "../../../../lib/requestRateLimit";
 import { validateRequestContentLength } from "../../../../lib/requestSize";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 const MAX_COLLECTION_VERIFY_REQUEST_BYTES = 16 * 1024;
+const COLLECTION_VERIFY_RATE_LIMIT = {
+  bucket: "collection-verify",
+  errorMessage: "Too many collection verification requests. Retry later.",
+  ...resolveRequestRateLimitConfig(process.env, "COLLECTION_VERIFY", {
+    maxRequests: 30,
+    windowMs: 60_000
+  })
+} as const;
 
 const factoryImplementationAbi = [
   {
@@ -27,6 +36,11 @@ const factoryImplementationAbi = [
 ] as const;
 
 export async function POST(request: NextRequest): Promise<Response> {
+  const rateLimitError = rateLimitRequest(request, COLLECTION_VERIFY_RATE_LIMIT);
+  if (rateLimitError) {
+    return NextResponse.json({ error: rateLimitError.error }, { status: rateLimitError.status, headers: rateLimitError.headers });
+  }
+
   const contentLengthError = validateRequestContentLength(request, MAX_COLLECTION_VERIFY_REQUEST_BYTES, "Verification payload");
   if (contentLengthError) {
     return NextResponse.json({ error: contentLengthError.error }, { status: contentLengthError.status });

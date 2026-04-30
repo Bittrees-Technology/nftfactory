@@ -16,6 +16,7 @@ import {
   resolveIpfsGatewayBaseUrl
 } from "../../../../lib/ipfsUpload";
 import { sanitizeBackendErrorMessage } from "../../../../lib/networkErrors";
+import { rateLimitRequest, resolveRequestRateLimitConfig } from "../../../../lib/requestRateLimit";
 import { validateRequestContentLength } from "../../../../lib/requestSize";
 
 const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
@@ -23,6 +24,14 @@ const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
 const MAX_METADATA_REQUEST_BYTES = 48 * 1024 * 1024;
 const MAX_IPFS_UPLOAD_ATTEMPTS = 3;
 const IPFS_UPLOAD_RETRY_DELAYS_MS = [250, 750];
+const IPFS_METADATA_RATE_LIMIT = {
+  bucket: "ipfs-metadata",
+  errorMessage: "Too many IPFS metadata upload requests. Retry later.",
+  ...resolveRequestRateLimitConfig(process.env, "IPFS_METADATA", {
+    maxRequests: 10,
+    windowMs: 5 * 60_000
+  })
+} as const;
 
 function requireEnv(name: string): string {
   const value = process.env[name];
@@ -120,6 +129,11 @@ async function pinFileWithFailover(
 
 export async function POST(request: Request) {
   try {
+    const rateLimitError = rateLimitRequest(request, IPFS_METADATA_RATE_LIMIT);
+    if (rateLimitError) {
+      return NextResponse.json({ error: rateLimitError.error }, { status: rateLimitError.status, headers: rateLimitError.headers });
+    }
+
     const contentLengthError = validateRequestContentLength(request, MAX_METADATA_REQUEST_BYTES, "Upload payload");
     if (contentLengthError) {
       return NextResponse.json({ error: contentLengthError.error }, { status: contentLengthError.status });

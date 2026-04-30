@@ -16,11 +16,20 @@ import {
   resolveIpfsGatewayBaseUrl
 } from "../../../../lib/ipfsUpload";
 import { sanitizeBackendErrorMessage } from "../../../../lib/networkErrors";
+import { rateLimitRequest, resolveRequestRateLimitConfig } from "../../../../lib/requestRateLimit";
 import { validateRequestContentLength } from "../../../../lib/requestSize";
 
 const MAX_IPFS_UPLOAD_ATTEMPTS = 3;
 const IPFS_UPLOAD_RETRY_DELAYS_MS = [250, 750];
 const MAX_PROFILE_PUBLISH_REQUEST_BYTES = 512 * 1024;
+const PROFILE_PUBLISH_RATE_LIMIT = {
+  bucket: "profile-publish",
+  errorMessage: "Too many profile publish requests. Retry later.",
+  ...resolveRequestRateLimitConfig(process.env, "PROFILE_PUBLISH", {
+    maxRequests: 10,
+    windowMs: 5 * 60_000
+  })
+} as const;
 
 function requireEnv(name: string): string {
   const value = process.env[name];
@@ -109,6 +118,11 @@ async function pinJsonWithFailover(
 
 export async function POST(request: Request) {
   try {
+    const rateLimitError = rateLimitRequest(request, PROFILE_PUBLISH_RATE_LIMIT);
+    if (rateLimitError) {
+      return NextResponse.json({ error: rateLimitError.error }, { status: rateLimitError.status, headers: rateLimitError.headers });
+    }
+
     const contentLengthError = validateRequestContentLength(request, MAX_PROFILE_PUBLISH_REQUEST_BYTES, "Profile payload");
     if (contentLengthError) {
       return NextResponse.json({ error: contentLengthError.error }, { status: contentLengthError.status });
