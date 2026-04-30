@@ -16,6 +16,7 @@ import {
   resolveIpfsGatewayBaseUrl
 } from "../../../../lib/ipfsUpload";
 import { sanitizeBackendErrorMessage } from "../../../../lib/networkErrors";
+import { validateRequestContentType } from "../../../../lib/requestContentType";
 import { rateLimitRequest, resolveRequestRateLimitConfig } from "../../../../lib/requestRateLimit";
 import { validateRequestContentLength } from "../../../../lib/requestSize";
 
@@ -121,6 +122,11 @@ export async function POST(request: Request) {
     const rateLimitError = rateLimitRequest(request, PROFILE_PUBLISH_RATE_LIMIT);
     if (rateLimitError) {
       return NextResponse.json({ error: rateLimitError.error }, { status: rateLimitError.status, headers: rateLimitError.headers });
+    }
+
+    const contentTypeError = validateRequestContentType(request, "application/json", "Profile payload");
+    if (contentTypeError) {
+      return NextResponse.json({ error: contentTypeError.error }, { status: contentTypeError.status });
     }
 
     const contentLengthError = validateRequestContentLength(request, MAX_PROFILE_PUBLISH_REQUEST_BYTES, "Profile payload");

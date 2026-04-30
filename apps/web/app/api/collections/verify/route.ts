@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAppChain } from "../../../../lib/chains";
 import { getContractsConfig } from "../../../../lib/contracts";
 import { probeCollectionVerificationStatus, verifyCollectionProxy } from "../../../../lib/etherscanVerification";
+import { validateRequestContentType } from "../../../../lib/requestContentType";
 import { rateLimitRequest, resolveRequestRateLimitConfig } from "../../../../lib/requestRateLimit";
 import { validateRequestContentLength } from "../../../../lib/requestSize";
 
@@ -39,6 +40,11 @@ export async function POST(request: NextRequest): Promise<Response> {
   const rateLimitError = rateLimitRequest(request, COLLECTION_VERIFY_RATE_LIMIT);
   if (rateLimitError) {
     return NextResponse.json({ error: rateLimitError.error }, { status: rateLimitError.status, headers: rateLimitError.headers });
+  }
+
+  const contentTypeError = validateRequestContentType(request, "application/json", "Verification payload");
+  if (contentTypeError) {
+    return NextResponse.json({ error: contentTypeError.error }, { status: contentTypeError.status });
   }
 
   const contentLengthError = validateRequestContentLength(request, MAX_COLLECTION_VERIFY_REQUEST_BYTES, "Verification payload");
