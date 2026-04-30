@@ -15,6 +15,7 @@
     "hono": "^4.12.14",
     "lodash": "^4.17.24",
     "picomatch": "^4.0.4",
+    "postcss": "^8.5.12",
     "socket.io-parser": "^4.2.6",
     "vite": "^6.4.2"
   },
@@ -48,6 +49,7 @@
     "test:contracts": "npm --workspace packages/contracts run test",
     "docs:contracts-deps": "bash scripts/generate-contract-dependency-tree.sh",
     "check:ensv2": "node scripts/check-ensv2-readiness.mjs",
+    "check:audit": "node scripts/check-audit.mjs",
     "check:ipfs": "bash scripts/ipfs-readiness.sh",
     "check:ipfs:backend": "node scripts/check-ipfs-backend.mjs",
     "check:public-routes": "node scripts/check-public-routes.mjs",
@@ -65,5 +67,8 @@
     "ipfs:publish": "node scripts/publish-artifact.mjs",
     "ipfs:publish:metadata": "node scripts/publish-metadata-json.mjs",
     "ipfs:publish:profile-snapshot": "node scripts/publish-profile-snapshot.mjs"
+  },
+  "devDependencies": {
+    "postcss": "^8.5.12"
   }
 }
