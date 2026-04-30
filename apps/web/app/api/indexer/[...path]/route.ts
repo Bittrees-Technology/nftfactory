@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { getIndexerBaseUrl } from "../../../../lib/indexerApi";
 import { evaluateIndexerProxyRequest } from "../../../../lib/indexerProxyPolicy";
+import { isIndexerProxyWriteMethod, resolveIndexerProxyWriteRateLimitConfig } from "../../../../lib/indexerProxyRateLimit";
 import { sanitizeBackendErrorMessage } from "../../../../lib/networkErrors";
+import { rateLimitRequest } from "../../../../lib/requestRateLimit";
 import { validateRequestContentLength } from "../../../../lib/requestSize";
 import { resolveIndexerServerUrl } from "../../../../lib/indexerServerEnv";
 
@@ -14,6 +16,7 @@ const INDEXER_PROXY_MAX_BODY_BYTES = Math.max(
   16 * 1024,
   Number.parseInt(process.env.INDEXER_PROXY_MAX_BODY_BYTES || `${1024 * 1024}`, 10) || 1024 * 1024
 );
+const INDEXER_PROXY_WRITE_RATE_LIMIT = resolveIndexerProxyWriteRateLimitConfig(process.env);
 
 function toErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message || fallback : fallback;
@@ -52,6 +55,13 @@ async function proxyRequest(
     const policy = evaluateIndexerProxyRequest(method, upstreamPath);
     if (!policy.ok) {
       return NextResponse.json({ error: policy.error }, { status: policy.status });
+    }
+
+    if (isIndexerProxyWriteMethod(method)) {
+      const rateLimitError = rateLimitRequest(request, INDEXER_PROXY_WRITE_RATE_LIMIT);
+      if (rateLimitError) {
+        return NextResponse.json({ error: rateLimitError.error }, { status: rateLimitError.status, headers: rateLimitError.headers });
+      }
     }
 
     const baseUrl = (resolveIndexerServerUrl(chainId) || getIndexerBaseUrl(chainId ? { chainId } : undefined)).replace(/\/$/, "");
