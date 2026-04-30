@@ -121,8 +121,9 @@ printSection("Follow-up contract actions", [
 
 printSection("Production validation", [
   "1. Check https://nftfactory.org/api/deploy/health",
-  "2. Validate /, /mint, /profile, /profile/setup, /profile/[name], and /profile/moderation if in scope",
-  "3. Confirm IPFS upload, shared mint, creator collection deploy, collection verification, listing management, and profile resolution",
-  "4. Confirm the live web app and indexer use the same address set that passed the release gate",
-  "5. Archive final addresses, tx hashes, and owner posture in the deployment log"
+  "2. Run npm run check:public-routes with RELEASE_WEB_BASE_URL (and RELEASE_PROFILE_ROUTE_NAME if you have a real creator route to verify)",
+  "3. Validate /, /mint, /profile, /profile/setup, /profile/[name], and /profile/moderation in-browser if wallet-connected UX is in scope",
+  "4. Confirm IPFS upload, shared mint, creator collection deploy, collection verification, listing management, and profile resolution",
+  "5. Confirm the live web app and indexer use the same address set that passed the release gate",
+  "6. Archive final addresses, tx hashes, and owner posture in the deployment log"
 ]);

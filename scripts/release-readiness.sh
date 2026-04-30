@@ -229,8 +229,17 @@ else
 fi
 
 echo ""
-echo "8) Manual release checklist"
-echo "- Validate /, /mint, /profile, /profile/setup, and /profile/<name> in browser."
+echo "8) Public route smoke"
+if [[ -n "$runtime_health_base_url" ]]; then
+  npm run check:public-routes
+else
+  echo "Skipping npm run check:public-routes because no public web origin is configured."
+  echo "Set RELEASE_WEB_BASE_URL, NEXT_PUBLIC_APP_URL, or NEXT_PUBLIC_SITE_URL to enable it."
+fi
+
+echo ""
+echo "9) Manual release checklist"
+echo "- Validate /, /mint, /profile, /profile/setup, and /profile/<name> in browser if wallet-connected UX is in scope."
 echo "- Validate the Mint workspace tabs: Mint and publish, View collection, and Manage collection."
 echo "- Verify indexer /health reports adminProtection.protected=true."
 echo "- Verify /api/deploy/health returns ok=true with walletconnect, ipfs, and indexer checks all green."
