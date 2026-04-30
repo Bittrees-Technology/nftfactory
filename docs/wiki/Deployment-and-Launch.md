@@ -199,7 +199,7 @@ Before deployment or release validation:
 - [ ] `https://nftfactory.org/api/deploy/health` returns `ok: true`
 - [ ] indexer `/health` reports `adminProtection.protected: true`
 - [ ] `npm run check:audit` passes and only reports the known RainbowKit/wagmi wallet-stack migration debt
-- [ ] `npm run check:public-routes` passes against the public site origin
+- [ ] `npm run check:public-routes` passes against the public site origin and confirms the deployed browser-security headers
 - [ ] `npm run verify:population -- --config ./path/to/config.json` passes for one shared-mint case and one custom-collection case
 
 ## Operational launch gates

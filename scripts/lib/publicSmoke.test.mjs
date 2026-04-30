@@ -4,6 +4,7 @@ import {
   buildBasicAuthHeader,
   buildPublicSmokeChecks,
   resolveReleaseSmokeBasicAuth,
+  validatePublicSmokeSecurityHeaders,
   validatePublicSmokeResponse
 } from "./publicSmoke.mjs";
 
@@ -74,5 +75,43 @@ test("validatePublicSmokeResponse enforces content-type and body shape", () => {
       bodyText: "not-json"
     }),
     "Response body was not valid JSON."
+  );
+});
+
+test("validatePublicSmokeSecurityHeaders enforces the deployed header baseline", () => {
+  const response = new Response("<html></html>", {
+    status: 200,
+    headers: {
+      "content-type": "text/html; charset=utf-8",
+      "x-content-type-options": "nosniff",
+      "referrer-policy": "strict-origin-when-cross-origin",
+      "x-frame-options": "DENY",
+      "permissions-policy": "camera=(), microphone=(), geolocation=(), browsing-topics=()",
+      "strict-transport-security": "max-age=31536000; includeSubDomains"
+    }
+  });
+
+  assert.equal(
+    validatePublicSmokeSecurityHeaders({
+      response,
+      requireStrictTransportSecurity: true
+    }),
+    null
+  );
+
+  const missingHeaderResponse = new Response("<html></html>", {
+    status: 200,
+    headers: {
+      "content-type": "text/html; charset=utf-8",
+      "x-content-type-options": "nosniff"
+    }
+  });
+
+  assert.equal(
+    validatePublicSmokeSecurityHeaders({
+      response: missingHeaderResponse,
+      requireStrictTransportSecurity: false
+    }),
+    "Missing security header: referrer-policy"
   );
 });

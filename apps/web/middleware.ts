@@ -5,29 +5,38 @@ import {
   isAuthorizedBasicAuth,
   resolveBasicAuthConfig
 } from "./lib/basicAuth";
+import { applySecurityHeaders } from "./lib/securityHeaders";
+
+function buildMiddlewareResponse(response: NextResponse, basicAuthEnabled: boolean): NextResponse {
+  applySecurityHeaders(response.headers, {
+    basicAuthEnabled,
+    production: process.env.NODE_ENV === "production"
+  });
+  return response;
+}
 
 export function middleware(request: NextRequest): NextResponse {
   const config = resolveBasicAuthConfig();
   if (!config.enabled) {
-    return NextResponse.next();
+    return buildMiddlewareResponse(NextResponse.next(), false);
   }
 
   if (config.misconfigured) {
-    return new NextResponse("Password protection is enabled but SITE_BASIC_AUTH_PASSWORD is missing.", {
+    return buildMiddlewareResponse(new NextResponse("Password protection is enabled but SITE_BASIC_AUTH_PASSWORD is missing.", {
       status: 500
-    });
+    }), true);
   }
 
   if (isAuthorizedBasicAuth(request.headers.get("authorization"))) {
-    return NextResponse.next();
+    return buildMiddlewareResponse(NextResponse.next(), true);
   }
 
-  return new NextResponse("Authentication required.", {
+  return buildMiddlewareResponse(new NextResponse("Authentication required.", {
     status: 401,
     headers: {
       "WWW-Authenticate": buildBasicAuthChallenge()
     }
-  });
+  }), true);
 }
 
 export const config = {

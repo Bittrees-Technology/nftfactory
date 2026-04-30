@@ -69,7 +69,7 @@ Then confirm:
 - listing sync and backfill endpoints work with the configured env
 - `npm run check:audit` passes and only reports the known RainbowKit/wagmi wallet-stack migration debt
 - `npm run check:runtime-health` passes when `RELEASE_WEB_BASE_URL` or the public app URL env is set
-- `npm run check:public-routes` passes when the deployed web origin is configured
+- `npm run check:public-routes` passes when the deployed web origin is configured, including the baseline browser-security headers on page and API responses
 
 If Prisma is unavailable locally, also confirm the degraded startup mode still supports the local testing path you need.
 

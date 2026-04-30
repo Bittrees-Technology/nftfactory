@@ -1,5 +1,12 @@
 import { isTruthyEnvFlag, resolveReleaseWebBaseUrl } from "./runtimeHealth.mjs";
 
+const REQUIRED_SECURITY_HEADERS = Object.freeze({
+  "x-content-type-options": "nosniff",
+  "referrer-policy": "strict-origin-when-cross-origin",
+  "x-frame-options": "DENY",
+  "permissions-policy": "camera=(), microphone=(), geolocation=(), browsing-topics=()"
+});
+
 export function resolveReleaseSmokeBasicAuth(env = process.env) {
   const password = String(env.RELEASE_SMOKE_BASIC_AUTH_PASSWORD || env.SITE_BASIC_AUTH_PASSWORD || "").trim();
   const username = String(env.RELEASE_SMOKE_BASIC_AUTH_USERNAME || env.SITE_BASIC_AUTH_USERNAME || "viewer").trim() || "viewer";
@@ -54,6 +61,30 @@ export function buildPublicSmokeChecks(env = process.env) {
   }
 
   return checks;
+}
+
+export function validatePublicSmokeSecurityHeaders({ response, requireStrictTransportSecurity = false }) {
+  for (const [name, expectedValue] of Object.entries(REQUIRED_SECURITY_HEADERS)) {
+    const actualValue = String(response.headers.get(name) || "");
+    if (!actualValue) {
+      return `Missing security header: ${name}`;
+    }
+    if (actualValue !== expectedValue) {
+      return `Unexpected security header value for ${name}: ${actualValue}`;
+    }
+  }
+
+  if (requireStrictTransportSecurity) {
+    const strictTransportSecurity = String(response.headers.get("strict-transport-security") || "");
+    if (!strictTransportSecurity) {
+      return "Missing security header: strict-transport-security";
+    }
+    if (!strictTransportSecurity.toLowerCase().includes("max-age=")) {
+      return `Unexpected security header value for strict-transport-security: ${strictTransportSecurity}`;
+    }
+  }
+
+  return null;
 }
 
 export function validatePublicSmokeResponse({ expectedContentType, response, bodyText }) {

@@ -1,6 +1,12 @@
 #!/usr/bin/env node
 
-import { buildBasicAuthHeader, buildPublicSmokeChecks, resolveReleaseSmokeBasicAuth, validatePublicSmokeResponse } from "./lib/publicSmoke.mjs";
+import {
+  buildBasicAuthHeader,
+  buildPublicSmokeChecks,
+  resolveReleaseSmokeBasicAuth,
+  validatePublicSmokeResponse,
+  validatePublicSmokeSecurityHeaders
+} from "./lib/publicSmoke.mjs";
 import { resolveReleaseWebBaseUrl } from "./lib/runtimeHealth.mjs";
 
 const REQUEST_TIMEOUT_MS = 8_000;
@@ -42,6 +48,7 @@ async function main() {
   const checks = buildPublicSmokeChecks(process.env);
   const basicAuth = resolveReleaseSmokeBasicAuth(process.env);
   const authorization = buildBasicAuthHeader(basicAuth.username, basicAuth.password);
+  const requireStrictTransportSecurity = normalizeBaseUrl(baseUrl).startsWith("https://");
 
   let failed = false;
   for (const check of checks) {
@@ -56,14 +63,22 @@ async function main() {
         response,
         bodyText
       });
+      const securityFailure = validatePublicSmokeSecurityHeaders({
+        response,
+        requireStrictTransportSecurity
+      });
 
       if (failure) {
         failed = true;
         console.log(`FAIL ${check.label} ${maskUrl(url)}`);
         console.log(`  ${failure}`);
+      } else if (securityFailure) {
+        failed = true;
+        console.log(`FAIL ${check.label} ${maskUrl(url)}`);
+        console.log(`  ${securityFailure}`);
       } else {
         console.log(`PASS ${check.label} ${maskUrl(url)}`);
-        console.log(`  ${check.expectedContentType}`);
+        console.log(`  ${check.expectedContentType} + security headers`);
       }
     } catch (error) {
       failed = true;
