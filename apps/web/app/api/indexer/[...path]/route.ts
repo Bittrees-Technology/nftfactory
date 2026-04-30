@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getIndexerBaseUrl } from "../../../../lib/indexerApi";
+import { evaluateIndexerProxyRequest } from "../../../../lib/indexerProxyPolicy";
 import { sanitizeBackendErrorMessage } from "../../../../lib/networkErrors";
 import { validateRequestContentLength } from "../../../../lib/requestSize";
 import { resolveIndexerServerUrl } from "../../../../lib/indexerServerEnv";
@@ -47,10 +48,15 @@ async function proxyRequest(
     inboundUrl.searchParams.delete("_chainId");
 
     const upstreamPath = `/${path.join("/")}`.replace(/\/+/g, "/");
+    const method = request.method.toUpperCase();
+    const policy = evaluateIndexerProxyRequest(method, upstreamPath);
+    if (!policy.ok) {
+      return NextResponse.json({ error: policy.error }, { status: policy.status });
+    }
+
     const baseUrl = (resolveIndexerServerUrl(chainId) || getIndexerBaseUrl(chainId ? { chainId } : undefined)).replace(/\/$/, "");
     const upstreamUrl = `${baseUrl}${upstreamPath}${inboundUrl.search}`;
 
-    const method = request.method.toUpperCase();
     const hasBody = !["GET", "HEAD"].includes(method);
     if (hasBody) {
       const contentLengthError = validateRequestContentLength(request, INDEXER_PROXY_MAX_BODY_BYTES, "Indexer proxy payload");
