@@ -16,9 +16,11 @@ import {
   resolveIpfsGatewayBaseUrl
 } from "../../../../lib/ipfsUpload";
 import { sanitizeBackendErrorMessage } from "../../../../lib/networkErrors";
+import { validateRequestContentLength } from "../../../../lib/requestSize";
 
 const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
 const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
+const MAX_METADATA_REQUEST_BYTES = 48 * 1024 * 1024;
 const MAX_IPFS_UPLOAD_ATTEMPTS = 3;
 const IPFS_UPLOAD_RETRY_DELAYS_MS = [250, 750];
 
@@ -118,6 +120,11 @@ async function pinFileWithFailover(
 
 export async function POST(request: Request) {
   try {
+    const contentLengthError = validateRequestContentLength(request, MAX_METADATA_REQUEST_BYTES, "Upload payload");
+    if (contentLengthError) {
+      return NextResponse.json({ error: contentLengthError.error }, { status: contentLengthError.status });
+    }
+
     const configuredApiUrls = resolveIpfsApiUrls(process.env);
     const apiUrls = configuredApiUrls.length > 0
       ? configuredApiUrls.map((url) => buildIpfsAddUrl(url))

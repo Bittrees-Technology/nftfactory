@@ -3,9 +3,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAppChain } from "../../../../lib/chains";
 import { getContractsConfig } from "../../../../lib/contracts";
 import { probeCollectionVerificationStatus, verifyCollectionProxy } from "../../../../lib/etherscanVerification";
+import { validateRequestContentLength } from "../../../../lib/requestSize";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+const MAX_COLLECTION_VERIFY_REQUEST_BYTES = 16 * 1024;
 
 const factoryImplementationAbi = [
   {
@@ -25,6 +27,11 @@ const factoryImplementationAbi = [
 ] as const;
 
 export async function POST(request: NextRequest): Promise<Response> {
+  const contentLengthError = validateRequestContentLength(request, MAX_COLLECTION_VERIFY_REQUEST_BYTES, "Verification payload");
+  if (contentLengthError) {
+    return NextResponse.json({ error: contentLengthError.error }, { status: contentLengthError.status });
+  }
+
   const body = (await request.json().catch(() => null)) as
     | {
         chainId?: number;

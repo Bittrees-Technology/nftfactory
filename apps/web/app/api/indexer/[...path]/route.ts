@@ -1,12 +1,17 @@
 import { NextResponse } from "next/server";
 import { getIndexerBaseUrl } from "../../../../lib/indexerApi";
 import { sanitizeBackendErrorMessage } from "../../../../lib/networkErrors";
+import { validateRequestContentLength } from "../../../../lib/requestSize";
 import { resolveIndexerServerUrl } from "../../../../lib/indexerServerEnv";
 
 export const dynamic = "force-dynamic";
 const INDEXER_PROXY_TIMEOUT_MS = Math.max(
   1_000,
   Number.parseInt(process.env.INDEXER_PROXY_TIMEOUT_MS || "8000", 10) || 8_000
+);
+const INDEXER_PROXY_MAX_BODY_BYTES = Math.max(
+  16 * 1024,
+  Number.parseInt(process.env.INDEXER_PROXY_MAX_BODY_BYTES || `${1024 * 1024}`, 10) || 1024 * 1024
 );
 
 function toErrorMessage(error: unknown, fallback: string): string {
@@ -47,6 +52,12 @@ async function proxyRequest(
 
     const method = request.method.toUpperCase();
     const hasBody = !["GET", "HEAD"].includes(method);
+    if (hasBody) {
+      const contentLengthError = validateRequestContentLength(request, INDEXER_PROXY_MAX_BODY_BYTES, "Indexer proxy payload");
+      if (contentLengthError) {
+        return NextResponse.json({ error: contentLengthError.error }, { status: contentLengthError.status });
+      }
+    }
     const body = hasBody ? await request.text() : undefined;
     const contentType = request.headers.get("Content-Type");
     const { signal, cleanup } = withTimeout();

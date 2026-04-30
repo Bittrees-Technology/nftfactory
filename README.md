@@ -51,7 +51,7 @@ The repo-root `.env.example` is now mainnet-first and should be filled with the 
 
 ## Local development
 
-Shared IPFS publishing commands in this repo use `projects/ipfs-evm-system`. Configure `IPFS_API_BASE_URL`, `IPFS_GATEWAY_BASE_URL`, and either `IPFS_API_BEARER_TOKEN` or both `IPFS_API_BASIC_AUTH_USERNAME` and `IPFS_API_BASIC_AUTH_PASSWORD` in the root environment for `npm run ipfs:publish`, `npm run ipfs:publish:metadata`, and `npm run ipfs:publish:profile-snapshot`. The web backend now resolves that same shared config through `@workspace/ipfs-storage`, so `IPFS_API_URL` is only needed when the deployed web app should override the shared IPFS API base URL. If `IPFS_API_URL` points at a public writable endpoint like `https://ipfs-api.nftfactory.org`, protect it with `IPFS_API_BEARER_TOKEN` or full basic auth unless the endpoint is intentionally public.
+Shared IPFS publishing commands in this repo use `projects/ipfs-evm-system`. Configure `IPFS_API_BASE_URL`, `IPFS_GATEWAY_BASE_URL`, and either `IPFS_API_BEARER_TOKEN` or both `IPFS_API_BASIC_AUTH_USERNAME` and `IPFS_API_BASIC_AUTH_PASSWORD` in the root environment for `npm run ipfs:publish`, `npm run ipfs:publish:metadata`, and `npm run ipfs:publish:profile-snapshot`. The web backend now resolves that same shared config through `@workspace/ipfs-storage`, so `IPFS_API_URL` is only needed when the deployed web app should override the shared IPFS API base URL. If `IPFS_API_URL` points at a public writable endpoint like `https://ipfs-api.nftfactory.org`, protect it with `IPFS_API_BEARER_TOKEN` or full basic auth unless the endpoint is intentionally public. The web API rejects oversized upload and proxy bodies up front; tune the `/api/indexer` proxy ceiling with `INDEXER_PROXY_MAX_BODY_BYTES` if your admin payloads need more than the default 1MB.
 1. `npm install`
 2. Start indexer API: `npm run dev:indexer`
 3. Start web app: `npm run dev:web`
@@ -136,6 +136,7 @@ Shared IPFS publishing commands in this repo use `projects/ipfs-evm-system`. Con
 - `apps/web/.env.local`
   - `NEXT_PUBLIC_INDEXER_API_URL=http://127.0.0.1:8787`
   - `INDEXER_API_URL=http://127.0.0.1:8787` (optional server-side override for app routes/proxies)
+  - `INDEXER_PROXY_MAX_BODY_BYTES=1048576` (optional server-side cap for `/api/indexer` request bodies)
   - existing contract and wallet env vars already used by mint/list flows
 
 ### Local indexer bootstrap

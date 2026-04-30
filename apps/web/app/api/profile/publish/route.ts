@@ -16,9 +16,11 @@ import {
   resolveIpfsGatewayBaseUrl
 } from "../../../../lib/ipfsUpload";
 import { sanitizeBackendErrorMessage } from "../../../../lib/networkErrors";
+import { validateRequestContentLength } from "../../../../lib/requestSize";
 
 const MAX_IPFS_UPLOAD_ATTEMPTS = 3;
 const IPFS_UPLOAD_RETRY_DELAYS_MS = [250, 750];
+const MAX_PROFILE_PUBLISH_REQUEST_BYTES = 512 * 1024;
 
 function requireEnv(name: string): string {
   const value = process.env[name];
@@ -107,6 +109,11 @@ async function pinJsonWithFailover(
 
 export async function POST(request: Request) {
   try {
+    const contentLengthError = validateRequestContentLength(request, MAX_PROFILE_PUBLISH_REQUEST_BYTES, "Profile payload");
+    if (contentLengthError) {
+      return NextResponse.json({ error: contentLengthError.error }, { status: contentLengthError.status });
+    }
+
     const payload = await request.json();
     if (!payload || typeof payload !== "object" || !payload.profile || typeof payload.profile !== "object") {
       return NextResponse.json({ error: "Missing profile manifest payload." }, { status: 400 });
