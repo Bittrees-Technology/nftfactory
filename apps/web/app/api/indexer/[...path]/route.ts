@@ -3,6 +3,7 @@ import { getIndexerBaseUrl } from "../../../../lib/indexerApi";
 import { evaluateIndexerProxyRequest } from "../../../../lib/indexerProxyPolicy";
 import { isIndexerProxyWriteMethod, resolveIndexerProxyWriteRateLimitConfig } from "../../../../lib/indexerProxyRateLimit";
 import { sanitizeBackendErrorMessage } from "../../../../lib/networkErrors";
+import { validateRequestContentType } from "../../../../lib/requestContentType";
 import { rateLimitRequest } from "../../../../lib/requestRateLimit";
 import { validateRequestContentLength } from "../../../../lib/requestSize";
 import { resolveIndexerServerUrl } from "../../../../lib/indexerServerEnv";
@@ -61,6 +62,11 @@ async function proxyRequest(
       const rateLimitError = rateLimitRequest(request, INDEXER_PROXY_WRITE_RATE_LIMIT);
       if (rateLimitError) {
         return NextResponse.json({ error: rateLimitError.error }, { status: rateLimitError.status, headers: rateLimitError.headers });
+      }
+
+      const contentTypeError = validateRequestContentType(request, "application/json", "Indexer proxy payload");
+      if (contentTypeError) {
+        return NextResponse.json({ error: contentTypeError.error }, { status: contentTypeError.status });
       }
     }
 
