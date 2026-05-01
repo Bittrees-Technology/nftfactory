@@ -1,0 +1,11 @@
+[Unit]
+Description=NFTFactory Indexer Backup Timer
+
+[Timer]
+OnCalendar=__ON_CALENDAR__
+Persistent=true
+RandomizedDelaySec=300
+Unit=nftfactory-indexer-backup.service
+
+[Install]
+WantedBy=timers.target

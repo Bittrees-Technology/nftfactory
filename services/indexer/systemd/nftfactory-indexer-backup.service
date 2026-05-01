@@ -1,0 +1,12 @@
+[Unit]
+Description=NFTFactory Indexer Backup Runner
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=__ROOT_DIR__
+Environment=HOME=__HOME__
+Environment=PATH=__PATH__
+EnvironmentFile=-__ROOT_DIR__/.env
+ExecStart=__NODE_BIN__ __ROOT_DIR__/scripts/run-indexer-backup.mjs

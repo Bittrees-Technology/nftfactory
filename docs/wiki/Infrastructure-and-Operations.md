@@ -232,6 +232,13 @@ The indexer backup flow now has integrity sidecars and a host-side verification 
 - `INDEXER_BACKUP_RETENTION_COUNT`
 - `INDEXER_BACKUP_RETENTION_DAYS`
 
+To persist scheduled backups on the host:
+
+- `npm run indexer:db:backup:systemd:install -- --now`
+- or `npm run indexer:db:backup:cron:install`
+
+The systemd timer defaults to `daily` and can be overridden with `INDEXER_BACKUP_SYSTEMD_ONCALENDAR`. The cron fallback defaults to `17 3 * * *` and can be overridden with `INDEXER_BACKUP_CRON_SCHEDULE`.
+
 `indexer:db:backup:check` verifies that the latest dump exists, is not stale, matches its sidecars when present, and is readable through `pg_restore --list`. If you want the root release gate to enforce that on the operator host, set:
 
 - `INDEXER_REQUIRE_FRESH_BACKUP=1`

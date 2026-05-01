@@ -222,6 +222,7 @@ Before deployment or release validation:
 - [ ] indexer `/health` reports live primary-chain RPC redundancy, and `webhooks.configured: true` when `REQUIRE_INDEXER_WEBHOOKS_CONFIGURED=1` is part of the release posture
 - [ ] a fresh readable indexer backup exists and `npm run indexer:db:backup:check` passes on the operator host if backup gating is part of the release posture
 - [ ] scheduled backup generation is wired with `npm run indexer:db:backup:run` if the host should retain rolling local dumps
+- [ ] backup scheduling persistence is installed through `indexer:db:backup:systemd:install` or `indexer:db:backup:cron:install` when the host should manage its own dumps
 - [ ] post-launch runtime monitor is wired (`npm run monitor:runtime`) and, if desired, a webhook destination is configured with `RUNTIME_MONITOR_WEBHOOK_URL`
 - [ ] `npm run check:audit` passes and only reports the known RainbowKit/wagmi wallet-stack migration debt
 - [ ] `npm run check:public-routes` passes against the public site origin and confirms the deployed browser-security headers
