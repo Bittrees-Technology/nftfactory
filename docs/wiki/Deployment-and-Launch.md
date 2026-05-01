@@ -187,10 +187,11 @@ Use `indexer:host:restart-api` when you need to reload the API process without d
 To duplicate indexed state to another server:
 
 1. `npm run indexer:db:export`
-2. copy the generated `.runtime-host/backups/indexer-*.dump` file
-3. set `DATABASE_URL` on the destination
-4. `npm run indexer:db:import -- /path/to/indexer.dump`
-5. `npm run indexer:host:restart-api`
+2. `npm run indexer:db:backup:check`
+3. copy the generated `.runtime-host/backups/indexer-*.dump` file and its `.sha256` / `.json` sidecars
+4. set `DATABASE_URL` on the destination
+5. `npm run indexer:db:import -- /path/to/indexer.dump`
+6. `npm run indexer:host:restart-api`
 
 Cloudflare should map:
 
@@ -219,6 +220,7 @@ Before deployment or release validation:
 - [ ] `https://nftfactory.org/api/deploy/health` returns `ok: true`
 - [ ] indexer `/health` reports `adminProtection.protected: true`
 - [ ] indexer `/health` reports live primary-chain RPC redundancy, and `webhooks.configured: true` when `REQUIRE_INDEXER_WEBHOOKS_CONFIGURED=1` is part of the release posture
+- [ ] a fresh readable indexer backup exists and `npm run indexer:db:backup:check` passes on the operator host if backup gating is part of the release posture
 - [ ] post-launch runtime monitor is wired (`npm run monitor:runtime`) and, if desired, a webhook destination is configured with `RUNTIME_MONITOR_WEBHOOK_URL`
 - [ ] `npm run check:audit` passes and only reports the known RainbowKit/wagmi wallet-stack migration debt
 - [ ] `npm run check:public-routes` passes against the public site origin and confirms the deployed browser-security headers
@@ -237,6 +239,7 @@ Before deployment or release validation:
 - [ ] creator collection implementations are verified on the explorer
 - [ ] fresh creator collection proxies can be verified from the web app
 - [ ] admin backfill and listing-sync tools behave as expected
+- [ ] backup exports are being generated with `.sha256` and `.json` sidecars, and restore verification is tested
 - [ ] profile, discover, and moderation routes are stable
 - [ ] protocol ownership is transferred where required
 - [ ] runtime monitoring is live against the public origin, indexer host, and writable IPFS API

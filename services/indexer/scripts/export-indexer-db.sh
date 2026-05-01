@@ -36,4 +36,5 @@ fi
 
 echo "Exporting indexer database to $OUTPUT_PATH"
 pg_dump --format=custom --file "$OUTPUT_PATH" "$DATABASE_URL"
+node "$SCRIPT_DIR/write-indexer-backup-manifest.mjs" "$OUTPUT_PATH"
 echo "Created $OUTPUT_PATH"

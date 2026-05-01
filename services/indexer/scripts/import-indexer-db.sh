@@ -39,6 +39,8 @@ if [ -x "$LOCAL_POSTGRES_BIN/pg_restore" ]; then
   export LD_LIBRARY_PATH="$LOCAL_POSTGRES_LIB${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 fi
 
+node "$SCRIPT_DIR/check-indexer-backup.mjs" --skip-age-check "$INPUT_PATH"
+
 echo "Restoring indexer database from $INPUT_PATH"
 pg_restore --clean --if-exists --no-owner --no-privileges --dbname "$DATABASE_URL" "$INPUT_PATH"
 echo "Restore complete."

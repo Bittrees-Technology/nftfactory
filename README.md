@@ -48,6 +48,7 @@ For the live writable IPFS path itself, run `npm run check:ipfs:backend` after e
 For deployed runtime wiring, set `RELEASE_WEB_BASE_URL` (or `NEXT_PUBLIC_APP_URL` / `NEXT_PUBLIC_SITE_URL`) and run `npm run check:runtime-health` to verify `/api/deploy/health` plus indexer `/health` with protected admin routes, live primary-chain RPC redundancy, and optional webhook configuration when `REQUIRE_INDEXER_WEBHOOKS_CONFIGURED=1` is set.
 For a lightweight deployed-site smoke test, run `npm run check:public-routes` to verify `/`, `/mint`, `/discover`, `/profile`, `/profile/setup`, `/api/profiles`, and an optional real `/profile/[name]` route when `RELEASE_PROFILE_ROUTE_NAME` is set, along with the deployed browser-security header baseline.
 For post-launch monitoring, run `npm run monitor:runtime` from a scheduler or external watchdog. It checks the public site root, `/api/deploy/health`, configured indexer `/health` targets, the writable IPFS API, and optionally one pinned gateway CID when `RUNTIME_MONITOR_IPFS_GATEWAY_CID` is set. If `RUNTIME_MONITOR_WEBHOOK_URL` is configured, it posts failure and recovery alerts with stateful dedupe.
+For indexer backup hygiene, run `npm run indexer:db:backup:check`. New `indexer:db:export` dumps now write matching `.sha256` and `.json` sidecars, and `indexer:db:import` verifies the dump before restore. Set `INDEXER_REQUIRE_FRESH_BACKUP=1` plus `INDEXER_BACKUP_DIR` or `INDEXER_BACKUP_PATH` if you want `npm run check:release` to enforce backup freshness on the operator host.
 For deployed-network verification, run `npm run check:deployments` with the real target-chain RPC and explicit deployed addresses. If you run it with no contract env values set, it still falls back to `docs/deployments.sepolia-app-wired.json`, but that fallback should be treated as Sepolia-only scaffolding, not a production source of truth.
 The repo-root `.env.example` is now mainnet-first and should be filled with the exact live deployment values for RPC, indexer, wallet, explorer, and IPFS.
 
@@ -191,10 +192,12 @@ To copy the warmed indexer data to another machine:
 
 1. export a dump:
    - `npm run indexer:db:export`
-2. copy the resulting `.runtime-host/backups/indexer-*.dump` file to the destination
-3. on the destination host, point `DATABASE_URL` at the target Postgres and run:
+2. verify it:
+   - `npm run indexer:db:backup:check`
+3. copy the resulting `.runtime-host/backups/indexer-*.dump` file plus its `.sha256` and `.json` sidecars to the destination
+4. on the destination host, point `DATABASE_URL` at the target Postgres and run:
    - `npm run indexer:db:import -- /path/to/indexer.dump`
-4. restart the indexer API:
+5. restart the indexer API:
    - `npm run indexer:host:restart-api`
 
 That path ensures Postgres, Prisma client generation, and Prisma migrations before starting the HTTP API.

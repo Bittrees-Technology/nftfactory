@@ -41,6 +41,7 @@
     "indexer:systemd:uninstall": "npm --workspace services/indexer run systemd:uninstall --",
     "indexer:cron:install": "npm --workspace services/indexer run cron:install --",
     "indexer:cron:uninstall": "npm --workspace services/indexer run cron:uninstall --",
+    "indexer:db:backup:check": "npm --workspace services/indexer run db:backup:check --",
     "rpc:selfhosted:start": "bash ./scripts/start-self-hosted-sepolia-stack.sh",
     "rpc:selfhosted:status": "bash ./scripts/status-self-hosted-sepolia-stack.sh",
     "rpc:selfhosted:stop": "bash ./scripts/stop-self-hosted-sepolia-stack.sh",

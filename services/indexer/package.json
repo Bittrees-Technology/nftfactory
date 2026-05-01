@@ -26,6 +26,7 @@
     "cron:uninstall": "bash ./scripts/uninstall-cron-supervisor.sh",
     "db:export": "bash ./scripts/export-indexer-db.sh",
     "db:import": "bash ./scripts/import-indexer-db.sh",
+    "db:backup:check": "node ./scripts/check-indexer-backup.mjs",
     "admin:backfill-registry": "node --import tsx ./scripts/run-backfill.ts",
     "admin:seed-ipfs-cids": "node --import tsx ./scripts/seed-ipfs-cids.ts",
     "admin:backfill-token-presentation": "tsx scripts/backfill-token-presentation.ts",

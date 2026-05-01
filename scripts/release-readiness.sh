@@ -246,11 +246,21 @@ else
 fi
 
 echo ""
-echo "11) Manual release checklist"
+echo "11) Indexer backup freshness"
+if normalize_truthy_env_flag "${INDEXER_REQUIRE_FRESH_BACKUP:-}" || [[ -n "${INDEXER_BACKUP_DIR:-}" || -n "${INDEXER_BACKUP_PATH:-}" ]]; then
+  npm run indexer:db:backup:check
+else
+  echo "Skipping npm run indexer:db:backup:check because no backup gate is configured."
+  echo "Set INDEXER_REQUIRE_FRESH_BACKUP=1, INDEXER_BACKUP_DIR, or INDEXER_BACKUP_PATH to enable it."
+fi
+
+echo ""
+echo "12) Manual release checklist"
 echo "- Validate /, /mint, /profile, /profile/setup, and /profile/<name> in browser if wallet-connected UX is in scope."
 echo "- Validate the Mint workspace tabs: Mint and publish, View collection, and Manage collection."
 echo "- Verify indexer /health reports adminProtection.protected=true."
 echo "- Verify /api/deploy/health returns ok=true with walletconnect, ipfs, and indexer checks all green."
+echo "- Verify a fresh readable indexer backup exists, with matching .sha256 and .json sidecars if backup gating is in scope."
 echo "- Execute wallet flow on the configured primary chain: publish, deploy collection, manage collection, and profile resolution."
 echo "- Verify deployed contract addresses and owner/admin posture."
 echo "- Confirm .org deployment uses the same env/address set as validated above."

@@ -213,6 +213,27 @@ journalctl --user -u ipfs -f
 journalctl --user -u cloudflared -f
 ```
 
+## Indexer backups
+
+The indexer backup flow now has integrity sidecars and a host-side verification command:
+
+1. `npm run indexer:db:export`
+2. `npm run indexer:db:backup:check`
+3. copy the generated `.dump` plus its `.sha256` and `.json` sidecars when moving state to another machine
+4. `npm run indexer:db:import -- /path/to/indexer.dump`
+
+`indexer:db:export` now writes:
+
+- `indexer-<timestamp>.dump.sha256`
+- `indexer-<timestamp>.dump.json`
+
+`indexer:db:backup:check` verifies that the latest dump exists, is not stale, matches its sidecars when present, and is readable through `pg_restore --list`. If you want the root release gate to enforce that on the operator host, set:
+
+- `INDEXER_REQUIRE_FRESH_BACKUP=1`
+- `INDEXER_BACKUP_DIR` or `INDEXER_BACKUP_PATH`
+- optional `INDEXER_BACKUP_MAX_AGE_HOURS`
+- optional `INDEXER_BACKUP_REQUIRE_SIDECARS=1`
+
 ## Runtime monitoring
 
 After the public site is live, run the repo-root runtime monitor from a scheduler or external watchdog:
