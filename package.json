@@ -52,6 +52,7 @@
     "check:audit": "node scripts/check-audit.mjs",
     "check:ipfs": "bash scripts/ipfs-readiness.sh",
     "check:ipfs:backend": "node scripts/check-ipfs-backend.mjs",
+    "check:rpc-policy": "node scripts/check-rpc-policy.mjs",
     "check:public-routes": "node scripts/check-public-routes.mjs",
     "check:runtime-health": "node scripts/check-runtime-health.mjs",
     "check:web-env": "node scripts/check-web-build-env.mjs",

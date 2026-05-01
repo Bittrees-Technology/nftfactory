@@ -1,5 +1,6 @@
 export const CHAIN_SCOPED_PUBLIC_ENV_NAMES = [
   "NEXT_PUBLIC_RPC_URL",
+  "NEXT_PUBLIC_RPC_URLS",
   "NEXT_PUBLIC_INDEXER_API_URL",
   "NEXT_PUBLIC_REGISTRY_ADDRESS",
   "NEXT_PUBLIC_ROYALTY_SPLIT_REGISTRY_ADDRESS",
@@ -28,6 +29,19 @@ function normalizeEnvValue(value: string | undefined): string | undefined {
   return typeof value === "string" && value.trim() ? value : undefined;
 }
 
+function splitEnvList(value: string | undefined): string[] {
+  return String(value || "")
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function getLegacyPrimaryChainIdOrDefault(): number {
+  const raw = normalizeEnvValue(process.env.NEXT_PUBLIC_PRIMARY_CHAIN_ID || process.env.NEXT_PUBLIC_CHAIN_ID);
+  const parsed = Number.parseInt(String(raw || "1"), 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : 1;
+}
+
 function getRootPublicEnvMap(): Record<RootPublicEnvName, string | undefined> {
   return {
     NEXT_PUBLIC_PRIMARY_CHAIN_ID: process.env.NEXT_PUBLIC_PRIMARY_CHAIN_ID,
@@ -40,6 +54,7 @@ function getRootPublicEnvMap(): Record<RootPublicEnvName, string | undefined> {
 function getLegacyChainPublicEnvMap(): Record<ChainScopedPublicEnvName, string | undefined> {
   return {
     NEXT_PUBLIC_RPC_URL: process.env.NEXT_PUBLIC_RPC_URL,
+    NEXT_PUBLIC_RPC_URLS: process.env.NEXT_PUBLIC_RPC_URLS,
     NEXT_PUBLIC_INDEXER_API_URL: process.env.NEXT_PUBLIC_INDEXER_API_URL,
     NEXT_PUBLIC_REGISTRY_ADDRESS: process.env.NEXT_PUBLIC_REGISTRY_ADDRESS,
     NEXT_PUBLIC_ROYALTY_SPLIT_REGISTRY_ADDRESS: process.env.NEXT_PUBLIC_ROYALTY_SPLIT_REGISTRY_ADDRESS,
@@ -58,6 +73,7 @@ function getChainScopedPublicEnvMap(chainId: number): ChainScopedPublicEnvValues
     case 1:
       return {
         NEXT_PUBLIC_RPC_URL: process.env.NEXT_PUBLIC_RPC_URL_1,
+        NEXT_PUBLIC_RPC_URLS: process.env.NEXT_PUBLIC_RPC_URLS_1,
         NEXT_PUBLIC_INDEXER_API_URL: process.env.NEXT_PUBLIC_INDEXER_API_URL_1,
         NEXT_PUBLIC_REGISTRY_ADDRESS: process.env.NEXT_PUBLIC_REGISTRY_ADDRESS_1,
         NEXT_PUBLIC_ROYALTY_SPLIT_REGISTRY_ADDRESS: process.env.NEXT_PUBLIC_ROYALTY_SPLIT_REGISTRY_ADDRESS_1,
@@ -71,6 +87,7 @@ function getChainScopedPublicEnvMap(chainId: number): ChainScopedPublicEnvValues
     case 10:
       return {
         NEXT_PUBLIC_RPC_URL: process.env.NEXT_PUBLIC_RPC_URL_10,
+        NEXT_PUBLIC_RPC_URLS: process.env.NEXT_PUBLIC_RPC_URLS_10,
         NEXT_PUBLIC_INDEXER_API_URL: process.env.NEXT_PUBLIC_INDEXER_API_URL_10,
         NEXT_PUBLIC_REGISTRY_ADDRESS: process.env.NEXT_PUBLIC_REGISTRY_ADDRESS_10,
         NEXT_PUBLIC_ROYALTY_SPLIT_REGISTRY_ADDRESS: process.env.NEXT_PUBLIC_ROYALTY_SPLIT_REGISTRY_ADDRESS_10,
@@ -84,6 +101,7 @@ function getChainScopedPublicEnvMap(chainId: number): ChainScopedPublicEnvValues
     case 130:
       return {
         NEXT_PUBLIC_RPC_URL: process.env.NEXT_PUBLIC_RPC_URL_130,
+        NEXT_PUBLIC_RPC_URLS: process.env.NEXT_PUBLIC_RPC_URLS_130,
         NEXT_PUBLIC_INDEXER_API_URL: process.env.NEXT_PUBLIC_INDEXER_API_URL_130,
         NEXT_PUBLIC_REGISTRY_ADDRESS: process.env.NEXT_PUBLIC_REGISTRY_ADDRESS_130,
         NEXT_PUBLIC_ROYALTY_SPLIT_REGISTRY_ADDRESS: process.env.NEXT_PUBLIC_ROYALTY_SPLIT_REGISTRY_ADDRESS_130,
@@ -97,6 +115,7 @@ function getChainScopedPublicEnvMap(chainId: number): ChainScopedPublicEnvValues
     case 137:
       return {
         NEXT_PUBLIC_RPC_URL: process.env.NEXT_PUBLIC_RPC_URL_137,
+        NEXT_PUBLIC_RPC_URLS: process.env.NEXT_PUBLIC_RPC_URLS_137,
         NEXT_PUBLIC_INDEXER_API_URL: process.env.NEXT_PUBLIC_INDEXER_API_URL_137,
         NEXT_PUBLIC_REGISTRY_ADDRESS: process.env.NEXT_PUBLIC_REGISTRY_ADDRESS_137,
         NEXT_PUBLIC_ROYALTY_SPLIT_REGISTRY_ADDRESS: process.env.NEXT_PUBLIC_ROYALTY_SPLIT_REGISTRY_ADDRESS_137,
@@ -110,6 +129,7 @@ function getChainScopedPublicEnvMap(chainId: number): ChainScopedPublicEnvValues
     case 143:
       return {
         NEXT_PUBLIC_RPC_URL: process.env.NEXT_PUBLIC_RPC_URL_143,
+        NEXT_PUBLIC_RPC_URLS: process.env.NEXT_PUBLIC_RPC_URLS_143,
         NEXT_PUBLIC_INDEXER_API_URL: process.env.NEXT_PUBLIC_INDEXER_API_URL_143,
         NEXT_PUBLIC_REGISTRY_ADDRESS: process.env.NEXT_PUBLIC_REGISTRY_ADDRESS_143,
         NEXT_PUBLIC_ROYALTY_SPLIT_REGISTRY_ADDRESS: process.env.NEXT_PUBLIC_ROYALTY_SPLIT_REGISTRY_ADDRESS_143,
@@ -123,6 +143,7 @@ function getChainScopedPublicEnvMap(chainId: number): ChainScopedPublicEnvValues
     case 8453:
       return {
         NEXT_PUBLIC_RPC_URL: process.env.NEXT_PUBLIC_RPC_URL_8453,
+        NEXT_PUBLIC_RPC_URLS: process.env.NEXT_PUBLIC_RPC_URLS_8453,
         NEXT_PUBLIC_INDEXER_API_URL: process.env.NEXT_PUBLIC_INDEXER_API_URL_8453,
         NEXT_PUBLIC_REGISTRY_ADDRESS: process.env.NEXT_PUBLIC_REGISTRY_ADDRESS_8453,
         NEXT_PUBLIC_ROYALTY_SPLIT_REGISTRY_ADDRESS: process.env.NEXT_PUBLIC_ROYALTY_SPLIT_REGISTRY_ADDRESS_8453,
@@ -136,6 +157,7 @@ function getChainScopedPublicEnvMap(chainId: number): ChainScopedPublicEnvValues
     case 43114:
       return {
         NEXT_PUBLIC_RPC_URL: process.env.NEXT_PUBLIC_RPC_URL_43114,
+        NEXT_PUBLIC_RPC_URLS: process.env.NEXT_PUBLIC_RPC_URLS_43114,
         NEXT_PUBLIC_INDEXER_API_URL: process.env.NEXT_PUBLIC_INDEXER_API_URL_43114,
         NEXT_PUBLIC_REGISTRY_ADDRESS: process.env.NEXT_PUBLIC_REGISTRY_ADDRESS_43114,
         NEXT_PUBLIC_ROYALTY_SPLIT_REGISTRY_ADDRESS: process.env.NEXT_PUBLIC_ROYALTY_SPLIT_REGISTRY_ADDRESS_43114,
@@ -149,6 +171,7 @@ function getChainScopedPublicEnvMap(chainId: number): ChainScopedPublicEnvValues
     case 57073:
       return {
         NEXT_PUBLIC_RPC_URL: process.env.NEXT_PUBLIC_RPC_URL_57073,
+        NEXT_PUBLIC_RPC_URLS: process.env.NEXT_PUBLIC_RPC_URLS_57073,
         NEXT_PUBLIC_INDEXER_API_URL: process.env.NEXT_PUBLIC_INDEXER_API_URL_57073,
         NEXT_PUBLIC_REGISTRY_ADDRESS: process.env.NEXT_PUBLIC_REGISTRY_ADDRESS_57073,
         NEXT_PUBLIC_ROYALTY_SPLIT_REGISTRY_ADDRESS: process.env.NEXT_PUBLIC_ROYALTY_SPLIT_REGISTRY_ADDRESS_57073,
@@ -162,6 +185,7 @@ function getChainScopedPublicEnvMap(chainId: number): ChainScopedPublicEnvValues
     case 534352:
       return {
         NEXT_PUBLIC_RPC_URL: process.env.NEXT_PUBLIC_RPC_URL_534352,
+        NEXT_PUBLIC_RPC_URLS: process.env.NEXT_PUBLIC_RPC_URLS_534352,
         NEXT_PUBLIC_INDEXER_API_URL: process.env.NEXT_PUBLIC_INDEXER_API_URL_534352,
         NEXT_PUBLIC_REGISTRY_ADDRESS: process.env.NEXT_PUBLIC_REGISTRY_ADDRESS_534352,
         NEXT_PUBLIC_ROYALTY_SPLIT_REGISTRY_ADDRESS: process.env.NEXT_PUBLIC_ROYALTY_SPLIT_REGISTRY_ADDRESS_534352,
@@ -175,6 +199,7 @@ function getChainScopedPublicEnvMap(chainId: number): ChainScopedPublicEnvValues
     case 11155111:
       return {
         NEXT_PUBLIC_RPC_URL: process.env.NEXT_PUBLIC_RPC_URL_11155111,
+        NEXT_PUBLIC_RPC_URLS: process.env.NEXT_PUBLIC_RPC_URLS_11155111,
         NEXT_PUBLIC_INDEXER_API_URL: process.env.NEXT_PUBLIC_INDEXER_API_URL_11155111,
         NEXT_PUBLIC_REGISTRY_ADDRESS: process.env.NEXT_PUBLIC_REGISTRY_ADDRESS_11155111,
         NEXT_PUBLIC_ROYALTY_SPLIT_REGISTRY_ADDRESS: process.env.NEXT_PUBLIC_ROYALTY_SPLIT_REGISTRY_ADDRESS_11155111,
@@ -200,4 +225,20 @@ export function getLegacyChainPublicEnv(name: ChainScopedPublicEnvName): string 
 
 export function getScopedChainPublicEnv(name: ChainScopedPublicEnvName, chainId: number): string | undefined {
   return normalizeEnvValue(getChainScopedPublicEnvMap(chainId)[name]);
+}
+
+export function resolveScopedChainPublicRpcUrls(chainId: number): string[] {
+  const scoped = getChainScopedPublicEnvMap(chainId);
+  const values = [
+    ...splitEnvList(scoped.NEXT_PUBLIC_RPC_URLS),
+    normalizeEnvValue(scoped.NEXT_PUBLIC_RPC_URL)
+  ];
+
+  if (chainId === getLegacyPrimaryChainIdOrDefault()) {
+    const legacy = getLegacyChainPublicEnvMap();
+    values.push(...splitEnvList(legacy.NEXT_PUBLIC_RPC_URLS));
+    values.push(normalizeEnvValue(legacy.NEXT_PUBLIC_RPC_URL));
+  }
+
+  return values.filter(Boolean).filter((value, index, list) => list.indexOf(value) === index) as string[];
 }

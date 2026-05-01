@@ -12,7 +12,6 @@ import {
 const primaryChainId = process.env.NEXT_PUBLIC_PRIMARY_CHAIN_ID || process.env.NEXT_PUBLIC_CHAIN_ID || "1";
 
 const REQUIRED_PUBLIC_ENV = [
-  "NEXT_PUBLIC_RPC_URL",
   "NEXT_PUBLIC_REGISTRY_ADDRESS",
   "NEXT_PUBLIC_MARKETPLACE_ADDRESS",
   "NEXT_PUBLIC_SHARED_721_ADDRESS",
@@ -33,6 +32,27 @@ function parseEnabledChainIds(): number[] {
     .filter(Number.isFinite);
 }
 
+function splitCsvEnv(value: string | undefined): string[] {
+  return String(value || "")
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function resolveChainPublicRpcUrls(chainId: number): string[] {
+  const scopedUrls = [
+    ...splitCsvEnv(process.env[`NEXT_PUBLIC_RPC_URLS_${chainId}`]),
+    String(process.env[`NEXT_PUBLIC_RPC_URL_${chainId}`] || "").trim()
+  ];
+
+  if (String(chainId) === primaryChainId) {
+    scopedUrls.push(...splitCsvEnv(process.env.NEXT_PUBLIC_RPC_URLS));
+    scopedUrls.push(String(process.env.NEXT_PUBLIC_RPC_URL || "").trim());
+  }
+
+  return scopedUrls.filter(Boolean).filter((value, index, list) => list.indexOf(value) === index);
+}
+
 function getActiveProductionChainIds(primaryChainIdValue: string): number[] {
   return Array.from(new Set([Number.parseInt(primaryChainIdValue, 10), ...parseEnabledChainIds()])).filter(Number.isFinite);
 }
@@ -41,6 +61,9 @@ if (process.env.NODE_ENV === "production") {
   const missing = REQUIRED_PUBLIC_ENV.filter(
     (name) => !process.env[`${name}_${primaryChainId}`] && !process.env[name]
   ).map((name) => `${name}_${primaryChainId}`);
+  if (resolveChainPublicRpcUrls(Number.parseInt(primaryChainId, 10)).length === 0) {
+    missing.unshift(`NEXT_PUBLIC_RPC_URL_${primaryChainId} (or NEXT_PUBLIC_RPC_URLS_${primaryChainId})`);
+  }
   if (missing.length > 0) {
     throw new Error(`Missing required env vars for production build:\n  ${missing.join("\n  ")}`);
   }
@@ -58,8 +81,8 @@ if (process.env.NODE_ENV === "production") {
 
   if (process.env.VERCEL) {
     const chainIds = getActiveProductionChainIds(primaryChainId);
-    const badIndexerEnv: string[] = [];
-    const missingIndexerEnv: string[] = [];
+    const invalidPublicEnv: string[] = [];
+    const missingPublicEnv: string[] = [];
 
     const ipfsApiUrl = resolvedIpfsApiUrl;
 
@@ -72,35 +95,50 @@ if (process.env.NODE_ENV === "production") {
     }
 
     for (const chainId of chainIds) {
+      const publicRpcUrls = resolveChainPublicRpcUrls(chainId);
       const scopedName = `NEXT_PUBLIC_INDEXER_API_URL_${chainId}`;
       const scopedValue = process.env[scopedName];
       const canUseLegacy = String(chainId) === primaryChainId;
       const fallbackValue = canUseLegacy ? process.env.NEXT_PUBLIC_INDEXER_API_URL : undefined;
 
+      if (publicRpcUrls.length === 0) {
+        missingPublicEnv.push(
+          canUseLegacy
+            ? `NEXT_PUBLIC_RPC_URL_${chainId} (or NEXT_PUBLIC_RPC_URLS_${chainId} / NEXT_PUBLIC_RPC_URL / NEXT_PUBLIC_RPC_URLS)`
+            : `NEXT_PUBLIC_RPC_URL_${chainId} (or NEXT_PUBLIC_RPC_URLS_${chainId})`
+        );
+      }
+
+      for (const rpcUrl of publicRpcUrls) {
+        if (isPrivateOrLocalUrl(rpcUrl)) {
+          invalidPublicEnv.push(`NEXT_PUBLIC_RPC_URL_${chainId}=${rpcUrl}`);
+        }
+      }
+
       if (!String(scopedValue || "").trim() && !String(fallbackValue || "").trim()) {
-        missingIndexerEnv.push(canUseLegacy ? `${scopedName} (or NEXT_PUBLIC_INDEXER_API_URL)` : scopedName);
+        missingPublicEnv.push(canUseLegacy ? `${scopedName} (or NEXT_PUBLIC_INDEXER_API_URL)` : scopedName);
         continue;
       }
 
       if (scopedValue && isPrivateOrLocalUrl(scopedValue)) {
-        badIndexerEnv.push(`${scopedName}=${scopedValue}`);
+        invalidPublicEnv.push(`${scopedName}=${scopedValue}`);
       }
     }
 
     const legacyIndexerUrl = process.env.NEXT_PUBLIC_INDEXER_API_URL;
     if (legacyIndexerUrl && isPrivateOrLocalUrl(legacyIndexerUrl)) {
-      badIndexerEnv.push(`NEXT_PUBLIC_INDEXER_API_URL=${legacyIndexerUrl}`);
+      invalidPublicEnv.push(`NEXT_PUBLIC_INDEXER_API_URL=${legacyIndexerUrl}`);
     }
 
-    if (badIndexerEnv.length > 0) {
+    if (invalidPublicEnv.length > 0) {
       throw new Error(
-        `Indexer API URL must be publicly reachable from Vercel. Invalid values:\n  ${badIndexerEnv.join("\n  ")}`
+        `Public runtime endpoints must be reachable from Vercel. Invalid values:\n  ${invalidPublicEnv.join("\n  ")}`
       );
     }
 
-    if (missingIndexerEnv.length > 0) {
+    if (missingPublicEnv.length > 0) {
       throw new Error(
-        `Missing required public indexer env vars for production build:\n  ${missingIndexerEnv.join("\n  ")}`
+        `Missing required public runtime env vars for production build:\n  ${missingPublicEnv.join("\n  ")}`
       );
     }
   }

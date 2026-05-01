@@ -1,5 +1,5 @@
 import { getDefaultConfig } from "@rainbow-me/rainbowkit";
-import { http, type Chain } from "viem";
+import { fallback, http, type Chain, type Transport } from "viem";
 import { getEnabledAppChains, getPrimaryAppChainId } from "./chains";
 import { getContractsConfig } from "./contracts";
 import {
@@ -24,15 +24,23 @@ if (chains.length === 0) {
 
 const transports = Object.fromEntries(
   chains.map((chain) => {
-    let rpcUrl = chain.rpcUrls.default.http[0] || "";
+    let rpcUrls = chain.rpcUrls.default.http.filter(Boolean);
     try {
-      rpcUrl = getContractsConfig(chain.id).rpcUrl;
+      rpcUrls = getContractsConfig(chain.id).rpcUrls;
     } catch {
-      rpcUrl = chain.rpcUrls.default.http[0] || "";
+      rpcUrls = chain.rpcUrls.default.http.filter(Boolean);
     }
-    return [chain.id, rpcUrl ? http(rpcUrl) : http()];
+    if (rpcUrls.length === 0) {
+      return [chain.id, http()];
+    }
+
+    if (rpcUrls.length === 1) {
+      return [chain.id, http(rpcUrls[0])];
+    }
+
+    return [chain.id, fallback(rpcUrls.map((rpcUrl) => http(rpcUrl)), { rank: false })];
   })
-) as Record<number, ReturnType<typeof http>>;
+) as Record<number, Transport>;
 
 export const wagmiConfig = getDefaultConfig({
   appName: "NFTFactory",

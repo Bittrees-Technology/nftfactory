@@ -53,6 +53,21 @@ describe("chains", () => {
     expect(getPrimaryAppChainId()).toBe(11155111);
   });
 
+  it("treats NEXT_PUBLIC_RPC_URLS as satisfying the RPC requirement", () => {
+    resetChainEnv();
+    process.env.NEXT_PUBLIC_PRIMARY_CHAIN_ID = "1";
+    process.env.NEXT_PUBLIC_RPC_URLS_1 = "https://rpc-a.example,https://rpc-b.example";
+    process.env.NEXT_PUBLIC_REGISTRY_ADDRESS_1 = "0x1111111111111111111111111111111111111111";
+    process.env.NEXT_PUBLIC_MARKETPLACE_ADDRESS_1 = "0x2222222222222222222222222222222222222222";
+    process.env.NEXT_PUBLIC_SHARED_721_ADDRESS_1 = "0x3333333333333333333333333333333333333333";
+    process.env.NEXT_PUBLIC_SHARED_1155_ADDRESS_1 = "0x4444444444444444444444444444444444444444";
+    process.env.NEXT_PUBLIC_SUBNAME_REGISTRAR_ADDRESS_1 = "0x5555555555555555555555555555555555555555";
+    process.env.NEXT_PUBLIC_FACTORY_ADDRESS_1 = "0x6666666666666666666666666666666666666666";
+
+    expect(isAppChainConfigured(1)).toBe(true);
+    expect(getMissingAppChainEnvVars(1)).toEqual([]);
+  });
+
   it("throws when explicitly enabled chains are not fully configured", () => {
     resetChainEnv();
     setChainEnv(11155111);

@@ -14,7 +14,8 @@ import {
 import {
   getLegacyChainPublicEnv,
   getRootPublicEnv,
-  getScopedChainPublicEnv
+  getScopedChainPublicEnv,
+  resolveScopedChainPublicRpcUrls
 } from "./publicEnv";
 
 export const anvil = defineChain({
@@ -58,7 +59,6 @@ const DEFAULT_ENABLED_CHAIN_IDS = [
 ];
 
 const REQUIRED_CHAIN_ENV_NAMES = [
-  "NEXT_PUBLIC_RPC_URL",
   "NEXT_PUBLIC_REGISTRY_ADDRESS",
   "NEXT_PUBLIC_MARKETPLACE_ADDRESS",
   "NEXT_PUBLIC_SHARED_721_ADDRESS",
@@ -101,6 +101,10 @@ function hasLegacyChainEnv(name: string, chainId: number): boolean {
 }
 
 export function isAppChainConfigured(chainId: number): boolean {
+  if (resolveScopedChainPublicRpcUrls(chainId).length === 0) {
+    return false;
+  }
+
   return REQUIRED_CHAIN_ENV_NAMES.every((name) => {
     if (getScopedChainPublicEnv(name, chainId)) return true;
     return hasLegacyChainEnv(name, chainId);
@@ -108,11 +112,17 @@ export function isAppChainConfigured(chainId: number): boolean {
 }
 
 export function getMissingAppChainEnvVars(chainId: number): string[] {
-  return REQUIRED_CHAIN_ENV_NAMES.flatMap((name) => {
+  const missing = REQUIRED_CHAIN_ENV_NAMES.flatMap((name) => {
     if (getScopedChainPublicEnv(name, chainId)) return [];
     if (hasLegacyChainEnv(name, chainId)) return [];
     return [`${name}_${chainId}`];
   });
+
+  if (resolveScopedChainPublicRpcUrls(chainId).length === 0) {
+    missing.unshift(`NEXT_PUBLIC_RPC_URL_${chainId} (or NEXT_PUBLIC_RPC_URLS_${chainId})`);
+  }
+
+  return missing;
 }
 
 export function getEnabledAppChainIds(): number[] {

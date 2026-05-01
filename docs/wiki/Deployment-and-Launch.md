@@ -187,7 +187,7 @@ Example tunnel file:
 Before deployment or release validation:
 
 - [ ] deployer or Safe is funded
-- [ ] RPC endpoints are valid
+- [ ] RPC endpoints are valid and production has at least two primary-chain upstreams with `npm run check:rpc-policy`
 - [ ] `NEXT_PUBLIC_PRIMARY_CHAIN_ID=1` and `CHAIN_ID=1` are set for the production cutover
 - [ ] `ETHERSCAN_API_KEY` is present wherever contract or proxy verification should run
 - [ ] web and indexer point to the same chain
@@ -206,7 +206,7 @@ Before deployment or release validation:
 
 ## Operational launch gates
 
-- [ ] `npm run check:release` passes (aggregates typechecks, tests, web build, audit policy, secret scan, env checks, IPFS backend reachability, runtime health, and public route smoke checks when configured)
+- [ ] `npm run check:release` passes (aggregates typechecks, tests, web build, audit policy, secret scan, env checks, RPC resilience policy, IPFS backend reachability, runtime health, and public route smoke checks when configured)
 - [ ] `npm run typecheck:web` passes
 - [ ] `npm run build:web` passes
 - [ ] `npm run typecheck:indexer` passes

@@ -13,7 +13,7 @@ const REQUIRED_PUBLIC_VARS = [
 export function validateEnv(): { valid: boolean; missing: string[] } {
   const primaryChainId = getPrimaryAppChainId();
   const missing = getMissingAppChainEnvVars(primaryChainId).filter((name) =>
-    REQUIRED_PUBLIC_VARS.some((requiredName) => name === `${requiredName}_${primaryChainId}`)
+    REQUIRED_PUBLIC_VARS.some((requiredName) => name.startsWith(`${requiredName}_${primaryChainId}`))
   );
   return { valid: missing.length === 0, missing };
 }

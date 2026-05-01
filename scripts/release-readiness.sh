@@ -208,11 +208,15 @@ fi
 echo "Environment reachability check passed."
 
 echo ""
-echo "6) Writable IPFS backend health"
+echo "6) RPC resilience policy"
+npm run check:rpc-policy
+
+echo ""
+echo "7) Writable IPFS backend health"
 npm run check:ipfs:backend
 
 echo ""
-echo "7) Deployment verification"
+echo "8) Deployment verification"
 scoped_primary_rpc_key="NEXT_PUBLIC_RPC_URL_${primary_chain_id}"
 scoped_primary_rpc_value="${!scoped_primary_rpc_key:-}"
 if [[ -n "${RPC_URL:-}" || -n "${SEPOLIA_RPC_URL:-}" || -n "${NEXT_PUBLIC_RPC_URL:-}" || -n "$scoped_primary_rpc_value" ]]; then
@@ -223,7 +227,7 @@ else
 fi
 
 echo ""
-echo "8) Runtime deployment health"
+echo "9) Runtime deployment health"
 runtime_health_base_url="${RELEASE_WEB_BASE_URL:-${NEXT_PUBLIC_APP_URL:-${NEXT_PUBLIC_SITE_URL:-}}}"
 if [[ -n "$runtime_health_base_url" || -n "${INDEXER_API_URL:-}" || -n "${NEXT_PUBLIC_INDEXER_API_URL:-}" ]]; then
   npm run check:runtime-health
@@ -233,7 +237,7 @@ else
 fi
 
 echo ""
-echo "9) Public route smoke"
+echo "10) Public route smoke"
 if [[ -n "$runtime_health_base_url" ]]; then
   npm run check:public-routes
 else
@@ -242,7 +246,7 @@ else
 fi
 
 echo ""
-echo "10) Manual release checklist"
+echo "11) Manual release checklist"
 echo "- Validate /, /mint, /profile, /profile/setup, and /profile/<name> in browser if wallet-connected UX is in scope."
 echo "- Validate the Mint workspace tabs: Mint and publish, View collection, and Manage collection."
 echo "- Verify indexer /health reports adminProtection.protected=true."

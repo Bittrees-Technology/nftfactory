@@ -51,6 +51,7 @@ function parseRpcUrls(value) {
 function readRpcUrls(id) {
   return [
     ...parseRpcUrls(process.env[`NEXT_PUBLIC_RPC_URLS_${id}`]),
+    ...parseRpcUrls(readScoped('NEXT_PUBLIC_RPC_URLS', id)),
     ...parseRpcUrls(process.env.RPC_URLS),
     ...parseRpcUrls(readRpcUrl(id)),
     ...parseRpcUrls(process.env.ALCHEMY_SEPOLIA_RPC_URL),
@@ -80,7 +81,7 @@ if (!Number.isInteger(chainId) || chainId <= 0) {
 }
 
 if (!rpcUrl) {
-  console.error(`Missing RPC URL for chain ${chainId}. Set NEXT_PUBLIC_RPC_URL_${chainId}, NEXT_PUBLIC_RPC_URLS_${chainId}, RPC_URL, RPC_URLS, or SEPOLIA_RPC_URL.`);
+  console.error(`Missing RPC URL for chain ${chainId}. Set NEXT_PUBLIC_RPC_URL_${chainId}, NEXT_PUBLIC_RPC_URLS_${chainId}, NEXT_PUBLIC_RPC_URLS, RPC_URL, RPC_URLS, or SEPOLIA_RPC_URL.`);
   process.exit(1);
 }
 

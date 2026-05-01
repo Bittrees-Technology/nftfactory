@@ -3,12 +3,14 @@ import {
   getLegacyChainPublicEnv,
   getRootPublicEnv,
   getScopedChainPublicEnv,
+  resolveScopedChainPublicRpcUrls,
   type ChainScopedPublicEnvName
 } from "./publicEnv";
 
 export type ContractsConfig = {
   chainId: number;
   rpcUrl: string;
+  rpcUrls: string[];
   indexerApiUrl?: string;
   registry: `0x${string}`;
   royaltySplitRegistry?: `0x${string}`;
@@ -60,8 +62,13 @@ function getScopedEnv(name: string, chainId: number): string | undefined {
   return undefined;
 }
 
-function requireScopedEnv(name: string, chainId: number): string {
-  return requireEnv(`${name}_${chainId}`, getScopedEnv(name, chainId));
+function requireScopedRpcUrls(chainId: number): string[] {
+  const rpcUrls = resolveScopedChainPublicRpcUrls(chainId);
+  if (rpcUrls.length === 0) {
+    throw new Error(`Missing required env var: NEXT_PUBLIC_RPC_URL_${chainId} or NEXT_PUBLIC_RPC_URLS_${chainId}`);
+  }
+
+  return rpcUrls;
 }
 
 function requireScopedAddress(name: string, chainId: number): `0x${string}` {
@@ -77,9 +84,12 @@ export function getContractsConfig(chainId = getPrimaryAppChainId()): ContractsC
     throw new Error(`Invalid chainId: ${chainId}`);
   }
 
+  const rpcUrls = requireScopedRpcUrls(chainId);
+
   return {
     chainId,
-    rpcUrl: requireScopedEnv("NEXT_PUBLIC_RPC_URL", chainId),
+    rpcUrl: rpcUrls[0],
+    rpcUrls,
     indexerApiUrl: getScopedEnv("NEXT_PUBLIC_INDEXER_API_URL", chainId),
     registry: requireScopedAddress("NEXT_PUBLIC_REGISTRY_ADDRESS", chainId),
     royaltySplitRegistry: optionalScopedAddress("NEXT_PUBLIC_ROYALTY_SPLIT_REGISTRY_ADDRESS", chainId),

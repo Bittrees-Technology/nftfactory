@@ -42,6 +42,7 @@ This repo includes build-ready scaffolding and first-pass contract/backend code.
 Profile pages can now be snapshotted from the public web route and published through the shared IPFS project tooling with `npm run ipfs:publish:profile-snapshot -- <profile-name> --source <public-web-origin>`. Use `--skip-publish` to export the JSON locally first. For password-protected deployments, pass `--basic-auth-user` and `--basic-auth-password` or set `PROFILE_SNAPSHOT_BASIC_AUTH_USERNAME` and `PROFILE_SNAPSHOT_BASIC_AUTH_PASSWORD`. The web app can also fall back to published snapshots when `NEXT_PUBLIC_PROFILE_SNAPSHOT_URL_TEMPLATE` or `NEXT_PUBLIC_PROFILE_SNAPSHOT_MANIFEST_URL` is configured.
 
 Before a production web build or release check, validate the required public build env set with `npm run check:web-env`.
+Run `npm run check:rpc-policy` to enforce the current RPC resilience baseline: at least two unique primary-chain upstream URLs by default, with separate hosts unless you explicitly override that policy.
 Run `npm run check:audit` to enforce the current dependency policy: block new or higher-severity advisories, while explicitly surfacing the remaining RainbowKit/wagmi wallet-stack debt.
 For the live writable IPFS path itself, run `npm run check:ipfs:backend` after exporting the repo env so the script can probe `/api/v0/version` with the configured auth mode and surface tunnel-specific failures like Cloudflare `1033`.
 For deployed runtime wiring, set `RELEASE_WEB_BASE_URL` (or `NEXT_PUBLIC_APP_URL` / `NEXT_PUBLIC_SITE_URL`) and run `npm run check:runtime-health` to verify `/api/deploy/health` plus indexer `/health` with protected admin routes.
@@ -61,12 +62,12 @@ Shared IPFS publishing commands in this repo use `projects/ipfs-evm-system`. Con
 2. Fill the mainnet block first:
    - `NEXT_PUBLIC_PRIMARY_CHAIN_ID=1`
    - `NEXT_PUBLIC_ENABLED_CHAIN_IDS=1`
-   - `NEXT_PUBLIC_RPC_URL_1`
+   - `NEXT_PUBLIC_RPC_URL_1` or `NEXT_PUBLIC_RPC_URLS_1`
    - `NEXT_PUBLIC_INDEXER_API_URL_1`
    - `NEXT_PUBLIC_*_1` contract addresses
    - `REGISTRY_ADDRESS`, `MARKETPLACE_ADDRESS`, `MODERATOR_REGISTRY_ADDRESS`
    - `RPC_URL`
-   - `RPC_URLS` (optional comma-separated failover list for indexer + verification scripts)
+   - `RPC_URLS` (strongly recommended comma-separated failover list for indexer + verification scripts)
    - `ALCHEMY_SEPOLIA_RPC_URL` (optional provider-specific fallback slot)
    - `INFURA_SEPOLIA_RPC_URL` (optional provider-specific fallback slot)
    - `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID`
@@ -86,6 +87,7 @@ Shared IPFS publishing commands in this repo use `projects/ipfs-evm-system`. Con
    - `set -a; source .env; set +a`
 5. Run:
    - `npm run check:web-env`
+   - `npm run check:rpc-policy`
    - `npm run check:deployments`
    - `npm run verify:population -- --config ./docs/population-check.sample.json` after replacing the sample values with real cases
 

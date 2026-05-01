@@ -5,7 +5,6 @@ const PRIMARY_CHAIN_ID = String(
 ).trim();
 
 const REQUIRED_CHAIN_ENV = [
-  "NEXT_PUBLIC_RPC_URL",
   "NEXT_PUBLIC_REGISTRY_ADDRESS",
   "NEXT_PUBLIC_MARKETPLACE_ADDRESS",
   "NEXT_PUBLIC_SHARED_721_ADDRESS",
@@ -24,6 +23,13 @@ function isPrivateOrLocalUrl(value) {
 
 function isTruthyEnvFlag(value) {
   return ["1", "true", "yes", "on"].includes(String(value || "").trim().toLowerCase());
+}
+
+function splitCsvEnv(value) {
+  return String(value || "")
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
 }
 
 function resolveIpfsApiUrls(env = process.env) {
@@ -50,6 +56,20 @@ function readChainValue(name, chainId) {
     || (String(chainId) === PRIMARY_CHAIN_ID ? String(process.env[name] || "").trim() : "");
 }
 
+function resolveChainRpcUrls(chainId) {
+  const urls = [
+    ...splitCsvEnv(process.env[`NEXT_PUBLIC_RPC_URLS_${chainId}`]),
+    String(process.env[`NEXT_PUBLIC_RPC_URL_${chainId}`] || "").trim()
+  ];
+
+  if (String(chainId) === PRIMARY_CHAIN_ID) {
+    urls.push(...splitCsvEnv(process.env.NEXT_PUBLIC_RPC_URLS));
+    urls.push(String(process.env.NEXT_PUBLIC_RPC_URL || "").trim());
+  }
+
+  return urls.filter(Boolean).filter((value, index, list) => list.indexOf(value) === index);
+}
+
 function validate() {
   const chainIds = parseEnabledChainIds();
   const missing = [];
@@ -60,6 +80,21 @@ function validate() {
   }
 
   for (const chainId of chainIds) {
+    const rpcUrls = resolveChainRpcUrls(chainId);
+    if (rpcUrls.length === 0) {
+      missing.push(
+        String(chainId) === PRIMARY_CHAIN_ID
+          ? `NEXT_PUBLIC_RPC_URL_${chainId} (or NEXT_PUBLIC_RPC_URLS_${chainId} / NEXT_PUBLIC_RPC_URL / NEXT_PUBLIC_RPC_URLS)`
+          : `NEXT_PUBLIC_RPC_URL_${chainId} (or NEXT_PUBLIC_RPC_URLS_${chainId})`
+      );
+    } else if (process.env.VERCEL) {
+      for (const rpcUrl of rpcUrls) {
+        if (isPrivateOrLocalUrl(rpcUrl)) {
+          warnings.push(`NEXT_PUBLIC_RPC_URL_${chainId} is private/local: ${rpcUrl}`);
+        }
+      }
+    }
+
     for (const name of REQUIRED_CHAIN_ENV) {
       if (!readChainValue(name, chainId)) {
         missing.push(`${name}_${chainId}`);

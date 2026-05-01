@@ -68,6 +68,7 @@ Then confirm:
 - admin auth behaves as expected
 - listing sync and backfill endpoints work with the configured env
 - `npm run check:audit` passes and only reports the known RainbowKit/wagmi wallet-stack migration debt
+- `npm run check:rpc-policy` passes and confirms the primary chain has at least two distinct RPC upstreams unless you explicitly opted into a weaker override
 - `npm run check:runtime-health` passes when `RELEASE_WEB_BASE_URL` or the public app URL env is set
 - `npm run check:public-routes` passes when the deployed web origin is configured, including the baseline browser-security headers on page and API responses
 
