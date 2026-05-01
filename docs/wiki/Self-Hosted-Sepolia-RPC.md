@@ -277,6 +277,7 @@ Then verify:
 - `npm run indexer:host:status`
 - `http://127.0.0.1:8787/health`
 - indexer logs stop showing upstream 429 / quota errors
+- `services/indexer/.runtime-host/logs/indexer-host-supervisor.log` shows the supervisor keeping the API up
 
 ## Rollout strategy
 

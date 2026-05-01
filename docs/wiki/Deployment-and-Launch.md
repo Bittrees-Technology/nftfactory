@@ -155,7 +155,7 @@ If the host has no Docker or Podman, install the rootless local PostgreSQL bundl
 
 The local bundle lives under `services/indexer/.tools/postgres15` and runs from `services/indexer/.runtime-host/postgres-data`.
 
-For a detached local runtime that keeps the indexer serving on `127.0.0.1:8787`:
+For a detached local runtime that keeps the indexer serving on `127.0.0.1:8787` and automatically restarts the API after crashes or dependency recovery:
 
 1. `npm run indexer:host:start`
 2. `npm run indexer:host:status`
@@ -163,6 +163,7 @@ For a detached local runtime that keeps the indexer serving on `127.0.0.1:8787`:
 4. `npm run indexer:host:stop`
 
 If `DATABASE_URL` is already set to a reachable Postgres instance, that flow skips the local container bootstrap and starts the indexer directly against the existing database.
+The supervisor writes runtime state to `services/indexer/.runtime-host/supervisor-state.json` and logs to `services/indexer/.runtime-host/logs/indexer-host-supervisor.log`.
 
 Use `indexer:host:restart-api` when you need to reload the API process without dropping the warmed local PostgreSQL state in `services/indexer/.runtime-host/postgres-data`.
 

@@ -13,6 +13,24 @@ DB_PORT="${INDEXER_DB_PORT:-5432}"
 
 mkdir -p "$LOG_DIR" "$PID_DIR"
 
+find_supervisor_pid() {
+  while IFS= read -r pid; do
+    [ -n "$pid" ] || continue
+    if [ -r "/proc/$pid/cmdline" ] && [ "$(basename "$(readlink "/proc/$pid/exe" 2>/dev/null || true)")" = "node" ] \
+      && tr '\0' ' ' <"/proc/$pid/cmdline" | grep -Eq 'node (\./)?scripts/[r]un-host-supervisor\.mjs' \
+      && [ "$(readlink "/proc/$pid/cwd" 2>/dev/null || true)" = "$INDEXER_DIR" ]; then
+      echo "$pid"
+      return 0
+    fi
+  done < <(pgrep -f "[r]un-host-supervisor.mjs" || true)
+}
+
+SUPERVISOR_PID="$(find_supervisor_pid)"
+if [ -n "$SUPERVISOR_PID" ] && [ "${INDEXER_ALLOW_STACK_WITH_SUPERVISOR:-0}" != "1" ]; then
+  echo "indexer-host-supervisor already running (pid $SUPERVISOR_PID); use host:supervisor:status or host:stack:stop to switch modes."
+  exit 0
+fi
+
 if [ -f "$INDEXER_DIR/.env" ]; then
   set -a
   # shellcheck disable=SC1091

@@ -156,14 +156,16 @@ For a clean local Sepolia indexing setup:
 4. Start the indexer API:
    - `npm run dev:indexer`
 
-For a detached local host process that keeps the indexer on `127.0.0.1:8787`:
+For a detached local host process that keeps the indexer on `127.0.0.1:8787` and automatically restarts the API if it exits:
 
 1. `npm run indexer:host:start`
 2. `npm run indexer:host:status`
 3. `npm run indexer:host:restart-api`
 4. `npm run indexer:host:stop`
 
+The supervisor writes state to `services/indexer/.runtime-host/supervisor-state.json` and logs to `services/indexer/.runtime-host/logs/indexer-host-supervisor.log`.
 Use `indexer:host:restart-api` when you need to reload the API process without wiping the current local PostgreSQL progress. It keeps `services/indexer/.runtime-host/postgres-data` running and reuses the existing database state.
+If you need the old one-shot launcher for debugging, the service workspace still exposes `npm --workspace services/indexer run host:stack:start`.
 
 To copy the warmed indexer data to another machine:
 

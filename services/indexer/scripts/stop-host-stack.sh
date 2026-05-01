@@ -27,6 +27,27 @@ for arg in "$@"; do
   esac
 done
 
+find_supervisor_pid() {
+  while IFS= read -r pid; do
+    [ -n "$pid" ] || continue
+    if [ -r "/proc/$pid/cmdline" ] && [ "$(basename "$(readlink "/proc/$pid/exe" 2>/dev/null || true)")" = "node" ] \
+      && tr '\0' ' ' <"/proc/$pid/cmdline" | grep -Eq 'node (\./)?scripts/[r]un-host-supervisor\.mjs' \
+      && [ "$(readlink "/proc/$pid/cwd" 2>/dev/null || true)" = "$INDEXER_DIR" ]; then
+      echo "$pid"
+      return 0
+    fi
+  done < <(pgrep -f "[r]un-host-supervisor.mjs" || true)
+}
+
+if [ "${INDEXER_SKIP_SUPERVISOR_STOP:-0}" != "1" ]; then
+  SUPERVISOR_PID="$(find_supervisor_pid)"
+  if [ -n "$SUPERVISOR_PID" ]; then
+    echo "indexer-host-supervisor is running (pid $SUPERVISOR_PID); stopping supervisor."
+    INDEXER_SKIP_SUPERVISOR_STOP=1 bash "$SCRIPT_DIR/stop-host-supervisor.sh"
+    exit 0
+  fi
+fi
+
 stop_service() {
   local name="$1"
   local pidf="$PID_DIR/$name.pid"
