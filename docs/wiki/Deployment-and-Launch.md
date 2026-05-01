@@ -218,6 +218,7 @@ Before deployment or release validation:
 - [ ] public write-route rate limits are reviewed for expected launch traffic (`IPFS_METADATA_RATE_LIMIT_*`, `PROFILE_PUBLISH_RATE_LIMIT_*`, and `COLLECTION_VERIFY_RATE_LIMIT_*`)
 - [ ] `https://nftfactory.org/api/deploy/health` returns `ok: true`
 - [ ] indexer `/health` reports `adminProtection.protected: true`
+- [ ] post-launch runtime monitor is wired (`npm run monitor:runtime`) and, if desired, a webhook destination is configured with `RUNTIME_MONITOR_WEBHOOK_URL`
 - [ ] `npm run check:audit` passes and only reports the known RainbowKit/wagmi wallet-stack migration debt
 - [ ] `npm run check:public-routes` passes against the public site origin and confirms the deployed browser-security headers
 - [ ] `npm run verify:population -- --config ./path/to/config.json` passes for one shared-mint case and one custom-collection case
@@ -237,6 +238,7 @@ Before deployment or release validation:
 - [ ] admin backfill and listing-sync tools behave as expected
 - [ ] profile, discover, and moderation routes are stable
 - [ ] protocol ownership is transferred where required
+- [ ] runtime monitoring is live against the public origin, indexer host, and writable IPFS API
 
 ## Mainnet go criteria
 

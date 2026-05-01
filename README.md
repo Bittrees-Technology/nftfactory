@@ -47,6 +47,7 @@ Run `npm run check:audit` to enforce the current dependency policy: block new or
 For the live writable IPFS path itself, run `npm run check:ipfs:backend` after exporting the repo env so the script can probe `/api/v0/version` with the configured auth mode and surface tunnel-specific failures like Cloudflare `1033`.
 For deployed runtime wiring, set `RELEASE_WEB_BASE_URL` (or `NEXT_PUBLIC_APP_URL` / `NEXT_PUBLIC_SITE_URL`) and run `npm run check:runtime-health` to verify `/api/deploy/health` plus indexer `/health` with protected admin routes.
 For a lightweight deployed-site smoke test, run `npm run check:public-routes` to verify `/`, `/mint`, `/discover`, `/profile`, `/profile/setup`, `/api/profiles`, and an optional real `/profile/[name]` route when `RELEASE_PROFILE_ROUTE_NAME` is set, along with the deployed browser-security header baseline.
+For post-launch monitoring, run `npm run monitor:runtime` from a scheduler or external watchdog. It checks the public site root, `/api/deploy/health`, configured indexer `/health` targets, the writable IPFS API, and optionally one pinned gateway CID when `RUNTIME_MONITOR_IPFS_GATEWAY_CID` is set. If `RUNTIME_MONITOR_WEBHOOK_URL` is configured, it posts failure and recovery alerts with stateful dedupe.
 For deployed-network verification, run `npm run check:deployments` with the real target-chain RPC and explicit deployed addresses. If you run it with no contract env values set, it still falls back to `docs/deployments.sepolia-app-wired.json`, but that fallback should be treated as Sepolia-only scaffolding, not a production source of truth.
 The repo-root `.env.example` is now mainnet-first and should be filled with the exact live deployment values for RPC, indexer, wallet, explorer, and IPFS.
 
@@ -90,6 +91,10 @@ Shared IPFS publishing commands in this repo use `projects/ipfs-evm-system`. Con
    - `npm run check:rpc-policy`
    - `npm run check:deployments`
    - `npm run verify:population -- --config ./docs/population-check.sample.json` after replacing the sample values with real cases
+6. After launch, wire:
+   - `npm run monitor:runtime`
+   - optionally `RUNTIME_MONITOR_WEBHOOK_URL` for failure and recovery alerts
+   - optionally `RUNTIME_MONITOR_IPFS_GATEWAY_CID` to probe a real public gateway path with a small pinned metadata CID
 
 ### Required env vars
 - `services/indexer/.env`

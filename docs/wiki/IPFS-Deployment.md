@@ -189,6 +189,14 @@ Planned implementation sequence:
 - secondary gateway health
 - disk usage and pin drift
 
+The repo now includes a practical public-path probe:
+
+```bash
+npm run monitor:runtime
+```
+
+That checks the configured writable IPFS API endpoints directly and can also probe one real public gateway CID when `RUNTIME_MONITOR_IPFS_GATEWAY_CID` is set. Use a small pinned metadata CID there so the monitor does not pull large assets just to verify gateway reachability.
+
 ### 6. Add disaster recovery posture
 
 - if the Pi fails, keep serving from the secondary node

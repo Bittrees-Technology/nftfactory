@@ -213,6 +213,24 @@ journalctl --user -u ipfs -f
 journalctl --user -u cloudflared -f
 ```
 
+## Runtime monitoring
+
+After the public site is live, run the repo-root runtime monitor from a scheduler or external watchdog:
+
+```bash
+npm run monitor:runtime
+```
+
+It checks:
+
+- `GET /` on the configured public web origin, including the security-header baseline
+- `/api/deploy/health`
+- each configured indexer `/health`
+- each configured writable IPFS API `/api/v0/version`
+- optionally a real public gateway CID when `RUNTIME_MONITOR_IPFS_GATEWAY_CID` is set
+
+If `RUNTIME_MONITOR_WEBHOOK_URL` is configured, the monitor posts failure and recovery alerts with stateful dedupe. Use `RUNTIME_MONITOR_STATE_FILE` if you want the dedupe state somewhere other than the default `/tmp/nftfactory-runtime-monitor-state.json`.
+
 ## Data flow
 
 The intended precedence is:
