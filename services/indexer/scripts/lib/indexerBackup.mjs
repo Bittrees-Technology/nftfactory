@@ -188,3 +188,128 @@ export function evaluateBackupAge(stats, maxAgeHours, nowMs = Date.now()) {
 export function formatHours(value) {
   return Number.parseFloat(String(value || "0")).toFixed(2);
 }
+
+export function parseRunBackupArgs(argv) {
+  const options = {
+    outputPath: "",
+    skipVerify: false,
+    retentionCount: null,
+    retentionDays: null
+  };
+
+  for (let index = 0; index < argv.length; index += 1) {
+    const value = String(argv[index] || "");
+    if (!value) {
+      continue;
+    }
+
+    if (value === "--skip-verify") {
+      options.skipVerify = true;
+      continue;
+    }
+
+    if (value === "--retention-count") {
+      const next = String(argv[index + 1] || "");
+      if (!next) {
+        throw new Error("--retention-count requires a value.");
+      }
+
+      const parsed = Number.parseInt(next, 10);
+      if (!Number.isInteger(parsed) || parsed < 0) {
+        throw new Error(`Invalid --retention-count value: ${next}`);
+      }
+
+      options.retentionCount = parsed;
+      index += 1;
+      continue;
+    }
+
+    if (value === "--retention-days") {
+      const next = String(argv[index + 1] || "");
+      if (!next) {
+        throw new Error("--retention-days requires a value.");
+      }
+
+      const parsed = Number.parseFloat(next);
+      if (!Number.isFinite(parsed) || parsed < 0) {
+        throw new Error(`Invalid --retention-days value: ${next}`);
+      }
+
+      options.retentionDays = parsed;
+      index += 1;
+      continue;
+    }
+
+    if (value.startsWith("--")) {
+      throw new Error(`Unknown option: ${value}`);
+    }
+
+    if (options.outputPath) {
+      throw new Error(`Unexpected extra argument: ${value}`);
+    }
+
+    options.outputPath = value;
+  }
+
+  return options;
+}
+
+export async function listBackupDumpEntries(targetPath) {
+  const targetStats = await stat(targetPath);
+  if (!targetStats.isDirectory()) {
+    return [
+      {
+        filePath: targetPath,
+        name: path.basename(targetPath),
+        mtimeMs: targetStats.mtimeMs,
+        sizeBytes: targetStats.size
+      }
+    ];
+  }
+
+  const entries = await readdir(targetPath, { withFileTypes: true });
+  const dumpEntries = [];
+
+  for (const entry of entries) {
+    if (!entry.isFile() || !entry.name.endsWith(".dump")) {
+      continue;
+    }
+
+    const filePath = path.join(targetPath, entry.name);
+    const fileStats = await stat(filePath);
+    dumpEntries.push({
+      filePath,
+      name: entry.name,
+      mtimeMs: fileStats.mtimeMs,
+      sizeBytes: fileStats.size
+    });
+  }
+
+  dumpEntries.sort((left, right) => right.mtimeMs - left.mtimeMs || right.filePath.localeCompare(left.filePath));
+  return dumpEntries;
+}
+
+export function selectBackupEntriesForPrune(entries, options = {}) {
+  const keepCount = Number.isInteger(options.keepCount) ? Math.max(0, options.keepCount) : null;
+  const retentionDays = Number.isFinite(options.retentionDays) ? Math.max(0, Number(options.retentionDays)) : null;
+  const nowMs = Number.isFinite(options.nowMs) ? Number(options.nowMs) : Date.now();
+  const staleBeforeMs = retentionDays !== null && retentionDays > 0 ? nowMs - retentionDays * 24 * 60 * 60 * 1000 : null;
+
+  const selected = new Map();
+
+  if (keepCount !== null) {
+    entries.slice(keepCount).forEach((entry) => {
+      selected.set(entry.filePath, entry);
+    });
+  }
+
+  if (staleBeforeMs !== null) {
+    entries.forEach((entry) => {
+      if (entry.mtimeMs < staleBeforeMs) {
+        selected.set(entry.filePath, entry);
+      }
+    });
+  }
+
+  return [...selected.values()].sort((left, right) => left.mtimeMs - right.mtimeMs || left.filePath.localeCompare(right.filePath));
+}

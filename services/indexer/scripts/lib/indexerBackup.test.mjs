@@ -8,9 +8,12 @@ import {
   buildBackupMetadata,
   evaluateBackupAge,
   getBackupArtifactPaths,
+  listBackupDumpEntries,
   parseCheckBackupArgs,
+  parseRunBackupArgs,
   readOptionalChecksum,
-  resolveLatestBackupDump
+  resolveLatestBackupDump,
+  selectBackupEntriesForPrune
 } from "./indexerBackup.mjs";
 
 test("getBackupArtifactPaths derives checksum and metadata paths", () => {
@@ -82,4 +85,58 @@ test("resolveLatestBackupDump chooses the newest dump in a directory", async () 
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+test("parseRunBackupArgs supports retention and skip flags", () => {
+  assert.deepEqual(parseRunBackupArgs(["--skip-verify", "--retention-count", "7", "--retention-days", "30", "/tmp/out.dump"]), {
+    outputPath: "/tmp/out.dump",
+    skipVerify: true,
+    retentionCount: 7,
+    retentionDays: 30
+  });
+});
+
+test("listBackupDumpEntries sorts newest first", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "indexer-backup-list-"));
+  try {
+    const older = path.join(dir, "older.dump");
+    const newer = path.join(dir, "newer.dump");
+    await writeFile(older, "older", "utf8");
+    await new Promise((resolve) => setTimeout(resolve, 15));
+    await writeFile(newer, "newer", "utf8");
+
+    const entries = await listBackupDumpEntries(dir);
+    assert.deepEqual(
+      entries.map((entry) => entry.filePath),
+      [newer, older]
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("selectBackupEntriesForPrune unions keep-count and age policy", () => {
+  const entries = [
+    { filePath: "/tmp/newest.dump", mtimeMs: Date.parse("2026-05-05T00:00:00.000Z") },
+    { filePath: "/tmp/middle.dump", mtimeMs: Date.parse("2026-05-03T00:00:00.000Z") },
+    { filePath: "/tmp/oldest.dump", mtimeMs: Date.parse("2026-04-01T00:00:00.000Z") }
+  ];
+
+  assert.deepEqual(
+    selectBackupEntriesForPrune(entries, {
+      keepCount: 2,
+      retentionDays: 10,
+      nowMs: Date.parse("2026-05-05T12:00:00.000Z")
+    }).map((entry) => entry.filePath),
+    ["/tmp/oldest.dump"]
+  );
+
+  assert.deepEqual(
+    selectBackupEntriesForPrune(entries, {
+      keepCount: 1,
+      retentionDays: 1,
+      nowMs: Date.parse("2026-05-05T12:00:00.000Z")
+    }).map((entry) => entry.filePath),
+    ["/tmp/oldest.dump", "/tmp/middle.dump"]
+  );
 });

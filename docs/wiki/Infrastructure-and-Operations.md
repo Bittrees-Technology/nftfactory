@@ -217,7 +217,7 @@ journalctl --user -u cloudflared -f
 
 The indexer backup flow now has integrity sidecars and a host-side verification command:
 
-1. `npm run indexer:db:export`
+1. `npm run indexer:db:backup:run`
 2. `npm run indexer:db:backup:check`
 3. copy the generated `.dump` plus its `.sha256` and `.json` sidecars when moving state to another machine
 4. `npm run indexer:db:import -- /path/to/indexer.dump`
@@ -226,6 +226,11 @@ The indexer backup flow now has integrity sidecars and a host-side verification 
 
 - `indexer-<timestamp>.dump.sha256`
 - `indexer-<timestamp>.dump.json`
+
+`indexer:db:backup:run` creates a new dump and verifies it by default before returning. If you want rolling cleanup in the same command, set:
+
+- `INDEXER_BACKUP_RETENTION_COUNT`
+- `INDEXER_BACKUP_RETENTION_DAYS`
 
 `indexer:db:backup:check` verifies that the latest dump exists, is not stale, matches its sidecars when present, and is readable through `pg_restore --list`. If you want the root release gate to enforce that on the operator host, set:
 

@@ -74,6 +74,7 @@ Then confirm:
 - `npm run check:runtime-health` passes when `RELEASE_WEB_BASE_URL` or the public app URL env is set
 - `npm run check:public-routes` passes when the deployed web origin is configured, including the baseline browser-security headers on page and API responses
 - `npm run indexer:db:backup:check` passes on the operator host when backup freshness is part of the release posture
+- `npm run indexer:db:backup:run` is wired into the host scheduler or external automation when the environment should keep rolling local dumps
 
 If Prisma is unavailable locally, also confirm the degraded startup mode still supports the local testing path you need.
 

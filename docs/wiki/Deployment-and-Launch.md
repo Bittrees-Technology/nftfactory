@@ -186,7 +186,7 @@ Use `indexer:host:restart-api` when you need to reload the API process without d
 
 To duplicate indexed state to another server:
 
-1. `npm run indexer:db:export`
+1. `npm run indexer:db:export` or `npm run indexer:db:backup:run`
 2. `npm run indexer:db:backup:check`
 3. copy the generated `.runtime-host/backups/indexer-*.dump` file and its `.sha256` / `.json` sidecars
 4. set `DATABASE_URL` on the destination
@@ -221,6 +221,7 @@ Before deployment or release validation:
 - [ ] indexer `/health` reports `adminProtection.protected: true`
 - [ ] indexer `/health` reports live primary-chain RPC redundancy, and `webhooks.configured: true` when `REQUIRE_INDEXER_WEBHOOKS_CONFIGURED=1` is part of the release posture
 - [ ] a fresh readable indexer backup exists and `npm run indexer:db:backup:check` passes on the operator host if backup gating is part of the release posture
+- [ ] scheduled backup generation is wired with `npm run indexer:db:backup:run` if the host should retain rolling local dumps
 - [ ] post-launch runtime monitor is wired (`npm run monitor:runtime`) and, if desired, a webhook destination is configured with `RUNTIME_MONITOR_WEBHOOK_URL`
 - [ ] `npm run check:audit` passes and only reports the known RainbowKit/wagmi wallet-stack migration debt
 - [ ] `npm run check:public-routes` passes against the public site origin and confirms the deployed browser-security headers

@@ -24,6 +24,7 @@
     "systemd:uninstall": "bash ./scripts/uninstall-systemd-user-unit.sh",
     "cron:install": "bash ./scripts/install-cron-supervisor.sh",
     "cron:uninstall": "bash ./scripts/uninstall-cron-supervisor.sh",
+    "db:backup:run": "node ./scripts/run-indexer-backup.mjs",
     "db:export": "bash ./scripts/export-indexer-db.sh",
     "db:import": "bash ./scripts/import-indexer-db.sh",
     "db:backup:check": "node ./scripts/check-indexer-backup.mjs",
