@@ -1,3 +1,5 @@
+import { getRpcHosts } from "./rpcPolicy.mjs";
+
 export function isTruthyEnvFlag(value) {
   return ["1", "true", "yes", "on"].includes(String(value || "").trim().toLowerCase());
 }
@@ -82,24 +84,63 @@ export function summarizeDeployHealthFailures(payload) {
     });
 }
 
-export function summarizeIndexerHealthFailure(payload) {
+export function summarizeIndexerHealthFailure(payload, options = {}) {
+  const failures = summarizeIndexerHealthFailures(payload, options);
+  return failures[0] || null;
+}
+
+export function summarizeIndexerHealthFailures(payload, options = {}) {
+  const env = options.env || process.env;
+  const chainId = String(options.chainId || "").trim();
   if (!payload || typeof payload !== "object") {
-    return "Indexer health response was not valid JSON.";
+    return ["Indexer health response was not valid JSON."];
   }
 
   if (payload.ok !== true) {
-    return "Indexer /health returned ok=false.";
+    return ["Indexer /health returned ok=false."];
   }
 
+  const failures = [];
   const adminProtection = payload.adminProtection;
   if (!adminProtection || typeof adminProtection !== "object") {
-    return "Indexer /health did not report adminProtection.";
+    failures.push("Indexer /health did not report adminProtection.");
+    return failures;
   }
 
   if (adminProtection.protected !== true) {
     const mode = String(adminProtection.mode || "unknown");
-    return `Indexer adminProtection is not protected (mode: ${mode}).`;
+    failures.push(`Indexer adminProtection is not protected (mode: ${mode}).`);
   }
 
-  return null;
+  const runtimeRpcUrls = Array.isArray(payload.rpc?.urls)
+    ? [...new Set(payload.rpc.urls.map((value) => String(value || "").trim()).filter(Boolean))]
+    : [];
+  if (runtimeRpcUrls.length === 0) {
+    failures.push("Indexer /health did not report rpc.urls.");
+  } else {
+    const primaryChainId = String(env.NEXT_PUBLIC_PRIMARY_CHAIN_ID || env.NEXT_PUBLIC_CHAIN_ID || "1").trim();
+    const allowSingleUpstream = isTruthyEnvFlag(env.ALLOW_SINGLE_RPC_UPSTREAM);
+    const allowSharedRpcHost = isTruthyEnvFlag(env.ALLOW_SHARED_RPC_HOST);
+    const runtimeRpcHosts = getRpcHosts(runtimeRpcUrls);
+
+    if (chainId && chainId === primaryChainId) {
+      if (runtimeRpcUrls.length < 2 && !allowSingleUpstream) {
+        failures.push(
+          `Indexer primary chain ${chainId} only reports ${runtimeRpcUrls.length} RPC URL. Production runtime requires at least 2 unique upstreams unless ALLOW_SINGLE_RPC_UPSTREAM=1 is set.`
+        );
+      }
+
+      if (runtimeRpcUrls.length >= 2 && runtimeRpcHosts.length < 2 && !allowSharedRpcHost) {
+        failures.push(
+          `Indexer primary chain ${chainId} RPC URLs collapse to ${runtimeRpcHosts.length} unique host. Use distinct upstream hosts or set ALLOW_SHARED_RPC_HOST=1 if one host intentionally fronts resilient failover.`
+        );
+      }
+    }
+  }
+
+  if (isTruthyEnvFlag(env.REQUIRE_INDEXER_WEBHOOKS_CONFIGURED) && payload.webhooks?.configured !== true) {
+    failures.push("Indexer /health reports webhooks.configured=false.");
+  }
+
+  return failures;
 }

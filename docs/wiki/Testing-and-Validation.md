@@ -64,6 +64,8 @@ Then confirm:
 
 - the service starts
 - `/health` returns `{"ok":true}` and `adminProtection.protected: true` unless you intentionally enabled the local/dev override
+- `/health` reports at least two primary-chain RPC URLs with distinct hosts unless you explicitly opted into the weaker runtime overrides
+- `/health` reports `webhooks.configured: true` when `REQUIRE_INDEXER_WEBHOOKS_CONFIGURED=1` is part of the release posture
 - collection, profile, and feed routes behave as expected
 - admin auth behaves as expected
 - listing sync and backfill endpoints work with the configured env

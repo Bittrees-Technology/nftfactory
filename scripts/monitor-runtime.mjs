@@ -107,7 +107,10 @@ async function checkDeployHealth(baseUrl, authorization) {
 async function checkIndexerHealth(target) {
   const url = `${normalizeBaseUrl(target.url)}/health`;
   const { response, payload, text } = await fetchJsonWithTimeout(url);
-  const failure = summarizeIndexerHealthFailure(payload);
+  const failure = summarizeIndexerHealthFailure(payload, {
+    chainId: target.chainId,
+    env: process.env
+  });
   return {
     label: `indexer:${target.chainId}`,
     url: maskUrl(url),
