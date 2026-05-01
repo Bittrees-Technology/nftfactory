@@ -156,14 +156,29 @@ For a clean local Sepolia indexing setup:
 4. Start the indexer API:
    - `npm run dev:indexer`
 
-For a detached local host process that keeps the indexer on `127.0.0.1:8787` and automatically restarts the API if it exits:
+On hosts with `systemd --user` available, prefer installing the persistent user unit:
+
+1. `npm run indexer:systemd:install -- --now`
+2. `systemctl --user status nftfactory-indexer-host.service`
+3. `journalctl --user -u nftfactory-indexer-host.service -f`
+
+That unit runs the same indexer supervisor but survives reboots and normal logout/login cycles once `loginctl enable-linger "$USER"` is enabled for the host user.
+
+If `systemd --user` is unavailable but `crontab` exists, install the reboot + watchdog fallback:
+
+1. `npm run indexer:cron:install`
+2. `crontab -l`
+
+That adds an `@reboot` entry plus a `*/5 * * * *` watchdog that reruns `start-host-supervisor.sh` if the supervisor is ever missing.
+
+If neither `systemd --user` nor `crontab` is available, use the detached supervisor path that keeps the indexer on `127.0.0.1:8787` and automatically restarts the API if it exits:
 
 1. `npm run indexer:host:start`
 2. `npm run indexer:host:status`
 3. `npm run indexer:host:restart-api`
 4. `npm run indexer:host:stop`
 
-The supervisor writes state to `services/indexer/.runtime-host/supervisor-state.json` and logs to `services/indexer/.runtime-host/logs/indexer-host-supervisor.log`.
+The fallback supervisor writes state to `services/indexer/.runtime-host/supervisor-state.json` and logs to `services/indexer/.runtime-host/logs/indexer-host-supervisor.log`.
 Use `indexer:host:restart-api` when you need to reload the API process without wiping the current local PostgreSQL progress. It keeps `services/indexer/.runtime-host/postgres-data` running and reuses the existing database state.
 If you need the old one-shot launcher for debugging, the service workspace still exposes `npm --workspace services/indexer run host:stack:start`.
 

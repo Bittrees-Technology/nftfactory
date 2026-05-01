@@ -32,6 +32,7 @@ packages/contracts/.env.example
 services/indexer/scripts/subname-map.json
 services/indexer/data/
 services/indexer/.runtime-host/
+services/indexer/.systemd-rendered/
 services/indexer/.tools/
 .claude/
 .vercel

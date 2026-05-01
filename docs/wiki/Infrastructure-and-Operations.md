@@ -189,6 +189,7 @@ The practical process models are:
 1. manual terminals
 2. `pm2` for persistent local sessions
 3. `systemd --user` services for persistent local infra processes such as `ipfs` and `cloudflared`
+4. `crontab` `@reboot` + watchdog entries when `systemd --user` is unavailable
 
 Useful `pm2` commands:
 
@@ -204,8 +205,10 @@ pm2 save
 Useful `systemd --user` commands:
 
 ```bash
+systemctl --user status nftfactory-indexer-host.service
 systemctl --user status ipfs
 systemctl --user status cloudflared
+journalctl --user -u nftfactory-indexer-host.service -f
 journalctl --user -u ipfs -f
 journalctl --user -u cloudflared -f
 ```

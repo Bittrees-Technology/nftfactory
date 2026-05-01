@@ -1,0 +1,20 @@
+[Unit]
+Description=NFTFactory Indexer Host Supervisor
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=__ROOT_DIR__
+Environment=HOME=__HOME__
+Environment=PATH=__PATH__
+EnvironmentFile=-__ROOT_DIR__/.env
+ExecStart=__NODE_BIN__ __ROOT_DIR__/scripts/run-host-supervisor.mjs
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+KillMode=mixed
+
+[Install]
+WantedBy=default.target
