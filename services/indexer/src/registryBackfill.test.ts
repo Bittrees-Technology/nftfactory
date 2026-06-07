@@ -42,17 +42,17 @@ describe("registryBackfill helpers", () => {
   it("returns shared backfill targets from env", () => {
     expect(
       getSharedBackfillTargets({
-        NEXT_PUBLIC_SHARED_721_ADDRESS: "0x4018dD11271CecFAbb275656631896F7A8811965",
-        NEXT_PUBLIC_SHARED_1155_ADDRESS: "0x530C5f6F1728dCF60C3399e6D9d3aC729a7637Ce"
+        NEXT_PUBLIC_SHARED_721_ADDRESS: "0xA98Db2732baD732aA588cad65478D3153A48f606",
+        NEXT_PUBLIC_SHARED_1155_ADDRESS: "0xe0F306B9fB44C3d46C0360503D3B1b68366BA97d"
       })
     ).toEqual([
       {
-        contractAddress: "0x4018dd11271cecfabb275656631896f7a8811965",
+        contractAddress: "0xa98db2732bad732aa588cad65478d3153a48f606",
         standard: "ERC721",
         isNftFactoryCreated: true
       },
       {
-        contractAddress: "0x530c5f6f1728dcf60c3399e6d9d3ac729a7637ce",
+        contractAddress: "0xe0f306b9fb44c3d46c0360503d3b1b68366ba97d",
         standard: "ERC1155",
         isNftFactoryCreated: true
       }
@@ -68,7 +68,7 @@ describe("registryBackfill helpers", () => {
           standard: "ERC721"
         },
         {
-          contractAddress: "0x4018dD11271CecFAbb275656631896F7A8811965",
+          contractAddress: "0xA98Db2732baD732aA588cad65478D3153A48f606",
           ownerAddress: "0xFDd45904F8f0ec01Ff3e198A96673634F3761185",
           ensSubname: "artist",
           standard: "erc721",
@@ -77,7 +77,7 @@ describe("registryBackfill helpers", () => {
       ])
     ).toEqual([
       {
-        contractAddress: "0x4018dd11271cecfabb275656631896f7a8811965",
+        contractAddress: "0xa98db2732bad732aa588cad65478d3153a48f606",
         ownerAddress: "0xfdd45904f8f0ec01ff3e198a96673634f3761185",
         ensSubname: "artist",
         standard: "ERC721",

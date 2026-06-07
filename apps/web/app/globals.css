@@ -593,7 +593,7 @@ nav {
 .homeSectionHeader {
   display: grid;
   gap: 10px;
-  align-items: end;
+  align-items: flex-end;
 }
 
 .homeSectionHeader p {
@@ -1155,7 +1155,7 @@ nav {
 
 .discoverPanelHeader {
   display: flex;
-  align-items: end;
+  align-items: flex-end;
   justify-content: space-between;
   gap: 16px;
   flex-wrap: wrap;
@@ -1424,7 +1424,7 @@ nav {
 .profileSetupActionRow {
   display: flex;
   gap: 12px;
-  align-items: end;
+  align-items: flex-end;
   justify-content: space-between;
   flex-wrap: wrap;
 }
@@ -1733,12 +1733,12 @@ nav {
   gap: 4px;
   align-self: stretch;
   margin: 0;
-  align-content: end;
+  align-content: flex-end;
 }
 
 .mintWorkspace .mintRoyaltySplitRowActions {
   display: flex;
-  align-items: end;
+  align-items: flex-end;
 }
 
 .mintWorkspace .mintRoyaltyActions {
@@ -2869,7 +2869,7 @@ button:disabled {
   display: grid;
   gap: 12px;
   grid-template-columns: minmax(180px, 0.85fr) minmax(320px, 1.55fr) minmax(180px, 0.85fr);
-  align-items: end;
+  align-items: flex-end;
 }
 
 .profileIdentityControlLeft,

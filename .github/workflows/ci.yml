@@ -13,6 +13,19 @@ jobs:
   web-checks:
     name: Web typecheck & tests
     runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_PRIMARY_CHAIN_ID: "11155111"
+      NEXT_PUBLIC_ENABLED_CHAIN_IDS: "11155111"
+      NEXT_PUBLIC_RPC_URL_11155111: "https://ethereum-sepolia-rpc.publicnode.com"
+      NEXT_PUBLIC_INDEXER_API_URL_11155111: "https://api.nftfactory.org"
+      NEXT_PUBLIC_REGISTRY_ADDRESS_11155111: "0x2A31aE082179E3AdbCfC4Cf27aC3c094Fd41F56f"
+      NEXT_PUBLIC_ROYALTY_SPLIT_REGISTRY_ADDRESS_11155111: "0x6617DD523409a78831E75E156f532d1F0402b5D8"
+      NEXT_PUBLIC_MODERATOR_REGISTRY_ADDRESS_11155111: "0x5F6F4f93127c9c04a142C5138523a734112fBE40"
+      NEXT_PUBLIC_MARKETPLACE_ADDRESS_11155111: "0xdB8429Eb30f36F8DB0146441645B7295fF37FfD0"
+      NEXT_PUBLIC_SHARED_721_ADDRESS_11155111: "0xA98Db2732baD732aA588cad65478D3153A48f606"
+      NEXT_PUBLIC_SHARED_1155_ADDRESS_11155111: "0xe0F306B9fB44C3d46C0360503D3B1b68366BA97d"
+      NEXT_PUBLIC_SUBNAME_REGISTRAR_ADDRESS_11155111: "0x549530BF5E17697d6C249Ba2b3E408aCA38f7b3F"
+      NEXT_PUBLIC_FACTORY_ADDRESS_11155111: "0xC3D1fbacC9BF055A8c125056aB46955A268c7c56"
     steps:
       - uses: actions/checkout@v4
 
@@ -24,11 +37,23 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Check Sepolia snapshot consistency
+        run: npm run check:sepolia-snapshot
+
+      - name: Check provider secret posture
+        run: npm run check:provider-posture
+
       - name: TypeScript check
         run: npm run typecheck:web
 
       - name: Run web tests
         run: npm run test:web
+
+      - name: Web env check
+        run: npm run check:web-env
+
+      - name: Build web app
+        run: npm run build:web
 
   indexer-checks:
     name: Indexer typecheck & tests

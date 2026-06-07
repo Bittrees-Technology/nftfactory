@@ -49,16 +49,19 @@ Current Sepolia split-registry deployment:
 
 Current app-wired Sepolia contract snapshot:
 
-- `Registry`: `0x1c8124F401Ac7A067f0c3dD39ce102D3623F4DE3`
-- `Marketplace`: `0xc0098BCC01e2179A5018EFabf64a9c74a2E6244B`
-- `RoyaltySplitRegistry`: `0xF2527b3E8085e03A0319CecbcB95a6877546D4B5`
-- `SharedMint721`: `0x4018dD11271CecFAbb275656631896F7A8811965`
-- `SharedMint1155`: `0x530C5f6F1728dCF60C3399e6D9d3aC729a7637Ce`
-- `SubnameRegistrar`: `0x0e8027b4b1E9B288E0e3Eedb50C52C20b8291294`
-- `CreatorFactory`: `0xe2E33E37A7bA2cAe9DEf60B1E1643c2803458DA8`
+- `Registry`: `0x2A31aE082179E3AdbCfC4Cf27aC3c094Fd41F56f`
+- `Marketplace`: `0xdB8429Eb30f36F8DB0146441645B7295fF37FfD0`
+- `RoyaltySplitRegistry`: `0x6617DD523409a78831E75E156f532d1F0402b5D8`
+- `ModeratorRegistry`: `0x5F6F4f93127c9c04a142C5138523a734112fBE40`
+- `SharedMint721`: `0xA98Db2732baD732aA588cad65478D3153A48f606`
+- `SharedMint1155`: `0xe0F306B9fB44C3d46C0360503D3B1b68366BA97d`
+- `SubnameRegistrar`: `0x549530BF5E17697d6C249Ba2b3E408aCA38f7b3F`
+- `CreatorFactory`: `0xC3D1fbacC9BF055A8c125056aB46955A268c7c56`
+- `CreatorCollection721 implementation`: `0x8F85E590047480b68cBe210AC9a433d88B2747BC`
+- `CreatorCollection1155 implementation`: `0xFc7F35DD10B5aEBA8e39eCb1CaeE3a319c0d1503`
 - `ENS NameWrapper`: `0x0635513f179D50A207757E05759CbD106d7dFcE8`
 - `ENS ETH Registrar Controller`: `0xFED6a969AaA60E4961FCD3EBF1A2e8913ac65B72`
-- `RPC`: `https://eth-sepolia.g.alchemy.com/v2/8EMwh0Ehzhq0j7cDJl2Db`
+- `RPC`: `https://ethereum-sepolia-rpc.publicnode.com`
 
 ## Local development
 
@@ -116,6 +119,7 @@ After deployment:
 - seed the moderator set in `ModeratorRegistry` if using the on-chain moderator path
 - update web and indexer env files to the exact deployed addresses
 - use `npm run print:deployment-env -- web` and `npm run print:deployment-env -- indexer` to scaffold the current app-wired Sepolia env blocks before filling RPC, indexer, and IPFS values
+- use `npm run print:mainnet-readiness` before cutover to get a non-secret blocker summary for repo cleanliness, mainnet env, indexer, IPFS, admin, governance, and verification posture
 - use `npm run print:mainnet-cutover` on deploy day to print the full mainnet env block, post-deploy checks, and Safe-transfer sequence in one place
 
 ## Current service wiring

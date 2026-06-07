@@ -291,8 +291,9 @@ const PROFILE_GUESTBOOK_WINDOW_MS = 10 * 60_000;
 const PROFILE_GUESTBOOK_MAX_POSTS_PER_WINDOW = 3;
 const PROFILE_GUESTBOOK_COOLDOWN_MS = 30_000;
 const PAYMENT_TOKEN_FILE = process.env.INDEXER_PAYMENT_TOKEN_FILE || path.join(process.cwd(), "data", "payment-tokens.json");
-const PARTICIPANT_ACTIVITY_FILE =
-  process.env.INDEXER_PARTICIPANT_ACTIVITY_FILE || path.join(process.cwd(), "data", "participant-activity.json");
+function participantActivityFile() {
+  return process.env.INDEXER_PARTICIPANT_ACTIVITY_FILE || path.join(process.cwd(), "data", "participant-activity.json");
+}
 const CUSTOM_COLLECTIONS_FILE = process.env.INDEXER_CUSTOM_COLLECTIONS_FILE || "";
 const TOKEN_PRESENTATION_FILE =
   process.env.INDEXER_TOKEN_PRESENTATION_FILE || path.join(process.cwd(), "data", "token-presentation.json");
@@ -1134,7 +1135,7 @@ function normalizeParticipantActivityRecord(input: ParticipantActivityRecord): P
 
 async function readParticipantActivityRecords(): Promise<ParticipantActivityRecord[]> {
   try {
-    const raw = await readFile(PARTICIPANT_ACTIVITY_FILE, "utf8");
+    const raw = await readFile(participantActivityFile(), "utf8");
     const parsed = JSON.parse(raw) as ParticipantActivityRecord[];
     if (!Array.isArray(parsed)) return [];
     return parsed
@@ -1150,8 +1151,8 @@ async function readParticipantActivityRecords(): Promise<ParticipantActivityReco
 }
 
 async function writeParticipantActivityRecords(records: ParticipantActivityRecord[]): Promise<void> {
-  await mkdir(path.dirname(PARTICIPANT_ACTIVITY_FILE), { recursive: true });
-  await writeFile(PARTICIPANT_ACTIVITY_FILE, JSON.stringify(records, null, 2), "utf8");
+  await mkdir(path.dirname(participantActivityFile()), { recursive: true });
+  await writeFile(participantActivityFile(), JSON.stringify(records, null, 2), "utf8");
 }
 
 async function recordParticipantActivity(input: ParticipantActivityInput): Promise<void> {

@@ -51,6 +51,7 @@ If the app-wired snapshot has changed, regenerate the scaffold first:
 ```bash
 npm run print:deployment-env -- web
 npm run print:deployment-env -- indexer
+npm run check:sepolia-snapshot
 ```
 
 ## 2. Export the root env

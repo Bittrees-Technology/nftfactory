@@ -386,7 +386,9 @@ describe("indexer handler", () => {
   });
 
   it("tracks participant activity for synced tokens and exposes a participant summary", async () => {
-    const participantFile = path.join(process.cwd(), "data", "participant-activity.json");
+    const participantFile = path.join(process.cwd(), "data", "participant-activity-indexer-test.json");
+    const previousParticipantFile = process.env.INDEXER_PARTICIPANT_ACTIVITY_FILE;
+    process.env.INDEXER_PARTICIPANT_ACTIVITY_FILE = participantFile;
     await rm(participantFile, { force: true });
 
     const handler = createRequestHandler(
@@ -444,5 +446,10 @@ describe("indexer handler", () => {
     expect(summaryResponse.body.chains[0].contracts[0].roles).toContain("creator");
 
     await rm(participantFile, { force: true });
+    if (previousParticipantFile === undefined) {
+      delete process.env.INDEXER_PARTICIPANT_ACTIVITY_FILE;
+    } else {
+      process.env.INDEXER_PARTICIPANT_ACTIVITY_FILE = previousParticipantFile;
+    }
   });
 });

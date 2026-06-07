@@ -66,6 +66,7 @@ Run these from the project root:
 | `npm run test:contracts` | Run contract tests |
 | `npm run print:deployment-env -- web` | Print web env exports from the checked-in deployment snapshot, including IPFS placeholders |
 | `npm run print:deployment-env -- indexer` | Print indexer env exports from the checked-in deployment snapshot |
+| `npm run check:sepolia-snapshot` | Verify tracked env examples, scripts, and operator docs still match the checked-in Sepolia deployment snapshot |
 | `npm run check:deployments` | Verify deployed code, ownership, and contract wiring against the current env or snapshot |
 | `npm run docs:contracts-deps` | Regenerate archived contract dependency output |
 

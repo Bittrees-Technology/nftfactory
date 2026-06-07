@@ -1,5 +1,4 @@
-import test from "node:test";
-import assert from "node:assert/strict";
+import { expect, it } from "vitest";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { tmpdir } from "node:os";
@@ -16,16 +15,16 @@ import {
   selectBackupEntriesForPrune
 } from "./indexerBackup.mjs";
 
-test("getBackupArtifactPaths derives checksum and metadata paths", () => {
-  assert.deepEqual(getBackupArtifactPaths("/tmp/indexer.dump"), {
+it("getBackupArtifactPaths derives checksum and metadata paths", () => {
+  expect(getBackupArtifactPaths("/tmp/indexer.dump")).toEqual({
     dumpPath: "/tmp/indexer.dump",
     checksumPath: "/tmp/indexer.dump.sha256",
     metadataPath: "/tmp/indexer.dump.json"
   });
 });
 
-test("parseCheckBackupArgs supports skip flags and max age override", () => {
-  assert.deepEqual(parseCheckBackupArgs(["--skip-age-check", "--max-age-hours", "72", "--json", "/tmp/backups"]), {
+it("parseCheckBackupArgs supports skip flags and max age override", () => {
+  expect(parseCheckBackupArgs(["--skip-age-check", "--max-age-hours", "72", "--json", "/tmp/backups"])).toEqual({
     targetPath: "/tmp/backups",
     maxAgeHours: 72,
     skipAgeCheck: true,
@@ -35,7 +34,7 @@ test("parseCheckBackupArgs supports skip flags and max age override", () => {
   });
 });
 
-test("buildBackupMetadata captures size and checksum", () => {
+it("buildBackupMetadata captures size and checksum", () => {
   const metadata = buildBackupMetadata({
     dumpPath: "/tmp/indexer.dump",
     sha256: "abc123",
@@ -43,7 +42,7 @@ test("buildBackupMetadata captures size and checksum", () => {
     createdAt: "2026-05-01T00:00:00.000Z"
   });
 
-  assert.deepEqual(metadata, {
+  expect(metadata).toEqual({
     version: BACKUP_METADATA_VERSION,
     fileName: "indexer.dump",
     sizeBytes: 1234,
@@ -52,26 +51,26 @@ test("buildBackupMetadata captures size and checksum", () => {
   });
 });
 
-test("evaluateBackupAge marks stale backups", () => {
+it("evaluateBackupAge marks stale backups", () => {
   const fresh = evaluateBackupAge({ mtimeMs: Date.parse("2026-05-01T11:00:00.000Z") }, 24, Date.parse("2026-05-01T12:00:00.000Z"));
-  assert.equal(fresh.stale, false);
+  expect(fresh.stale).toBe(false);
 
   const stale = evaluateBackupAge({ mtimeMs: Date.parse("2026-04-29T00:00:00.000Z") }, 24, Date.parse("2026-05-01T12:00:00.000Z"));
-  assert.equal(stale.stale, true);
+  expect(stale.stale).toBe(true);
 });
 
-test("readOptionalChecksum parses the first token from checksum files", async () => {
+it("readOptionalChecksum parses the first token from checksum files", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "indexer-backup-checksum-"));
   try {
     const checksumPath = path.join(dir, "indexer.dump.sha256");
     await writeFile(checksumPath, "deadbeef  indexer.dump\n", "utf8");
-    assert.equal(await readOptionalChecksum(checksumPath), "deadbeef");
+    await expect(readOptionalChecksum(checksumPath)).resolves.toBe("deadbeef");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
 });
 
-test("resolveLatestBackupDump chooses the newest dump in a directory", async () => {
+it("resolveLatestBackupDump chooses the newest dump in a directory", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "indexer-backup-dir-"));
   try {
     await mkdir(path.join(dir, "nested"));
@@ -81,14 +80,14 @@ test("resolveLatestBackupDump chooses the newest dump in a directory", async () 
     await new Promise((resolve) => setTimeout(resolve, 15));
     await writeFile(newer, "newer", "utf8");
 
-    assert.equal(await resolveLatestBackupDump(dir), newer);
+    await expect(resolveLatestBackupDump(dir)).resolves.toBe(newer);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
 });
 
-test("parseRunBackupArgs supports retention and skip flags", () => {
-  assert.deepEqual(parseRunBackupArgs(["--skip-verify", "--retention-count", "7", "--retention-days", "30", "/tmp/out.dump"]), {
+it("parseRunBackupArgs supports retention and skip flags", () => {
+  expect(parseRunBackupArgs(["--skip-verify", "--retention-count", "7", "--retention-days", "30", "/tmp/out.dump"])).toEqual({
     outputPath: "/tmp/out.dump",
     skipVerify: true,
     retentionCount: 7,
@@ -96,7 +95,7 @@ test("parseRunBackupArgs supports retention and skip flags", () => {
   });
 });
 
-test("listBackupDumpEntries sorts newest first", async () => {
+it("listBackupDumpEntries sorts newest first", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "indexer-backup-list-"));
   try {
     const older = path.join(dir, "older.dump");
@@ -106,37 +105,32 @@ test("listBackupDumpEntries sorts newest first", async () => {
     await writeFile(newer, "newer", "utf8");
 
     const entries = await listBackupDumpEntries(dir);
-    assert.deepEqual(
-      entries.map((entry) => entry.filePath),
-      [newer, older]
-    );
+    expect(entries.map((entry) => entry.filePath)).toEqual([newer, older]);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
 });
 
-test("selectBackupEntriesForPrune unions keep-count and age policy", () => {
+it("selectBackupEntriesForPrune unions keep-count and age policy", () => {
   const entries = [
     { filePath: "/tmp/newest.dump", mtimeMs: Date.parse("2026-05-05T00:00:00.000Z") },
     { filePath: "/tmp/middle.dump", mtimeMs: Date.parse("2026-05-03T00:00:00.000Z") },
     { filePath: "/tmp/oldest.dump", mtimeMs: Date.parse("2026-04-01T00:00:00.000Z") }
   ];
 
-  assert.deepEqual(
+  expect(
     selectBackupEntriesForPrune(entries, {
       keepCount: 2,
       retentionDays: 10,
       nowMs: Date.parse("2026-05-05T12:00:00.000Z")
-    }).map((entry) => entry.filePath),
-    ["/tmp/oldest.dump"]
-  );
+    }).map((entry) => entry.filePath)
+  ).toEqual(["/tmp/oldest.dump"]);
 
-  assert.deepEqual(
+  expect(
     selectBackupEntriesForPrune(entries, {
       keepCount: 1,
       retentionDays: 1,
       nowMs: Date.parse("2026-05-05T12:00:00.000Z")
-    }).map((entry) => entry.filePath),
-    ["/tmp/oldest.dump", "/tmp/middle.dump"]
-  );
+    }).map((entry) => entry.filePath)
+  ).toEqual(["/tmp/oldest.dump", "/tmp/middle.dump"]);
 });
