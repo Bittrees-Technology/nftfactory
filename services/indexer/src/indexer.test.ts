@@ -4,7 +4,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { Readable } from "node:stream";
 import { describe, expect, it, vi } from "vitest";
 import type { PrismaClient } from "@prisma/client";
-import { createRequestHandler, summarizeAdminProtection } from "./indexer.js";
+import { createRequestHandler, isTransientRpcProviderError, summarizeAdminProtection } from "./indexer.js";
 
 function createMockPrisma(): PrismaClient {
   return {
@@ -121,6 +121,12 @@ async function runHandler(
 }
 
 describe("indexer handler", () => {
+  it("classifies transient RPC provider failures", () => {
+    expect(isTransientRpcProviderError(new Error("HTTP request failed: 429 Too Many Requests"))).toBe(true);
+    expect(isTransientRpcProviderError(new Error("Unexpected token M is not valid JSON"))).toBe(true);
+    expect(isTransientRpcProviderError(new Error("execution reverted"))).toBe(false);
+  });
+
   it("summarizes an unprotected admin override explicitly", () => {
     expect(
       summarizeAdminProtection({

@@ -887,6 +887,10 @@ const OWNER_REGISTRY_CACHE_TTL_MS = Math.max(
   15_000,
   Number.parseInt(process.env.INDEXER_OWNER_REGISTRY_CACHE_TTL_MS || "60000", 10) || 60_000
 );
+const OWNER_COLLECTION_SYNC_RPC_COOLDOWN_MS = Math.max(
+  15_000,
+  Number.parseInt(process.env.INDEXER_OWNER_COLLECTION_SYNC_RPC_COOLDOWN_MS || "120000", 10) || 120_000
+);
 const ENABLE_REGISTRY_INTERVAL_SYNC = process.env.INDEXER_ENABLE_REGISTRY_INTERVAL_SYNC === "1";
 const PARTICIPANT_CONTRACT_SYNC_TTL_MS = Math.max(
   15_000,
@@ -935,6 +939,7 @@ let ownerCollectionRegistryCache = new Map<
   }
 >();
 let ownerCollectionSyncAt = new Map<string, number>();
+let ownerCollectionSyncRpcCooldownUntil = new Map<string, number>();
 let ownerCollectionSyncPromises = new Map<string, Promise<void>>();
 let participantContractSyncAt = new Map<string, number>();
 let participantContractSyncPromises = new Map<string, Promise<void>>();
@@ -5019,6 +5024,18 @@ function isRateLimitError(err: unknown): boolean {
   return msg.includes("429") || msg.toLowerCase().includes("too many requests") || msg.includes("rate limit");
 }
 
+export function isTransientRpcProviderError(err: unknown): boolean {
+  const msg = String(err instanceof Error ? err.message : err).toLowerCase();
+  return (
+    isRateLimitError(err) ||
+    msg.includes("not valid json") ||
+    msg.includes("bad gateway") ||
+    msg.includes("gateway timeout") ||
+    msg.includes("temporarily unavailable") ||
+    msg.includes("service unavailable")
+  );
+}
+
 async function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -5676,6 +5693,11 @@ async function syncOwnerCollectionsIfStale(
   if (!force && now - (ownerCollectionSyncAt.get(owner) || 0) < OWNER_COLLECTION_SYNC_TTL_MS) {
     return;
   }
+  const cooldownUntil = ownerCollectionSyncRpcCooldownUntil.get(owner) || 0;
+  if (!force && cooldownUntil > now) {
+    log.debug({ ownerAddress: owner, cooldownUntil }, "owner_collection_sync_deferred_rpc_cooldown");
+    return;
+  }
 
   const promise = (async () => {
     let chainRecords:
@@ -5683,7 +5705,17 @@ async function syncOwnerCollectionsIfStale(
       | null = null;
     try {
       chainRecords = await getCachedOwnerCollectionsFromRegistry(owner, config, options);
+      ownerCollectionSyncRpcCooldownUntil.delete(owner);
     } catch (err) {
+      if (isTransientRpcProviderError(err)) {
+        const cooldownUntil = Date.now() + OWNER_COLLECTION_SYNC_RPC_COOLDOWN_MS;
+        ownerCollectionSyncRpcCooldownUntil.set(owner, cooldownUntil);
+        log.warn(
+          { err, ownerAddress: owner, cooldownMs: OWNER_COLLECTION_SYNC_RPC_COOLDOWN_MS },
+          "owner_collection_sync_deferred_transient_rpc"
+        );
+        return;
+      }
       log.warn({ err, ownerAddress: owner }, "owner_collection_sync_failed");
       return;
     }
