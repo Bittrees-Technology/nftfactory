@@ -8,11 +8,11 @@
     "services/*"
   ],
   "overrides": {
-    "axios": "^1.15.0",
+    "axios": "1.16.0",
     "defu": "^6.1.5",
     "follow-redirects": "^1.15.12",
     "h3": "^1.15.9",
-    "hono": "^4.12.14",
+    "hono": "4.12.21",
     "lodash": "^4.17.24",
     "picomatch": "^4.0.4",
     "postcss": "^8.5.12",

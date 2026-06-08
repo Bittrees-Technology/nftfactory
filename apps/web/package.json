@@ -17,7 +17,7 @@
     "@workspace/ipfs-storage": "file:../../../ipfs-evm-system",
     "@rainbow-me/rainbowkit": "^2.2.10",
     "@tanstack/react-query": "^5.90.21",
-    "next": "15.5.15",
+    "next": "15.5.19",
     "react": "19.0.0",
     "react-dom": "19.0.0",
     "viem": "^2.46.3",
@@ -28,6 +28,6 @@
     "@types/react": "19.0.10",
     "@types/react-dom": "19.0.4",
     "typescript": "5.7.3",
-    "vitest": "3.0.5"
+    "vitest": "3.2.6"
   }
 }
