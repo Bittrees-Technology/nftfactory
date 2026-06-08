@@ -319,6 +319,19 @@ Check:
 
 The current build has explicit long-running backfill routes. If HTTP is still unreliable for a large recovery job, use the standalone indexer script path from `services/indexer/scripts` instead of keeping the browser request open.
 
+For collection recovery, prefer the script-backed path:
+
+    npm --workspace services/indexer run admin:backfill-subname -- --dry-run --file ./services/indexer/scripts/subname-map.json
+    npm --workspace services/indexer run admin:backfill-subname -- --file ./services/indexer/scripts/subname-map.json
+
+For listing recovery, call the admin route directly on the indexer host instead of going through the public web proxy:
+
+    curl -sS -X POST "$INDEXER_ADMIN_BASE_URL/api/admin/listings/sync" \
+      -H "Authorization: Bearer $INDEXER_ADMIN_TOKEN" \
+      -H "x-admin-address: $INDEXER_ADMIN_ADDRESS"
+
+If you only need the combined marketplace sync, use /api/admin/marketplace/sync on the same direct indexer host. The public /api/indexer proxy does not expose either admin path.
+
 ## Historical recovery
 
 Use this when older collections or tokens are missing from the indexer, or when historical metadata needs to be re-pinned into Kubo.
