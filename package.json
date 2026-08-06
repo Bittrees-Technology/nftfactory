@@ -71,6 +71,7 @@
     "check:provider-posture": "node scripts/check-provider-secret-posture.mjs",
     "check:deployments": "node scripts/check-deployment-addresses.mjs",
     "verify:population": "node scripts/verify-population.mjs",
+    "test:independence": "node scripts/verify-independence-product-draft.mjs",
     "print:deployment-env": "node scripts/print-deployment-env.mjs",
     "print:mainnet-readiness": "node scripts/check-mainnet-readiness.mjs",
     "check:mainnet-readiness": "node scripts/check-mainnet-readiness.mjs --strict",
