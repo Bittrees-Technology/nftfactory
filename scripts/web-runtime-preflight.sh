@@ -8,15 +8,14 @@ if [[ "${ALLOW_CONCURRENT_WEB:-0}" == "1" ]]; then
   exit 0
 fi
 
-mapfile -t matches < <(
-  while IFS= read -r line; do
-    case "$line" in
-      *"/node_modules/.bin/next dev "*|*"/node_modules/.bin/next build "*|*"/node_modules/.bin/next dev"|*"/node_modules/.bin/next build")
-        printf '%s\n' "$line"
-        ;;
-    esac
-  done < <(pgrep -af "$ROOT_DIR/node_modules/.bin/next")
-)
+matches=()
+while IFS= read -r line; do
+  case "$line" in
+    *"/node_modules/.bin/next dev "*|*"/node_modules/.bin/next build "*|*"/node_modules/.bin/next dev"|*"/node_modules/.bin/next build")
+      matches+=("$line")
+      ;;
+  esac
+done < <(pgrep -af "$ROOT_DIR/node_modules/.bin/next" || true)
 
 if [[ "${#matches[@]}" -gt 0 ]]; then
   echo "Refusing to start ${MODE}: another web compiler process is already running for ${ROOT_DIR}."
