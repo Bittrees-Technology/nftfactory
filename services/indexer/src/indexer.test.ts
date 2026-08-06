@@ -1,8 +1,8 @@
-import { rm, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { Readable } from "node:stream";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, onTestFinished, vi } from "vitest";
 import type { PrismaClient } from "@prisma/client";
 import { createRequestHandler, isTransientRpcProviderError, summarizeAdminProtection } from "./indexer.js";
 
@@ -293,8 +293,22 @@ describe("indexer handler", () => {
   });
 
   it("restores hidden guestbook entries for the profile owner", async () => {
-    const guestbookFile = path.join(process.cwd(), "data", "profile-guestbook.json");
-    const profileFile = path.join(process.cwd(), "data", "profiles.json");
+    const dataDir = path.join(process.cwd(), "data");
+    const guestbookFile = path.join(dataDir, "profile-guestbook.json");
+    const profileFile = path.join(dataDir, "profiles.json");
+    const dataDirExisted = await access(dataDir).then(() => true).catch(() => false);
+    const [previousGuestbook, previousProfile] = await Promise.all([
+      readFile(guestbookFile).catch(() => null),
+      readFile(profileFile).catch(() => null)
+    ]);
+    await mkdir(dataDir, { recursive: true });
+    onTestFinished(async () => {
+      await Promise.all([
+        previousGuestbook === null ? rm(guestbookFile, { force: true }) : writeFile(guestbookFile, previousGuestbook),
+        previousProfile === null ? rm(profileFile, { force: true }) : writeFile(profileFile, previousProfile)
+      ]);
+      if (!dataDirExisted) await rm(dataDir, { recursive: true, force: true });
+    });
     await writeFile(profileFile, JSON.stringify([
       {
         slug: "demo",
