@@ -61,3 +61,13 @@ Read-only verification found the Safe deployed on Ethereum and Sepolia, with thi
 The deployment script configures contracts under the deploying signer and initiates eight two-step ownership transfers. Release remains blocked until the Safe calls `acceptOwnership()` on each of registry, royalty split registry, subname registrar, moderator registry, shared 721, shared 1155, creator factory, and marketplace. Verify every `owner()` equals the Safe and `pendingOwner()` is zero. A pending transfer is not completed custody.
 
 Do not change production contract addresses or enable new marketplace transactions before replacement deployment, ownership acceptance, exact-runtime verification, and two-wallet testnet acceptance all pass.
+
+## Verified replacement deployment and additional Safes
+
+All 22 Sepolia replacement deployment transactions have succeeded. Their sender, nonce, destination, value, calldata and created addresses match the reviewed simulation. All ten deployed runtimes pass the exact compiled-runtime gate. Eight contracts currently retain the deploying signer as owner and nominate the confirmed Safe as pending owner. This is an intermediate custody state, not completed Safe control.
+
+The eight-call acceptance batch is loaded in the Sepolia Safe, and Safe Transaction Builder simulation succeeded. Final signer approval and on-chain ownership verification remain required. Deployment transactions sent directly by the signer do not automatically create Safe queue entries.
+
+Read-only mainnet checks also confirmed the same Safe at `0xaBE23191D53E3Caad10DE495b7Cfe0d0288b5E6f` on Base (8453) and Robinhood (4663), each with raging.eth's resolved address as sole owner and threshold 1. Safe creation does not deploy NFTFactory contracts or enable those networks in the product. Their test acceptance, fee estimates and contract deployments remain separate release steps.
+
+Evidence: `docs/reviews/product-expansion/sepolia-replacement/`. Public-chain receipts and runtime reports contain no RPC credentials or wallet secrets. The recorded pending-owner state must be superseded by an acceptance report after execution.

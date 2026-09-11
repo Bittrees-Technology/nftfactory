@@ -29,3 +29,9 @@ After the 22 public deployment requests complete, verify exact runtime code and 
 ## Validation
 
 Local: 247 web tests, web type check, production build, contract tests and isolated Safe deployment/acceptance rehearsal pass. The creator introduction and share image return server-rendered content locally. The sharing PNG was visually reviewed. GitHub CI and Vercel staging evidence are recorded with the release PR.
+
+## Follow-up verification
+
+PR #26 merged into main as `3562540260f92bbf2ad74fb4eea652308703408a`, with all three GitHub CI jobs passing. Merged local and remote feature branches were pruned; only main remains. A fresh dependency audit reported zero vulnerabilities. Vercel deployment `dpl_9yLinDJqFamNSAYioNVRVhTcWLMJ` reached READY; authenticated staging checks passed for home, creator walkthrough, marketplace, robots, sitemap and the deployment health endpoint. The live domain remained on the previous release pending the coordinated rollout.
+
+The user completed all 22 Sepolia deployment transactions. Receipt contents and all ten runtime contracts were verified against the reviewed source. The eight ownership handoffs await Safe acceptance; a successful Safe Transaction Builder simulation and review are prepared. The same Safe is now verified on Base and Robinhood mainnet, but NFTFactory deployment to those chains remains outstanding.

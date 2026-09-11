@@ -1,0 +1,109 @@
+{
+  "chainId": 11155111,
+  "blockNumber": "11682849",
+  "checkedAt": "2026-09-11T15:40:28.624Z",
+  "exactMatch": true,
+  "method": "Exact compiled runtime comparison with compiler-declared immutable bytes masked. Metadata-excluded comparison is diagnostic only; constructor/immutable values require separate verification.",
+  "results": [
+    {
+      "name": "NftFactoryRegistry",
+      "address": "0x4530ab3ed550ec65fbcf2b1e4c2ccb5f82905b7f",
+      "hasCode": true,
+      "runtimeHash": "0xcbe269757f656cf91e109d39c6c9c4e45fe3e144443a52c601102a4f660e9e14",
+      "actualBytes": 4865,
+      "expectedBytes": 4865,
+      "exact": true,
+      "excludingMetadata": true
+    },
+    {
+      "name": "RoyaltySplitRegistry",
+      "address": "0x096bd73eb0ae183b59c1da7ac8ef1cac5522082d",
+      "hasCode": true,
+      "runtimeHash": "0xdb1e32a9dcd008a4797d658d9796c3925682603993c976c6a1bbab4dfec94c41",
+      "actualBytes": 2857,
+      "expectedBytes": 2857,
+      "exact": true,
+      "excludingMetadata": true
+    },
+    {
+      "name": "SubnameRegistrar",
+      "address": "0x0c63e82d5006e6682b7436f05f4217fc7e65f46f",
+      "hasCode": true,
+      "runtimeHash": "0xca0c2a04776ba1dc9610a322f88340b39b23f6c97de8901c566db906a6cbf26c",
+      "actualBytes": 3599,
+      "expectedBytes": 3599,
+      "exact": true,
+      "excludingMetadata": true
+    },
+    {
+      "name": "ModeratorRegistry",
+      "address": "0x95ec5bf5f35642ebd4d32ab1c9762798f8c71478",
+      "hasCode": true,
+      "runtimeHash": "0xa28d4af8b1bc8cc3638de296b333aa63c9148c96c6804f5ad0925aa362d4bc42",
+      "actualBytes": 3218,
+      "expectedBytes": 3218,
+      "exact": true,
+      "excludingMetadata": true
+    },
+    {
+      "name": "SharedMint721",
+      "address": "0x0c62a94095b73ec539b91607436bc42b8f9c7a91",
+      "hasCode": true,
+      "runtimeHash": "0xbd933aa9264d6ad7a30b371b3e79e15e735fd7c9eaee6ab04e0f230f36f57af5",
+      "actualBytes": 4862,
+      "expectedBytes": 4862,
+      "exact": true,
+      "excludingMetadata": true
+    },
+    {
+      "name": "SharedMint1155",
+      "address": "0x0c5b5c23bc1a47c9c15d43cba1d51c0fad9dc477",
+      "hasCode": true,
+      "runtimeHash": "0x25e5ac6c18c71bded9bea4d8b423791dfc0bfc519415e874edc762ae504b5485",
+      "actualBytes": 6158,
+      "expectedBytes": 6158,
+      "exact": true,
+      "excludingMetadata": true
+    },
+    {
+      "name": "CreatorCollection721",
+      "address": "0x75d5d8ad3311269647f27bf214a8186599febe02",
+      "hasCode": true,
+      "runtimeHash": "0xc6ecb57cb63be3d1b94aa3cb8364b2e85d0be9b4970e3fef50805c88e25db539",
+      "actualBytes": 10679,
+      "expectedBytes": 10679,
+      "exact": true,
+      "excludingMetadata": true
+    },
+    {
+      "name": "CreatorCollection1155",
+      "address": "0xe44186ab7212cd51a424644550d3b6a6c19e8ebb",
+      "hasCode": true,
+      "runtimeHash": "0x491fb1a898ec07da5eb8fe6fdf07b84ba355bdb4e1ab10404d328406d3f128ea",
+      "actualBytes": 10635,
+      "expectedBytes": 10635,
+      "exact": true,
+      "excludingMetadata": true
+    },
+    {
+      "name": "CreatorFactory",
+      "address": "0x350b2bc9c5a2e625b27487d71e8e9ce58f56aeae",
+      "hasCode": true,
+      "runtimeHash": "0x5220cd1d91c8404f29727a90ab02dd072dadd69df6e7e7404e01c6699e0b7df6",
+      "actualBytes": 4085,
+      "expectedBytes": 4085,
+      "exact": true,
+      "excludingMetadata": true
+    },
+    {
+      "name": "Marketplace",
+      "address": "0xbde18862bc7ff0b72dd0a47ae2b746a53a800b4d",
+      "hasCode": true,
+      "runtimeHash": "0x9df4430443ab6b3c25d33963e72e0abc0d2b5e14184a9e292e23b930905d114a",
+      "actualBytes": 12836,
+      "expectedBytes": 12836,
+      "exact": true,
+      "excludingMetadata": true
+    }
+  ]
+}
