@@ -1,0 +1,16 @@
+{
+  "transactionHash": "0x1d38d8114f9d1013ba0ece09aebcea80dbdd61484e7b9aa006df1f1268378673",
+  "status": "0x1",
+  "contract": "0x4018dd11271cecfabb275656631896f7a8811965",
+  "tokenId": "5",
+  "ownerOf": "0xE5350D96FC3161BF5c385843ec5ee24E8B465B2f",
+  "tokenURI": "ipfs://bafkreibc2c5ufthhfdxpxf6rvgpabuugyf4yocze7vzhexrh5tjophdnv4",
+  "metadata": {
+    "name": "NFTFactory Sepolia Acceptance",
+    "description": "Original test artwork verifying NFTFactory creation, replicated IPFS storage, and Sepolia minting. Testnet only.",
+    "image": "ipfs://bafkreigfcrd57ctudtoum7vsgdj6kuokhi46gatatnefbevymnjnvkqvha"
+  },
+  "metadataSha256": "22d0bb42cce728eefb97d1a99e00d286c179870b24fd72725e27ecd2e79c6daf",
+  "artworkSha256": "c51447df8a741cdd467eb230d3e551ca3a39e302609b485092b86352daaa1538",
+  "twoCopiesVerified": true
+}

@@ -2,6 +2,8 @@
 
 This records implementation against [the ordered review](Product-Refresh-Review-2026-09-11.md). Code readiness and operational readiness are separate: the refreshed application can be built and deployed, but publishing must remain paused until independent storage and the indexer are reachable.
 
+See [the latest live release acceptance](Release-Acceptance-2026-09-11.md) for the successful mint, indexing retry, restore drill and remaining availability limits. It supersedes earlier pending-status notes below.
+
 ## Operational progress after the initial review
 
 As of the latest 2026-09-11 checks:
