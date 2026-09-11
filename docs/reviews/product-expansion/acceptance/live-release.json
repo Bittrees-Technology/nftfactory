@@ -1,0 +1,52 @@
+{
+  "checkedAt": "2026-09-11T16:21:55.374Z",
+  "deployment": "dpl_3rsfvc7qBfQmR7XkJQVfti6MUCkH",
+  "sourceCommit": "689d0c64e4a339c1f38811d96436dc9842c0a6fc",
+  "results": [
+    {
+      "path": "/",
+      "status": 200,
+      "passwordChallenge": null,
+      "title": "Create NFTs. Build your body of work. | NFTFactory",
+      "robots": null
+    },
+    {
+      "path": "/marketplace",
+      "status": 200,
+      "passwordChallenge": null,
+      "title": "NFT marketplace | NFTFactory",
+      "robots": null
+    },
+    {
+      "path": "/profile/setup",
+      "status": 200,
+      "passwordChallenge": null,
+      "title": "Customize your creator page | NFTFactory",
+      "robots": null
+    },
+    {
+      "path": "/robots.txt",
+      "status": 200,
+      "passwordChallenge": null,
+      "robots": null
+    },
+    {
+      "path": "/sitemap.xml",
+      "status": 200,
+      "passwordChallenge": null,
+      "robots": null,
+      "sitemapValid": true
+    },
+    {
+      "path": "/api/deploy/health",
+      "status": 200,
+      "passwordChallenge": null,
+      "robots": null
+    },
+    {
+      "path": "www/wiki/storage",
+      "status": 308,
+      "location": "https://nftfactory.org/wiki/storage"
+    }
+  ]
+}
