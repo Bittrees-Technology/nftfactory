@@ -1,5 +1,6 @@
 import { readToken } from "../../../packages/auth/session.mjs";
 import dotenv from "dotenv";
+import { verifyMintReceipt } from './mintReceipt.js';
 
 import { mkdir, readFile, writeFile, rename } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
@@ -6344,6 +6345,14 @@ async function handleRequest(
     }
 
     const payload = await readJsonBody<SyncMintedTokenPayload>(req);
+    const session = readToken(parseBearerToken(req.headers.authorization), process.env.SESSION_SECRET, 'session');
+    if (!session) { sendJson(res, 401, { error: 'Sign in to index your mint.' }); return; }
+    try {
+      const verified = await verifyMintReceipt(createRpcClient(config), payload, session.address);
+      Object.assign(payload, verified);
+    } catch {
+      sendJson(res, 403, { error: 'A confirmed mint owned by the signed-in wallet is required.' }); return;
+    }
     const token = await upsertMintedToken(payload, deps, config);
     await upsertTokenPresentationRecord({
       contractAddress: payload.contractAddress,

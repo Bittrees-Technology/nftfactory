@@ -1,3 +1,5 @@
+// Receipt verification has its own chain-data tests; these suites exercise persistence.
+vi.mock('./mintReceipt.js', () => ({ verifyMintReceipt: vi.fn(async (_client, input, signer) => ({ ownerAddress: signer, creatorAddress: signer, collectionOwnerAddress: input.collectionOwnerAddress || signer })) }));
 import { issueToken } from "../../../packages/auth/session.mjs";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
