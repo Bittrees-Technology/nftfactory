@@ -6,8 +6,10 @@ export PATH=/opt/nftfactory-node24/bin:/usr/sbin:/usr/bin:/sbin:/bin
 [[ ${NFTFACTORY_FINAL_RELEASE:-} == 1 ]] || { echo 'Deployment held. Set NFTFACTORY_FINAL_RELEASE=1 only at the final release step.'; exit 1; }
 source_dir=${1:?Provide a prepared runtime directory}
 expected_commit=${2:?Provide the reviewed full commit}
+release_config=${3:-}
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 node "$script_dir/verify-indexer-release.mjs" "$source_dir" "$expected_commit"
+if [[ -n "$release_config" ]]; then node "$script_dir/apply-indexer-release-config.mjs" "$release_config"; fi
 [[ -d /opt/nftfactory-indexer && ! -L /opt/nftfactory-indexer ]] || { echo 'Unexpected current installation layout; stop for review.'; exit 1; }
 stamp=$(date -u +%Y%m%dT%H%M%SZ)
 release_dir="/opt/nftfactory-indexer-release-$stamp"
@@ -44,11 +46,13 @@ runuser -u postgres -- pg_dump --format=custom nftfactory_app > "$backup_dir/dat
 pg_restore --list "$backup_dir/database.dump" > "$backup_dir/database.contents"
 tar -C /var/lib/nftfactory-indexer -czf "$backup_dir/profile-data.tar.gz" .
 cp /etc/systemd/system/nftfactory-indexer.service "$backup_dir/service.unit"
+cp /etc/nftfactory-indexer/service.env "$backup_dir/service.env"
 printf '%s\n' "$expected_commit" > "$backup_dir/target-commit"
 chmod 0600 "$backup_dir/"*
 migration_started=1
 # --env-file reads the root-owned service file without printing or shell-evaluating credentials.
 node --env-file=/etc/nftfactory-indexer/service.env node_modules/prisma/build/index.js migrate deploy --schema services/indexer/prisma/schema.prisma
+if [[ -n "$release_config" ]]; then node "$script_dir/apply-indexer-release-config.mjs" "$release_config" "$release_dir" "$backup_dir"; fi
 mv /opt/nftfactory-indexer "$previous_dir"
 mv "$release_dir" /opt/nftfactory-indexer
 systemctl start nftfactory-indexer
