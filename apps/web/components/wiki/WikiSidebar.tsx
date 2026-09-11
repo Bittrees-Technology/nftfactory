@@ -34,7 +34,7 @@ export default function WikiSidebar({
   return (
     <aside className="card wikiSidebar">
       <p className="eyebrow">Creator Guide</p>
-      <h1>Wiki</h1>
+      <h2>Wiki</h2>
       <p className="sectionLead">{lead}</p>
       <label className="wikiSearchLabel">
         <span>Filter pages</span>

@@ -1,3 +1,4 @@
+vi.mock('./publicSeo', () => ({ publicCreatorSitemapPaths: async () => [] }));
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { canIndexSite, pageMetadata } from './seo';
 import robots from '../app/robots';

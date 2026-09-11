@@ -25,13 +25,15 @@ contract DeployScript is Script {
 
     function run() external {
         require(block.chainid == vm.envUint("EXPECTED_CHAIN_ID"), "Unexpected deployment network");
-        uint256 pk = vm.envUint("PRIVATE_KEY");
-        address deployer = vm.addr(pk);
+        address deployer = vm.envAddress("DEPLOYER_ADDRESS");
+        require(deployer != address(0), "Deployer is required");
+        address adminSafe = vm.envAddress("ADMIN_SAFE");
+        require(adminSafe.code.length > 0, "Administrator Safe must exist on this network");
         address treasury = vm.envAddress("TREASURY_SAFE");
         require(treasury != address(0), "Treasury is required");
         address[] memory paymentTokens = _readOptionalPaymentTokenAllowlist();
 
-        vm.startBroadcast(pk);
+        vm.startBroadcast(deployer);
 
         NftFactoryRegistry registry = new NftFactoryRegistry(deployer, treasury);
         RoyaltySplitRegistry splitRegistry = new RoyaltySplitRegistry(deployer);
@@ -56,7 +58,19 @@ contract DeployScript is Script {
         registrar.setAuthorizedMinter(address(shared721), true);
         registrar.setAuthorizedMinter(address(shared1155), true);
 
+        // Two-step ownership: the Safe must accept each handoff before release.
+        registry.transferOwnership(adminSafe);
+        splitRegistry.transferOwnership(adminSafe);
+        registrar.transferOwnership(adminSafe);
+        moderatorRegistry.transferOwnership(adminSafe);
+        shared721.transferOwnership(adminSafe);
+        shared1155.transferOwnership(adminSafe);
+        factory.transferOwnership(adminSafe);
+        marketplace.transferOwnership(adminSafe);
+
         vm.stopBroadcast();
+        console2.log("Pending administrator Safe", adminSafe);
+        console2.log("RELEASE HOLD: Safe must accept all eight ownership transfers");
 
         console2.log("Registry", address(registry));
         console2.log("RoyaltySplitRegistry", address(splitRegistry));

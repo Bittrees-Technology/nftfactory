@@ -43,3 +43,8 @@ Preserve: Create / Explore / Marketplace / My studio navigation, semantic links,
 - Local HTTP checks: 13 public/workspace/guide/metadata routes return 200, unique titles and appropriate canonical paths are present, and default noindex / blocked robots / empty sitemap remain.
 - These are presentation and indexing checks, not a new live mint or purchase acceptance run. Existing release gates remain in Release-Acceptance.md.
 - GitHub CI must pass before merging this refresh; no production deployment is triggered.
+
+
+## Execution update
+
+The www certificate/redirect finding is resolved. See [Launch execution](Launch-Execution-2026-09-11.md) for implemented search metadata, sharing cards, walkthrough, marketing kit, confirmed Safe custody, and the outstanding public release steps.

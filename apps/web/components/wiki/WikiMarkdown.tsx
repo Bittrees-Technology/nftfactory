@@ -163,7 +163,7 @@ export default function WikiMarkdown({ content }: { content: string }) {
       const seenCount = seenHeadingIds.get(baseId) ?? 0;
       seenHeadingIds.set(baseId, seenCount + 1);
       const headingId = seenCount === 0 ? baseId : `${baseId}-${seenCount + 1}`;
-      const Tag = `h${Math.min(level + 1, 6)}` as ElementType;
+      const Tag = `h${level}` as ElementType;
       blocks.push(
         <Tag key={`heading-${key++}`} id={headingId} className={`wikiHeading wikiHeading${level}`}>
           <a href={`#${headingId}`} className="wikiHeadingAnchor">

@@ -15,7 +15,8 @@ const publicWikiSlugs = new Set([
   "ens-integration",
   "contracts",
   "finality",
-  "storage"
+  "storage",
+  "creator-walkthrough"
 ]);
 
 export type WikiPageSummary = {

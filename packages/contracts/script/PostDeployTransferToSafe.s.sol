@@ -7,12 +7,14 @@ import {Owned} from "../src/utils/Owned.sol";
 
 contract PostDeployTransferToSafeScript is Script {
     function run() external {
-        uint256 pk = vm.envUint("PRIVATE_KEY");
-        address safe = vm.envAddress("TREASURY_SAFE");
+        require(block.chainid == vm.envUint("EXPECTED_CHAIN_ID"), "Unexpected deployment network");
+        address deployer = vm.envAddress("DEPLOYER_ADDRESS");
+        address safe = vm.envAddress("ADMIN_SAFE");
+        require(deployer != address(0) && safe.code.length > 0, "Configured signer and deployed Safe required");
 
         address[] memory ownables = vm.envAddress("OWNABLE_ADDRESSES", ",");
 
-        vm.startBroadcast(pk);
+        vm.startBroadcast(deployer);
         for (uint256 i = 0; i < ownables.length; i++) {
             Owned(ownables[i]).transferOwnership(safe);
             console2.log("Ownership transfer initiated (pending acceptance)", ownables[i]);

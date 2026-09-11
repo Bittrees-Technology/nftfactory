@@ -1,6 +1,6 @@
 # Requirement-to-evidence release checklist
 
-Current decision: **hold deployment**. Implementation is on the feature branch and GitHub checks pass through `38c3a21`. This is not a claim that every control/state or public-chain transaction has passed. No production release or mainnet broadcast occurred.
+Current decision: **public promotion pending runtime and wallet acceptance**. The user has requested deployment completion; the remaining hold is technical, not a missing general permission. Expansion and brand work were merged in PRs #24 and #25. See Launch-Execution-2026-09-11.md for the certificate repair, confirmed Safe custody, SEO implementation and deployment rehearsal. Local simulation does not certify public-chain acceptance.
 
 | Plan area | Implemented / evidence | Still required |
 |---|---|---|

@@ -48,3 +48,16 @@ Run `scripts/compare-contract-runtime.mjs` with the intended network manifest, t
 The existing Sepolia manifest currently fails this gate. The reviewed marketplace also now stores fee rate and treasury at creation of each listing/offer, preventing later registry changes from altering those orders. This behavior requires a new marketplace deployment; do not infer it exists at the old address.
 
 A read-only probe on 2026-09-11 verified the expected chain IDs on Ethereum, Ethereum Sepolia, Base, Base Sepolia, Robinhood and Robinhood testnet. All six returned recent heads (0–4 seconds old during the sample) and a finalized block. Measured individual chain/head reads ranged from 90–372 ms from the review computer. This is one sample, not sustained rate-limit, reorg, indexer or availability acceptance. Evidence: `docs/reviews/product-expansion/network-rpc-probe.json`. No network was enabled in production by this probe.
+
+
+## Confirmed custody, September 11
+
+Administrator and treasury: `0xaBE23191D53E3Caad10DE495b7Cfe0d0288b5E6f` (Safe).
+Proposer/signer: `raging.eth`, resolved on Ethereum to `0xE5350D96FC3161BF5c385843ec5ee24E8B465B2f`.
+Read-only verification found the Safe deployed on Ethereum and Sepolia, with this signer as its sole owner and threshold 1. This is current observed configuration, not a recommendation for broad real-value trading.
+
+`Deploy.s.sol` now requires `DEPLOYER_ADDRESS`, `ADMIN_SAFE`, `TREASURY_SAFE`, and `EXPECTED_CHAIN_ID`. It does not read a private key from the environment. Use the authorized wallet or a configured Foundry signer for broadcast; never export a browser wallet seed/key. A simulation alone does not broadcast.
+
+The deployment script configures contracts under the deploying signer and initiates eight two-step ownership transfers. Release remains blocked until the Safe calls `acceptOwnership()` on each of registry, royalty split registry, subname registrar, moderator registry, shared 721, shared 1155, creator factory, and marketplace. Verify every `owner()` equals the Safe and `pendingOwner()` is zero. A pending transfer is not completed custody.
+
+Do not change production contract addresses or enable new marketplace transactions before replacement deployment, ownership acceptance, exact-runtime verification, and two-wallet testnet acceptance all pass.
