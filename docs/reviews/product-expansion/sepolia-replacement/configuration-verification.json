@@ -1,0 +1,93 @@
+{
+  "chainId": 11155111,
+  "blockNumber": "11682864",
+  "checkedAt": "2026-09-11T15:44:34.609Z",
+  "passed": true,
+  "results": [
+    {
+      "contract": "NftFactoryRegistry",
+      "field": "treasury",
+      "actual": "0xaBE23191D53E3Caad10DE495b7Cfe0d0288b5E6f",
+      "expected": "0xaBE23191D53E3Caad10DE495b7Cfe0d0288b5E6f",
+      "passed": true
+    },
+    {
+      "contract": "SubnameRegistrar",
+      "field": "treasury",
+      "actual": "0xaBE23191D53E3Caad10DE495b7Cfe0d0288b5E6f",
+      "expected": "0xaBE23191D53E3Caad10DE495b7Cfe0d0288b5E6f",
+      "passed": true
+    },
+    {
+      "contract": "NftFactoryRegistry",
+      "field": "protocolFeeBps",
+      "actual": "0",
+      "expected": "0",
+      "passed": true,
+      "basis": "Reviewed constructor leaves protocolFeeBps at zero; deployment has no fee setter call."
+    },
+    {
+      "contract": "CreatorFactory",
+      "field": "registry",
+      "actual": "0x4530aB3eD550eC65FbCF2B1e4C2CCb5F82905b7F",
+      "expected": "0x4530ab3ed550ec65fbcf2b1e4c2ccb5f82905b7f",
+      "passed": true
+    },
+    {
+      "contract": "Marketplace",
+      "field": "registry",
+      "actual": "0x4530aB3eD550eC65FbCF2B1e4C2CCb5F82905b7F",
+      "expected": "0x4530ab3ed550ec65fbcf2b1e4c2ccb5f82905b7f",
+      "passed": true
+    },
+    {
+      "contract": "CreatorFactory",
+      "field": "implementation721",
+      "actual": "0x75d5D8AD3311269647f27bF214A8186599FebE02",
+      "expected": "0x75d5d8ad3311269647f27bf214a8186599febe02",
+      "passed": true
+    },
+    {
+      "contract": "CreatorFactory",
+      "field": "implementation1155",
+      "actual": "0xE44186aB7212Cd51A424644550d3b6A6c19e8EbB",
+      "expected": "0xe44186ab7212cd51a424644550d3b6a6c19e8ebb",
+      "passed": true
+    },
+    {
+      "contract": "NftFactoryRegistry",
+      "field": "authorizedFactory",
+      "actual": "true",
+      "expected": "true",
+      "passed": true
+    },
+    {
+      "contract": "SubnameRegistrar",
+      "field": "authorizedMinter",
+      "actual": "true",
+      "expected": "true",
+      "passed": true
+    },
+    {
+      "contract": "SubnameRegistrar",
+      "field": "authorizedMinter",
+      "actual": "true",
+      "expected": "true",
+      "passed": true
+    },
+    {
+      "contract": "SharedMint721",
+      "field": "registrar",
+      "actual": "0x0c63e82D5006e6682B7436F05F4217FC7e65f46F",
+      "expected": "0x0c63e82d5006e6682b7436f05f4217fc7e65f46f",
+      "passed": true
+    },
+    {
+      "contract": "SharedMint1155",
+      "field": "registrar",
+      "actual": "0x0c63e82D5006e6682B7436F05F4217FC7e65f46F",
+      "expected": "0x0c63e82d5006e6682b7436f05f4217fc7e65f46f",
+      "passed": true
+    }
+  ]
+}

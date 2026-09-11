@@ -4,7 +4,7 @@ Status: prepared, not executed. Production is unchanged. Do not use the older tw
 
 ## Before the final deployment step
 
-1. Require a clean reviewed commit, passing GitHub checks, completed transaction acceptance and a resolved contract deployment manifest. Existing Sepolia contracts do not match this reviewed build; see the runtime comparison evidence.
+1. Require a clean reviewed commit, passing GitHub checks, completed transaction acceptance and a resolved contract deployment manifest. Replacement Sepolia contracts now match the reviewed build and Safe ownership is complete; see the replacement runtime and ownership evidence.
 2. Run `node scripts/package-indexer-release.mjs --out <new-directory>` from the clean checkout on supported Node 24. Keep `release-manifest.json`, the lockfile and every listed file. Never include credentials, private data, or `node_modules` in the transfer.
 3. Run `node scripts/verify-indexer-release.mjs <new-directory> <full-reviewed-commit>`. This checks hashes, required files, clean commit declaration and unexpected files/symlinks. It is not a cryptographic publisher signature; transfer only the artifact prepared from the trusted checkout.
 4. Copy the directory plus `scripts/install-acer-indexer-release.sh` and `scripts/verify-indexer-release.mjs` to the existing Acer staging area. Keep both scripts together. Verify the uploaded directory again before installation.
@@ -32,10 +32,12 @@ Use a maintenance window with the indexer stopped. Substitute only the exact pat
 
 The new backend requires network-bound SIWE sessions, so users sign in again. After backend canaries pass, build Vercel from the actual production environment, never the local test `.env.local` or `.next-build` output.
 
-Set `NEXT_PUBLIC_IPFS_REPLICA_GATEWAY=https://neat-lime-mite.myfilebase.com` in the final Vercel configuration; its current production value was empty during review. Keep Acer's primary gateway. The local browser test loaded the acceptance artwork from this Filebase host with the primary deliberately unavailable, then restored the primary setting.
+Set `NEXT_PUBLIC_IPFS_REPLICA_GATEWAY=https://neat-lime-mite.myfilebase.com` in the final Vercel configuration; this value is now configured in production. Sensitive CLI exports can show blanks and are not evidence that a secret is missing. Keep Acer's primary gateway. The local browser test loaded the acceptance artwork from this Filebase host with the primary deliberately unavailable, then restored the primary setting.
 
 Verify protected-site access, sign-in, profile persistence, public snapshot fallback, image fallback, uploads and transaction indexing. Keep the current access restriction until public launch is authorized. Merge/prune only once release evidence and rollback references are preserved.
 
 ## Outage limitations
 
 Public snapshots are dated read-only copies, not database replication. Only exported profiles have copies, and new edits require a fresh export/release. During Acer outage, existing replicated NFT files and exported public profiles can be read; profile edits, private tags, imports, live marketplace state and new uploads require service recovery. Private offsite database backups remain deferred after launch under the $0/month constraint.
+
+Before replacing the marketplace address, isolate or migrate its indexed state: listing and offer identifiers are keyed by chain, so a second marketplace on the same chain can reuse old IDs. Preserve the old database and cursor files; use a separate release database/state or a verified marketplace-aware migration. Do not simply point the existing index at the replacement contract.

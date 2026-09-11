@@ -71,3 +71,5 @@ The eight-call acceptance batch is loaded in the Sepolia Safe, and Safe Transact
 Read-only mainnet checks also confirmed the same Safe at `0xaBE23191D53E3Caad10DE495b7Cfe0d0288b5E6f` on Base (8453) and Robinhood (4663), each with raging.eth's resolved address as sole owner and threshold 1. Safe creation does not deploy NFTFactory contracts or enable those networks in the product. Their test acceptance, fee estimates and contract deployments remain separate release steps.
 
 Evidence: `docs/reviews/product-expansion/sepolia-replacement/`. Public-chain receipts and runtime reports contain no RPC credentials or wallet secrets. The recorded pending-owner state must be superseded by an acceptance report after execution.
+
+Safe acceptance subsequently completed: at Sepolia block 11682861, all eight owners were the confirmed Safe and all pending owners were zero. Twelve treasury, registry, implementation, minter and initial fee configuration checks passed. The reviewed deployment initializes protocol fees to zero; no fee increase was requested or sent. See the ownership and configuration reports in the evidence directory.
