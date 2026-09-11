@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin
 [[ $(id -u) = 0 ]]
 umask 077
 exec 9>/run/lock/nftfactory-indexer-backup.lock

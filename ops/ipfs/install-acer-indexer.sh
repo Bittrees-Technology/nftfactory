@@ -38,7 +38,7 @@ runuser -u postgres -- psql -v ON_ERROR_STOP=1 <<SQL
 CREATE ROLE nftfactory_app LOGIN PASSWORD '$db_password';
 CREATE DATABASE nftfactory_app OWNER nftfactory_app;
 SQL
-export PATH=/opt/nftfactory-node24/bin:/usr/bin:/bin
+export PATH=/opt/nftfactory-node24/bin:/usr/sbin:/usr/bin:/sbin:/bin
 cd /opt/nftfactory-indexer
 node node_modules/prisma/build/index.js migrate deploy --schema services/indexer/prisma/schema.prisma
 cat > /etc/systemd/system/nftfactory-indexer.service <<'UNIT'
