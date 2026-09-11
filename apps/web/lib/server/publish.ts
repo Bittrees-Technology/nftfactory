@@ -22,7 +22,7 @@ export function assertPublishingConfigured() {
 async function checkedJson(url: string, init: RequestInit) {
   const result = await fetch(url, { ...init, redirect: 'error', signal: AbortSignal.timeout(8_000) });
   if (!result.ok) throw new PublishingUnavailable('The backup service could not confirm your content. Please retry.');
-  return result.json();
+  return JSON.parse((await boundedBody(result, 64 * 1024)).toString());
 }
 export async function confirmReplica(cid: string, expected: Uint8Array, name: string) {
   const { api, gateway, headers } = replicaConfig();
@@ -66,14 +66,14 @@ export async function publishFile(file: File, name: string) {
       const form = new FormData(); form.append('file', file, name);
       const response = await fetch(buildIpfsAddUrl(base), { method: 'POST', headers: buildIpfsAuthHeaders(), body: form, redirect: 'error', signal: AbortSignal.timeout(15_000) });
       if (!response.ok) continue;
-      cid = parseIpfsAddResponse(await response.text()); break;
+      cid = parseIpfsAddResponse((await boundedBody(response, 64 * 1024)).toString()); break;
     } catch { /* Try the next explicitly configured primary endpoint. */ }
   }
   if (!cid) throw new PublishingUnavailable('Your home storage is unavailable. Keep your draft and retry when it returns.');
   const replica = await confirmReplica(cid, bytes, name);
   return { cid, uri: `ipfs://${cid}`, gatewayUrl: buildGatewayUrl({ gatewayBaseUrl: resolveIpfsGatewayBaseUrl(), cid }), storage: { copies: 2, ...replica } };
 }
-export async function boundedBody(request: Request, limit = MAX_PUBLISH_BYTES) {
+export async function boundedBody(request: Pick<Request, "headers" | "body">, limit = MAX_PUBLISH_BYTES) {
   if (Number(request.headers.get('content-length') || 0) > limit) throw new Error('Upload must be smaller than 3 MiB in total.');
   if (!request.body) throw new Error('Upload is empty.');
   const chunks: Uint8Array[] = []; let size = 0;

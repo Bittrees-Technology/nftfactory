@@ -1,3 +1,4 @@
+import { boundedBody } from "../../../../lib/server/publish";
 import { requireSession, cookieValue, SESSION_COOKIE } from "../../../../lib/server/session";
 import { NextResponse } from "next/server";
 import { getIndexerBaseUrl } from "../../../../lib/indexerApi";
@@ -83,7 +84,7 @@ async function proxyRequest(
         return NextResponse.json({ error: contentLengthError.error }, { status: contentLengthError.status });
       }
     }
-    const body = hasBody ? await request.text() : undefined;
+    const body = hasBody ? (await boundedBody(request, INDEXER_PROXY_MAX_BODY_BYTES)).toString() : undefined;
     if (body && Buffer.byteLength(body) > INDEXER_PROXY_MAX_BODY_BYTES) return NextResponse.json({ error: "Request too large." }, { status: 413 });
     const contentType = request.headers.get("Content-Type");
     const { signal, cleanup } = withTimeout();
