@@ -6,5 +6,5 @@ import ProductPageHeader from '../../components/ProductPageHeader';
 import ProfileSelectorClient from '../../components/profile/ProfileSelectorClient';
 export const dynamic = 'force-dynamic';
 export default function ProfileLandingPage() {
-  return <section><ProductPageHeader section="Your workspace" title="My studio" description="Create new work, shape your creator page, and manage what you share." actions={<><Link href="/mint" className="ctaLink">Create an NFT</Link><Link href="/profile/setup" className="ctaLink secondary">Edit creator page</Link></>} /><p><Link href="/examples/retro-profile">Looking for inspiration? Visit a retro, experimental example studio ↗</Link></p><StudioWorkspaceClient /><ProfileSelectorClient /></section>;
+  return <section><ProductPageHeader section="Your workspace" title="My studio" description="Create new work, shape your creator page, and manage what you share." actions={<><Link href="/mint" className="ctaLink">Create an NFT</Link><Link href="/profile/setup" className="ctaLink secondary">Edit creator page</Link></>} /><StudioWorkspaceClient /><ProfileSelectorClient /></section>;
 }
