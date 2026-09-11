@@ -1,3 +1,5 @@
+// Receipt verification has its own chain-data tests; these suites exercise persistence.
+vi.mock('./mintReceipt.js', () => ({ verifyMintReceipt: vi.fn(async (_client, input, signer) => ({ ownerAddress: signer, creatorAddress: signer, collectionOwnerAddress: input.collectionOwnerAddress || signer })) }));
 import { issueToken } from "../../../packages/auth/session.mjs";
 import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -8,7 +10,7 @@ import type { PrismaClient } from "@prisma/client";
 import { createRequestHandler as actualCreateRequestHandler, isTransientRpcProviderError, summarizeAdminProtection } from "./indexer.js";
 
 function createRequestHandler(deps: Parameters<typeof actualCreateRequestHandler>[0], config: Parameters<typeof actualCreateRequestHandler>[1]) {
-  return actualCreateRequestHandler({ verifyProfileIdentityImpl: async () => true, ...deps }, config);
+  return actualCreateRequestHandler({ verifyProfileIdentityImpl: async () => true, ...deps }, { rpcUrl: "http://127.0.0.1:8545", ...config });
 }
 
 function createMockPrisma(): PrismaClient {

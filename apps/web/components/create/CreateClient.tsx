@@ -2,6 +2,8 @@
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi';
+import { parseEventLogs, parseAbiItem, zeroAddress } from 'viem';
+import { syncMintedToken } from '../../lib/indexerApi';
 import { encodePublish721 } from '../../lib/abi';
 import { getContractsConfig } from '../../lib/contracts';
 import { getAppChain, getPrimaryAppChainId } from '../../lib/chains';
@@ -56,7 +58,19 @@ export default function CreateClient() {
       setMessage('Waiting for the transaction confirmation…');
       const receipt = await client.waitForTransactionReceipt({ hash: current.txHash!, timeout: 60_000 });
       if (receipt.status !== 'success') throw new Error('The transaction reverted. No NFT was created. Check its receipt before starting a new draft.');
-      setComplete(true); setMessage('Your NFT is minted. Discovery will update after indexing completes.');
+      const contract = getContractsConfig(targetChainId).shared721;
+      const mint = parseEventLogs({ abi: [parseAbiItem('event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)')], logs: receipt.logs })
+        .find(log => log.address.toLowerCase() === contract.toLowerCase() && log.args.from === zeroAddress && log.args.to.toLowerCase() === address.toLowerCase());
+      if (!mint) throw new Error('Transaction confirmed, but its NFT mint could not be identified. Keep the transaction hash for review.');
+      setMessage('Your NFT is minted. Adding it to your creator page…');
+      await ensureWalletSession(address, args => wallet.signMessage(args));
+      const metadataUri = current.metadataUri || await client.readContract({ address: contract, abi: [{ type: 'function', name: 'tokenURI', stateMutability: 'view', inputs: [{type:'uint256'}], outputs: [{type:'string'}] }], functionName: 'tokenURI', args: [mint.args.tokenId] });
+      try {
+        await syncMintedToken({ chainId: targetChainId, contractAddress: contract, tokenId: mint.args.tokenId.toString(), creatorAddress: address, ownerAddress: address, standard: 'ERC721', isFactoryCreated: true, isUpgradeable: false, mintTxHash: current.txHash, draftName: current.name, draftDescription: current.description, metadataCid: metadataUri, mediaCid: current.imageGatewayUrl?.includes('/ipfs/') ? `ipfs://${current.imageGatewayUrl.split('/ipfs/')[1]}` : null, immutable: true });
+      } catch {
+        throw new Error('Your NFT is minted, but your creator page has not updated yet. Choose Check confirmation to retry indexing without minting again.');
+      }
+      setComplete(true); setMessage('Your NFT is minted and indexed. View it on your creator page.');
     } catch (error) { setMessage(error instanceof Error ? error.message : 'Publishing did not complete. Your draft is preserved.'); }
     finally { busyRef.current = false; setBusy(false); }
   }
