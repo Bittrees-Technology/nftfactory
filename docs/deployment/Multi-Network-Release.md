@@ -19,7 +19,7 @@ Do not copy Sepolia addresses into another network's configuration. Record treas
 
 `Deploy.s.sol` now requires `EXPECTED_CHAIN_ID` to equal the connected chain before broadcasting and refuses a zero treasury. Use the existing protected signer workflow; do not place a private key in source control or a shared document. Run without `--broadcast` first. Only the final, reviewed transaction step may broadcast.
 
-The current deployment script completed an isolated local EVM simulation with an ephemeral test signer, zero allowlisted payment tokens, and a dummy treasury. It reported 13,442,314 gas used. This is a local rehearsal result, not a live-network quote: transaction overhead, fee changes and rollup data fees must be included in a fresh network simulation. Estimate native cost from the actual transaction gas estimates and current network fees before asking for funded approvals.
+The current deployment script completed an isolated local EVM simulation with an ephemeral test signer, zero allowlisted payment tokens, and a dummy treasury. It reported 13,684,646 gas used after the fee-quote hardening. This is a local rehearsal result, not a live-network quote: transaction overhead, fee changes and rollup data fees must be included in a fresh network simulation. Estimate native cost from the actual transaction gas estimates and current network fees before asking for funded approvals.
 
 ## Per-network evidence required
 
