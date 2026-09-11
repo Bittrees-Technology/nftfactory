@@ -169,6 +169,23 @@ contract MarketplaceTest is Test {
         vm.deal(buyer, 10 ether);
     }
 
+    function testListingRejectsChangedQuotedTermsBeforeCreation() external {
+        vm.startPrank(seller);
+        nft721.mint(seller, 1);
+        nft721.setApprovalForAll(address(marketplace), true);
+        vm.stopPrank();
+        Marketplace.FeeTerms memory quoted = Marketplace.FeeTerms(0, treasury);
+        vm.prank(admin);
+        registry.setProtocolFeeBps(500);
+        vm.prank(seller);
+        vm.expectRevert(Marketplace.FeeTermsChanged.selector);
+        marketplace.createListingWithFeeTerms(address(nft721), 1, 1, "ERC721", address(0), 1 ether, 7, quoted);
+        assertEq(marketplace.nextListingId(), 0);
+        vm.prank(seller);
+        marketplace.createListingWithFeeTerms(address(nft721), 1, 1, "ERC721", address(0), 1 ether, 7, Marketplace.FeeTerms(500, treasury));
+        assertEq(marketplace.nextListingId(), 1);
+    }
+
     function testListingPreservesOriginalFeeAndTreasury() external {
         vm.prank(admin);
         registry.setProtocolFeeBps(500);

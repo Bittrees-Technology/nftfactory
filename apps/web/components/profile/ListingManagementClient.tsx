@@ -8,9 +8,9 @@ import DetailGridItem from "../DetailGridItem";
 import SectionCardHeader from "../SectionCardHeader";
 import {
   encodeCancelListing,
-  encodeCreateListing,
   toWeiBigInt
 } from "../../lib/abi";
+import {readFeeQuote,encodeQuotedListing,type FeeQuote} from "../../lib/marketplaceFeeTerms";
 import { getContractsConfig } from "../../lib/contracts";
 import {
   logPaymentTokenUsage,
@@ -396,6 +396,9 @@ export default function ListingManagementClient({
   const publicClient = usePublicClient();
   const { switchChainAsync, switchChain } = useSwitchChain();
 
+  const [feeQuote,setFeeQuote]=useState<FeeQuote|null>(null);
+  const [feeQuoteError,setFeeQuoteError]=useState("");
+  const [feeAttempt,setFeeAttempt]=useState(0);
   const [standard, setStandard] = useState<Standard>("ERC721");
   const [selectedChainFilter, setSelectedChainFilter] = useState<"all" | number>(chainFilter ?? "all");
   const [selectedContractKey, setSelectedContractKey] = useState("");
@@ -753,6 +756,17 @@ export default function ListingManagementClient({
   );
 
   const submitNeedsChainSwitch = Boolean(isConnected && submitTargetChainId && chainId !== submitTargetChainId);
+  const feeClient=usePublicClient({chainId:submitTargetChainId||config.chainId});
+  useEffect(()=>{
+    let active=true;setFeeQuote(null);setFeeQuoteError('');
+    if(!submitTargetChainId||!feeClient)return;
+    const target=getOptionalChainContractsConfig(submitTargetChainId);if(!target)return;
+    readFeeQuote(feeClient,target.registry as Address,submitTargetChainId).then(quote=>{if(active)setFeeQuote(quote);}).catch(()=>{if(active)setFeeQuoteError('Fee terms could not be loaded. Refresh them before listing.');});
+    return()=>{active=false;};
+  },[submitTargetChainId,feeClient,feeAttempt]);
+  let sellerProceeds:string|null=null;
+  try{if(feeQuote&&feeQuote.chainId===submitTargetChainId){const total=toWeiBigInt(priceInput);sellerProceeds=formatEther(total-total*feeQuote.feeBps/10000n);}}catch{}
+
 
   async function ensureChainReady(targetChainId: number, actionLabel: string): Promise<boolean> {
     if (!isConnected || !address) {
@@ -891,6 +905,8 @@ export default function ListingManagementClient({
       return;
     }
 
+    if(!feeQuote||feeQuote.chainId!==submitTargetChainId){setState(errorActionState("Load and review the fee terms before listing."));return;}
+
     if (paymentTokenType === "ERC20") {
       try {
         await ensureAllowedPaymentToken({
@@ -1008,14 +1024,15 @@ export default function ListingManagementClient({
         );
         const listingTx = await sendTransaction(
           submitMarketplace,
-          encodeCreateListing(
+          encodeQuotedListing(
             submitContract as `0x${string}`,
             BigInt(token.tokenId),
             BigInt(parsedAmount),
             submitStandard,
             paymentToken,
             priceWei,
-            BigInt(parsedDays)
+            BigInt(parsedDays),
+            feeQuote
           ) as `0x${string}`
         );
         latestHash = listingTx;
@@ -1304,9 +1321,14 @@ export default function ListingManagementClient({
               Custom ERC20s must already be allowlisted in the registry. Usage is also logged so admin can review trusted and suspicious tokens consistently.
             </p>
           ) : null}
+          <div className="hint" aria-live="polite">
+            {feeQuote&&feeQuote.chainId===submitTargetChainId?<p>Protocol fee: {Number(feeQuote.feeBps)/100}%. You receive {sellerProceeds??'—'} ETH per listing, before your network costs. The total covers all copies in that listing. Separate creator royalties are not enforced.</p>:<p>{feeQuoteError||(submitTargetChainId?'Loading fee terms…':'Select artwork to review fees.')}</p>}
+            <button type="button" className="secondary" disabled={!submitTargetChainId||state.status==='pending'} onClick={()=>setFeeAttempt(value=>value+1)}>Refresh fee terms</button>
+            <p>The quoted fee is checked by the contract. If it changes before your listing is created, the transaction fails instead of accepting different terms.</p>
+          </div>
           <button
             type="submit"
-            disabled={state.status === "pending" || (!editingListing && selectedTokens.length === 0)}
+            disabled={state.status === "pending" || !feeQuote || feeQuote.chainId!==submitTargetChainId || (!editingListing && selectedTokens.length === 0)}
           >
             {state.status === "pending"
               ? "Submitting..."
@@ -1324,6 +1346,7 @@ export default function ListingManagementClient({
 
         <div className="card formCard">
           <SectionCardHeader
+            headingLevel={embedded ? 3 : 2}
             title="3. My Active Listings"
             layout="split"
             actions={

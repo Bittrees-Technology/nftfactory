@@ -141,6 +141,30 @@ contract Marketplace is Owned {
         uint256 price,
         uint256 durationDays
     ) external nonReentrant {
+        _createListing(nft, tokenId, amount, standard, paymentToken, price, durationDays);
+    }
+
+    error FeeTermsChanged();
+
+    function createListingWithFeeTerms(
+        address nft, uint256 tokenId, uint256 amount, string calldata standard,
+        address paymentToken, uint256 price, uint256 durationDays, FeeTerms calldata expected
+    ) external nonReentrant {
+        if (registry.protocolFeeBps() != expected.feeBps || registry.treasury() != expected.treasury) {
+            revert FeeTermsChanged();
+        }
+        _createListing(nft, tokenId, amount, standard, paymentToken, price, durationDays);
+    }
+
+    function _createListing(
+        address nft,
+        uint256 tokenId,
+        uint256 amount,
+        string calldata standard,
+        address paymentToken,
+        uint256 price,
+        uint256 durationDays
+    ) internal {
         if (registry.blocked(msg.sender) || registry.blocked(nft) || blockedCollection[nft]) revert Sanctioned();
         if (price == 0) revert InvalidPrice();
         _assertPaymentTokenAllowed(paymentToken);
