@@ -93,3 +93,17 @@ a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visib
   .siteHeader { gap: 12px; }
   .brandLink { font-size: 1.15rem; }
 }
+
+/* Shared discovery and documentation surfaces use the same workshop palette. */
+.discoverHero, .profileSelectorHero { background: transparent; border: 0; padding: 20px 0; }
+.discoverRecordCard, .profileSelectorEmptyCard, .wikiNavLink, .wikiEmptyState { background: var(--surface); border-color: var(--line); border-radius: 12px; }
+.discoverToolbar { background: var(--bg); border-color: var(--line); border-radius: 8px; }
+.discoverTab { min-height: 44px; border-radius: 6px; background: var(--surface); color: var(--ink); border-color: #87938a; }
+.discoverTabActive { background: var(--accent); border-color: var(--accent-dark); color: #fff; }
+.discoverFieldControl, .wikiSearchInput { background: var(--surface); border-color: #87938a; border-radius: 6px; }
+.discoverFieldControl:focus, .wikiSearchInput:focus { outline: 3px solid var(--accent); outline-offset: 3px; }
+.discoverField, .wikiSearchLabel, .wikiNavLink span, .wikiParagraph, .wikiList { color: var(--muted); }
+.wikiNavLink.active { border-color: var(--accent); background: var(--surface-strong); }
+.wikiBlockquote { background: var(--surface-strong); color: var(--ink); border-color: var(--accent); }
+.wikiInlineCode { background: var(--surface-strong); color: var(--ink); }
+.wikiInlineLink, .wikiBackLink, .wikiTocLink { color: var(--accent-dark); }
