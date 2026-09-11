@@ -31,7 +31,7 @@ export async function confirmReplica(cid: string, expected: Uint8Array, name: st
   let job = existing.results?.find((p: any) => p.pin?.cid === cid && p.status !== 'failed');
   if (!job) job = await checkedJson(`${api}/pins`, { method: 'POST', headers, body: JSON.stringify({ cid, name, meta: { project: 'nftfactory' } }) });
   if (!job.requestid || job.pin?.cid !== cid) throw new PublishingUnavailable('The backup service returned an invalid storage receipt.');
-  const deadline = Date.now() + 25_000;
+  const deadline = Date.now() + 60_000;
   while (job.status !== 'pinned' && Date.now() < deadline) {
     if (job.status === 'failed') throw new PublishingUnavailable('The backup copy failed. Keep your draft and retry.');
     await new Promise(resolve => setTimeout(resolve, 1000));
@@ -39,7 +39,7 @@ export async function confirmReplica(cid: string, expected: Uint8Array, name: st
     if (job.pin?.cid !== cid) throw new PublishingUnavailable('The backup receipt did not match this content.');
   }
   if (job.status !== 'pinned') throw new PublishingUnavailable('Your backup copy is still being prepared. Keep your draft and retry shortly.');
-  const result = await fetch(buildGatewayUrl({ gatewayBaseUrl: gateway, cid }), { redirect: 'error', signal: AbortSignal.timeout(10_000), cache: 'no-store' });
+  const result = await fetch(buildGatewayUrl({ gatewayBaseUrl: gateway, cid }), { redirect: 'error', signal: AbortSignal.timeout(30_000), cache: 'no-store' });
   if (!result.ok || !result.body) throw new PublishingUnavailable('The backup copy is not readable yet. Please retry shortly.');
   const reader = result.body.getReader();
   const hash = createHash('sha256');
@@ -64,7 +64,7 @@ export async function publishFile(file: File, name: string) {
   for (const base of resolveIpfsApiUrls()) {
     try {
       const form = new FormData(); form.append('file', file, name);
-      const response = await fetch(buildIpfsAddUrl(base), { method: 'POST', headers: buildIpfsAuthHeaders(), body: form, redirect: 'error', signal: AbortSignal.timeout(15_000) });
+      const response = await fetch(buildIpfsAddUrl(base), { method: 'POST', headers: buildIpfsAuthHeaders(), body: form, redirect: 'error', signal: AbortSignal.timeout(30_000) });
       if (!response.ok) continue;
       cid = parseIpfsAddResponse((await boundedBody(response, 64 * 1024)).toString()); break;
     } catch { /* Try the next explicitly configured primary endpoint. */ }
