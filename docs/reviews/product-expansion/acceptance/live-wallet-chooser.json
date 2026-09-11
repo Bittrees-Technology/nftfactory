@@ -1,0 +1,32 @@
+{
+  "url": "https://nftfactory.org",
+  "deployment": "dpl_3rsfvc7qBfQmR7XkJQVfti6MUCkH",
+  "method": "Observed live browser UI through CUA; no wallet extension installed in review browser",
+  "checks": [
+    {
+      "check": "Connect button opens named wallet chooser",
+      "result": "passed"
+    },
+    {
+      "check": "Browser wallet without extension gives recovery guidance",
+      "result": "passed",
+      "observed": "No browser wallet was found. Open NFTFactory in your wallet-enabled browser, or choose WalletConnect."
+    },
+    {
+      "check": "WalletConnect displays pairing dialog",
+      "result": "passed",
+      "observed": "Scan this QR Code with your phone; Copy link; Search Wallet 140+"
+    },
+    {
+      "check": "Escape dismisses pairing dialog and re-enables Connect",
+      "result": "passed"
+    }
+  ],
+  "not_tested": [
+    "Physical phone pairing",
+    "Wallet signature",
+    "Account/network change",
+    "Signed SIWE session",
+    "Mint or marketplace transaction"
+  ]
+}
