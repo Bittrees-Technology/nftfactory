@@ -12,7 +12,9 @@ function replicaConfig() {
     const url = new URL(value);
     if (url.username || url.password || (url.protocol !== 'https:' && !(process.env.NODE_ENV === 'test' && url.hostname === '127.0.0.1'))) throw new PublishingUnavailable('Storage configuration needs attention.');
   }
-  return { api, gateway, headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } };
+  const mode = process.env.IPFS_REPLICA_MODE || 'pinning-service';
+  if (!['pinning-service', 'kubo-upload'].includes(mode)) throw new PublishingUnavailable('Storage configuration needs attention.');
+  return { api, gateway, mode, headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } };
 }
 export function assertPublishingConfigured() {
   replicaConfig();
@@ -25,20 +27,38 @@ async function checkedJson(url: string, init: RequestInit) {
   return JSON.parse((await boundedBody(result, 64 * 1024)).toString());
 }
 export async function confirmReplica(cid: string, expected: Uint8Array, name: string) {
-  const { api, gateway, headers } = replicaConfig();
-  const existing = await checkedJson(`${api}/pins?cid=${encodeURIComponent(cid)}&limit=10`, { headers });
-  // The pinning service retains a durable pin job; retries reuse its request ID.
-  let job = existing.results?.find((p: any) => p.pin?.cid === cid && p.status !== 'failed');
-  if (!job) job = await checkedJson(`${api}/pins`, { method: 'POST', headers, body: JSON.stringify({ cid, name, meta: { project: 'nftfactory' } }) });
-  if (!job.requestid || job.pin?.cid !== cid) throw new PublishingUnavailable('The backup service returned an invalid storage receipt.');
-  const deadline = Date.now() + 60_000;
-  while (job.status !== 'pinned' && Date.now() < deadline) {
-    if (job.status === 'failed') throw new PublishingUnavailable('The backup copy failed. Keep your draft and retry.');
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    job = await checkedJson(`${api}/pins/${encodeURIComponent(job.requestid)}`, { headers });
-    if (job.pin?.cid !== cid) throw new PublishingUnavailable('The backup receipt did not match this content.');
+  const { api, gateway, mode, headers } = replicaConfig();
+  let requestId: string;
+  if (mode === 'kubo-upload') {
+    if (!expected.byteLength || expected.byteLength > MAX_PUBLISH_BYTES) throw new PublishingUnavailable('The backup upload exceeds the allowed size.');
+    const form = new FormData();
+    form.append('file', new Blob([new Uint8Array(expected)]), name);
+    const result = await fetch(buildIpfsAddUrl(api), { method: 'POST', headers: { Authorization: headers.Authorization }, body: form, redirect: 'error', signal: AbortSignal.timeout(30_000) });
+    if (!result.ok) throw new PublishingUnavailable('The backup upload failed. Keep your draft and retry.');
+    const uploadedCid = parseIpfsAddResponse((await boundedBody(result, 64 * 1024)).toString());
+    if (uploadedCid !== cid) throw new PublishingUnavailable('The backup receipt did not match this content.');
+    const pinUrl = new URL(buildIpfsAddUrl(api));
+    pinUrl.pathname = pinUrl.pathname.replace(/add$/, 'pin/ls');
+    pinUrl.search = new URLSearchParams({ arg: cid, type: 'recursive' }).toString();
+    const pins = await checkedJson(pinUrl.toString(), { method: 'POST', headers });
+    if (pins.Keys?.[cid]?.Type !== 'recursive') throw new PublishingUnavailable('The backup service did not confirm a durable pin.');
+    requestId = cid;
+  } else {
+    const existing = await checkedJson(`${api}/pins?cid=${encodeURIComponent(cid)}&limit=10`, { headers });
+    // The pinning service retains a durable pin job; retries reuse its request ID.
+    let job = existing.results?.find((p: any) => p.pin?.cid === cid && p.status !== 'failed');
+    if (!job) job = await checkedJson(`${api}/pins`, { method: 'POST', headers, body: JSON.stringify({ cid, name, meta: { project: 'nftfactory' } }) });
+    if (!job.requestid || job.pin?.cid !== cid) throw new PublishingUnavailable('The backup service returned an invalid storage receipt.');
+    const deadline = Date.now() + 60_000;
+    while (job.status !== 'pinned' && Date.now() < deadline) {
+      if (job.status === 'failed') throw new PublishingUnavailable('The backup copy failed. Keep your draft and retry.');
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      job = await checkedJson(`${api}/pins/${encodeURIComponent(job.requestid)}`, { headers });
+      if (job.pin?.cid !== cid) throw new PublishingUnavailable('The backup receipt did not match this content.');
+    }
+    if (job.status !== 'pinned') throw new PublishingUnavailable('Your backup copy is still being prepared. Keep your draft and retry shortly.');
+    requestId = job.requestid;
   }
-  if (job.status !== 'pinned') throw new PublishingUnavailable('Your backup copy is still being prepared. Keep your draft and retry shortly.');
   const result = await fetch(buildGatewayUrl({ gatewayBaseUrl: gateway, cid }), { redirect: 'error', signal: AbortSignal.timeout(30_000), cache: 'no-store' });
   if (!result.ok || !result.body) throw new PublishingUnavailable('The backup copy is not readable yet. Please retry shortly.');
   const reader = result.body.getReader();
@@ -54,7 +74,7 @@ export async function confirmReplica(cid: string, expected: Uint8Array, name: st
     }
   } finally { await reader.cancel(); }
   if (size !== expected.byteLength || hash.digest('hex') !== createHash('sha256').update(expected).digest('hex')) throw new PublishingUnavailable('The backup copy did not match the original.');
-  return { requestId: job.requestid as string, verifiedAt: new Date().toISOString() };
+  return { requestId, verifiedAt: new Date().toISOString() };
 }
 export async function publishFile(file: File, name: string) {
   assertPublishingConfigured();
