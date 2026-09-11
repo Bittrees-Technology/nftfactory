@@ -808,7 +808,7 @@ describe("indexer consistency hardening", () => {
     expect(response.body.lastMarketplaceListingSyncCount).toBe(1);
     expect(response.body.lastOfferSyncCount).toBe(1);
     expect((prisma.listing.upsert as any).mock.calls[0][0]).toMatchObject({
-      where: { listingId: "v2:0" },
+      where: { chainId_listingId: {chainId:11155111,listingId: "v2:0"} },
       update: expect.objectContaining({
         marketplaceVersion: "v2",
         tokenRefId: "tok_v2_1",
@@ -816,7 +816,7 @@ describe("indexer consistency hardening", () => {
       })
     });
     expect((prisma.offer.upsert as any).mock.calls[0][0]).toMatchObject({
-      where: { offerId: "0" },
+      where: { chainId_offerId: {chainId:11155111,offerId: "0"} },
       update: expect.objectContaining({
         marketplaceVersion: "v2",
         tokenRefId: "tok_v2_1",
@@ -1292,7 +1292,7 @@ describe("indexer consistency hardening", () => {
     expect(incrementalResponse.status).toBe(200);
     expect(listingUpsert).toHaveBeenCalledTimes(2);
     expect((listingUpsert as any).mock.calls[1][0]).toMatchObject({
-      where: { listingId: "v2:1" },
+      where: { chainId_listingId: {chainId:11155111,listingId: "v2:1"} },
       update: expect.objectContaining({
         tokenId: "8",
         marketplaceVersion: "v2"
@@ -1407,7 +1407,7 @@ describe("indexer consistency hardening", () => {
     expect(incrementalResponse.status).toBe(200);
     expect(offerUpsert).toHaveBeenCalledTimes(2);
     expect((offerUpsert as any).mock.calls[1][0]).toMatchObject({
-      where: { offerId: "1" },
+      where: { chainId_offerId: {chainId:11155111,offerId: "1"} },
       update: expect.objectContaining({
         tokenId: "8",
         marketplaceVersion: "v2"
@@ -2055,7 +2055,7 @@ describe("indexer consistency hardening", () => {
       }
     });
     expect(collectionFindUnique).toHaveBeenCalledWith({
-      where: { contractAddress },
+      where: { chainId_contractAddress: {chainId:11155111,contractAddress} },
       select: {
         ownerAddress: true,
         ensSubname: true,
@@ -2917,7 +2917,7 @@ describe("indexer consistency hardening", () => {
 
     expect(response.status).toBe(200);
     expect(collectionFindMany).toHaveBeenCalledWith({
-      where: { contractAddress: "0x2222222222222222222222222222222222222222" },
+      where: { chainId:11155111, contractAddress: "0x2222222222222222222222222222222222222222" },
       select: { contractAddress: true, ownerAddress: true },
       take: 1
     });

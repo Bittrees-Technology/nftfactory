@@ -235,7 +235,7 @@ export default function DiscoverClient() {
 
   const filteredCollectionCards = useMemo(() => {
     return collectionCards.filter((item) => {
-      if (collectionStandardFilter !== "all" && item.standard !== collectionStandardFilter) return false;
+      if (collectionStandardFilter !== "all" && item.standard.replace(/-/g, "") !== collectionStandardFilter.replace(/-/g, "")) return false;
       if (collectionListingFilter === "listed" && item.activeListingCount === 0) return false;
       if (collectionListingFilter === "unlisted" && item.activeListingCount > 0) return false;
       return true;
@@ -244,7 +244,7 @@ export default function DiscoverClient() {
 
   const filteredNftItems = useMemo(() => {
     return searchedFeedItems.filter((item) => {
-      if (nftStandardFilter !== "all" && item.collection.standard !== nftStandardFilter) return false;
+      if (nftStandardFilter !== "all" && item.collection.standard.replace(/-/g, "") !== nftStandardFilter.replace(/-/g, "")) return false;
       if (nftListingFilter === "listed" && !item.activeListing) return false;
       if (nftListingFilter === "unlisted" && item.activeListing) return false;
       if (nftMediaFilter === "with-media" && !item.mediaUrl) return false;
@@ -284,35 +284,19 @@ export default function DiscoverClient() {
       <section className="card formCard discoverHero">
         <div className="discoverHeroCopy">
           <p className="eyebrow">Discover</p>
-          <h2>Discover artwork and the people behind it.</h2>
+          <h1>Discover artwork and the people behind it.</h1>
           <p className="sectionLead">
             Explore creator pages, collections, and NFTs published with NFTFactory.
           </p>
         </div>
-        <div className="discoverHeroStats" aria-label="Discover index summary">
-          <div className="discoverHeroStat">
-            <span className="flowLabel">Profiles</span>
-            <strong>{directoryTotal}</strong>
-            <p>Indexed creator pages</p>
-          </div>
-          <div className="discoverHeroStat">
-            <span className="flowLabel">Collections</span>
-            <strong>{collectionCards.length}</strong>
-            <p>Contracts surfaced</p>
-          </div>
-          <div className="discoverHeroStat">
-            <span className="flowLabel">NFTs</span>
-            <strong>{searchedFeedItems.length}</strong>
-            <p>Feed items loaded</p>
-          </div>
-        </div>
+
       </section>
 
       <section className="card formCard discoverPanel">
         <div className="discoverPanelHeader">
           <div>
-            <p className="eyebrow">Public Index</p>
-            <h3>{view === "profiles" ? "Profiles" : view === "collections" ? "Collection Contracts" : "NFTs"}</h3>
+            <p className="eyebrow">Explore</p>
+            <h3>{view === "profiles" ? "Profiles" : view === "collections" ? "Collections" : "NFTs"}</h3>
           </div>
           <p className="hint">{activeResultLabel}</p>
         </div>
@@ -362,7 +346,6 @@ export default function DiscoverClient() {
                     onChange={(event) => setProfileCollectionFilter(event.target.value as ProfileCollectionFilter)}
                   >
                     <option value="all">All profiles</option>
-                    <option value="wallet">Wallet creators</option>
                     <option value="with-collection">With collection</option>
                     <option value="without-collection">Without collection</option>
                   </select>
@@ -465,11 +448,11 @@ export default function DiscoverClient() {
                       <p className="hint">{profile.tagline || profile.fullName}</p>
                       <div className="profileChipRow">
                         {profile.collectionAddress ? <span className="profileChip">with collection</span> : null}
-                        {profile.layoutMode ? <span className="profileChip">{profile.layoutMode} layout</span> : null}
+
                       </div>
                       <div className="profileSelectorMetaGrid discoverRecordMeta">
-                        <p className="hint"><span className="mono">/profile/{profile.slug}</span></p>
-                        <p className="hint">Owner <span className="mono">{profile.ownerAddress}</span></p>
+
+                        <p className="hint">Owner <span className="mono">{profile.ownerAddress.slice(0,6)}…{profile.ownerAddress.slice(-4)}</span></p>
                       </div>
                       <div className="row profileSelectorActions">
                         <Link href={`/profile/${encodeURIComponent(profile.slug)}`} className="ctaLink">

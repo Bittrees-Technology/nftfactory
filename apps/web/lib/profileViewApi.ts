@@ -12,6 +12,8 @@ import {
 } from "./profileSnapshotApi";
 
 export type ApiProfileViewResponse = {
+  readOnly?: boolean;
+  snapshotAt?: string;
   name: string;
   resolution: ApiProfileResolution | null;
   resolutionFailures: ChainFailure[];
@@ -87,7 +89,9 @@ export async function fetchProfileView(
         })
       );
     }
-    return (await response.json()) as ApiProfileViewResponse;
+    const data=(await response.json()) as ApiProfileViewResponse;
+    if(!data.resolution && data.resolutionError)throw new Error(data.resolutionError);
+    return data;
   } catch (error) {
     const primaryErrorMessage = parseErrorMessage(error, "Failed to load profile view.");
     if (!hasProfileSnapshotFallbackConfigured()) {

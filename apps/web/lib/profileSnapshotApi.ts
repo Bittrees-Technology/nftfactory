@@ -46,7 +46,7 @@ function getSnapshotManifestUrl(): string | undefined {
 
 function getSnapshotUrlTemplate(): string | undefined {
   const value = String(process.env.NEXT_PUBLIC_PROFILE_SNAPSHOT_URL_TEMPLATE || "").trim();
-  return value || undefined;
+  return value || (getSnapshotManifestUrl() ? undefined : "/profile-snapshots/{name}.json");
 }
 
 export function hasProfileSnapshotFallbackConfigured(): boolean {
@@ -129,15 +129,20 @@ export async function fetchProfileViewSnapshot(name: string): Promise<ApiProfile
 
   const payload = await fetchJsonWithTimeout<unknown>(snapshotUrl, "Failed to load profile snapshot.");
   if (isProfileViewPayload(payload)) {
-    return payload;
+    return readonlySnapshot(payload);
   }
 
   if (payload && typeof payload === "object" && "profileView" in payload) {
     const profileView = (payload as { profileView?: unknown }).profileView;
     if (isProfileViewPayload(profileView)) {
-      return profileView;
+      const generatedAt = (payload as {generatedAt?:unknown}).generatedAt;
+      return readonlySnapshot({...profileView,snapshotAt: typeof generatedAt === "string" && Number.isFinite(Date.parse(generatedAt)) ? generatedAt : undefined});
     }
   }
 
   throw new Error("Profile snapshot payload is invalid.");
+}
+
+export function readonlySnapshot(data:ApiProfileViewResponse):ApiProfileViewResponse {
+  return {...data,readOnly:true,activeSellerAddresses:[],listings:[],offers:[],holdings:(data.holdings||[]).map(item=>({...item,activeListing:null,bestOffer:null,offerCount:0})),listingError:"Live marketplace data is unavailable while viewing a saved copy.",offerError:"Live offers are unavailable while viewing a saved copy."};
 }

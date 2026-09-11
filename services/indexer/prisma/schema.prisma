@@ -10,7 +10,7 @@ datasource db {
 model Collection {
   id                 String   @id @default(cuid())
   chainId            Int
-  contractAddress    String   @unique
+  contractAddress    String
   ownerAddress       String
   ensSubname         String?
   standard           String
@@ -19,6 +19,7 @@ model Collection {
   finalizedAt        DateTime?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
+  @@unique([chainId, contractAddress])
   tokens             Token[]
 }
 
@@ -49,8 +50,9 @@ model Token {
 }
 
 model Listing {
+  @@unique([chainId, listingId])
   id                 String   @id @default(cuid())
-  listingId          String   @unique
+  listingId          String
   chainId            Int
   marketplaceVersion String   @default("v1")
   collectionAddress  String
@@ -75,8 +77,9 @@ model Listing {
 }
 
 model Offer {
+  @@unique([chainId, offerId])
   id                   String   @id @default(cuid())
-  offerId              String   @unique
+  offerId              String
   chainId              Int
   marketplaceVersion   String   @default("v2")
   collectionAddress    String
@@ -131,6 +134,7 @@ model Tag {
 }
 
 model TokenTag {
+  private            Boolean @default(false)
   id                 String   @id @default(cuid())
   tokenId            String
   tagId              String

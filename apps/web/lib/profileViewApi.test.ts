@@ -1,3 +1,4 @@
+import {readonlySnapshot} from "./profileSnapshotApi";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fetchProfileView, type ApiProfileViewResponse } from "./profileViewApi";
 
@@ -63,7 +64,7 @@ describe("profileViewApi", () => {
     });
     global.fetch = fetchMock as typeof fetch;
 
-    await expect(fetchProfileView("demo")).resolves.toEqual(snapshotPayload);
+    await expect(fetchProfileView("demo")).resolves.toEqual(readonlySnapshot(snapshotPayload));
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
@@ -104,7 +105,7 @@ describe("profileViewApi", () => {
     });
     global.fetch = fetchMock as typeof fetch;
 
-    await expect(fetchProfileView("demo")).resolves.toEqual(snapshotPayload);
+    await expect(fetchProfileView("demo")).resolves.toEqual(readonlySnapshot(snapshotPayload));
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 

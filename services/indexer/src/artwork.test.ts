@@ -1,0 +1,12 @@
+import {describe,expect,it,vi} from 'vitest';
+import {assetInput,normalizeTags,verifyOwnedAsset,readArtworkTags,importArtwork} from './artwork.js';
+const owner='0x1111111111111111111111111111111111111111',contract='0x2222222222222222222222222222222222222222';
+describe('import and annotation boundaries',()=>{
+ it('rejects malformed and out of range identifiers',()=>{expect(()=>assetInput(contract,'-1')).toThrow();expect(()=>assetInput(contract,(2n**256n).toString())).toThrow();expect(assetInput(contract,'0').id).toBe('0');});
+ it('normalizes labels and rejects markup or excessive tags',()=>{expect(normalizeTags(['  Art ','art','Digital   Work'])).toEqual(['art','digital work']);expect(()=>normalizeTags(['<script>'])).toThrow();expect(()=>normalizeTags(Array(21).fill('a'))).toThrow();});
+ it('rejects an ERC721 whose chain owner differs from the session',async()=>{const client={readContract:vi.fn().mockResolvedValueOnce(true).mockResolvedValueOnce(contract)};await expect(verifyOwnedAsset(client as any,contract,'1',owner)).rejects.toThrow('does not currently own');});
+ it('verifies ERC1155 balances rather than assuming token ownership',async()=>{const client={readContract:vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true).mockResolvedValueOnce(3n)};expect(await verifyOwnedAsset(client as any,contract,'1',owner)).toEqual({standard:'ERC1155',quantity:3n});});
+ it('anonymous reads never query private annotations',async()=>{const findMany=vi.fn().mockResolvedValue([]);await readArtworkTags({tokenTag:{findMany}} as any,1,contract,'1');expect(findMany.mock.calls[0][0].where.OR).toEqual([{private:false}]);expect(findMany.mock.calls[0][0].where.token.collection.chainId).toBe(1);});
+ it('includes only the signed-in authors private annotations',async()=>{const findMany=vi.fn().mockResolvedValue([]);await readArtworkTags({tokenTag:{findMany}} as any,8453,contract,'1',owner);expect(findMany.mock.calls[0][0].where.OR).toEqual([{private:false},{addedByAddress:owner}]);});
+ it('fails closed before database mutation if the RPC is on the wrong chain',async()=>{await expect(importArtwork({} as any,{getChainId:async()=>1} as any,8453,owner,{contractAddress:contract,tokenIds:['1']})).rejects.toThrow('wrong network');});
+});

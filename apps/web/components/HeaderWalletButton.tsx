@@ -1,10 +1,12 @@
 'use client';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAccount, useConnect, useConnectors, useDisconnect, useSwitchChain, useWalletClient } from 'wagmi';
 import { getPrimaryAppChainId, getAppChain } from '../lib/chains';
 import { ensureWalletSession } from '../lib/walletSession';
 export default function HeaderWalletButton() {
   const { address, chainId } = useAccount();
+  const previousIdentity=useRef<string|null>(null);
+  useEffect(()=>{const identity=`${address||''}:${chainId||''}`;if(previousIdentity.current!==null&&previousIdentity.current!==identity)void fetch('/api/auth',{method:'DELETE'});previousIdentity.current=identity;},[address,chainId]);
   const connectors = useConnectors(); const { connectAsync, isPending } = useConnect(); const { disconnect } = useDisconnect(); const { switchChainAsync } = useSwitchChain(); const { data: wallet } = useWalletClient();
   const dialog = useRef<HTMLDialogElement>(null); const [error,setError] = useState(''); const [busy,setBusy] = useState(false);
   const target = getPrimaryAppChainId();

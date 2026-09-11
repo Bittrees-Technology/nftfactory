@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import {artworkSources} from "../components/profile/ArtworkImage";
 
 export type NftMetadataPreview = {
   name: string | null;
@@ -73,19 +74,19 @@ function writeCachedPreview(metadataUri: string | null, mediaUri: string | null,
 }
 
 export function ipfsToGatewayUrl(value: string | null | undefined, gateway: string): string | null {
-  if (!value) return null;
+  if (typeof value!=="string" || !value) return null;
   if (value.startsWith("ipfs://")) {
     return `${gateway.replace(/\/$/, "")}/${value.replace(/^ipfs:\/\//, "")}`;
   }
-  return value;
+  try {const url=new URL(value);return url.protocol==="https:"&&!url.username&&!url.password?url.href:null;}catch{return null;}
 }
 
 export function toDisplayAssetUrl(value: string | null | undefined, gateway: string): string | null {
-  if (!value) return null;
+  if (typeof value!=="string" || !value) return null;
   if (value.startsWith("ipfs://")) {
     return ipfsToGatewayUrl(value, gateway);
   }
-  return value;
+  try {const url=new URL(value);return url.protocol==="https:"&&!url.username&&!url.password?url.href:null;}catch{return null;}
 }
 
 export function looksLikeImageUrl(value: string | null | undefined): boolean {
@@ -111,18 +112,28 @@ export async function resolveNftMetadataPreview(params: {
   if (cached) return cached;
 
   if (!metadataUrl) {
-    writeCachedPreview(metadataUrl, mediaUrl, gateway, fallback);
     return fallback;
   }
 
   try {
-    const response = await fetch(metadataUrl);
+    let response:Response|undefined;
+    for(const url of artworkSources(metadataUrl)) {
+      try {const candidate=await fetch(url,{credentials:"omit",redirect:"error",signal:AbortSignal.timeout(8000)});if(candidate.ok){response=candidate;break;}}catch{/* Try the configured replica. */}
+    }
+    if(!response)return fallback;
     if (!response.ok) {
       writeCachedPreview(metadataUrl, mediaUrl, gateway, fallback);
       return fallback;
     }
 
-    const metadata = (await response.json()) as MetadataPayload;
+    if(Number(response.headers.get("content-length")||0)>524288)throw new Error("Metadata too large.");
+    const reader=response.body?.getReader();if(!reader)return fallback;
+    const chunks:Uint8Array[]=[];let length=0;
+    try {while(true){const chunk=await reader.read();if(chunk.done)break;length+=chunk.value.length;if(length>524288)throw new Error("Metadata too large.");chunks.push(chunk.value);}}finally{await reader.cancel();}
+    const bytes=new Uint8Array(length);let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.length;}
+    const raw=JSON.parse(new TextDecoder().decode(bytes)) as Record<string,unknown>;
+    const text=(value:unknown,max:number)=>typeof value==="string"?value.slice(0,max):undefined;
+    const metadata:MetadataPayload={name:text(raw.name,160),title:text(raw.title,160),description:text(raw.description,4000),image:text(raw.image||raw.image_url||raw.imageUrl,4096),animation_url:text(raw.animation_url||raw.animationUrl,4096)};
     const resolved: NftMetadataPreview = {
       name: metadata.name || metadata.title || null,
       description: metadata.description || null,
@@ -137,7 +148,6 @@ export async function resolveNftMetadataPreview(params: {
     writeCachedPreview(metadataUrl, mediaUrl, gateway, resolved);
     return resolved;
   } catch {
-    writeCachedPreview(metadataUrl, mediaUrl, gateway, fallback);
     return fallback;
   }
 }

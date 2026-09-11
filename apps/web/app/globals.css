@@ -3930,3 +3930,5 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .moduleOrder { padding-left: 1.5rem; }
 .moduleOrder li { padding: .5rem; }
 .moduleOrder button { margin-left: 1rem; }
+.studioNavigation { display:flex; flex-wrap:wrap; gap:1rem; margin:2rem 0; padding:1rem; border-bottom:1px solid #ded9e9; }
+.purchaseReview { margin:2rem 0; border:2px solid #6651c6; }

@@ -421,7 +421,7 @@ export default function ProfileLandingClient({
       case "nftfactory-subname":
         return initialIdentityMode;
       default:
-        return "nftfactory-subname";
+        return "ens";
     }
   }, [initialIdentityMode]);
 
@@ -1429,71 +1429,7 @@ export default function ProfileLandingClient({
   }
 
   async function createNftFactorySubname(): Promise<void> {
-    if (!slug) {
-      setSetupState({ status: "error", message: "Enter a label first." });
-      return;
-    }
-    if (!walletClient?.account) {
-      setSetupState({ status: "error", message: "Connect wallet first." });
-      return;
-    }
-    if (wrongNetwork) {
-      setSetupState({ status: "error", message: `Select ${appChain.name} in the wallet menu first.` });
-      return;
-    }
-    if (!publicClient) {
-      setSetupState({ status: "error", message: "Public client unavailable. Reconnect wallet and try again." });
-      return;
-    }
-
-    try {
-      setSetupState({ status: "pending", message: `Creating ${slug}.nftfactory.eth...` });
-      setCheckedIdentityReady(false);
-      setPostLinkProfile(null);
-      setPostLinkMintCta(false);
-      const txHash = await walletClient.sendTransaction({
-        account: walletClient.account,
-        to: config.subnameRegistrar as Address,
-        data: encodeRegisterSubname(slug) as Hex,
-        value: BigInt(toHexWei(SUBNAME_FEE_ETH))
-      });
-      await publicClient.waitForTransactionReceipt({ hash: txHash as Hex });
-
-      let nextProfile: ApiProfileRecord;
-      try {
-        const response = await linkProfileIdentity({
-          name: slug,
-          source: "nftfactory-subname",
-          ownerAddress: walletClient.account.address,
-          collectionAddress: selectedCollection || undefined,
-          routeSlug: derivedRouteSlug || undefined
-        });
-        nextProfile = response.profile;
-      } catch {
-        nextProfile = createLocalProfileRecord({
-          fullName: `${slug}.nftfactory.eth`,
-          slug: derivedRouteSlug || slug,
-          source: "nftfactory-subname",
-          ownerAddress: walletClient.account.address,
-          collectionAddress: selectedCollection || undefined
-        });
-      }
-      globalThis.localStorage.setItem(
-        createPrimaryProfileKey(walletClient.account.address),
-        JSON.stringify(nextProfile)
-      );
-
-      const nextProfiles = dedupeProfiles([...profiles, nextProfile]);
-      setProfiles(nextProfiles);
-      setPostLinkProfile(nextProfile);
-      setSetupState({
-        status: "success",
-        hash: txHash,
-        message: `${nextProfile.fullName} created and linked.`
-      });
-    } catch (err) {
-      setSetupState({ status: "error", message: err instanceof Error ? err.message : "Failed to create nftfactory subname" });
-    }
+    setSetupState({status:"error",message:"The legacy handle registrar does not create a resolvable ENS name. Use a wallet creator page or link an existing ENS name instead."});
   }
 
   function clearPendingEthRegistration(): void {
@@ -1529,7 +1465,7 @@ export default function ProfileLandingClient({
         <h3>Creator Identity</h3>
         <p className="sectionLead">
           Choose how this creator identity should be created or linked. By default, NFTFactory creates a{" "}
-          <span className="mono">nftfactory.eth</span> subname unless you choose an ENS option instead.
+          <span className="mono">nftfactory.eth</span> handle registration is unavailable. Link a verified ENS name or use your wallet creator page.
         </p>
         {isConnected && profiles.length > 0 ? (
           <p className="hint">
@@ -1554,7 +1490,7 @@ export default function ProfileLandingClient({
               }
             >
               <optgroup label="Create New">
-                <option value="nftfactory-subname">Create nftfactory.eth subname</option>
+                <option value="nftfactory-subname" disabled>Legacy handle registration unavailable</option>
                 <option value="register-eth">Register .eth</option>
                 <option value="register-eth-subname">Register .eth subname</option>
               </optgroup>

@@ -216,14 +216,19 @@ contract SharedMint1155 is Owned {
         _balances[msg.sender][tokenId] += amount;
         _uris[tokenId] = newUri;
 
+        string memory verifiedSubname = "";
         if (bytes(creatorSubname).length != 0) {
-            // Subname attribution is optional — the mint always succeeds.
-            try registrar.recordMint(creatorSubname) {} catch {}
+            // A caller cannot attribute work to another wallet's registered handle.
+            try registrar.subnames(keccak256(bytes(creatorSubname))) returns (address handleOwner, uint256 expiresAt, uint256, bool exists) {
+                if (exists && handleOwner == msg.sender && expiresAt > block.timestamp) {
+                    try registrar.recordMint(creatorSubname) { verifiedSubname = creatorSubname; } catch {}
+                }
+            } catch {}
         }
 
         emit TransferSingle(msg.sender, address(0), msg.sender, tokenId, amount);
         emit URI(newUri, tokenId);
-        emit Published(msg.sender, tokenId, creatorSubname, amount, newUri);
+        emit Published(msg.sender, tokenId, verifiedSubname, amount, newUri);
     }
 
     // ── ERC-165 ───────────────────────────────────────────────────────────────

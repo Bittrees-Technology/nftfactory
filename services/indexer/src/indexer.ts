@@ -1,3 +1,5 @@
+import {importArtwork,readArtworkTags,saveArtworkTags} from "./artwork.js";
+import {chainWhere} from "./chainScope.js";
 import { normalizeDesign, type ProfileDesign } from "../../../packages/profile/design.mjs";
 import { readToken } from "../../../packages/auth/session.mjs";
 import dotenv from "dotenv";
@@ -419,7 +421,13 @@ function createFallbackPrisma(): PrismaClient {
 
 function createPrismaClient(): PrismaClient {
   try {
-    return new PrismaClient();
+    return new PrismaClient().$extends({query:{$allModels:{$allOperations({model,operation,args,query}) {
+      if (['findMany','findFirst','findUnique','count','aggregate','updateMany','deleteMany','update','delete','upsert'].includes(operation)) {
+        const input=args as unknown as {where?:Record<string,unknown>};
+        input.where=chainWhere(model,input.where,CHAIN_ID);
+      }
+      return query(args);
+    }}}}) as unknown as PrismaClient;
   } catch (err) {
     if (err instanceof Error && err.message.includes("did not initialize yet")) {
       return createFallbackPrisma();
@@ -3535,7 +3543,7 @@ async function syncMarketplaceListingsIfStale(
               : {};
 
             await deps.prisma.listing.upsert({
-              where: { listingId },
+              where: { chainId_listingId: {chainId:config.chainId,listingId} },
               update: {
                 ...baseListingData,
                 ...listingV2Data
@@ -3649,7 +3657,7 @@ async function fullSyncMarketplaceListings(
         const tokenRefId = await findTokenRefIdForAsset(collectionAddress, tokenId, deps);
 
         await deps.prisma.listing.upsert({
-          where: { listingId },
+          where: { chainId_listingId: {chainId:config.chainId,listingId} },
           update: {
             chainId: config.chainId,
             marketplaceVersion: "v2",
@@ -3832,7 +3840,7 @@ async function syncMarketplaceListings(
         const listed = listedById.get(logKey);
 
         await deps.prisma.listing.upsert({
-          where: { listingId },
+          where: { chainId_listingId: {chainId:config.chainId,listingId} },
           update: {
             chainId: config.chainId,
             marketplaceVersion: "v2",
@@ -4043,13 +4051,13 @@ async function fullSyncMarketplaceOffers(
         const tokenRefId = await findTokenRefIdForAsset(collectionAddress, tokenId, deps);
         const previousOffer = typeof offerDelegate.findUnique === "function"
           ? await offerDelegate.findUnique({
-              where: { offerId },
+              where: { chainId_offerId: {chainId:config.chainId,offerId} },
               select: { acceptedTxHash: true }
             })
           : null;
 
         await offerDelegate.upsert({
-          where: { offerId },
+          where: { chainId_offerId: {chainId:config.chainId,offerId} },
           update: {
             chainId: config.chainId,
             marketplaceVersion: "v2",
@@ -4258,13 +4266,13 @@ async function syncMarketplaceOffers(
         const tokenRefId = await findTokenRefIdForAsset(collectionAddress, tokenId, deps);
         const previousOffer = typeof offerDelegate.findUnique === "function"
           ? await offerDelegate.findUnique({
-              where: { offerId },
+              where: { chainId_offerId: {chainId:config.chainId,offerId} },
               select: { acceptedTxHash: true }
             })
           : null;
 
         await offerDelegate.upsert({
-          where: { offerId },
+          where: { chainId_offerId: {chainId:config.chainId,offerId} },
           update: {
             chainId: config.chainId,
             marketplaceVersion: "v2",
@@ -4509,8 +4517,12 @@ async function syncPreferredMarketplaceIfStale(
 
 async function readJsonBody<T>(req: IncomingMessage): Promise<T> {
   const chunks: Buffer[] = [];
+  let bytes = 0;
   for await (const chunk of req) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    const buffer=Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    bytes+=buffer.length;
+    if(bytes>1024*1024)throw new BadRequestError("Request body exceeds 1 MiB.");
+    chunks.push(buffer);
   }
   const raw = Buffer.concat(chunks).toString("utf8");
   if (!raw) throw new BadRequestError("Missing JSON body");
@@ -4763,7 +4775,7 @@ async function ensureTokenForListing(
   const standard = (payload.standard || "UNKNOWN").toUpperCase();
 
   const collection = await deps.prisma.collection.upsert({
-    where: { contractAddress: collectionAddress },
+    where: { chainId_contractAddress: {chainId:config.chainId,contractAddress:collectionAddress} },
     update: {
       ownerAddress: sellerAddress,
       standard
@@ -4808,7 +4820,7 @@ async function ensureTokenForListing(
     : "v1";
 
   const listing = await deps.prisma.listing.upsert({
-    where: { listingId: listingRecordId },
+    where: { chainId_listingId: {chainId:config.chainId,listingId:listingRecordId} },
     update: {
       chainId: config.chainId,
       collectionAddress,
@@ -4895,7 +4907,7 @@ async function upsertMintedToken(
   }
 
   const collection = await deps.prisma.collection.upsert({
-    where: { contractAddress },
+    where: { chainId_contractAddress: {chainId:config.chainId,contractAddress} },
     update: {
       ownerAddress: collectionOwnerAddress,
       ensSubname: ensSubname || undefined,
@@ -5152,7 +5164,7 @@ async function backfillCollectionTokens(
   }
 
   const existingCollection = await deps.prisma.collection.findUnique({
-    where: { contractAddress },
+    where: { chainId_contractAddress: {chainId:config.chainId,contractAddress} },
     select: {
       ownerAddress: true,
       ensSubname: true,
@@ -5812,7 +5824,7 @@ async function syncParticipantContractsIfStale(
         const contractAddress = String(contract.contractAddress || "").trim().toLowerCase();
         if (!isAddress(contractAddress)) return;
         const existingCollection = await collectionDelegate.findUnique({
-          where: { contractAddress },
+          where: { chainId_contractAddress: {chainId:config.chainId,contractAddress} },
           select: {
             ownerAddress: true,
             ensSubname: true,
@@ -6123,6 +6135,19 @@ async function handleRequest(
 
   const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
   const path = url.pathname;
+
+  if (path === "/api/imports" || /^\/api\/artwork\/[^/]+\/[^/]+\/tags$/.test(path)) {
+    const session=readToken(parseBearerToken(req.headers.authorization),process.env.SESSION_SECRET,"session");
+    if(req.method !== "GET" && !session){sendJson(res,401,{error:"Sign in with the wallet that owns this artwork."});return;}
+    if (deps.isRateLimitedImpl(deps.getClientIpImpl(req,config.trustProxy))) {sendJson(res,429,{error:"Too many requests. Please retry shortly."});return;}
+    try {
+      if(path === "/api/imports" && req.method === "POST") {sendJson(res,200,await importArtwork(deps.prisma,createRpcClient(config),config.chainId,session!.address as `0x${string}`,await readJsonBody(req)));return;}
+      const parts=path.split("/");
+      if(req.method === "GET" && path !== "/api/imports") {sendJson(res,200,await readArtworkTags(deps.prisma,config.chainId,parts[3],parts[4],session?.address));return;}
+      if(req.method === "POST" && path !== "/api/imports") {sendJson(res,200,await saveArtworkTags(deps.prisma,createRpcClient(config),config.chainId,parts[3],parts[4],session!.address as `0x${string}`,await readJsonBody(req)));return;}
+      sendJson(res,405,{error:"Method not allowed."});return;
+    }catch(error){sendJson(res,400,{error:error instanceof Error?error.message:"Artwork request failed."});return;}
+  }
 
   if (req.method === "POST" && path === "/api/auth/consume") {
     const proof = readToken(parseBearerToken(req.headers.authorization), process.env.SESSION_SECRET, "nonce-consume");
@@ -6524,7 +6549,7 @@ async function handleRequest(
     }
     const includeActionListingRefs = await hasModerationActionListingColumns(deps);
     const listing = await deps.prisma.listing.findUnique({
-      where: { listingId },
+      where: { chainId_listingId: {chainId:config.chainId,listingId} },
       select: {
         tokenRefId: true,
         listingId: true
@@ -7915,7 +7940,7 @@ async function handleRequest(
 
     if (collectionAddress) {
       const attachedCollection = await deps.prisma.collection.findMany({
-        where: { contractAddress: collectionAddress },
+        where: { chainId:config.chainId,contractAddress:collectionAddress },
         select: { contractAddress: true, ownerAddress: true },
         take: 1
       });
@@ -8894,7 +8919,7 @@ async function handleRequest(
     }
     try {
       const collectionRecord = await deps.prisma.collection.findUnique({
-        where: { contractAddress },
+        where: { chainId_contractAddress: {chainId:config.chainId,contractAddress} },
         select: {
           ownerAddress: true,
           ensSubname: true,
@@ -9109,7 +9134,7 @@ export async function main() {
     requestConfig
   );
   const server = createServer(handler);
-  server.requestTimeout = 0; // disable for long-running admin backfills
+  server.requestTimeout = 60_000; // Bound incoming request time without limiting completed-body backfills.
 
   server.listen(PORT, HOST, () => {
     log.info({ host: HOST, port: PORT }, "Indexer API listening");

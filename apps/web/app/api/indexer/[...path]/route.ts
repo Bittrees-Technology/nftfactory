@@ -87,7 +87,7 @@ async function proxyRequest(
     const body = hasBody ? (await boundedBody(request, INDEXER_PROXY_MAX_BODY_BYTES)).toString() : undefined;
     if (body && Buffer.byteLength(body) > INDEXER_PROXY_MAX_BODY_BYTES) return NextResponse.json({ error: "Request too large." }, { status: 413 });
     const contentType = request.headers.get("Content-Type");
-    const { signal, cleanup } = withTimeout();
+    const { signal, cleanup } = withTimeout(upstreamPath === "/api/imports" ? 60_000 : INDEXER_PROXY_TIMEOUT_MS);
 
     try {
       const response = await fetch(upstreamUrl, {
@@ -121,7 +121,8 @@ async function proxyRequest(
       return new NextResponse(text, {
         status: response.status,
         headers: {
-          "Content-Type": upstreamContentType || "application/json"
+          "Content-Type": upstreamContentType || "application/json",
+          "Cache-Control": "private, no-store"
         }
       });
     } finally {

@@ -1,3 +1,5 @@
+import {boundedBody} from '../../../lib/server/publish';
+import {rateLimitRequest} from '../../../lib/requestRateLimit';
 import { NextResponse } from 'next/server';
 import { makeSignInMessage, verifySignInMessage, consumeSignInMessage } from '../../../lib/server/siwe';
 import { getPrimaryAppChainId } from '../../../lib/chains';
@@ -16,7 +18,9 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     if (request.headers.get('origin') !== new URL(request.url).origin) return NextResponse.json({ error: 'Invalid request origin.' }, { status: 403 });
-    const raw = await request.text();
+    const limit=rateLimitRequest(request,{bucket:"wallet-auth",maxRequests:20,windowMs:60000,errorMessage:"Too many sign-in attempts. Please wait a minute."});
+    if(limit)return NextResponse.json({error:limit.error},{status:429,headers:limit.headers});
+    const raw = (await boundedBody(request,4096)).toString();
     if (raw.length > 4096) return NextResponse.json({ error: 'Request too large.' }, { status: 413 });
     const body = JSON.parse(raw);
     const address = String(body.address || '').toLowerCase();

@@ -1,6 +1,6 @@
 # NFTFactory product expansion plan
 
-Status: implementation authorized; deployment held until final validation. This is not a completed UX or security audit. No application changes accompany this plan.
+Status: implementation authorized; deployment held until final validation. This is not a completed UX or security audit. Implementation is in progress on the feature branch; production is unchanged.
 
 ## Objective and constraints
 

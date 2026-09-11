@@ -1173,7 +1173,7 @@ export default function ListingManagementClient({
             <p className="hint">
               {mintInventoryLoading
                 ? "Loading owned NFTs..."
-                : "No owned NFTs from the selected NFTFactory contracts match this standard yet."}
+                : "No eligible NFTs found. Try another network or import artwork you own."}
             </p>
           )}
           {mintInventoryError ? <p className="error">{mintInventoryError}</p> : null}
@@ -1249,7 +1249,7 @@ export default function ListingManagementClient({
           <h3>2. Create Listing</h3>
           <p className="hint">Set the payment asset, choose the fixed price, and choose how long the listing should stay live.</p>
           <p className="hint">
-            New listings target Marketplace on the selected token’s chain. Active listings below are loaded across the configured V2 indexers and remain chain-scoped for actions.
+            Choose an NFT and set its price. Your wallet will show the network and any approval needed before you list it.
           </p>
           {editingListing ? (
             <div className="selectionCard">
