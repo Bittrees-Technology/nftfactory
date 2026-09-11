@@ -254,6 +254,8 @@ export default function DiscoverClient() {
   }, [nftListingFilter, nftMediaFilter, nftStandardFilter, searchedFeedItems]);
 
   const activeResultLabel = useMemo(() => {
+    if (view === "profiles" ? directoryLoading : feedLoading) return "Loading results…";
+    if (view === "profiles" ? directoryError : feedError) return "Results are temporarily unavailable.";
     if (view === "profiles") {
       return directoryTotal === 0
         ? "No profiles match the current filters."
@@ -267,7 +269,7 @@ export default function DiscoverClient() {
     return filteredNftItems.length === 0
       ? "No NFTs match the current filters."
       : `Showing ${filteredNftItems.length} NFTs from NFTFactory-related collections.`;
-  }, [directoryProfiles.length, directoryTotal, filteredCollectionCards.length, filteredNftItems.length, view]);
+  }, [directoryProfiles.length, directoryTotal, filteredCollectionCards.length, filteredNftItems.length, view, directoryLoading, feedLoading, directoryError, feedError]);
 
   function loadMoreProfiles(): void {
     if (directoryLoading || !directoryCanLoadMore) return;

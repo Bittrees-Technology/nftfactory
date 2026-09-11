@@ -25,7 +25,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <div id="page-content">
             {children}
             </div>
-            <footer className="siteFooter"><span>NFTFactory · Create and share</span><Link href="/wiki">Help & documentation</Link><Link href="/wiki/acer-ipfs-integration">Storage status</Link></footer>
+            <footer className="siteFooter"><span>NFTFactory · Create and share</span><Link href="/wiki">Help & documentation</Link><Link href="/wiki/storage">About storage</Link></footer>
           </main>
         </AppProviders>
       </body>

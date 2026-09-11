@@ -3,6 +3,7 @@ import {rateLimitRequest} from '../../../lib/requestRateLimit';
 import { NextResponse } from 'next/server';
 import { makeSignInMessage, verifySignInMessage, consumeSignInMessage } from '../../../lib/server/siwe';
 import { getPrimaryAppChainId } from '../../../lib/chains';
+import {parseSiweMessage} from 'viem/siwe';
 import { isAddress, type Hex } from 'viem';
 import { issueToken, readToken } from '../../../../../packages/auth/session.mjs';
 import { cookieValue, SESSION_COOKIE } from '../../../lib/server/session';
@@ -13,7 +14,7 @@ function cookieOptions(request: Request, maxAge: number) {
 }
 export async function GET(request: Request) {
   const session = readToken(cookieValue(request, SESSION_COOKIE), process.env.SESSION_SECRET, 'session');
-  return NextResponse.json({ address: session?.address || null }, { headers: { 'Cache-Control': 'no-store' } });
+  return NextResponse.json({ address: session?.address || null, chainId: session?.chainId || null }, { headers: { 'Cache-Control': 'no-store' } });
 }
 export async function POST(request: Request) {
   try {
@@ -38,7 +39,7 @@ export async function POST(request: Request) {
     }
     await consumeSignInMessage(address, challenge.message, challenge.exp);
     const response = NextResponse.json({ address }, { headers: { 'Cache-Control': 'no-store' } });
-    response.cookies.set(SESSION_COOKIE, issueToken({ purpose: 'session', address, exp: Date.now() + 60 * 60_000 }, process.env.SESSION_SECRET), cookieOptions(request, 3600));
+    response.cookies.set(SESSION_COOKIE, issueToken({ purpose: 'session', address, chainId: parseSiweMessage(challenge.message).chainId, exp: Date.now() + 60 * 60_000 }, process.env.SESSION_SECRET), cookieOptions(request, 3600));
     response.cookies.set(CHALLENGE_COOKIE, '', cookieOptions(request, 0));
     return response;
   } catch { return NextResponse.json({ error: 'Wallet sign-in is unavailable. Please try again later.' }, { status: 503 }); }

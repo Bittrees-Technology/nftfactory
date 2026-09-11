@@ -40,7 +40,7 @@ function createReq(params: {
   let actor: string | undefined;
   try { const body = JSON.parse(params.body || "{}"); actor = body.actorAddress || body.currentOwnerAddress || body.ownerAddress; } catch { /* malformed-body test */ }
   actor ||= new URL(params.url, "http://localhost").searchParams.get("actorAddress") || undefined;
-  const session = actor && /^0x[0-9a-f]{40}$/i.test(actor) ? issueToken({ purpose: "session", address: actor.toLowerCase(), exp: Date.now() + 60_000 }, secret) : undefined;
+  const session = actor && /^0x[0-9a-f]{40}$/i.test(actor) ? issueToken({ purpose: "session", chainId: 11155111, address: actor.toLowerCase(), exp: Date.now() + 60_000 }, secret) : undefined;
   req.headers = { host: "localhost", ...(session ? { authorization: `Bearer ${session}` } : {}), ...(params.headers || {}) };
   (req as any).socket = { remoteAddress: "127.0.0.1" };
   return req;

@@ -2228,7 +2228,7 @@ export default function MintClient({
 
   async function uploadMetadata(): Promise<string> {
     if (!walletClient?.account) throw new Error("Connect your wallet first.");
-    await ensureWalletSession(walletClient.account.address, args => walletClient.signMessage(args));
+    await ensureWalletSession(walletClient.account.address, args => walletClient.signMessage(args), config.chainId);
     if (useCustomMetadataUri) {
       const customUri = metadataUri.trim();
       if (!customUri) {

@@ -3932,3 +3932,14 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .moduleOrder button { margin-left: 1rem; }
 .studioNavigation { display:flex; flex-wrap:wrap; gap:1rem; margin:2rem 0; padding:1rem; border-bottom:1px solid #ded9e9; }
 .purchaseReview { margin:2rem 0; border:2px solid #6651c6; }
+
+.createLayout label.studioCheckbox { display:flex; align-items:center; gap:.65rem; text-transform:capitalize; }
+.createLayout .studioCheckbox input { width:1.1rem; height:1.1rem; margin:0; flex:none; }
+.studioPage .formCard h2, .studioPage .formCard h3 { margin:.6rem 0 .2rem; }
+.studioPage .formCard p { margin:.2rem 0 .6rem; }
+.studioToolGrid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1rem; }
+.studioTool { padding:1.4rem; }
+.studioTool h3 { margin:0 0 .6rem; }
+.studioWorkspace { margin:2rem 0; }
+@media(min-width:901px) { .studioPage .artworkPreview { position:sticky; top:1.5rem; } }
+@media(max-width:600px) { .studioToolGrid { grid-template-columns:1fr; } }

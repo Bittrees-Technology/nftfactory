@@ -14,7 +14,8 @@ const publicWikiSlugs = new Set([
   "profiles-and-identity",
   "ens-integration",
   "contracts",
-  "finality"
+  "finality",
+  "storage"
 ]);
 
 export type WikiPageSummary = {

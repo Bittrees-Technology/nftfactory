@@ -1,7 +1,7 @@
 import {importArtwork,readArtworkTags,saveArtworkTags} from "./artwork.js";
 import {chainWhere} from "./chainScope.js";
 import { normalizeDesign, type ProfileDesign } from "../../../packages/profile/design.mjs";
-import { readToken } from "../../../packages/auth/session.mjs";
+import { readToken, readChainSession } from "../../../packages/auth/session.mjs";
 import dotenv from "dotenv";
 import { verifyMintReceipt } from './mintReceipt.js';
 
@@ -6137,7 +6137,8 @@ async function handleRequest(
   const path = url.pathname;
 
   if (path === "/api/imports" || /^\/api\/artwork\/[^/]+\/[^/]+\/tags$/.test(path)) {
-    const session=readToken(parseBearerToken(req.headers.authorization),process.env.SESSION_SECRET,"session");
+    res.setHeader("Cache-Control", "private, no-store");
+    const session=readChainSession(parseBearerToken(req.headers.authorization), process.env.SESSION_SECRET, config.chainId);
     if(req.method !== "GET" && !session){sendJson(res,401,{error:"Sign in with the wallet that owns this artwork."});return;}
     if (deps.isRateLimitedImpl(deps.getClientIpImpl(req,config.trustProxy))) {sendJson(res,429,{error:"Too many requests. Please retry shortly."});return;}
     try {
@@ -6387,7 +6388,7 @@ async function handleRequest(
     }
 
     const payload = await readJsonBody<SyncMintedTokenPayload>(req);
-    const session = readToken(parseBearerToken(req.headers.authorization), process.env.SESSION_SECRET, 'session');
+    const session = readChainSession(parseBearerToken(req.headers.authorization), process.env.SESSION_SECRET, config.chainId);
     if (!session) { sendJson(res, 401, { error: 'Sign in to index your mint.' }); return; }
     try {
       const verified = await verifyMintReceipt(createRpcClient(config), payload, session.address);
@@ -7901,7 +7902,7 @@ async function handleRequest(
       return;
     }
 
-    const session = readToken(parseBearerToken(req.headers.authorization), process.env.SESSION_SECRET, "session");
+    const session = readChainSession(parseBearerToken(req.headers.authorization), process.env.SESSION_SECRET, config.chainId);
     if (!session || session.address !== ownerAddress) { sendJson(res, 401, { error: "Sign in as the profile owner." }); return; }
     if (source === "wallet" && (String(payload.name || "").toLowerCase() !== ownerAddress || payload.routeSlug && payload.routeSlug !== ownerAddress)) { sendJson(res, 400, { error: "Wallet profiles use their verified wallet address." }); return; }
     const normalized = normalizeProfileInput(payload.name, source);
@@ -8106,7 +8107,7 @@ async function handleRequest(
       return;
     }
 
-    const session = readToken(parseBearerToken(req.headers.authorization), process.env.SESSION_SECRET, "session");
+    const session = readChainSession(parseBearerToken(req.headers.authorization), process.env.SESSION_SECRET, config.chainId);
     if (!session || session.address !== currentOwnerAddress) { sendJson(res, 401, { error: "Sign in as the current owner." }); return; }
     const newOwnerAddress = String(payload.newOwnerAddress || "").trim().toLowerCase();
     if (!isAddress(newOwnerAddress)) {
@@ -8235,7 +8236,7 @@ async function handleRequest(
     const entryId = String(payload.entryId || "").trim();
     const currentOwnerAddress = String(payload.currentOwnerAddress || "").trim().toLowerCase();
     const actorAddress = String(payload.actorAddress || payload.currentOwnerAddress || "").trim().toLowerCase();
-    const session = readToken(parseBearerToken(req.headers.authorization), process.env.SESSION_SECRET, "session");
+    const session = readChainSession(parseBearerToken(req.headers.authorization), process.env.SESSION_SECRET, config.chainId);
     if (!session || session.address !== actorAddress) { sendJson(res, 401, { error: "Sign in as the acting wallet." }); return; }
     if (!entryId) {
       sendJson(res, 400, { error: "Invalid entryId" });
@@ -8292,7 +8293,7 @@ async function handleRequest(
     const entryId = String(payload.entryId || "").trim();
     const currentOwnerAddress = String(payload.currentOwnerAddress || "").trim().toLowerCase();
     const actorAddress = String(payload.actorAddress || payload.currentOwnerAddress || "").trim().toLowerCase();
-    const session = readToken(parseBearerToken(req.headers.authorization), process.env.SESSION_SECRET, "session");
+    const session = readChainSession(parseBearerToken(req.headers.authorization), process.env.SESSION_SECRET, config.chainId);
     if (!session || session.address !== actorAddress) { sendJson(res, 401, { error: "Sign in as the acting wallet." }); return; }
     if (!entryId) {
       sendJson(res, 400, { error: "Invalid entryId" });
@@ -8355,7 +8356,7 @@ async function handleRequest(
     const entryId = String(payload.entryId || "").trim();
     const currentOwnerAddress = String(payload.currentOwnerAddress || "").trim().toLowerCase();
     const actorAddress = String(payload.actorAddress || payload.currentOwnerAddress || "").trim().toLowerCase();
-    const session = readToken(parseBearerToken(req.headers.authorization), process.env.SESSION_SECRET, "session");
+    const session = readChainSession(parseBearerToken(req.headers.authorization), process.env.SESSION_SECRET, config.chainId);
     if (!session || session.address !== actorAddress) { sendJson(res, 401, { error: "Sign in as the acting wallet." }); return; }
     if (!entryId) {
       sendJson(res, 400, { error: "Invalid entryId" });
@@ -8408,7 +8409,7 @@ async function handleRequest(
       const actorAddress = String(url.searchParams.get("actorAddress") || "").trim().toLowerCase();
       const profileRecords = await readProfileRecords();
       const moderators = includeHidden ? await readEffectiveModeratorRecords(config) : [];
-      const session = readToken(parseBearerToken(req.headers.authorization), process.env.SESSION_SECRET, "session");
+      const session = readChainSession(parseBearerToken(req.headers.authorization), process.env.SESSION_SECRET, config.chainId);
       const canViewModerationEntries = includeHidden && session?.address === actorAddress
         ? (isAddress(actorAddress) && profileRecords.some((item) => item.slug === slug && item.ownerAddress === actorAddress))
           || moderators.some((item) => item.address === actorAddress)
@@ -8432,7 +8433,7 @@ async function handleRequest(
     const payload = await readJsonBody<ProfileGuestbookPayload>(req);
     const authorName = sanitizeProfileText(payload.authorName, 80) || null;
     const authorAddress = isAddress(String(payload.authorAddress || "").toLowerCase()) ? String(payload.authorAddress).toLowerCase() : null;
-    const authorSession = readToken(parseBearerToken(req.headers.authorization), process.env.SESSION_SECRET, "session");
+    const authorSession = readChainSession(parseBearerToken(req.headers.authorization), process.env.SESSION_SECRET, config.chainId);
     if (authorAddress && authorSession?.address !== authorAddress) { sendJson(res, 401, { error: "Sign in before attaching a wallet address to a comment." }); return; }
     const message = sanitizeProfileText(payload.message, 600) || null;
     if (!authorName || !message) {

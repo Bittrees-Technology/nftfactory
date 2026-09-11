@@ -21,3 +21,8 @@ export function readToken(token, secret, purpose, now = Date.now()) {
     return payload;
   } catch { return null; }
 }
+
+export function readChainSession(token, secret, chainId, now = Date.now()) {
+  const session = readToken(token, secret, 'session', now);
+  return session && Number.isSafeInteger(session.chainId) && session.chainId === chainId ? session : null;
+}
