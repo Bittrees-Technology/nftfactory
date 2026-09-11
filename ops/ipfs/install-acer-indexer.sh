@@ -40,7 +40,7 @@ CREATE DATABASE nftfactory_app OWNER nftfactory_app;
 SQL
 export PATH=/opt/nftfactory-node24/bin:/usr/bin:/bin
 cd /opt/nftfactory-indexer
-runuser -u nftfactory-indexer --preserve-environment -- node node_modules/prisma/build/index.js migrate deploy --schema services/indexer/prisma/schema.prisma
+node node_modules/prisma/build/index.js migrate deploy --schema services/indexer/prisma/schema.prisma
 cat > /etc/systemd/system/nftfactory-indexer.service <<'UNIT'
 [Unit]
 Description=NFTFactory profile and discovery API
