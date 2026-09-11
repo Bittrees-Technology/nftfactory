@@ -1,3 +1,5 @@
+import { pageMetadata } from '../../lib/seo';
+export const metadata = pageMetadata('My studio', 'Manage your creator page, artwork, and collections.', '/profile', true);
 import StudioWorkspaceClient from '../../components/profile/StudioWorkspaceClient';
 import Link from 'next/link';
 import ProfileSelectorClient from '../../components/profile/ProfileSelectorClient';

@@ -1,9 +1,17 @@
+import { pageMetadata } from '../../../lib/seo';
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import WikiMarkdown from "../../../components/wiki/WikiMarkdown";
 import WikiSidebar from "../../../components/wiki/WikiSidebar";
 import WikiTableOfContents from "../../../components/wiki/WikiTableOfContents";
 import { getWikiPageBySlug, getWikiPages } from "../../../lib/wiki";
+
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  const page = await getWikiPageBySlug(slug);
+  if (!page) return { title: 'Guide not found', robots: { index: false, follow: false } };
+  return pageMetadata(page.title, page.description || 'NFTFactory creator guide.', slug === 'home' ? '/wiki' : `/wiki/${slug}`);
+}
 
 export default async function WikiDetailPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -23,7 +31,6 @@ export default async function WikiDetailPage({ params }: { params: Promise<{ slu
             Back to wiki home
           </Link>
         </div>
-        <h2>{page.title}</h2>
         <WikiTableOfContents headings={page.headings} />
         <WikiMarkdown content={page.content} />
       </article>
