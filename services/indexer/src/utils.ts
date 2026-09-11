@@ -53,3 +53,8 @@ export function isRateLimited(ip: string): boolean {
 export function resetRateLimits(): void {
   rateLimitMap.clear();
 }
+
+// Public diagnostics must never include RPC path/query credentials or userinfo.
+export function publicRpcOrigin(value:string):string {
+  try { const url=new URL(value); return ["http:","https:"].includes(url.protocol)?url.origin:"unavailable"; } catch { return "unavailable"; }
+}
