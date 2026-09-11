@@ -96,7 +96,7 @@ export async function fetchProfileResolutionAcrossChains(
   });
 
   const profiles = dedupeProfiles(mergedProfiles);
-  throwIfEveryChainFailed(profiles.length > 0 || mergedCollections.size > 0 || sellerMap.size > 0 ? [true] : [], failures, "Profile resolution failed.");
+  throwIfEveryChainFailed(results.filter(result => result.status === "fulfilled"), failures, "Profile resolution failed.");
 
   return {
     resolution: {
