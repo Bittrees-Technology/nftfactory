@@ -32,7 +32,7 @@ export default function HomePage() {
     </section>
     <section className="factoryDetails" aria-label="Before you begin">
       <div><h2>Made to be explored.</h2><p>Discover creators and browse NFT listings. Check the network, price, and availability before connecting your wallet.</p><Link href="/marketplace">Browse the marketplace →</Link></div>
-      <div><h2>Know what you publish.</h2><p>NFT ownership does not automatically include copyright. Artwork and metadata use IPFS; availability depends on maintained copies. Wallet confirmation and network fees apply.</p><Link href="/wiki/storage">Read about storage →</Link></div>
+      <div><h2>Know what you publish.</h2><p>NFT ownership does not automatically include copyright. Artwork and metadata use IPFS; availability depends on maintained copies. Wallet confirmation and network fees apply.</p><Link href="/wiki/creator-walkthrough">Follow the creator walkthrough →</Link></div>
     </section>
   </div>;
 }

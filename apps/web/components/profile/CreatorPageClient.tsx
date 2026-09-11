@@ -3,13 +3,13 @@ import Link from 'next/link';
 import ArtworkImage from './ArtworkImage';
 import ArtworkCard from '../artwork/ArtworkCard';
 import {normalizeDesign,safeProfileLink} from '../../../../packages/profile/design.mjs';
-import type {ApiMintFeedItem} from '../../lib/indexerApi';
+import type {ApiMintFeedItem, ApiProfileRecord} from '../../lib/indexerApi';
 import {fetchProfileViewSnapshot} from '../../lib/profileSnapshotApi';
 import {collectionPath} from '../../lib/assetRoutes';
 import { useEffect, useState } from 'react';
 import { useAccount } from 'wagmi';
 import { fetchProfileView, type ApiProfileViewResponse } from '../../lib/profileViewApi';
-export default function CreatorPageClient({address}:{address:string}) {
+export default function CreatorPageClient({address,initialProfile}:{address:string;initialProfile?:ApiProfileRecord|null}) {
  const {address:viewer}=useAccount(); const [data,setData]=useState<ApiProfileViewResponse|null>(null); const [error,setError]=useState(''); const [attempt,setAttempt]=useState(0);
  useEffect(()=>{
   let active=true,liveLoaded=false,hasSaved=false;setData(null);setError('');
@@ -21,7 +21,7 @@ export default function CreatorPageClient({address}:{address:string}) {
  },[address,attempt]);
 
  const ownedProfiles=data?.resolution?.profiles?.filter(p=>p.ownerAddress.toLowerCase()===address.toLowerCase())||[];
- const profile=ownedProfiles.find(p=>p.source==='wallet')||ownedProfiles[0];
+ const profile=ownedProfiles.find(p=>p.source==='wallet')||ownedProfiles[0]||(!data?initialProfile:undefined);
  const items=(data?.holdings || []).filter((item):item is ApiMintFeedItem=>item.collection!==null);
  const design=normalizeDesign(profile?.design);
  const featured=design.featured.flatMap(key=>items.filter(item=>`${item.collection.chainId}:${item.collection.contractAddress.toLowerCase()}:${item.tokenId}`===key));
