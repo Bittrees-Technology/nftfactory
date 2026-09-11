@@ -43,8 +43,15 @@
     }
   ],
   "limitations": [
-    "No completed signature or publication in this record",
-    "No mobile, keyboard or account-change result inferred",
-    "NFT displayed is an existing test NFT, not a new replacement-contract mint"
-  ]
+    "Mobile, keyboard and account-change dimensions remain unverified in this session",
+    "Existing test NFT was used; this is not a new-contract mint test"
+  ],
+  "publicationVerification": {
+    "checkedAt": "2026-09-11T18:45:56.219228+00:00",
+    "deployment": "dpl_64eVGPHdJK7UUjgoTRjYhZ54nadv",
+    "result": "passed: connected desktop publication and reload",
+    "editorMessage": "Your creator page is ready to share.",
+    "publicUrl": "https://nftfactory.org/profile/0xe5350d96fc3161bf5c385843ec5ee24e8b465b2f",
+    "observed": "View your page opened the public creator page with saved name, introduction, featured NFT and collected artwork. Reload briefly showed a saved fallback, then live content restored the featured artwork and Edit your page link."
+  }
 }
