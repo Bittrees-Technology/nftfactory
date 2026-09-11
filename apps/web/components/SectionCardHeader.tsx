@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 
 type Props = {
   title: ReactNode;
+  headingLevel?: 2 | 3;
   description?: ReactNode;
   descriptionClassName?: string;
   actions?: ReactNode;
@@ -13,16 +14,18 @@ type Props = {
 
 export default function SectionCardHeader({
   title,
+  headingLevel = 3,
   description,
   descriptionClassName = "hint",
   actions,
   layout = "stacked"
 }: Props) {
+  const Heading = headingLevel === 2 ? "h2" : "h3";
   if (layout === "split") {
     return (
       <>
         <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
-          <h3>{title}</h3>
+          <Heading>{title}</Heading>
           {actions}
         </div>
         {description ? (
@@ -38,7 +41,7 @@ export default function SectionCardHeader({
 
   return (
     <>
-      <h3>{title}</h3>
+      <Heading>{title}</Heading>
       {description ? (
         typeof description === "string" || typeof description === "number" ? (
           <p className={descriptionClassName}>{description}</p>

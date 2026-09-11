@@ -27,6 +27,8 @@ contract CreatorCollection1155 is Initializable, Ownable2StepUpgradeable, UUPSUp
     error TokenAlreadyMinted();
     error InvalidAmount();
 
+    constructor() { _disableInitializers(); }
+
     function initialize(
         address creator,
         string calldata tokenName,
@@ -59,7 +61,7 @@ contract CreatorCollection1155 is Initializable, Ownable2StepUpgradeable, UUPSUp
         _mint(to, tokenId, amount, "");
         // EIP-1155 §5.4: URI event MUST be emitted whenever a token URI is set or changed.
         emit URI(newUri, tokenId);
-        emit TokenPublished(to, tokenId, amount, newUri);
+        emit TokenPublished(msg.sender, tokenId, amount, newUri);
     }
 
     function updateTokenURI(uint256 tokenId, string calldata newUri) external onlyOwner {

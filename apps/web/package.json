@@ -3,8 +3,8 @@
   "private": true,
   "version": "0.1.0",
   "scripts": {
-    "dev": "bash ../../scripts/web-runtime-preflight.sh dev && next dev",
-    "dev:clean": "bash ../../scripts/web-runtime-preflight.sh dev:clean && rm -rf .next && next dev",
+    "dev": "bash ../../scripts/web-runtime-preflight.sh dev && next dev --webpack",
+    "dev:clean": "bash ../../scripts/web-runtime-preflight.sh dev:clean && rm -rf .next && next dev --webpack",
     "build": "bash ../../scripts/web-runtime-preflight.sh build && NEXT_DIST_DIR=.next-build node ../../scripts/run-next-build.mjs",
     "build:clean": "bash ../../scripts/web-runtime-preflight.sh build:clean && rm -rf .next-build && NEXT_DIST_DIR=.next-build node ../../scripts/run-next-build.mjs",
     "start": "NEXT_DIST_DIR=.next-build next start",
@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.90.21",
+    "@wagmi/connectors": "^8.2.0",
     "@walletconnect/ethereum-provider": "2.24.0",
     "next": "16.3.4",
     "react": "19.0.0",

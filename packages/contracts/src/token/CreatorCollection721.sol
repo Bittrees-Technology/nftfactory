@@ -22,6 +22,8 @@ contract CreatorCollection721 is Initializable, Ownable2StepUpgradeable, UUPSUpg
     error MetadataLocked();
     error UpgradesFinalized();
 
+    constructor() { _disableInitializers(); }
+
     function initialize(
         address creator,
         string calldata tokenName,
@@ -49,7 +51,7 @@ contract CreatorCollection721 is Initializable, Ownable2StepUpgradeable, UUPSUpg
         _safeMint(to, tokenId);
         _setTokenURI(tokenId, uri);
         metadataLocked[tokenId] = lockMetadata;
-        emit TokenPublished(to, tokenId, uri);
+        emit TokenPublished(msg.sender, tokenId, uri);
     }
 
     function updateTokenURI(uint256 tokenId, string calldata newUri) external onlyOwner {

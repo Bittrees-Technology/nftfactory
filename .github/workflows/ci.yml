@@ -75,6 +75,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Generate database client
+        env:
+          DATABASE_URL: postgresql://test:test@127.0.0.1:5432/nftfactory_ci
+        run: npm --workspace services/indexer run db:generate
+
       - name: TypeScript check
         run: npm run typecheck:indexer
 
@@ -92,8 +97,19 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install integration dependencies
+        run: npm ci
+
       - name: Build contracts
         run: npm --workspace packages/contracts run build
 
       - name: Run Forge tests
         run: npm run test:contracts
+
+      - name: Verify real contract-wallet sign-in locally
+        run: node --import tsx scripts/test-siwe-contract-wallet.mjs

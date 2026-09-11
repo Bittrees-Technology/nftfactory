@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   fetchCollectionTokens,
+  syncMintedToken,
   fetchCollectionsByOwner,
   fetchProfileDirectory,
   type ApiCollectionTokens,
@@ -119,3 +120,5 @@ describe("indexerApi", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
+
+it('routes mint receipt synchronization to the minted network',async()=>{global.window={} as typeof window;const request=vi.fn(async(_input:RequestInfo|URL,_options?:RequestInit)=>new Response(JSON.stringify({ok:true,token:{}}),{status:200}));global.fetch=request as typeof fetch;await syncMintedToken({chainId:8453,contractAddress:'0x'+'11'.repeat(20),tokenId:'1',creatorAddress:'0x'+'22'.repeat(20),ownerAddress:'0x'+'22'.repeat(20),standard:'ERC721',isFactoryCreated:false,isUpgradeable:true,metadataCid:'ipfs://test',immutable:false});expect(String(request.mock.calls[0][0])).toContain('_chainId=8453');});

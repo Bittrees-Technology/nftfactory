@@ -1,3 +1,4 @@
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
@@ -12,8 +13,14 @@ contract CreatorCollection1155Test is Test {
     address internal nextOwner = address(0xA11CE);
 
     function setUp() external {
-        collection = new CreatorCollection1155();
+        collection = CreatorCollection1155(address(new ERC1967Proxy(address(new CreatorCollection1155()), "")));
         collection.initialize(creator, "Creator Multi", "CM", "studio", creator, 500);
+    }
+
+    function testImplementationCannotBeInitialized() external {
+        CreatorCollection1155 implementation = new CreatorCollection1155();
+        vm.expectRevert();
+        implementation.initialize(creator, "Locked", "LOCK", "", creator, 500);
     }
 
     function testPublishMintsNewTokenId() external {

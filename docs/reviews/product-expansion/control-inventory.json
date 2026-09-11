@@ -1,0 +1,2231 @@
+{
+  "scope": "JSX source controls, including conditional legacy states; not a browser pass",
+  "controls": [
+    {
+      "file": "apps/web/app/error.tsx",
+      "line": 22,
+      "tag": "button",
+      "control": "<button type=\"button\" onClick={reset}>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/app/error.tsx",
+      "line": 25,
+      "tag": "Link",
+      "control": "<Link href=\"/wiki/infrastructure-and-operations\" className=\"ctaLink secondaryLink\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/app/layout.tsx",
+      "line": 22,
+      "tag": "a",
+      "control": "<a className=\"skipLink\" href=\"#page-content\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/app/layout.tsx",
+      "line": 28,
+      "tag": "Link",
+      "control": "<Link href=\"/wiki\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/app/layout.tsx",
+      "line": 28,
+      "tag": "Link",
+      "control": "<Link href=\"/wiki/acer-ipfs-integration\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/app/mint/error.tsx",
+      "line": 25,
+      "tag": "button",
+      "control": "<button type=\"button\" onClick={reset}>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/app/mint/error.tsx",
+      "line": 28,
+      "tag": "Link",
+      "control": "<Link href=\"/wiki/ipfs-upload-failure-triage\" className=\"ctaLink secondaryLink\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/app/mint/error.tsx",
+      "line": 31,
+      "tag": "Link",
+      "control": "<Link href=\"/wiki/infrastructure-and-operations\" className=\"ctaLink secondaryLink\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/app/page.tsx",
+      "line": 4,
+      "tag": "Link",
+      "control": "<Link className=\"ctaLink\" href=\"/mint\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/app/page.tsx",
+      "line": 4,
+      "tag": "Link",
+      "control": "<Link className=\"ctaLink secondary\" href=\"/discover\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/app/page.tsx",
+      "line": 6,
+      "tag": "Link",
+      "control": "<Link href=\"/profile/setup\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/app/profile/[name]/error.tsx",
+      "line": 34,
+      "tag": "button",
+      "control": "<button type=\"button\" onClick={reset}>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/app/profile/[name]/error.tsx",
+      "line": 37,
+      "tag": "Link",
+      "control": "<Link href=\"/discover\" className=\"ctaLink secondaryLink\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/app/profile/[name]/error.tsx",
+      "line": 40,
+      "tag": "Link",
+      "control": "<Link href=\"/wiki/infrastructure-and-operations\" className=\"ctaLink secondaryLink\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/app/profile/page.tsx",
+      "line": 5,
+      "tag": "Link",
+      "control": "<Link href=\"/mint\" className=\"ctaLink\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/app/profile/page.tsx",
+      "line": 5,
+      "tag": "Link",
+      "control": "<Link href=\"/profile/setup\" className=\"ctaLink secondary\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/app/wiki/[slug]/page.tsx",
+      "line": 22,
+      "tag": "Link",
+      "control": "<Link href=\"/wiki\" className=\"wikiBackLink\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/AsyncButton.tsx",
+      "line": 25,
+      "tag": "button",
+      "control": "<button type={type} onClick={onClick} disabled={disabled || loading} className={className}>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/HeaderWalletButton.tsx",
+      "line": 11,
+      "tag": "button",
+      "control": "<button className={`headerWalletButton ${address ? 'walletConnected' : ''}`} onClick={()=>dialog.current?.showModal()} aria-label={address ? 'Open wallet account' : 'Connect wallet'}>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/HeaderWalletButton.tsx",
+      "line": 11,
+      "tag": "button",
+      "control": "<button className=\"secondary\" aria-label=\"Close wallet dialog\" onClick={()=>dialog.current?.close()}>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/HeaderWalletButton.tsx",
+      "line": 11,
+      "tag": "button",
+      "control": "<button key={connector.uid} disabled={isPending} onClick={async()=>{setError('');try {await connectAsync({connector});dialog.current?.close();}catch{setError('Connection was not completed. Unlock your wallet and retry.');}}}>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/HeaderWalletButton.tsx",
+      "line": 11,
+      "tag": "button",
+      "control": "<button onClick={async()=>{try{await switchChainAsync({chainId:target});}catch{setError('Network switch was not completed.');}}}>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/HeaderWalletButton.tsx",
+      "line": 11,
+      "tag": "button",
+      "control": "<button disabled={busy || !wallet} onClick={async()=>{if(!wallet)return;setBusy(true);try{await ensureWalletSession(address,args=>wallet.signMessage(args));setError('Signed in. You can now save changes.');}catch{setError('Sign-in was not completed.');}finally{setBusy(false);}}}>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/HeaderWalletButton.tsx",
+      "line": 11,
+      "tag": "button",
+      "control": "<button className=\"secondary\" onClick={()=>{void fetch('/api/auth',{method:'DELETE'});disconnect();dialog.current?.close();}}>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/ListingSummaryRow.tsx",
+      "line": 67,
+      "tag": "a",
+      "control": "<a href={toExplorerAddress(item.nft, effectiveChainId)!} target=\"_blank\" rel=\"noreferrer\" className=\"mono\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/ListingSummaryRow.tsx",
+      "line": 75,
+      "tag": "a",
+      "control": "<a href={toExplorerAddress(item.seller, effectiveChainId)!} target=\"_blank\" rel=\"noreferrer\" className=\"mono\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/SiteNavigation.tsx",
+      "line": 8,
+      "tag": "Link",
+      "control": "<Link className=\"brandLink\" href=\"/\" aria-label=\"NFTFactory home\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/SiteNavigation.tsx",
+      "line": 8,
+      "tag": "Link",
+      "control": "<Link key={url} href={url} aria-current={pathname.startsWith(url) ? 'page' : undefined}>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/SiteNavigation.tsx",
+      "line": 8,
+      "tag": "summary",
+      "control": "<summary>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/SiteNavigation.tsx",
+      "line": 8,
+      "tag": "Link",
+      "control": "<Link key={url} href={url}>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/SiteNavigation.tsx",
+      "line": 8,
+      "tag": "Link",
+      "control": "<Link href=\"/wiki\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/create/CreateClient.tsx",
+      "line": 83,
+      "tag": "input",
+      "control": "<input aria-label=\"Artwork file\" type=\"file\" accept=\"image/png,image/jpeg,image/webp\" disabled={!loaded || busy || Boolean(draft.txHash)} onChange={e => { const file = e.target.files?.[0]; if (!file) return; if (file.size > LIMIT || !['image/png','image/jpeg','image/webp'].includes(file.type)) { setMessage('Choose a PNG, JPEG, or WebP smaller than 3 MiB.'); return; } edit({ file }); }} />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/create/CreateClient.tsx",
+      "line": 84,
+      "tag": "input",
+      "control": "<input value={draft.name} maxLength={120} disabled={busy || Boolean(draft.txHash)} onChange={e => edit({ name: e.target.value })} />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/create/CreateClient.tsx",
+      "line": 84,
+      "tag": "textarea",
+      "control": "<textarea value={draft.description} maxLength={2000} disabled={busy || Boolean(draft.txHash)} onChange={e => edit({ description: e.target.value })} />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/create/CreateClient.tsx",
+      "line": 85,
+      "tag": "button",
+      "control": "<button disabled={busy || !loaded} onClick={() => void publish()}>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/create/CreateClient.tsx",
+      "line": 85,
+      "tag": "Link",
+      "control": "<Link className=\"ctaLink\" href=\"/profile/setup\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/create/CreateClient.tsx",
+      "line": 85,
+      "tag": "button",
+      "control": "<button className=\"secondary\" onClick={() => { setDraft({ name: '', description: '' }); setComplete(false); setStage(0); setMessage(''); }}>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/create/CreateClient.tsx",
+      "line": 87,
+      "tag": "button",
+      "control": "<button className=\"secondary\" disabled={busy} onClick={() => setStage(stage - 1)}>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/create/CreateClient.tsx",
+      "line": 87,
+      "tag": "button",
+      "control": "<button disabled={!loaded || !draft.file || (stage === 1 && !draft.name.trim())} onClick={() => setStage(stage + 1)}>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/create/CreateClient.tsx",
+      "line": 91,
+      "tag": "summary",
+      "control": "<summary>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/create/CreateClient.tsx",
+      "line": 91,
+      "tag": "Link",
+      "control": "<Link href=\"/mint?view=manage\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/create/CreateClient.tsx",
+      "line": 91,
+      "tag": "Link",
+      "control": "<Link href=\"/mint?view=mint&collection=custom\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/discover/DiscoverClient.tsx",
+      "line": 318,
+      "tag": "button",
+      "control": "<button type=\"button\" className={view === \"profiles\" ? \"discoverTab discoverTabActive\" : \"discoverTab\"} onClick={() => setView(\"profiles\")}>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/discover/DiscoverClient.tsx",
+      "line": 321,
+      "tag": "button",
+      "control": "<button type=\"button\" className={view === \"collections\" ? \"discoverTab discoverTabActive\" : \"discoverTab\"} onClick={() => setView(\"collections\")}>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/discover/DiscoverClient.tsx",
+      "line": 324,
+      "tag": "button",
+      "control": "<button type=\"button\" className={view === \"nfts\" ? \"discoverTab discoverTabActive\" : \"discoverTab\"} onClick={() => setView(\"nfts\")}>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/discover/DiscoverClient.tsx",
+      "line": 331,
+      "tag": "input",
+      "control": "<input className=\"discoverFieldControl\" value={searchValue} onChange={(event) => setSearchValue(event.target.value)} placeholder={view === \"profiles\" ? \"name, slug, tagline, wallet\" : \"name, contract, token, wallet\"} />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/discover/DiscoverClient.tsx",
+      "line": 342,
+      "tag": "select",
+      "control": "<select className=\"discoverFieldControl\" value={profileSourceFilter} onChange={(event) => setProfileSourceFilter(event.target.value as ProfileSourceFilter)} >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/discover/DiscoverClient.tsx",
+      "line": 355,
+      "tag": "select",
+      "control": "<select className=\"discoverFieldControl\" value={profileCollectionFilter} onChange={(event) => setProfileCollectionFilter(event.target.value as ProfileCollectionFilter)} >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/discover/DiscoverClient.tsx",
+      "line": 367,
+      "tag": "select",
+      "control": "<select className=\"discoverFieldControl\" value={profileSort} onChange={(event) => setProfileSort(event.target.value as ProfileSort)}>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/discover/DiscoverClient.tsx",
+      "line": 380,
+      "tag": "select",
+      "control": "<select className=\"discoverFieldControl\" value={collectionStandardFilter} onChange={(event) => setCollectionStandardFilter(event.target.value as StandardFilter)} >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/discover/DiscoverClient.tsx",
+      "line": 392,
+      "tag": "select",
+      "control": "<select className=\"discoverFieldControl\" value={collectionListingFilter} onChange={(event) => setCollectionListingFilter(event.target.value as ListingFilter)} >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/discover/DiscoverClient.tsx",
+      "line": 408,
+      "tag": "select",
+      "control": "<select className=\"discoverFieldControl\" value={nftStandardFilter} onChange={(event) => setNftStandardFilter(event.target.value as StandardFilter)} >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/discover/DiscoverClient.tsx",
+      "line": 420,
+      "tag": "select",
+      "control": "<select className=\"discoverFieldControl\" value={nftListingFilter} onChange={(event) => setNftListingFilter(event.target.value as ListingFilter)} >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/discover/DiscoverClient.tsx",
+      "line": 432,
+      "tag": "select",
+      "control": "<select className=\"discoverFieldControl\" value={nftMediaFilter} onChange={(event) => setNftMediaFilter(event.target.value as MediaFilter)} >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/discover/DiscoverClient.tsx",
+      "line": 470,
+      "tag": "Link",
+      "control": "<Link href={`/profile/${encodeURIComponent(profile.slug)}`} className=\"ctaLink\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/discover/DiscoverClient.tsx",
+      "line": 474,
+      "tag": "Link",
+      "control": "<Link href={`/mint?view=manage&address=${encodeURIComponent(profile.collectionAddress)}`} className=\"ctaLink secondaryLink\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/discover/DiscoverClient.tsx",
+      "line": 484,
+      "tag": "button",
+      "control": "<button type=\"button\" onClick={loadMoreProfiles} disabled={directoryLoading}>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/discover/DiscoverClient.tsx",
+      "line": 517,
+      "tag": "Link",
+      "control": "<Link href={`/mint?view=view&address=${encodeURIComponent(item.contractAddress)}`} className=\"ctaLink\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/discover/DiscoverClient.tsx",
+      "line": 520,
+      "tag": "Link",
+      "control": "<Link href={`/mint?view=manage&address=${encodeURIComponent(item.contractAddress)}`} className=\"ctaLink secondaryLink\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/discover/DiscoverClient.tsx",
+      "line": 529,
+      "tag": "button",
+      "control": "<button type=\"button\" onClick={loadMoreFeed} disabled={feedLoading}>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/discover/DiscoverClient.tsx",
+      "line": 564,
+      "tag": "Link",
+      "control": "<Link href={`/mint?view=view&address=${encodeURIComponent(item.collection.contractAddress)}`} className=\"ctaLink\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/discover/DiscoverClient.tsx",
+      "line": 568,
+      "tag": "a",
+      "control": "<a href={artworkSources(item.metadataUrl)[0] || item.metadataUrl} target=\"_blank\" rel=\"noreferrer\" className=\"ctaLink secondaryLink\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/discover/DiscoverClient.tsx",
+      "line": 578,
+      "tag": "button",
+      "control": "<button type=\"button\" onClick={loadMoreFeed} disabled={feedLoading}>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 932,
+      "tag": "a",
+      "control": "<a href={metadataLink} target=\"_blank\" rel=\"noreferrer\" className=\"ctaLink secondaryLink\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 937,
+      "tag": "a",
+      "control": "<a href={mediaLink} target=\"_blank\" rel=\"noreferrer\" className=\"ctaLink secondaryLink\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 3323,
+      "tag": "button",
+      "control": "<button type=\"button\" className={pageMode === \"mint\" ? \"presetButton presetActive mintWorkspaceModeButton\" : \"presetButton mintWorkspaceModeButton\"} onClick={() => setPageMode(\"mint\")}>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 3327,
+      "tag": "button",
+      "control": "<button type=\"button\" className={pageMode === \"view\" ? \"presetButton presetActive mintWorkspaceModeButton\" : \"presetButton mintWorkspaceModeButton\"} onClick={() => setPageMode(\"view\")}>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 3331,
+      "tag": "button",
+      "control": "<button type=\"button\" className={pageMode === \"manage\" ? \"presetButton presetActive mintWorkspaceModeButton\" : \"presetButton mintWorkspaceModeButton\"} onClick={() => setPageMode(\"manage\")}>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 3368,
+      "tag": "select",
+      "control": "<select value={selectedWalletNetworkId} onChange={(e) => void onSelectWalletNetwork(Number(e.target.value))} disabled={!isConnected || isSwitchingChain} >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 3397,
+      "tag": "select",
+      "control": "<select value={standard} onChange={(e) => setStandard(e.target.value as Standard)}>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 3409,
+      "tag": "select",
+      "control": "<select value={mintMode} onChange={(e) => { setMintMode(e.target.value as MintMode); setShowDeployForm(false); }} >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 3448,
+      "tag": "select",
+      "control": "<select value={collectionSelector} onChange={(e) => setCollectionSelector(e.target.value as \"saved\" | \"manual\")} >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 3459,
+      "tag": "select",
+      "control": "<select value={customCollectionAddress} onChange={(e) => setCustomCollectionAddress(e.target.value)} >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 3473,
+      "tag": "input",
+      "control": "<input value={customCollectionAddress} onChange={(e) => setCustomCollectionAddress(e.target.value)} />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 3494,
+      "tag": "a",
+      "control": "<a href={toExplorerAddress(config.chainId, customCollectionAddress)!} target=\"_blank\" rel=\"noreferrer\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 3508,
+      "tag": "input",
+      "control": "<input value={custom1155TokenId} onChange={(e) => setCustom1155TokenId(e.target.value)} inputMode=\"numeric\" />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 3518,
+      "tag": "input",
+      "control": "<input type=\"checkbox\" checked={lockMetadata} onChange={(e) => setLockMetadata(e.target.checked)} />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 3534,
+      "tag": "summary",
+      "control": "<summary style={{ cursor: \"pointer\", fontWeight: 600, marginTop: \"0.5rem\" }}>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 3544,
+      "tag": "input",
+      "control": "<input value={deployName} onChange={(e) => setDeployName(e.target.value)} />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 3548,
+      "tag": "input",
+      "control": "<input value={deploySymbol} onChange={(e) => setDeploySymbol(e.target.value)} />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 3552,
+      "tag": "input",
+      "control": "<input value={deploySubname} onChange={(e) => setDeploySubname(e.target.value)} />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 3562,
+      "tag": "input",
+      "control": "<input value={deployRoyaltyReceiver} onChange={(e) => setDeployRoyaltyReceiver(e.target.value)} placeholder=\"0x... or name.eth\" />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 3583,
+      "tag": "input",
+      "control": "<input value={deployRoyaltyBps} onChange={(e) => setDeployRoyaltyBps(e.target.value)} inputMode=\"numeric\" />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 3590,
+      "tag": "button",
+      "control": "<button type=\"button\" onClick={onDeployCollection} disabled={!isConnected || wrongNetwork || deployTx.status === \"pending\"} >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 3616,
+      "tag": "input",
+      "control": "<input value={name} onChange={(e) => setName(e.target.value)} />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 3620,
+      "tag": "input",
+      "control": "<input value={description} onChange={(e) => setDescription(e.target.value)} />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 3625,
+      "tag": "input",
+      "control": "<input value={copies} onChange={(e) => setCopies(e.target.value)} inputMode=\"numeric\" />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 3633,
+      "tag": "input",
+      "control": "<input type=\"file\" accept=\"image/*\" onChange={(e) => setImageFile(e.target.files?.[0] ?? null)} />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 3636,
+      "tag": "input",
+      "control": "<input type=\"checkbox\" checked={includeAudio} onChange={(e) => setIncludeAudio(e.target.checked)} />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 3646,
+      "tag": "input",
+      "control": "<input type=\"file\" accept=\"audio/*\" onChange={(e) => setAudioFile(e.target.files?.[0] ?? null)} />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 3661,
+      "tag": "input",
+      "control": "<input type=\"checkbox\" checked={includeExternalUrl} onChange={(e) => setIncludeExternalUrl(e.target.checked)} />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 3671,
+      "tag": "input",
+      "control": "<input value={externalUrl} onChange={(e) => setExternalUrl(e.target.value)} />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 3675,
+      "tag": "input",
+      "control": "<input type=\"checkbox\" checked={useCustomMetadataUri} onChange={(e) => setUseCustomMetadataUri(e.target.checked)} />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 3685,
+      "tag": "input",
+      "control": "<input value={metadataUri} onChange={(e) => setMetadataUri(e.target.value)} />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 3755,
+      "tag": "button",
+      "control": "<button type=\"submit\" disabled={!isConnected || wrongNetwork || mintTx.status === \"pending\" || uploadTx.status === \"pending\"} >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 3773,
+      "tag": "a",
+      "control": "<a href={toExplorerTx(getContractsConfig().chainId, mintTx.hash)!} target=\"_blank\" rel=\"noreferrer\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 3778,
+      "tag": "a",
+      "control": "<a href={uploadReceipt.metadataGatewayUrl} target=\"_blank\" rel=\"noreferrer\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 3785,
+      "tag": "a",
+      "control": "<a href={uploadReceipt.imageGatewayUrl} target=\"_blank\" rel=\"noreferrer\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 3790,
+      "tag": "a",
+      "control": "<a href={uploadReceipt.audioGatewayUrl} target=\"_blank\" rel=\"noreferrer\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 3834,
+      "tag": "select",
+      "control": "<select value={manageSelector} onChange={(e) => setManageSelector(e.target.value as \"saved\" | \"manual\")} >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 3846,
+      "tag": "select",
+      "control": "<select value={manageAddress} onChange={(e) => setManageAddress(e.target.value)} >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 3861,
+      "tag": "input",
+      "control": "<input value={manageAddress} onChange={(e) => setManageAddress(e.target.value)} />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 3901,
+      "tag": "a",
+      "control": "<a href={toExplorerAddress(config.chainId, manageAddress)!} target=\"_blank\" rel=\"noreferrer\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 3945,
+      "tag": "button",
+      "control": "<button type=\"button\" className=\"secondaryButton\" disabled={!isAddress(manageAddress) || viewCollectionLoading} onClick={() => { if (!isAddress(manageAddress)) return; setViewCollectionLoading(true); setViewCollectionError(\"\"); void fetchCollectionTokens(manageAddress, { chainId: config.chainId, sync: true, syncScope: \"collection\", timeoutMs: 30_000, ownerAddress: manageCollectionOwner || account || undefined, royaltyReceiverAddress: manageRoyaltyReceiver || undefined, implementationAddress: manageImplementationAddress || undefined }) .then(async (result) => { if (result.count === 0 && publicClient && manageCollectionStandard) { result = await fetchCollectionTokensOnChain({ publicClient, cha",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 4061,
+      "tag": "select",
+      "control": "<select value={manageSelector} onChange={(e) => setManageSelector(e.target.value as \"saved\" | \"manual\")} >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 4073,
+      "tag": "select",
+      "control": "<select value={manageAddress} onChange={(e) => setManageAddress(e.target.value)} >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 4088,
+      "tag": "input",
+      "control": "<input value={manageAddress} onChange={(e) => setManageAddress(e.target.value)} />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 4102,
+      "tag": "a",
+      "control": "<a href={toExplorerAddress(config.chainId, manageAddress)!} target=\"_blank\" rel=\"noreferrer\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 4126,
+      "tag": "a",
+      "control": "<a href={toExplorerAddress(config.chainId, manageAddress)!} target=\"_blank\" rel=\"noreferrer\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 4137,
+      "tag": "a",
+      "control": "<a href={toExplorerAddress(config.chainId, manageImplementationAddress)!} target=\"_blank\" rel=\"noreferrer\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 4148,
+      "tag": "button",
+      "control": "<button type=\"button\" className=\"secondaryButton\" disabled={!isAddress(manageAddress) || !manageCollectionStandard || collectionVerificationTx.status === \"pending\"} onClick={() => { if (!isAddress(manageAddress) || !manageCollectionStandard) return; void runCollectionVerification(manageAddress, manageCollectionStandard); }} >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 4159,
+      "tag": "button",
+      "control": "<button type=\"button\" className=\"secondaryButton\" disabled={!isAddress(manageAddress) || collectionVerificationTx.status === \"pending\"} onClick={() => { if (!isAddress(manageAddress)) return; void checkCollectionVerificationStatus(manageAddress); }} >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 4171,
+      "tag": "a",
+      "control": "<a href={collectionVerificationTx.explorerUrl} target=\"_blank\" rel=\"noreferrer\" className=\"ctaLink secondaryLink\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 4209,
+      "tag": "select",
+      "control": "<select value={identityMode} onChange={(e) => setIdentityMode(e.target.value as CollectionIdentityMode)}>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 4223,
+      "tag": "input",
+      "control": "<input value={registerSubnameLabel} onChange={(e) => setRegisterSubnameLabel(e.target.value)} />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 4230,
+      "tag": "select",
+      "control": "<select value={selectedCollectionSubnameParentOption} onChange={(e) => setCollectionSubnameParent(e.target.value)} disabled={collectionEnsParentCandidates.length === 0} >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 4265,
+      "tag": "input",
+      "control": "<input value={registerSubnameLabel} onChange={(e) => setRegisterSubnameLabel(e.target.value)} list={identityMode === \"ens\" ? \"existing-ens-options\" : \"existing-ens-subname-options\"} placeholder={identityMode === \"ens\" ? \"artist.eth\" : \"studio.example.eth\"} />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 4299,
+      "tag": "input",
+      "control": "<input value={registerSubnameLabel} onChange={(e) => setRegisterSubnameLabel(e.target.value)} />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 4321,
+      "tag": "button",
+      "control": "<button type=\"button\" onClick={() => { void saveCollectionIdentity(); }} disabled={ !isConnected || !isAddress(manageAddress) || ((identityMode === \"nftfactory-subname\" || identityMode === \"register-eth\" || identityMode === \"register-eth-subname\") && wrongNetwork) || (identityMode === \"register-eth-subname\" && !String(collectionSubnameParent || \"\").trim()) || (identityMode === \"register-eth\" && Boolean(pendingCollectionEnsRegistration) && collectionRegistrationCountdown > 0) || subnameTx.status === \"pending\" } >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 4363,
+      "tag": "input",
+      "control": "<input value={manageRoyaltyReceiver} onChange={(e) => setManageRoyaltyReceiver(e.target.value)} placeholder={account || \"0x...\"} />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 4371,
+      "tag": "input",
+      "control": "<input inputMode=\"numeric\" value={manageRoyaltyBps} onChange={(e) => setManageRoyaltyBps(sanitizeRoyaltyBpsInput(e.target.value))} placeholder=\"500\" />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 4381,
+      "tag": "button",
+      "control": "<button type=\"button\" onClick={onSaveDefaultRoyalty} disabled={!isConnected || wrongNetwork || !isAddress(manageAddress) || royaltyTx.status === \"pending\"} >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 4412,
+      "tag": "a",
+      "control": "<a href={toExplorerAddress(config.chainId, config.royaltySplitRegistry)!} target=\"_blank\" rel=\"noreferrer\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 4445,
+      "tag": "input",
+      "control": "<input value={split.account} onChange={(e) => updateRoyaltySplitRow(index, \"account\", e.target.value)} placeholder=\"0x...\" />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 4453,
+      "tag": "input",
+      "control": "<input inputMode=\"numeric\" value={split.bps} onChange={(e) => updateRoyaltySplitRow(index, \"bps\", e.target.value)} placeholder=\"5000\" />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 4466,
+      "tag": "button",
+      "control": "<button type=\"button\" className=\"secondary\" onClick={() => removeRoyaltySplitRow(index)} disabled={royaltySplitTx.status === \"pending\"} >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 4486,
+      "tag": "button",
+      "control": "<button type=\"button\" className=\"secondary\" onClick={addRoyaltySplitRow} disabled={royaltySplitTx.status === \"pending\"} >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 4494,
+      "tag": "button",
+      "control": "<button type=\"button\" className=\"secondary\" onClick={clearRoyaltySplitRows} disabled={royaltySplitTx.status === \"pending\" || manageRoyaltySplits.length === 0} >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 4502,
+      "tag": "button",
+      "control": "<button type=\"button\" onClick={onSaveCollectionRoyaltySplits} disabled={!isConnected || wrongNetwork || !isAddress(manageAddress) || royaltySplitTx.status === \"pending\"} >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 4545,
+      "tag": "a",
+      "control": "<a href={ownerExplorerUrl} target=\"_blank\" rel=\"noreferrer\" className=\"mono\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 4582,
+      "tag": "input",
+      "control": "<input value={transferTarget} onChange={(e) => setTransferTarget(e.target.value)} placeholder=\"0x...\" />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 4589,
+      "tag": "button",
+      "control": "<button type=\"button\" onClick={onCancelPendingOwnershipTransfer} disabled={ !isConnected || wrongNetwork || !isAddress(manageAddress) || !connectedWalletOwnsCollection || transferTx.status === \"pending\" } >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 4602,
+      "tag": "button",
+      "control": "<button type=\"button\" onClick={onTransferOwnership} disabled={ !isConnected || wrongNetwork || !isAddress(manageAddress) || !connectedWalletOwnsCollection || !hasValidTransferTarget || transferTx.status === \"pending\" } >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 4620,
+      "tag": "button",
+      "control": "<button type=\"button\" onClick={onAcceptOwnership} disabled={ !isConnected || wrongNetwork || !isAddress(manageAddress) || !connectedWalletIsPendingOwner || transferTx.status === \"pending\" } >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 4646,
+      "tag": "input",
+      "control": "<input value={transferTarget} onChange={(e) => setTransferTarget(e.target.value)} placeholder=\"0x...\" />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 4652,
+      "tag": "button",
+      "control": "<button type=\"button\" onClick={onTransferOwnership} disabled={ !isConnected || wrongNetwork || !isAddress(manageAddress) || !connectedWalletOwnsCollection || !hasValidTransferTarget || transferTx.status === \"pending\" } >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 4677,
+      "tag": "input",
+      "control": "<input value={transferTarget} onChange={(e) => setTransferTarget(e.target.value)} placeholder=\"0x...\" />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 4683,
+      "tag": "button",
+      "control": "<button type=\"button\" onClick={onTransferOwnership} disabled={ !isConnected || wrongNetwork || !isAddress(manageAddress) || !connectedWalletOwnsCollection || !hasValidTransferTarget || transferTx.status === \"pending\" } >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 4713,
+      "tag": "input",
+      "control": "<input type=\"checkbox\" checked={finalizeConfirmed} onChange={(e) => setFinalizeConfirmed(e.target.checked)} />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 4721,
+      "tag": "button",
+      "control": "<button type=\"button\" onClick={onFinalizeUpgrades} disabled={ !isConnected || wrongNetwork || !isAddress(manageAddress) || !finalizeConfirmed || finalizeTx.status === \"pending\" } style={{ background: finalizeConfirmed ? \"#c00\" : undefined }} >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/mint/MintClient.tsx",
+      "line": 4826,
+      "tag": "a",
+      "control": "<a href={toExplorerTx(getContractsConfig().chainId, state.hash)!} target=\"_blank\" rel=\"noreferrer\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/CreatorPageClient.tsx",
+      "line": 12,
+      "tag": "summary",
+      "control": "<summary>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/CreatorPageClient.tsx",
+      "line": 12,
+      "tag": "Link",
+      "control": "<Link className=\"ctaLink\" href=\"/profile/setup\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/CreatorPageClient.tsx",
+      "line": 12,
+      "tag": "button",
+      "control": "<button onClick={()=>setAttempt(v=>v+1)}>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/CreatorPageClient.tsx",
+      "line": 12,
+      "tag": "Link",
+      "control": "<Link href=\"/discover\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/CreatorSetupClient.tsx",
+      "line": 22,
+      "tag": "input",
+      "control": "<input value={name} maxLength={80} onChange={e=>{setName(e.target.value);setSaved(false);}} />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/CreatorSetupClient.tsx",
+      "line": 22,
+      "tag": "textarea",
+      "control": "<textarea value={bio} maxLength={1200} onChange={e=>{setBio(e.target.value);setSaved(false);}} />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/CreatorSetupClient.tsx",
+      "line": 22,
+      "tag": "button",
+      "control": "<button disabled={!address || !name.trim() || busy} onClick={()=>void save()}>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/CreatorSetupClient.tsx",
+      "line": 22,
+      "tag": "Link",
+      "control": "<Link className=\"ctaLink\" href={`/profile/${address?.toLowerCase()}`}>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/CreatorSetupClient.tsx",
+      "line": 22,
+      "tag": "summary",
+      "control": "<summary>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/CreatorSetupClient.tsx",
+      "line": 22,
+      "tag": "Link",
+      "control": "<Link href=\"/profile/setup?advanced=1\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ListingManagementCard.tsx",
+      "line": 115,
+      "tag": "a",
+      "control": "<a href={txLink} target=\"_blank\" rel=\"noreferrer\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ListingManagementCard.tsx",
+      "line": 139,
+      "tag": "button",
+      "control": "<button type=\"button\" className=\"miniBtn\" onClick={() => onCopy(`${prefix}-nft-${itemKeySuffix}`, item.nft)}>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ListingManagementCard.tsx",
+      "line": 146,
+      "tag": "button",
+      "control": "<button type=\"button\" className=\"miniBtn\" onClick={() => onCopy(`seller-${itemKeySuffix}`, item.seller)}>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ListingManagementCard.tsx",
+      "line": 152,
+      "tag": "a",
+      "control": "<a href={metadataUrl} target=\"_blank\" rel=\"noreferrer\" className=\"feedLinkPill\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ListingManagementCard.tsx",
+      "line": 157,
+      "tag": "a",
+      "control": "<a href={mediaUrl} target=\"_blank\" rel=\"noreferrer\" className=\"feedLinkPill\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ListingManagementCard.tsx",
+      "line": 163,
+      "tag": "button",
+      "control": "<button type=\"button\" className=\"feedLinkPill\" onClick={() => onUpdate(item)} disabled={isCanceling || !isConnected} >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ListingManagementCard.tsx",
+      "line": 171,
+      "tag": "button",
+      "control": "<button type=\"button\" onClick={() => onCancel(item)} disabled={isCanceling || !isConnected} >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ListingManagementCard.tsx",
+      "line": 180,
+      "tag": "button",
+      "control": "<button type=\"button\" onClick={() => onBuy(item)} disabled={!canBuy || isBuying} >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ListingManagementClient.tsx",
+      "line": 361,
+      "tag": "a",
+      "control": "<a href={metadataUrl} target=\"_blank\" rel=\"noreferrer\" className=\"ctaLink secondaryLink\" onClick={(e) => e.stopPropagation()}>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ListingManagementClient.tsx",
+      "line": 366,
+      "tag": "a",
+      "control": "<a href={mediaUrl} target=\"_blank\" rel=\"noreferrer\" className=\"ctaLink secondaryLink\" onClick={(e) => e.stopPropagation()}>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ListingManagementClient.tsx",
+      "line": 1111,
+      "tag": "select",
+      "control": "<select value={standard} onChange={(e) => setStandard(e.target.value as Standard)}>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ListingManagementClient.tsx",
+      "line": 1119,
+      "tag": "select",
+      "control": "<select value={selectedChainFilter === \"all\" ? \"all\" : String(selectedChainFilter)} onChange={(e) => setSelectedChainFilter(e.target.value === \"all\" ? \"all\" : Number.parseInt(e.target.value, 10)) } >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ListingManagementClient.tsx",
+      "line": 1149,
+      "tag": "select",
+      "control": "<select value={selectedContractKey} onChange={(e) => setSelectedContractKey(e.target.value)}>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ListingManagementClient.tsx",
+      "line": 1159,
+      "tag": "select",
+      "control": "<select value={inventorySort} onChange={(e) => setInventorySort(e.target.value as InventorySort)}>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ListingManagementClient.tsx",
+      "line": 1187,
+      "tag": "select",
+      "control": "<select value={inventorySort} onChange={(e) => setInventorySort(e.target.value as InventorySort)}>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ListingManagementClient.tsx",
+      "line": 1218,
+      "tag": "input",
+      "control": "<input value={erc1155Amount} onChange={(e) => setErc1155Amount(e.target.value)} inputMode=\"numeric\" min=\"1\" max={selectedErc1155AvailableCap ? selectedErc1155AvailableCap.toString() : undefined} placeholder=\"1\" />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ListingManagementClient.tsx",
+      "line": 1265,
+      "tag": "button",
+      "control": "<button type=\"button\" className=\"miniBtn\" onClick={clearListingUpdate}>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ListingManagementClient.tsx",
+      "line": 1274,
+      "tag": "select",
+      "control": "<select value={paymentTokenType} onChange={(e) => setPaymentTokenType(e.target.value as \"ETH\" | \"ERC20\")}>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ListingManagementClient.tsx",
+      "line": 1282,
+      "tag": "input",
+      "control": "<input value={erc20TokenAddress} onChange={(e) => setErc20TokenAddress(e.target.value)} placeholder=\"0x...\" />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ListingManagementClient.tsx",
+      "line": 1287,
+      "tag": "input",
+      "control": "<input value={priceInput} onChange={(e) => setPriceInput(e.target.value)} placeholder={paymentTokenType === \"ETH\" ? \"0.01\" : \"1000000\"} />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ListingManagementClient.tsx",
+      "line": 1295,
+      "tag": "input",
+      "control": "<input value={listingDays} onChange={(e) => setListingDays(e.target.value)} inputMode=\"numeric\" placeholder=\"7\" />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ListingManagementClient.tsx",
+      "line": 1306,
+      "tag": "button",
+      "control": "<button type=\"submit\" disabled={state.status === \"pending\" || (!editingListing && selectedTokens.length === 0)} >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ListingManagementTxStatus.tsx",
+      "line": 18,
+      "tag": "a",
+      "control": "<a href={`${explorerBase}/tx/${state.hash}`} target=\"_blank\" rel=\"noreferrer\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 2189,
+      "tag": "iframe",
+      "control": "<iframe title={embed.title} src={embed.embedUrl} loading=\"lazy\" allow={embed.kind === \"youtube\" ? \"accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture\" : \"autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture\"} allowFullScreen={embed.kind === \"youtube\"} referrerPolicy=\"strict-origin-when-cross-origin\" />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 2198,
+      "tag": "a",
+      "control": "<a href={embed.url} target=\"_blank\" rel=\"noreferrer\" className=\"mono\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 2225,
+      "tag": "iframe",
+      "control": "<iframe title={block.title} src={block.embedView.embedUrl} loading=\"lazy\" allow={block.embedView.kind === \"youtube\" ? \"accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture\" : \"autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture\"} allowFullScreen={block.embedView.kind === \"youtube\"} referrerPolicy=\"strict-origin-when-cross-origin\" className=\"profileMyspaceRetroEmbedFrame\" />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 2235,
+      "tag": "a",
+      "control": "<a href={block.embedUrl} target=\"_blank\" rel=\"noreferrer\" className=\"mono\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 2244,
+      "tag": "a",
+      "control": "<a href={link} target=\"_blank\" rel=\"noreferrer\" className=\"mono\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 2309,
+      "tag": "input",
+      "control": "<input value={guestbookName} onChange={(e) => setGuestbookName(e.target.value)} placeholder=\"space friend\" />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 2313,
+      "tag": "textarea",
+      "control": "<textarea value={guestbookMessage} onChange={(e) => setGuestbookMessage(e.target.value)} placeholder=\"leave a comment for this page\" />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 2316,
+      "tag": "button",
+      "control": "<button type=\"button\" onClick={() => void submitGuestbookEntry()} disabled={guestbookState.status === \"pending\"}>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 2334,
+      "tag": "button",
+      "control": "<button type=\"button\" onClick={() => void hideGuestbookEntry(entry.id)} disabled={moderatingGuestbookEntryId === entry.id} >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 2341,
+      "tag": "button",
+      "control": "<button type=\"button\" onClick={() => void deleteGuestbookEntry(entry.id)} disabled={moderatingGuestbookEntryId === entry.id} >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 2372,
+      "tag": "button",
+      "control": "<button type=\"button\" onClick={() => void restoreGuestbookEntry(entry.id)} disabled={moderatingGuestbookEntryId === entry.id} >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 2398,
+      "tag": "iframe",
+      "control": "<iframe key={customPreviewId} title={`${creatorDisplayName} custom profile module`} srcDoc={customProfilePreview} sandbox=\"allow-popups\" className=\"profileCustomModuleFrame\" />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 2415,
+      "tag": "iframe",
+      "control": "<iframe title={embed.title} src={embed.embedUrl} loading=\"lazy\" allow={embed.kind === \"youtube\" ? \"accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture\" : \"autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture\"} allowFullScreen={embed.kind === \"youtube\"} referrerPolicy=\"strict-origin-when-cross-origin\" />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 2424,
+      "tag": "a",
+      "control": "<a href={embed.url} target=\"_blank\" rel=\"noreferrer\" className=\"mono\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 2438,
+      "tag": "iframe",
+      "control": "<iframe title={block.title} src={block.embedView.embedUrl} loading=\"lazy\" allow={block.embedView.kind === \"youtube\" ? \"accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture\" : \"autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture\"} allowFullScreen={block.embedView.kind === \"youtube\"} referrerPolicy=\"strict-origin-when-cross-origin\" className=\"profileMyspaceRetroEmbedFrame\" />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 2438,
+      "tag": "a",
+      "control": "<a href={block.embedUrl} target=\"_blank\" rel=\"noreferrer\" className=\"mono\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 2439,
+      "tag": "a",
+      "control": "<a href={link} target=\"_blank\" rel=\"noreferrer\" className=\"mono\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 2450,
+      "tag": "input",
+      "control": "<input value={guestbookName} onChange={(e) => setGuestbookName(e.target.value)} placeholder=\"space friend\" />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 2450,
+      "tag": "textarea",
+      "control": "<textarea value={guestbookMessage} onChange={(e) => setGuestbookMessage(e.target.value)} placeholder=\"leave a comment for this page\" />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 2450,
+      "tag": "button",
+      "control": "<button type=\"button\" onClick={() => void submitGuestbookEntry()} disabled={guestbookState.status === \"pending\"}>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 2451,
+      "tag": "button",
+      "control": "<button type=\"button\" onClick={() => void hideGuestbookEntry(entry.id)} disabled={moderatingGuestbookEntryId === entry.id}>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 2451,
+      "tag": "button",
+      "control": "<button type=\"button\" onClick={() => void deleteGuestbookEntry(entry.id)} disabled={moderatingGuestbookEntryId === entry.id}>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 2452,
+      "tag": "button",
+      "control": "<button type=\"button\" onClick={() => void restoreGuestbookEntry(entry.id)} disabled={moderatingGuestbookEntryId === entry.id}>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 2454,
+      "tag": "iframe",
+      "control": "<iframe key={customPreviewId} title={`${creatorDisplayName} custom profile module`} srcDoc={customProfilePreview} sandbox=\"allow-popups\" className=\"profileCustomModuleFrame\" />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 2479,
+      "tag": "Link",
+      "control": "<Link href=\"/mint?view=view\" className=\"ctaLink secondaryLink\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 2486,
+      "tag": "input",
+      "control": "<input value={sellerAddress} onChange={(e) => setSellerAddress(e.target.value.trim())} placeholder=\"0xcreator...\" />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 2494,
+      "tag": "input",
+      "control": "<input value={scanDepth} onChange={(e) => setScanDepth(e.target.value)} inputMode=\"numeric\" placeholder=\"250\" />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 2498,
+      "tag": "select",
+      "control": "<select value={selectedChainFilter === \"all\" ? \"all\" : String(selectedChainFilter)} onChange={(e) => setSelectedChainFilter(e.target.value === \"all\" ? \"all\" : Number.parseInt(e.target.value, 10)) } >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 2546,
+      "tag": "Link",
+      "control": "<Link href={`/profile/setup?label=${encodeURIComponent(name)}`} className=\"ctaLink secondaryLink\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 2547,
+      "tag": "Link",
+      "control": "<Link href={`/mint?view=mint&collection=shared&profile=${encodeURIComponent(mintProfileParam)}`} className=\"ctaLink secondaryLink\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 2548,
+      "tag": "Link",
+      "control": "<Link href=\"/mint?view=view\" className=\"ctaLink secondaryLink\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 2562,
+      "tag": "Link",
+      "control": "<Link href={`/profile/setup?label=${encodeURIComponent(name)}`} className=\"ctaLink secondaryLink\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 2563,
+      "tag": "Link",
+      "control": "<Link href={`/mint?view=mint&collection=shared&profile=${encodeURIComponent(mintProfileParam)}`} className=\"ctaLink secondaryLink\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 2586,
+      "tag": "Link",
+      "control": "<Link href={buildMintCollectionHref(\"view\", mintProfileParam)} className=\"ctaLink secondaryLink\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 2590,
+      "tag": "Link",
+      "control": "<Link href={buildMintCollectionHref(\"manage\", mintProfileParam)} className=\"ctaLink secondaryLink\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 2602,
+      "tag": "Link",
+      "control": "<Link href={`/mint?view=mint&collection=shared&profile=${encodeURIComponent(mintProfileParam)}`} className=\"ctaLink secondaryLink\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 2605,
+      "tag": "Link",
+      "control": "<Link href={buildMintCollectionHref(\"view\", mintProfileParam)} className=\"ctaLink secondaryLink\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 2631,
+      "tag": "a",
+      "control": "<a href={contractExplorer} target=\"_blank\" rel=\"noreferrer\" className=\"mono\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 2638,
+      "tag": "Link",
+      "control": "<Link href={buildMintCollectionHref(\"view\", mintProfileParam, collection.contractAddress)} className=\"ctaLink secondaryLink\" >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 2645,
+      "tag": "Link",
+      "control": "<Link href={buildMintCollectionHref(\"manage\", mintProfileParam, collection.contractAddress)} className=\"ctaLink secondaryLink\" >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 2694,
+      "tag": "button",
+      "control": "<button type=\"button\" onClick={() => setScanDepth(\"500\")}>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 2753,
+      "tag": "button",
+      "control": "<button type=\"button\" onClick={() => setOwnerRailOpen((current) => !current)}>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 2786,
+      "tag": "a",
+      "control": "<a href={toExplorerAddress(wallet, config.chainId)!} target=\"_blank\" rel=\"noreferrer\" className=\"mono\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 2804,
+      "tag": "Link",
+      "control": "<Link href={buildMintCollectionHref(\"manage\", mintProfileParam)} className=\"ctaLink secondaryLink\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 2813,
+      "tag": "Link",
+      "control": "<Link href={buildMintCollectionHref(\"manage\", mintProfileParam)} className=\"ctaLink secondaryLink\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 2843,
+      "tag": "a",
+      "control": "<a href={contractExplorer} target=\"_blank\" rel=\"noreferrer\" className=\"mono\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 2852,
+      "tag": "Link",
+      "control": "<Link href={`/profile/${encodeURIComponent(attachedProfile.slug)}`} className=\"mono\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 2862,
+      "tag": "Link",
+      "control": "<Link href={collection.fixHref} className=\"ctaLink secondaryLink\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 2879,
+      "tag": "Link",
+      "control": "<Link href={`/profile/setup?label=${encodeURIComponent(name)}`} className=\"ctaLink secondaryLink\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 2981,
+      "tag": "a",
+      "control": "<a href={publishedProfileGatewayUrl} target=\"_blank\" rel=\"noreferrer\" className=\"mono\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 2989,
+      "tag": "button",
+      "control": "<button type=\"button\" onClick={() => void publishProfileManifest()} disabled={publishState.status === \"pending\"}>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 3001,
+      "tag": "button",
+      "control": "<button type=\"button\" onClick={() => { setEditStatusHeadline((current) => current.trim() || \"tuning this page like it's 2006\"); setEditSidebarFactsText((current) => current.trim() || formatSidebarFactsInput(MYSPACE_STARTER_SIDEBAR_FACTS)); setEditTopFriendsText((current) => current.trim() || \"Tom\\nBestie\\nFavorite collector\"); setEditRetroBlocksText((current) => current.trim() || formatRetroBlocksInput(MYSPACE_STARTER_RETRO_BLOCKS)); setEditCustomBoxesText((current) => current.trim() || formatCustomBoxesInput(MYSPACE_STARTER_CUSTOM_BOXES)); setEditModuleOrder([\"social\", \"retro\", \"media\", \"boxes\", \"guestbook\", \"custom\"]); setEditHeroModules([\"social\", \"guestbook\"]); setEditHeroCompactModules(",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 3020,
+      "tag": "button",
+      "control": "<button type=\"button\" onClick={() => { setEditCustomHtml(\"\"); setEditCustomCss(\"\"); }} disabled={!hasCustomHtmlModule} >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 3035,
+      "tag": "input",
+      "control": "<input value={editDisplayName} onChange={(e) => setEditDisplayName(e.target.value)} />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 3039,
+      "tag": "input",
+      "control": "<input value={editTagline} onChange={(e) => setEditTagline(e.target.value)} />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 3043,
+      "tag": "input",
+      "control": "<input value=\"Unified creator page\" readOnly />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 3047,
+      "tag": "input",
+      "control": "<input value={editAccentColor} onChange={(e) => setEditAccentColor(e.target.value)} />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 3051,
+      "tag": "input",
+      "control": "<input value={editAvatarUrl} onChange={(e) => setEditAvatarUrl(e.target.value)} />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 3055,
+      "tag": "input",
+      "control": "<input value={editBannerUrl} onChange={(e) => setEditBannerUrl(e.target.value)} />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 3059,
+      "tag": "input",
+      "control": "<input value={editFeaturedUrl} onChange={(e) => setEditFeaturedUrl(e.target.value)} />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 3063,
+      "tag": "textarea",
+      "control": "<textarea value={editBio} onChange={(e) => setEditBio(e.target.value)} />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 3067,
+      "tag": "textarea",
+      "control": "<textarea value={editAboutMe} onChange={(e) => setEditAboutMe(e.target.value)} />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 3071,
+      "tag": "textarea",
+      "control": "<textarea value={editInterests} onChange={(e) => setEditInterests(e.target.value)} />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 3075,
+      "tag": "textarea",
+      "control": "<textarea value={editWhoIdLikeToMeet} onChange={(e) => setEditWhoIdLikeToMeet(e.target.value)} />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 3079,
+      "tag": "input",
+      "control": "<input value={editStatusHeadline} onChange={(e) => setEditStatusHeadline(e.target.value)} placeholder=\"currently obsessing over weird internet relics\" />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 3087,
+      "tag": "button",
+      "control": "<button key={template.label} type=\"button\" onClick={() => setEditSidebarFactsText((current) => appendSidebarFactTemplate(current, template.value))} >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 3097,
+      "tag": "textarea",
+      "control": "<textarea value={editSidebarFactsText} onChange={(e) => setEditSidebarFactsText(e.target.value)} placeholder=\"Mood: Chronically online Location: Terminal tab Occupation: Pixel archivist\" />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 3103,
+      "tag": "textarea",
+      "control": "<textarea value={editCustomCss} onChange={(e) => setEditCustomCss(e.target.value)} placeholder=\".profile-panel { transform: rotate(-1deg); }\" />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 3107,
+      "tag": "textarea",
+      "control": "<textarea value={editCustomHtml} onChange={(e) => setEditCustomHtml(e.target.value)} placeholder=\"<div><marquee>Welcome to my page</marquee></div>\" />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 3112,
+      "tag": "textarea",
+      "control": "<textarea value={editTopFriendsText} onChange={(e) => setEditTopFriendsText(e.target.value)} placeholder=\"Tom Bestie Favorite collector\" />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 3118,
+      "tag": "textarea",
+      "control": "<textarea value={editTestimonialsText} onChange={(e) => setEditTestimonialsText(e.target.value)} placeholder=\"legendary page coder instant follow\" />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 3124,
+      "tag": "input",
+      "control": "<input value={editProfileSongUrl} onChange={(e) => setEditProfileSongUrl(e.target.value)} placeholder=\"https://.../song.mp3\" />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 3132,
+      "tag": "button",
+      "control": "<button key={template.label} type=\"button\" onClick={() => setEditMediaEmbedsText((current) => appendMediaEmbedTemplate(current, template.value))} >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 3142,
+      "tag": "textarea",
+      "control": "<textarea value={editMediaEmbedsText} onChange={(e) => setEditMediaEmbedsText(e.target.value)} placeholder=\"Favorite Video | https://www.youtube.com/watch?v=dQw4w9WgXcQ Playlist | https://open.spotify.com/playlist/...\" />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 3151,
+      "tag": "button",
+      "control": "<button key={template.label} type=\"button\" onClick={() => setEditRetroBlocksText((current) => appendRetroBlockTemplate(current, template.block))} >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 3161,
+      "tag": "textarea",
+      "control": "<textarea value={editRetroBlocksText} onChange={(e) => setEditRetroBlocksText(e.target.value)} placeholder={\"Type: text\\nTitle: Latest Bulletin\\nReworking this profile to feel like 2006 again.\\n\\nType: marquee\\nTitle: Scrolling Note\\nwelcome 2 my page :: leave a comment :: glitter forever\\n\\nType: badges\\nTitle: Blinkies\\nonline now\\nscene archive\\nweb revivalist\\n\\nType: divider\\nTitle: Glitter Break\\n***************\"} />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 3169,
+      "tag": "textarea",
+      "control": "<textarea value={editStampsText} onChange={(e) => setEditStampsText(e.target.value)} placeholder=\"online now scene kid collector core\" />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 3211,
+      "tag": "button",
+      "control": "<button type=\"button\" onClick={() => setEditModuleOrder((current) => moveMyspaceModuleOrder(current, moduleId, -1))} disabled={index === 0} >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 3218,
+      "tag": "button",
+      "control": "<button type=\"button\" onClick={() => setEditModuleOrder((current) => moveMyspaceModuleOrder(current, moduleId, 1))} disabled={index === editModuleOrder.length - 1} >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 3236,
+      "tag": "input",
+      "control": "<input type=\"checkbox\" checked={editHeroModules.includes(moduleId)} onChange={() => setEditHeroModules((current) => toggleMyspaceHeroModule(current, moduleId))} />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 3255,
+      "tag": "select",
+      "control": "<select value={featured && editHeroCompactModules.includes(moduleId) ? \"compact\" : featured ? \"default\" : \"off\"} onChange={(event) => { const nextValue = event.target.value; if (nextValue === \"off\") return; setEditHeroCompactModules((current) => nextValue === \"compact\" ? normalizeMyspaceHeroCompactModules([...current.filter((item) => item !== moduleId), moduleId]) : current.filter((item) => item !== moduleId)); }} disabled={!featured} >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 3280,
+      "tag": "input",
+      "control": "<input type=\"checkbox\" checked={editSidebarModules.includes(moduleId)} onChange={() => setEditSidebarModules((current) => toggleMyspaceSidebarModule(current, moduleId))} />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 3299,
+      "tag": "select",
+      "control": "<select value={pinned && editSidebarCompactModules.includes(moduleId) ? \"compact\" : pinned ? \"default\" : \"off\"} onChange={(event) => { const nextValue = event.target.value; if (nextValue === \"off\") return; setEditSidebarCompactModules((current) => nextValue === \"compact\" ? normalizeMyspaceSidebarCompactModules([...current.filter((item) => item !== moduleId), moduleId]) : current.filter((item) => item !== moduleId)); }} disabled={!pinned} >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 3327,
+      "tag": "select",
+      "control": "<select value={inSidebar ? \"sidebar\" : width} onChange={(event) => { const nextWidth = event.target.value as MyspaceMainColumnWidth | \"sidebar\"; if (nextWidth === \"sidebar\") return; const next = setMyspaceMainColumnWidth(moduleId, nextWidth, editMainColumnSplitModules, editMainColumnCompactModules); setEditMainColumnSplitModules(next.splitModules); setEditMainColumnCompactModules(next.compactModules); }} disabled={inSidebar} >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 3355,
+      "tag": "button",
+      "control": "<button key={template.label} type=\"button\" onClick={() => setEditCustomBoxesText((current) => appendCustomBoxTemplate(current, template.value))} >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 3365,
+      "tag": "textarea",
+      "control": "<textarea value={editCustomBoxesText} onChange={(e) => setEditCustomBoxesText(e.target.value)} placeholder={\"Title: Favorite Movies\\nHackers, Ghost World, Blade Runner\\n\\nTitle: Latest Obsession\\nCollecting weird internet relics.\"} />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 3373,
+      "tag": "textarea",
+      "control": "<textarea value={editLinksText} onChange={(e) => setEditLinksText(e.target.value)} />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 3380,
+      "tag": "button",
+      "control": "<button type=\"button\" onClick={() => void saveProfileDetails()} disabled={editState.status === \"pending\"}>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 3395,
+      "tag": "input",
+      "control": "<input value={transferAddress} onChange={(e) => setTransferAddress(e.target.value)} />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 3399,
+      "tag": "button",
+      "control": "<button type=\"button\" onClick={() => void submitProfileTransfer()} disabled={transferState.status === \"pending\"}>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileClient.tsx",
+      "line": 3414,
+      "tag": "Link",
+      "control": "<Link href={`/profile/setup?label=${encodeURIComponent(name)}`} className=\"ctaLink secondaryLink\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileHeroSections.tsx",
+      "line": 120,
+      "tag": "Link",
+      "control": "<Link href={`/mint?view=mint&collection=shared&profile=${encodeURIComponent(mintProfileParam)}`} className=\"ctaLink secondaryLink\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileHeroSections.tsx",
+      "line": 123,
+      "tag": "Link",
+      "control": "<Link href={`/mint?view=view&profile=${encodeURIComponent(mintProfileParam)}`} className=\"ctaLink secondaryLink\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileHeroSections.tsx",
+      "line": 127,
+      "tag": "Link",
+      "control": "<Link href={`${canonicalRoute}#listing-management`} className=\"ctaLink secondaryLink\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileHeroSections.tsx",
+      "line": 176,
+      "tag": "a",
+      "control": "<a href={primaryProfile.featuredUrl} target=\"_blank\" rel=\"noreferrer\" className=\"ctaLink secondaryLink\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileHeroSections.tsx",
+      "line": 182,
+      "tag": "a",
+      "control": "<a href={primaryProfile.featuredUrl} target=\"_blank\" rel=\"noreferrer\" className=\"ctaLink secondaryLink\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileHeroSections.tsx",
+      "line": 230,
+      "tag": "Link",
+      "control": "<Link href={`/mint?view=mint&collection=shared&profile=${encodeURIComponent(mintProfileParam)}`} className=\"ctaLink secondaryLink\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileHeroSections.tsx",
+      "line": 233,
+      "tag": "Link",
+      "control": "<Link href={`${canonicalRoute}#listing-management`} className=\"ctaLink secondaryLink\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileHeroSections.tsx",
+      "line": 265,
+      "tag": "a",
+      "control": "<a key={link} href={link} target=\"_blank\" rel=\"noreferrer\" className=\"profileLinkRow\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileHeroSections.tsx",
+      "line": 290,
+      "tag": "a",
+      "control": "<a href={toExplorerAddress(pinnedCollection.contractAddress, pinnedCollection.chainId || configChainId)!} target=\"_blank\" rel=\"noreferrer\" className=\"mono\" >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileHoldingsSection.tsx",
+      "line": 63,
+      "tag": "Link",
+      "control": "<Link href={`/mint?view=view&profile=${encodeURIComponent(mintProfileParam)}`} className=\"ctaLink secondaryLink\" >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileHoldingsSection.tsx",
+      "line": 69,
+      "tag": "Link",
+      "control": "<Link href={`/mint?view=mint&collection=shared&profile=${encodeURIComponent(mintProfileParam)}`} className=\"ctaLink secondaryLink\" >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileHoldingsSection.tsx",
+      "line": 147,
+      "tag": "a",
+      "control": "<a href={contractExplorer} target=\"_blank\" rel=\"noreferrer\" className=\"mono\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileHoldingsSection.tsx",
+      "line": 169,
+      "tag": "Link",
+      "control": "<Link href={`/mint?view=view&profile=${encodeURIComponent(mintProfileParam)}`} className=\"ctaLink secondaryLink\" >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileHoldingsSection.tsx",
+      "line": 175,
+      "tag": "Link",
+      "control": "<Link href={`/mint?view=manage&profile=${encodeURIComponent(mintProfileParam)}`} className=\"ctaLink secondaryLink\" >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileLandingClient.tsx",
+      "line": 1537,
+      "tag": "Link",
+      "control": "<Link href={`/profile/${encodeURIComponent(profiles[0].slug)}`}>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileLandingClient.tsx",
+      "line": 1543,
+      "tag": "select",
+      "control": "<select value={identityMode} onChange={(e) => setIdentityMode( e.target.value as | \"register-eth\" | \"register-eth-subname\" | \"ens\" | \"external-subname\" | \"nftfactory-subname\" ) } >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileLandingClient.tsx",
+      "line": 1574,
+      "tag": "input",
+      "control": "<input value={identityName} onChange={(e) => setIdentityName(e.target.value)} />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileLandingClient.tsx",
+      "line": 1578,
+      "tag": "select",
+      "control": "<select value={selectedSubnameParentOption} onChange={(e) => setSubnameParent(e.target.value)} disabled={ensParentCandidates.length === 0} >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileLandingClient.tsx",
+      "line": 1606,
+      "tag": "select",
+      "control": "<select value={identityName} onChange={(e) => setIdentityName(e.target.value)} disabled={(identityMode === \"ens\" ? existingEnsOptions : existingSubnameOptions).length === 0} >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileLandingClient.tsx",
+      "line": 1621,
+      "tag": "input",
+      "control": "<input value={identityName} onChange={(e) => setIdentityName(e.target.value)} />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileLandingClient.tsx",
+      "line": 1635,
+      "tag": "button",
+      "control": "<button type=\"button\" className={checkedIdentityReady ? \"profileActionReady\" : undefined} onClick={() => void ( checkedIdentityReady ? runIdentityAction() : checkIdentityAvailability() ) } disabled={primaryActionDisabled} >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileLandingClient.tsx",
+      "line": 1655,
+      "tag": "select",
+      "control": "<select value={registrationYears} onChange={(e) => setRegistrationYears(e.target.value)}>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileLandingClient.tsx",
+      "line": 1674,
+      "tag": "select",
+      "control": "<select value={selectedCollection} onChange={(e) => setSelectedCollection(e.target.value)}>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileLandingClient.tsx",
+      "line": 1687,
+      "tag": "button",
+      "control": "<button type=\"button\" onClick={() => void completeEthRegistration()} disabled={!isConnected || setupState.status === \"pending\" || wrongNetwork || registrationCountdown > 0} >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileLandingClient.tsx",
+      "line": 1698,
+      "tag": "button",
+      "control": "<button type=\"button\" className=\"secondary\" onClick={clearPendingEthRegistration}>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileLandingClient.tsx",
+      "line": 1727,
+      "tag": "a",
+      "control": "<a href={`${explorerBase}/tx/${setupState.hash}`} target=\"_blank\" rel=\"noreferrer\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileLandingClient.tsx",
+      "line": 1737,
+      "tag": "Link",
+      "control": "<Link href={`/profile/${encodeURIComponent(postLinkProfile.slug)}`} className=\"ctaLink\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileLandingClient.tsx",
+      "line": 1741,
+      "tag": "Link",
+      "control": "<Link href={`/mint?view=mint&collection=shared&profile=${encodeURIComponent(postLinkProfile.fullName)}`} className=\"ctaLink\" >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileModerationClient.tsx",
+      "line": 179,
+      "tag": "input",
+      "control": "<input value={profileName} onChange={(event) => setProfileName(event.target.value)} placeholder=\"demo\" />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileModerationClient.tsx",
+      "line": 183,
+      "tag": "input",
+      "control": "<input value={actorAddress} onChange={(event) => setActorAddress(event.target.value)} placeholder=\"0x...\" />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileModerationClient.tsx",
+      "line": 187,
+      "tag": "button",
+      "control": "<button type=\"button\" onClick={() => void loadEntries()} disabled={loadState.status === \"pending\"}>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileModerationClient.tsx",
+      "line": 191,
+      "tag": "Link",
+      "control": "<Link href={\"/profile/\" + encodeURIComponent(normalizedProfileName)} className=\"ctaLink secondaryLink\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileModerationClient.tsx",
+      "line": 225,
+      "tag": "button",
+      "control": "<button type=\"button\" disabled={isBusy} onClick={() => void hideEntry(entry.id)}>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileModerationClient.tsx",
+      "line": 230,
+      "tag": "button",
+      "control": "<button type=\"button\" disabled={isBusy} onClick={() => void restoreEntry(entry.id)}>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileModerationClient.tsx",
+      "line": 235,
+      "tag": "button",
+      "control": "<button type=\"button\" disabled={isBusy} onClick={() => void deleteEntry(entry.id)}>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileOffersSection.tsx",
+      "line": 140,
+      "tag": "a",
+      "control": "<a href={contractExplorer} target=\"_blank\" rel=\"noreferrer\" className=\"mono\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileOffersSection.tsx",
+      "line": 147,
+      "tag": "button",
+      "control": "<button type=\"button\" onClick={() => void acceptOffer(offer)} disabled={actingOfferId === offer.id || !canAccept} >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileOffersSection.tsx",
+      "line": 222,
+      "tag": "a",
+      "control": "<a href={contractExplorer} target=\"_blank\" rel=\"noreferrer\" className=\"mono\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileOffersSection.tsx",
+      "line": 229,
+      "tag": "button",
+      "control": "<button type=\"button\" onClick={() => void cancelOffer(offer)} disabled={actingOfferId === offer.id || !canCancel} >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileSelectorClient.tsx",
+      "line": 298,
+      "tag": "Link",
+      "control": "<Link href=\"/profile/setup\" className=\"ctaLink\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileSelectorClient.tsx",
+      "line": 301,
+      "tag": "Link",
+      "control": "<Link href=\"/discover\" className=\"ctaLink secondaryLink\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileSelectorClient.tsx",
+      "line": 304,
+      "tag": "Link",
+      "control": "<Link href=\"/mint?view=manage\" className=\"ctaLink secondaryLink\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileSelectorClient.tsx",
+      "line": 335,
+      "tag": "Link",
+      "control": "<Link href={`/profile/${encodeURIComponent(profile.slug)}`} className=\"ctaLink\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileSelectorClient.tsx",
+      "line": 339,
+      "tag": "Link",
+      "control": "<Link href={`/mint?view=manage&address=${encodeURIComponent(profile.collectionAddress)}`} className=\"ctaLink secondaryLink\" >",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileSelectorClient.tsx",
+      "line": 357,
+      "tag": "Link",
+      "control": "<Link href=\"/profile/setup\" className=\"ctaLink\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileSelectorClient.tsx",
+      "line": 366,
+      "tag": "Link",
+      "control": "<Link href={item.href} className=\"ctaLink\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/profile/ProfileSelectorClient.tsx",
+      "line": 384,
+      "tag": "Link",
+      "control": "<Link href={item.href} className=\"ctaLink secondaryLink\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/wiki/WikiMarkdown.tsx",
+      "line": 52,
+      "tag": "Link",
+      "control": "<Link key={`link-${key++}`} href={href} className=\"wikiInlineLink\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/wiki/WikiMarkdown.tsx",
+      "line": 58,
+      "tag": "a",
+      "control": "<a key={`link-${key++}`} href={href} target=\"_blank\" rel=\"noreferrer\" className=\"wikiInlineLink\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/wiki/WikiMarkdown.tsx",
+      "line": 167,
+      "tag": "a",
+      "control": "<a href={`#${headingId}`} className=\"wikiHeadingAnchor\">",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/wiki/WikiSidebar.tsx",
+      "line": 41,
+      "tag": "input",
+      "control": "<input className=\"wikiSearchInput\" type=\"search\" value={query} onChange={(event) => setQuery(event.target.value)} placeholder=\"Search creator guides\" />",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/wiki/WikiSidebar.tsx",
+      "line": 54,
+      "tag": "Link",
+      "control": "<Link key={page.slug} href={href} className={`wikiNavLink${isActive ? \" active\" : \"\"}`}>",
+      "status": "source-inventoried; interaction verification pending"
+    },
+    {
+      "file": "apps/web/components/wiki/WikiTableOfContents.tsx",
+      "line": 78,
+      "tag": "a",
+      "control": "<a key={heading.id} href={`#${heading.id}`} className={`wikiTocLink wikiTocLevel${Math.min(heading.level, 4)}${activeId === heading.id ? \" active\" : \"\"}`} >",
+      "status": "source-inventoried; interaction verification pending"
+    }
+  ]
+}

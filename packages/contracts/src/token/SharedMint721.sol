@@ -171,13 +171,18 @@ contract SharedMint721 is Owned {
         balanceOf[msg.sender] += 1;
         _tokenURIs[tokenId] = uri;
 
+        string memory verifiedSubname = "";
         if (bytes(creatorSubname).length != 0) {
-            // Subname attribution is optional — the mint always succeeds.
-            try registrar.recordMint(creatorSubname) {} catch {}
+            // A caller cannot attribute work to another wallet's registered handle.
+            try registrar.subnames(keccak256(bytes(creatorSubname))) returns (address handleOwner, uint256 expiresAt, uint256, bool exists) {
+                if (exists && handleOwner == msg.sender && expiresAt > block.timestamp) {
+                    try registrar.recordMint(creatorSubname) { verifiedSubname = creatorSubname; } catch {}
+                }
+            } catch {}
         }
 
         emit Transfer(address(0), msg.sender, tokenId);
-        emit Published(msg.sender, tokenId, creatorSubname, uri);
+        emit Published(msg.sender, tokenId, verifiedSubname, uri);
     }
 
     // ── ERC-165 ───────────────────────────────────────────────────────────────

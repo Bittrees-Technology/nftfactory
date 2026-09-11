@@ -3902,3 +3902,51 @@ a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visib
 .walletOptions { display:grid; gap:12px; margin:20px 0; }
 
 .creatorArtworkGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,230px),1fr));gap:1.25rem}.creatorArtworkGrid article{padding:1rem}.creatorArtworkGrid img{width:100%;aspect-ratio:1;object-fit:contain;border-radius:12px}.creatorArtworkGrid h3{margin-top:1rem}
+
+/* Shared artwork surfaces keep creator, collection and NFT views consistent. */
+.artworkCard { padding: 0; overflow: hidden; min-width: 0; }
+.artworkCardImage { display: block; aspect-ratio: 1; background: #eeeaf4; overflow: hidden; }
+.artworkCardImage img, .artworkDetailImage img { width: 100%; height: 100%; object-fit: contain; }
+.artworkCardBody { padding: 1.25rem; }
+.artworkCardBody h3 { margin: .45rem 0; overflow-wrap: anywhere; }
+.artworkCardBody h3 a { color: inherit; text-decoration: none; }
+.artworkDetailImage { aspect-ratio: 1; border-radius: 20px; overflow: hidden; background: #eeeaf4; }
+.breadcrumb { display: flex; flex-wrap: wrap; gap: .65rem; margin: 1.5rem 0; font-size: .9rem; }
+dl dd { margin: .4rem 0 1.2rem; overflow-wrap: anywhere; }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 3px solid #6651c6; outline-offset: 4px; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+.creatorTheme-gallery { --creator-ink: #28243b; background: #fff; color: var(--creator-ink); }
+.creatorTheme-midnight { --creator-ink: #f1efff; background: #202238; color: var(--creator-ink); padding: 1.5rem; border-radius: 24px; }
+.creatorTheme-paper { --creator-ink: #33291f; background: #f6efdf; color: var(--creator-ink); padding: 1.5rem; border-radius: 24px; }
+.creatorTheme-midnight .hint, .creatorTheme-midnight .eyebrow, .creatorTheme-midnight .pageHeading p, .creatorTheme-midnight a { color: #d4ccff; }
+.creatorTheme-midnight .card { color: #28243b; }
+.creatorTheme-midnight .card a, .creatorTheme-midnight .card .hint, .creatorTheme-midnight .card .eyebrow { color: #594b87; }
+.creatorFont-serif h1, .creatorFont-serif h2, .creatorFont-serif h3 { font-family: Georgia, serif; }
+.creatorBanner { height: clamp(130px, 24vw, 300px); overflow: hidden; border-radius: 20px; background: #e8e3f4; }
+.creatorBanner img { width: 100%; height: 100%; object-fit: cover; }
+.creatorAvatar { width: 96px; height: 96px; border-radius: 50%; overflow: hidden; background: #e8e3f4; }
+.creatorAvatar img { width: 100%; height: 100%; object-fit: cover; }
+.creatorModule { margin: 2rem 0; }
+.moduleOrder { padding-left: 1.5rem; }
+.moduleOrder li { padding: .5rem; }
+.moduleOrder button { margin-left: 1rem; }
+.studioNavigation { display:flex; flex-wrap:wrap; gap:1rem; margin:2rem 0; padding:1rem; border-bottom:1px solid #ded9e9; }
+.purchaseReview { margin:2rem 0; border:2px solid #6651c6; }
+
+.createLayout label.studioCheckbox { display:flex; align-items:center; gap:.65rem; text-transform:capitalize; }
+.createLayout .studioCheckbox input { width:1.1rem; height:1.1rem; margin:0; flex:none; }
+.studioPage .formCard h2, .studioPage .formCard h3 { margin:.6rem 0 .2rem; }
+.studioPage .formCard p { margin:.2rem 0 .6rem; }
+.studioToolGrid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1rem; }
+.studioTool { padding:1.4rem; }
+.studioTool h3 { margin:0 0 .6rem; }
+.studioWorkspace { margin:2rem 0; }
+@media(min-width:901px) { .studioPage .artworkPreview { position:sticky; top:1.5rem; } }
+@media(max-width:600px) { .studioToolGrid { grid-template-columns:1fr; } }
+
+nav.breadcrumb { flex-direction:row; align-items:center; justify-content:flex-start; background:none; border:0; box-shadow:none; padding:0; border-radius:0; }
+
+.discoveryCollectionCover { aspect-ratio: 16 / 10; border-radius: 12px; overflow: hidden; }
+.discoveryAvatar { width: 64px; height: 64px; border-radius: 50%; overflow: hidden; }
+.discoveryAvatar img { width: 100%; height: 100%; object-fit: cover; }
+.discoverRecordTitle { margin: 0; overflow-wrap: anywhere; }

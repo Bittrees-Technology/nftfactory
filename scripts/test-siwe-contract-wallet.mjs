@@ -1,0 +1,41 @@
+// Runs only against an isolated local Anvil process with ephemeral signers.
+import assert from 'node:assert/strict';
+import {spawn} from 'node:child_process';
+import {readFile} from 'node:fs/promises';
+import {createServer} from 'node:net';
+import {createPublicClient,createWalletClient,createTestClient,http,parseEther} from 'viem';
+import {generatePrivateKey,privateKeyToAccount} from 'viem/accounts';
+import {anvil as localChain} from 'viem/chains';
+const port=18546;
+await new Promise((resolve,reject)=>{const probe=createServer();probe.once('error',()=>reject(new Error('Local test port is already occupied; no changes made.')));probe.listen(port,'127.0.0.1',()=>probe.close(resolve));});
+const processHandle=spawn('anvil',['--host','127.0.0.1','--port',String(port),'--chain-id','31337','--silent'],{stdio:'ignore'});
+let launchError;processHandle.on('error',error=>{launchError=error;});
+const transport=http(`http://127.0.0.1:${port}`,{timeout:1000,retryCount:0});
+const publicClient=createPublicClient({chain:localChain,transport});
+try{
+ let ready=false;for(let i=0;i<50;i++){if(launchError)throw launchError;try{ready=await publicClient.getChainId()===31337;if(ready)break;}catch{}await new Promise(resolve=>setTimeout(resolve,100));}assert(ready,'Isolated Anvil did not start');
+ const account=privateKeyToAccount(generatePrivateKey());const attacker=privateKeyToAccount(generatePrivateKey());
+ const testClient=createTestClient({chain:localChain,mode:'anvil',transport});
+ await testClient.setBalance({address:account.address,value:parseEther('10')});
+ const wallet=createWalletClient({account,chain:localChain,transport});
+ const artifact=JSON.parse(await readFile(new URL('../packages/contracts/out/SignInWallet.sol/SignInWallet.json',import.meta.url),'utf8'));
+ const hash=await wallet.deployContract({abi:artifact.abi,bytecode:artifact.bytecode.object,args:[account.address]});
+ const receipt=await publicClient.waitForTransactionReceipt({hash});assert(receipt.contractAddress);
+ for(const key of Object.keys(process.env))if(key.startsWith('NEXT_PUBLIC_'))delete process.env[key];
+ Object.assign(process.env,{NEXT_PUBLIC_CHAIN_ID:'31337',NEXT_PUBLIC_ENABLED_CHAIN_IDS:'31337',NEXT_PUBLIC_RPC_URL:`http://127.0.0.1:${port}`});
+ for(const key of ['REGISTRY','MARKETPLACE','SHARED_721','SHARED_1155','SUBNAME_REGISTRAR','FACTORY'])process.env[`NEXT_PUBLIC_${key}_ADDRESS`]=receipt.contractAddress;
+ const {makeSignInMessage,verifySignInMessage}=await import('../apps/web/lib/server/siwe.ts');
+ const origin='https://nftfactory.example';
+ const message=makeSignInMessage(receipt.contractAddress,origin,31337);
+ const signature=await account.signMessage({message});
+ assert.equal(await verifySignInMessage(receipt.contractAddress,origin,message,signature),true,'ERC1271 signer accepted');
+ assert.equal(await verifySignInMessage(receipt.contractAddress,origin,message,await attacker.signMessage({message})),false,'Wrong contract signer rejected');
+ assert.equal(await verifySignInMessage(receipt.contractAddress,'https://other.example',message,signature),false,'Wrong domain rejected');
+ const expired=makeSignInMessage(receipt.contractAddress,origin,31337,new Date(Date.now()-600000));
+ assert.equal(await verifySignInMessage(receipt.contractAddress,origin,expired,await account.signMessage({message:expired})),false,'Expired contract signature rejected');
+ const wrongChain=message.replace('Chain ID: 31337','Chain ID: 1');
+ assert.equal(await verifySignInMessage(receipt.contractAddress,origin,wrongChain,await account.signMessage({message:wrongChain})),false,'Wrong chain rejected');
+ const eoa=makeSignInMessage(account.address,origin,31337);
+ assert.equal(await verifySignInMessage(account.address,origin,eoa,await account.signMessage({message:eoa})),true,'EOA signer accepted');
+ console.log('Passed six real local-RPC SIWE checks: ERC1271, invalid signer, domain, expiry, chain and EOA. No public-chain transactions.');
+}finally{processHandle.kill('SIGTERM');}

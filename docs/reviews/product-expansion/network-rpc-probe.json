@@ -1,0 +1,78 @@
+{
+  "checkedAt": "2026-09-11T08:59:40.019Z",
+  "scope": "Read-only public RPC probe. No transactions, sustained load test or production reliability guarantee.",
+  "results": [
+    {
+      "name": "Ethereum",
+      "expectedChainId": 1,
+      "reportedChainId": 1,
+      "matches": true,
+      "headNumber": "25953120",
+      "headAgeSeconds": 4,
+      "chainReadMs": 151,
+      "blockReadMs": 95,
+      "finalizedBlock": "0x18c0308",
+      "url": "https://ethereum-rpc.publicnode.com"
+    },
+    {
+      "name": "Ethereum Sepolia",
+      "expectedChainId": 11155111,
+      "reportedChainId": 11155111,
+      "matches": true,
+      "headNumber": "11680899",
+      "headAgeSeconds": 3,
+      "chainReadMs": 146,
+      "blockReadMs": 90,
+      "finalizedBlock": "0xb23c44",
+      "url": "https://ethereum-sepolia-rpc.publicnode.com"
+    },
+    {
+      "name": "Base",
+      "expectedChainId": 8453,
+      "reportedChainId": 8453,
+      "matches": true,
+      "headNumber": "51163916",
+      "headAgeSeconds": 0,
+      "chainReadMs": 251,
+      "blockReadMs": 169,
+      "finalizedBlock": "0x30cb0ef",
+      "url": "https://mainnet.base.org"
+    },
+    {
+      "name": "Base Sepolia",
+      "expectedChainId": 84532,
+      "reportedChainId": 84532,
+      "matches": true,
+      "headNumber": "46674445",
+      "headAgeSeconds": 1,
+      "chainReadMs": 241,
+      "blockReadMs": 167,
+      "finalizedBlock": "0x2c83057",
+      "url": "https://sepolia.base.org"
+    },
+    {
+      "name": "Robinhood",
+      "expectedChainId": 4663,
+      "reportedChainId": 4663,
+      "matches": true,
+      "headNumber": "60133975",
+      "headAgeSeconds": 0,
+      "chainReadMs": 285,
+      "blockReadMs": 132,
+      "finalizedBlock": "0x39568ba",
+      "url": "https://rpc.mainnet.chain.robinhood.com"
+    },
+    {
+      "name": "Robinhood testnet",
+      "expectedChainId": 46630,
+      "reportedChainId": 46630,
+      "matches": true,
+      "headNumber": "117342972",
+      "headAgeSeconds": 2,
+      "chainReadMs": 372,
+      "blockReadMs": 191,
+      "finalizedBlock": "0x6fe6803",
+      "url": "https://rpc.testnet.chain.robinhood.com"
+    }
+  ]
+}

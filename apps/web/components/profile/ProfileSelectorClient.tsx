@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useAccount, usePublicClient } from "wagmi";
 import {
   syncWalletScope,
@@ -100,7 +99,6 @@ function deriveEnsNamesFromCollections(collections: ApiOwnedCollections["collect
 }
 
 export default function ProfileSelectorClient() {
-  const router = useRouter();
   const { address, isConnected } = useAccount();
   const publicClient = usePublicClient();
   const config = useMemo(() => getContractsConfig(), []);
@@ -197,7 +195,7 @@ export default function ProfileSelectorClient() {
             );
             return;
           }
-          setNote("No creator profile is linked to this wallet yet. Open setup to link an ENS identity or create an nftfactory.eth subname.");
+          setNote("Create your page with this wallet. You can link an ENS name later.");
           return;
         }
 
@@ -221,7 +219,7 @@ export default function ProfileSelectorClient() {
         }
 
         if (nextProfiles.length > 1) {
-          setNote("Multiple creator profiles are linked to this wallet. Redirecting to the primary profile.");
+          setNote("Choose one of your linked profiles below.");
         }
       })
       .catch((err) => {
@@ -240,11 +238,6 @@ export default function ProfileSelectorClient() {
       cancelled = true;
     };
   }, [address, config.chainId, config.registry, isConnected, publicClient]);
-
-  useEffect(() => {
-    if (!isConnected || isLoading || profiles.length === 0) return;
-    router.replace(`/profile/${encodeURIComponent(profiles[0].slug)}`);
-  }, [isConnected, isLoading, profiles, router]);
 
   const linkedProfiles = useMemo(() => profiles.slice(0, 12), [profiles]);
   const discoveredIdentityLinks = useMemo(
@@ -272,44 +265,18 @@ export default function ProfileSelectorClient() {
 
   return (
     <section className="wizard profileSelectorPage">
-      <section className="card formCard profileSelectorHero">
-        <div className="profileSelectorHeroCopy">
-          <p className="eyebrow">Creator Portal</p>
-          <h2>Open the creator page, link the identity, or browse the live directory.</h2>
-          <p className="sectionLead">
-            NFTFactory profiles are the public-facing layer for collections, identity, and storefront state. This route should help
-            you get into the right profile quickly, or start from zero without guessing where the setup path lives.
-          </p>
-          <div className="profileSelectorHeroPills">
-            <span className="profileSelectorPill">ENS and subname identity</span>
-            <span className="profileSelectorPill">Creator page routing</span>
-            <span className="profileSelectorPill">Collection-linked profiles</span>
-          </div>
-        </div>
-      </section>
-
       <div className="card formCard profileSelectorPanel">
         <div className="profileSelectorPanelHeader">
           <div>
-            <h3>Creator Routes</h3>
-            <p className="hint">Open the linked creator route for this wallet, or start a new identity setup flow.</p>
+            <h2>Your profiles and collections</h2>
+            <p className="hint">Manage your work and visit your public creator page.</p>
           </div>
-          <div className="profileSelectorQuickActions">
-            <Link href="/profile/setup" className="ctaLink">
-              Open profile setup
-            </Link>
-            <Link href="/discover" className="ctaLink secondaryLink">
-              Open discover
-            </Link>
-            <Link href="/mint?view=manage" className="ctaLink secondaryLink">
-              Manage collection
-            </Link>
-          </div>
+          {address && <Link href={`/profile/${address.toLowerCase()}`} className="ctaLink">View public page</Link>}
         </div>
         {!isConnected ? (
           <div className="profileSelectorEmptyCard">
             <strong>Connect a wallet to load linked creator profiles.</strong>
-            <p className="hint">Use the header wallet control to load the creator routes already tied to this account.</p>
+            <p className="hint">Connect using the wallet button above, then customize your page or import artwork.</p>
           </div>
         ) : isLoading ? (
           <div className="profileSelectorEmptyCard">
@@ -318,7 +285,7 @@ export default function ProfileSelectorClient() {
           </div>
         ) : linkedProfiles.length > 0 ? (
           <div className="stack profileSelectorStack">
-            <p className="hint">Linked profiles found. Redirecting to the primary profile now.</p>
+            <p className="hint">Your linked identities</p>
             {linkedProfiles.map((profile) => (
               <div key={`${profile.slug}:${profile.ownerAddress}:${profile.collectionAddress || ""}`} className="card profileSelectorProfileCard">
                 <strong>{profile.displayName || profile.fullName}</strong>
@@ -333,7 +300,7 @@ export default function ProfileSelectorClient() {
                 </div>
                 <div className="row profileSelectorActions">
                   <Link href={`/profile/${encodeURIComponent(profile.slug)}`} className="ctaLink">
-                    Open profile now
+                    View profile
                   </Link>
                   {profile.collectionAddress ? (
                     <Link
@@ -351,10 +318,10 @@ export default function ProfileSelectorClient() {
           <div className="stack profileSelectorStack">
             <div className="profileSelectorEmptyCard">
               <strong>No creator profile is linked to this wallet yet.</strong>
-              <p className="hint">Start from setup, then link ENS identity or mint an nftfactory.eth subname before publishing the creator page.</p>
+              <p className="hint">Add a name, introduction, and artwork to your page. An ENS name is optional.</p>
             </div>
             <div className="row profileSelectorActions">
-              <Link href="/profile/setup" className="ctaLink">Create or link profile</Link>
+              <Link href="/profile/setup" className="ctaLink">Create your page</Link>
             </div>
             {discoveredIdentityLinks.length > 0 ? (
               <div className="stack profileSelectorDiscoveryBlock">

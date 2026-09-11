@@ -41,6 +41,13 @@ contract Marketplace is Owned {
     uint256 public nextOfferId;
     NftFactoryRegistry public immutable registry;
 
+    struct FeeTerms {
+        uint256 feeBps;
+        address treasury;
+    }
+
+    mapping(uint256 => FeeTerms) public listingFeeTerms;
+    mapping(uint256 => FeeTerms) public offerFeeTerms;
     mapping(uint256 => Listing) public listings;
     mapping(uint256 => Offer) public offers;
     mapping(address => bool) public blockedCollection;
@@ -134,6 +141,30 @@ contract Marketplace is Owned {
         uint256 price,
         uint256 durationDays
     ) external nonReentrant {
+        _createListing(nft, tokenId, amount, standard, paymentToken, price, durationDays);
+    }
+
+    error FeeTermsChanged();
+
+    function createListingWithFeeTerms(
+        address nft, uint256 tokenId, uint256 amount, string calldata standard,
+        address paymentToken, uint256 price, uint256 durationDays, FeeTerms calldata expected
+    ) external nonReentrant {
+        if (registry.protocolFeeBps() != expected.feeBps || registry.treasury() != expected.treasury) {
+            revert FeeTermsChanged();
+        }
+        _createListing(nft, tokenId, amount, standard, paymentToken, price, durationDays);
+    }
+
+    function _createListing(
+        address nft,
+        uint256 tokenId,
+        uint256 amount,
+        string calldata standard,
+        address paymentToken,
+        uint256 price,
+        uint256 durationDays
+    ) internal {
         if (registry.blocked(msg.sender) || registry.blocked(nft) || blockedCollection[nft]) revert Sanctioned();
         if (price == 0) revert InvalidPrice();
         _assertPaymentTokenAllowed(paymentToken);
@@ -160,6 +191,7 @@ contract Marketplace is Owned {
             expiresAt: expiresAt,
             active: true
         });
+        listingFeeTerms[listingId] = FeeTerms(registry.protocolFeeBps(), registry.treasury());
         _activeListingIds[listingKey] = listingId + 1;
 
         emit Listed(listingId, msg.sender, nft, tokenId, amount, normalizedStandard, paymentToken, price, expiresAt);
@@ -197,7 +229,7 @@ contract Marketplace is Owned {
         _assertApproved(seller, nft, standardKey);
 
         _deactivateListing(listingId);
-        _disburseSaleProceeds(paymentToken, msg.sender, seller, price);
+        _disburseSaleProceeds(paymentToken, msg.sender, seller, price, listingFeeTerms[listingId]);
         _transferAsset(seller, msg.sender, nft, tokenId, amount, standardKey);
 
         emit Sale(listingId, msg.sender, price, paymentToken);
@@ -242,6 +274,8 @@ contract Marketplace is Owned {
             active: true
         });
 
+        offerFeeTerms[offerId] = FeeTerms(registry.protocolFeeBps(), registry.treasury());
+
         emit OfferCreated(offerId, msg.sender, nft, tokenId, quantity, normalizedStandard, paymentToken, price, expiresAt);
         nextOfferId = offerId + 1;
     }
@@ -285,7 +319,7 @@ contract Marketplace is Owned {
             }
         }
 
-        _settleEscrowedOffer(offer.paymentToken, msg.sender, offer.price);
+        _settleEscrowedOffer(offer.paymentToken, msg.sender, offer.price, offerFeeTerms[offerId]);
         _transferAsset(msg.sender, offer.buyer, offer.nft, offer.tokenId, offer.quantity, standardKey);
 
         emit OfferAccepted(
@@ -312,10 +346,10 @@ contract Marketplace is Owned {
         _safeTransferERC20(paymentToken, buyer, price);
     }
 
-    function _settleEscrowedOffer(address paymentToken, address seller, uint256 price) internal {
-        uint256 protocolFee = _protocolFee(price);
+    function _settleEscrowedOffer(address paymentToken, address seller, uint256 price, FeeTerms memory terms) internal {
+        uint256 protocolFee = _protocolFee(price, terms.feeBps);
         uint256 sellerProceeds = price - protocolFee;
-        address feeTreasury = registry.treasury();
+        address feeTreasury = terms.treasury;
 
         if (paymentToken == address(0)) {
             if (protocolFee > 0) {
@@ -333,10 +367,10 @@ contract Marketplace is Owned {
         _safeTransferERC20(paymentToken, seller, sellerProceeds);
     }
 
-    function _disburseSaleProceeds(address paymentToken, address buyer, address seller, uint256 price) internal {
-        uint256 protocolFee = _protocolFee(price);
+    function _disburseSaleProceeds(address paymentToken, address buyer, address seller, uint256 price, FeeTerms memory terms) internal {
+        uint256 protocolFee = _protocolFee(price, terms.feeBps);
         uint256 sellerProceeds = price - protocolFee;
-        address feeTreasury = registry.treasury();
+        address feeTreasury = terms.treasury;
 
         if (paymentToken == address(0)) {
             if (msg.value != price) revert PaymentMismatch();
@@ -428,8 +462,7 @@ contract Marketplace is Owned {
         return block.timestamp + (durationDays * 1 days);
     }
 
-    function _protocolFee(uint256 price) internal view returns (uint256) {
-        uint256 feeBps = registry.protocolFeeBps();
+    function _protocolFee(uint256 price, uint256 feeBps) internal pure returns (uint256) {
         if (feeBps == 0) return 0;
         return (price * feeBps) / 10_000;
     }

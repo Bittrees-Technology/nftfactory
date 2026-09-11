@@ -12,6 +12,8 @@ function wikiHref(target: string): string | null {
   if (trimmed.startsWith("http://") || trimmed.startsWith("https://") || trimmed.startsWith("mailto:")) {
     return trimmed;
   }
+  if (trimmed.startsWith("/") && !trimmed.startsWith("//")) return trimmed;
+  if (trimmed.startsWith("#")) return trimmed;
   const normalized = trimmed.replace(/^\.\//u, "").replace(/\.md$/iu, "").toLowerCase();
   return normalized === "home" ? "/wiki" : `/wiki/${normalized}`;
 }
@@ -47,7 +49,7 @@ function renderInline(text: string): ReactNode[] {
       if (parts) {
         const [, label, hrefValue] = parts;
         const href = wikiHref(hrefValue);
-        if (href?.startsWith("/wiki")) {
+        if (href?.startsWith("/") || href?.startsWith("#")) {
           nodes.push(
             <Link key={`link-${key++}`} href={href} className="wikiInlineLink">
               {label}
@@ -84,7 +86,7 @@ function parseTableRow(line: string): string[] {
 }
 
 function isTableSeparator(line: string): boolean {
-  return /^\|?[\s:-|]+\|?$/u.test(line.trim());
+  return /^\|?[-\s:|]+\|?$/u.test(line.trim());
 }
 
 function isListLine(line: string): boolean {

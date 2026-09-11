@@ -1,46 +1,39 @@
 # NFTFactory Guide
 
-NFTFactory lets creators publish from shared mint contracts or their own collection contracts, then attach ENS-based identity and a public profile page on top.
+Create, organize, and share artwork with your wallet. An ENS name is optional.
 
-This in-app wiki is intentionally trimmed to the pages that matter most to a creator or collector using the live product. It does not include internal operator runbooks, deployment notes, or infrastructure troubleshooting.
+## Start here
 
-## Start Here
+| I want to | Where to go |
+|---|---|
+| Find artwork and creators | [Explore](/discover) |
+| Publish an NFT | [Create](/mint) |
+| Customize my creator page | [My studio](/profile/setup) |
+| Add NFTs I already own | [Import artwork](/profile/import) |
+| Search or update my tags | [Organize tags](/profile/tags) |
+| Browse artwork for sale | [Marketplace](/marketplace) |
+| List or cancel a sale | [Manage listings](/profile/listings) |
 
-| Page | Purpose |
-|------|---------|
-| [Profiles and Identity](./Profiles-and-Identity.md) | What `/discover`, `/profile`, `/profile/setup`, and `/profile/[name]` do today |
-| [ENS Integration](./ENS-Integration.md) | What NFTFactory creates onchain vs what it only links |
-| [Contracts](./Contracts.md) | The contract groups behind shared publishing and creator-owned collections |
-| [Finality](./Finality.md) | What becomes permanent when a creator finalizes upgrades or locks metadata |
+## Your wallet and your page
 
-## Product Surface
+Connecting a wallet lets the site find your artwork. Signing in proves that you control that wallet so you can save a profile or tags. Sign-in does not send a transaction or authorize spending.
 
-NFTFactory currently has three user-facing surfaces:
+Publishing an NFT and buying or listing artwork are separate actions. Review the network, price, and permissions in your wallet before approving them.
 
-1. **Landing**
-   - the brand entry at `/`
-2. **Mint and collection management**
-   - publish through shared mint contracts or creator-owned collections from `/mint`
-3. **Profiles and identity**
-   - resolve a connected wallet at `/profile`
-   - browse public profiles, collections, and NFTs at `/discover`
-   - create or link identity at `/profile/setup`
-   - render a public creator page at `/profile/[name]`
+## Make the page yours
 
-## How To Read The Product
+Add a name, introduction, avatar, banner, and links. Choose a theme and font, then show, hide, or reorder sections. Save a draft on this device, or save your creator page to publish it. Your public page includes your wallet address.
 
-- A wallet proves ownership.
-- ENS gives the profile a public identity.
-- The collection contract controls minting and ownership rules.
-- The public profile page is the presentation layer on top.
+## Existing artwork and tags
 
-## What Is Not In This In-App Wiki
+Import artwork by choosing its network, entering its contract address, and supplying token IDs. NFTFactory checks ownership; import does not mint or transfer an NFT. Partial results explain which items were added.
 
-The repo still contains internal documentation for:
+Public tags appear with artwork. Private tags are only visible when you sign in with the wallet that saved them. These annotations do not change the NFT's original metadata or onchain traits.
 
-- infrastructure and deployment
-- indexer operations
-- webhook and RPC setup
-- validation and release runbooks
+## Learn more
 
-Those pages remain in `docs/wiki` for maintainers, but they are intentionally hidden from the in-app wiki surface.
+- [Profiles and identity](Profiles-and-Identity.md)
+- [ENS names](ENS-Integration.md)
+- [Storage and outages](Storage.md)
+- [Contract permanence](Finality.md)
+- [Contract details](Contracts.md)

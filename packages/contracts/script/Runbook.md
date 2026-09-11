@@ -1,3 +1,5 @@
+Deployment now requires `EXPECTED_CHAIN_ID` to match the connected network and a nonzero `TREASURY_SAFE`. See [the multi-network release checklist](../../../docs/deployment/Multi-Network-Release.md) before broadcasting.
+
 # Foundry Runbook
 
 ## Install dependencies

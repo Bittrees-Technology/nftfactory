@@ -1712,6 +1712,7 @@ export default function ProfileClient({ name }: { name: string }) {
 <html>
   <head>
     <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src https: data:; font-src 'none'; form-action 'none'; base-uri 'none'" />
     <title>${title}</title>
     <style>
       :root { color-scheme: light; }
@@ -2399,7 +2400,7 @@ export default function ProfileClient({ name }: { name: string }) {
                 key={customPreviewId}
                 title={`${creatorDisplayName} custom profile module`}
                 srcDoc={customProfilePreview}
-                sandbox="allow-popups"
+                sandbox=""
                 className="profileCustomModuleFrame"
               />
                   </section>
@@ -2451,7 +2452,7 @@ export default function ProfileClient({ name }: { name: string }) {
                     {publicGuestbookEntries.length > 0 ? <div className="profileMyspaceGuestbookList">{publicGuestbookEntries.map((entry) => (<article key={entry.id} className="profileMyspaceGuestbookEntry"><div className="profileMyspaceGuestbookMeta"><strong>{entry.authorName}</strong>{entry.authorAddress ? <span className="mono">{truncateAddress(entry.authorAddress as Address)}</span> : null}<span className="hint">{new Date(entry.createdAt).toLocaleString()}</span></div><p>{entry.message}</p>{canEditProfile ? <div className="row"><button type="button" onClick={() => void hideGuestbookEntry(entry.id)} disabled={moderatingGuestbookEntryId === entry.id}>{moderatingGuestbookEntryId === entry.id ? "Working..." : "Hide Entry"}</button><button type="button" onClick={() => void deleteGuestbookEntry(entry.id)} disabled={moderatingGuestbookEntryId === entry.id}>{moderatingGuestbookEntryId === entry.id ? "Working..." : "Delete Entry"}</button></div> : null}</article>))}</div> : <p className="hint">No public guestbook entries yet. Be the first to sign this page.</p>}
                     {canEditProfile && moderatedGuestbookEntries.length > 0 ? <div className="profileMyspaceGuestbookList">{moderatedGuestbookEntries.map((entry) => (<article key={entry.id} className="profileMyspaceGuestbookEntry"><div className="profileMyspaceGuestbookMeta"><strong>{entry.authorName}</strong>{entry.authorAddress ? <span className="mono">{truncateAddress(entry.authorAddress as Address)}</span> : null}<span className="hint">{entry.deletedAt ? "Deleted" : "Hidden"}</span></div><p>{entry.message}</p><p className="hint">Posted {new Date(entry.createdAt).toLocaleString()}{entry.hiddenAt ? " | Hidden " + new Date(entry.hiddenAt).toLocaleString() + " by " + getModerationActorLabel(entry.hiddenBy, primaryProfile?.ownerAddress) : ""}{entry.deletedAt ? " | Deleted " + new Date(entry.deletedAt).toLocaleString() + " by " + getModerationActorLabel(entry.deletedBy, primaryProfile?.ownerAddress) : ""}</p><div className="row"><button type="button" onClick={() => void restoreGuestbookEntry(entry.id)} disabled={moderatingGuestbookEntryId === entry.id}>{moderatingGuestbookEntryId === entry.id ? "Working..." : "Restore Entry"}</button></div></article>))}</div> : null}
                   </section> : null}
-                  {myspaceSidebarModules.includes("custom") && (presentationProfile?.customHtml || presentationProfile?.customCss) ? <section className={`card formCard profileMyspaceCustomCard profileMyspaceCustomCard--sidebar ${myspaceSidebarCompactModules.includes("custom") ? "profileMyspaceSidebarModule--compact" : ""}`.trim()} style={getMyspaceModuleOrderStyle(myspaceModuleOrder, "custom")}> <div className="profileMyspaceCustomHeader"><div><p className="eyebrow">Custom Module</p><h3>Independent HTML + CSS Block</h3></div><span className="profileChip">Sandboxed preview</span></div><p className="hint">Custom HTML is sanitized and rendered inside an isolated iframe so creators can style a personal module without taking over the rest of the app shell.</p><iframe key={customPreviewId} title={`${creatorDisplayName} custom profile module`} srcDoc={customProfilePreview} sandbox="allow-popups" className="profileCustomModuleFrame" /></section> : null}
+                  {myspaceSidebarModules.includes("custom") && (presentationProfile?.customHtml || presentationProfile?.customCss) ? <section className={`card formCard profileMyspaceCustomCard profileMyspaceCustomCard--sidebar ${myspaceSidebarCompactModules.includes("custom") ? "profileMyspaceSidebarModule--compact" : ""}`.trim()} style={getMyspaceModuleOrderStyle(myspaceModuleOrder, "custom")}> <div className="profileMyspaceCustomHeader"><div><p className="eyebrow">Custom Module</p><h3>Independent HTML + CSS Block</h3></div><span className="profileChip">Sandboxed preview</span></div><p className="hint">Custom HTML is sanitized and rendered inside an isolated iframe so creators can style a personal module without taking over the rest of the app shell.</p><iframe key={customPreviewId} title={`${creatorDisplayName} custom profile module`} srcDoc={customProfilePreview} sandbox="" className="profileCustomModuleFrame" /></section> : null}
                 </aside>
               ) : null}
             </div>

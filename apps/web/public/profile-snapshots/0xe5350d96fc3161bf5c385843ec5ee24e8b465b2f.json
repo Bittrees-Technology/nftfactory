@@ -1,0 +1,122 @@
+{
+  "profileName": "0xe5350d96fc3161bf5c385843ec5ee24e8b465b2f",
+  "sourceUrl": "https://nftfactory.org/api/profile/view/0xe5350d96fc3161bf5c385843ec5ee24e8b465b2f",
+  "generatedAt": "2026-09-11T07:19:59.654Z",
+  "profileView": {
+    "name": "0xe5350d96fc3161bf5c385843ec5ee24e8b465b2f",
+    "resolution": {
+      "name": "0xe5350d96fc3161bf5c385843ec5ee24e8b465b2f",
+      "sellers": [
+        "0xe5350d96fc3161bf5c385843ec5ee24e8b465b2f"
+      ],
+      "profiles": [
+        {
+          "slug": "0xe5350d96fc3161bf5c385843ec5ee24e8b465b2f",
+          "fullName": "0xe5350d96fc3161bf5c385843ec5ee24e8b465b2f",
+          "source": "wallet",
+          "ownerAddress": "0xe5350d96fc3161bf5c385843ec5ee24e8b465b2f",
+          "collectionAddress": null,
+          "tagline": null,
+          "displayName": "NFTFactory Test Creator",
+          "bio": "Testing the NFTFactory creator experience and original artwork on Sepolia.",
+          "layoutMode": "default",
+          "aboutMe": null,
+          "interests": null,
+          "whoIdLikeToMeet": null,
+          "statusHeadline": null,
+          "sidebarFacts": [],
+          "mediaEmbeds": [],
+          "retroBlocks": [],
+          "moduleOrder": [
+            "social",
+            "media",
+            "retro",
+            "boxes",
+            "guestbook",
+            "custom"
+          ],
+          "heroModules": [],
+          "heroCompactModules": [],
+          "sidebarModules": [],
+          "sidebarCompactModules": [],
+          "mainColumnSplitModules": [],
+          "mainColumnCompactModules": [],
+          "topFriends": [],
+          "stamps": [],
+          "testimonials": [],
+          "profileSongUrl": null,
+          "customBoxes": [],
+          "bannerUrl": null,
+          "avatarUrl": null,
+          "featuredUrl": null,
+          "accentColor": null,
+          "customCss": null,
+          "customHtml": null,
+          "links": [],
+          "publishedProfileUri": null,
+          "publishedProfileGatewayUrl": null,
+          "publishedProfilePublishedAt": null,
+          "createdAt": "2026-09-11T06:12:54.852Z",
+          "updatedAt": "2026-09-11T06:12:54.852Z"
+        }
+      ],
+      "collections": []
+    },
+    "resolutionFailures": [],
+    "resolutionError": null,
+    "activeSellerAddresses": [
+      "0xe5350d96fc3161bf5c385843ec5ee24e8b465b2f"
+    ],
+    "listings": [],
+    "listingFailures": [],
+    "listingError": "Active listing aggregation failed.",
+    "hiddenListingRecordIds": [],
+    "hiddenListingFailures": [],
+    "hiddenListingError": null,
+    "offers": [],
+    "offerFailures": [],
+    "offerError": null,
+    "holdings": [
+      {
+        "id": "cmtwkn4tm0002weu78vbciqw3",
+        "tokenId": "5",
+        "creatorAddress": "0xe5350d96fc3161bf5c385843ec5ee24e8b465b2f",
+        "ownerAddress": "0xe5350d96fc3161bf5c385843ec5ee24e8b465b2f",
+        "currentOwnerAddress": "0xe5350d96fc3161bf5c385843ec5ee24e8b465b2f",
+        "currentOwnerAddresses": [
+          "0xe5350d96fc3161bf5c385843ec5ee24e8b465b2f"
+        ],
+        "heldAmountRaw": "1",
+        "reservedAmountRaw": "0",
+        "availableAmountRaw": "1",
+        "mintTxHash": "0x1d38d8114f9d1013ba0ece09aebcea80dbdd61484e7b9aa006df1f1268378673",
+        "draftName": "NFTFactory Sepolia Acceptance",
+        "draftDescription": "Original test artwork verifying NFTFactory creation, replicated IPFS storage, and Sepolia minting. Testnet only.",
+        "mintedAmountRaw": null,
+        "metadataCid": "ipfs://bafkreibc2c5ufthhfdxpxf6rvgpabuugyf4yocze7vzhexrh5tjophdnv4",
+        "metadataUrl": "https://dweb.link/ipfs/bafkreibc2c5ufthhfdxpxf6rvgpabuugyf4yocze7vzhexrh5tjophdnv4",
+        "mediaCid": "ipfs://bafkreigfcrd57ctudtoum7vsgdj6kuokhi46gatatnefbevymnjnvkqvha",
+        "mediaUrl": "https://dweb.link/ipfs/bafkreigfcrd57ctudtoum7vsgdj6kuokhi46gatatnefbevymnjnvkqvha",
+        "immutable": true,
+        "mintedAt": "2026-09-11T06:24:47.126Z",
+        "bestOffer": null,
+        "offerCount": 0,
+        "activeListing": null,
+        "collection": {
+          "chainId": 11155111,
+          "contractAddress": "0x4018dd11271cecfabb275656631896f7a8811965",
+          "ownerAddress": "0x5975bcbc61bff418890bbb349ecb4e4ce1b5dac2",
+          "ensSubname": null,
+          "standard": "ERC721",
+          "isFactoryCreated": true,
+          "isUpgradeable": false,
+          "finalizedAt": null,
+          "createdAt": "2026-09-11T06:24:47.129Z",
+          "updatedAt": "2026-09-11T06:24:47.129Z"
+        }
+      }
+    ],
+    "holdingsFailures": [],
+    "holdingsError": null
+  }
+}

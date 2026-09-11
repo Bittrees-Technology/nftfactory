@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createPublicClient, http } from "viem";
+import {normalize} from "viem/ens";
 import { mainnet } from "viem/chains";
 import { getScopedChainPublicEnv } from "../../../../lib/publicEnv";
 
@@ -25,10 +26,7 @@ function isAddress(value: string): value is `0x${string}` {
 }
 
 function normalizeEnsName(value: string | null): string | null {
-  const normalized = String(value || "").trim().toLowerCase();
-  if (!normalized || !normalized.endsWith(".eth")) return null;
-  if (!/^(?:[a-z0-9-]+\.)+[a-z]{2,}$/i.test(normalized)) return null;
-  return normalized;
+  try {const name=normalize(String(value||"").trim());return name.endsWith(".eth")&&name.length<=255?name:null;}catch{return null;}
 }
 
 export async function GET(req: Request) {
@@ -54,10 +52,11 @@ export async function GET(req: Request) {
   try {
     const client = createPublicClient({
       chain: mainnet,
-      transport: http(MAINNET_RPC_URL)
+      transport: http(MAINNET_RPC_URL,{timeout:8000,retryCount:0})
     });
     const resolved = await client.getEnsAddress({ name });
     const address = isAddress(String(resolved || "")) ? String(resolved) : null;
+    if(ensCache.size>=1000)ensCache.delete(ensCache.keys().next().value!);
     ensCache.set(name, {
       address,
       expiresAt: Date.now() + CACHE_TTL_MS

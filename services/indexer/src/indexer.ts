@@ -1,4 +1,7 @@
-import { readToken } from "../../../packages/auth/session.mjs";
+import {importArtwork,readArtworkTags,saveArtworkTags,searchOwnArtworkTags} from "./artwork.js";
+import {chainWhere} from "./chainScope.js";
+import { normalizeDesign, type ProfileDesign } from "../../../packages/profile/design.mjs";
+import { readToken, readChainSession } from "../../../packages/auth/session.mjs";
 import dotenv from "dotenv";
 import { verifyMintReceipt } from './mintReceipt.js';
 
@@ -82,6 +85,7 @@ type ModeratorRecord = {
 type ProfileLinkSource = "wallet" | "ens" | "external-subname" | "nftfactory-subname";
 
 type ProfileLinkPayload = {
+  design?: ProfileDesign;
   name: string;
   source: ProfileLinkSource;
   ownerAddress: string;
@@ -171,6 +175,7 @@ type ProfileRetroBlock = {
 };
 
 type ProfileRecord = {
+  design?: ProfileDesign;
   slug: string;
   fullName: string;
   source: ProfileLinkSource;
@@ -416,7 +421,13 @@ function createFallbackPrisma(): PrismaClient {
 
 function createPrismaClient(): PrismaClient {
   try {
-    return new PrismaClient();
+    return new PrismaClient().$extends({query:{$allModels:{$allOperations({model,operation,args,query}) {
+      if (['findMany','findFirst','findUnique','count','aggregate','updateMany','deleteMany','update','delete','upsert'].includes(operation)) {
+        const input=args as unknown as {where?:Record<string,unknown>};
+        input.where=chainWhere(model,input.where,CHAIN_ID);
+      }
+      return query(args);
+    }}}}) as unknown as PrismaClient;
   } catch (err) {
     if (err instanceof Error && err.message.includes("did not initialize yet")) {
       return createFallbackPrisma();
@@ -2177,7 +2188,7 @@ async function readProfileRecords(): Promise<ProfileRecord[]> {
     const parsed = JSON.parse(raw) as ProfileRecord[];
     return parsed
       .filter((item) => item && isAddress(String(item.ownerAddress || "").toLowerCase()))
-      .map((item) => {
+      .map((item): ProfileRecord | null => {
         const source = (item.source || "nftfactory-subname") as ProfileLinkSource;
         const normalized = normalizeProfileInput(String(item.fullName || item.slug || ""), source);
         if (!normalized) {
@@ -2190,6 +2201,7 @@ async function readProfileRecords(): Promise<ProfileRecord[]> {
           source,
           ownerAddress: item.ownerAddress.toLowerCase(),
           collectionAddress: collectionAddress && isAddress(collectionAddress) ? collectionAddress : null,
+          design: normalizeDesign(item.design),
           tagline: sanitizeProfileText(item.tagline || undefined, 120),
           displayName: sanitizeProfileText(item.displayName || undefined, 80),
           bio: sanitizeProfileText(item.bio || undefined, 1200),
@@ -3531,7 +3543,7 @@ async function syncMarketplaceListingsIfStale(
               : {};
 
             await deps.prisma.listing.upsert({
-              where: { listingId },
+              where: { chainId_listingId: {chainId:config.chainId,listingId} },
               update: {
                 ...baseListingData,
                 ...listingV2Data
@@ -3645,7 +3657,7 @@ async function fullSyncMarketplaceListings(
         const tokenRefId = await findTokenRefIdForAsset(collectionAddress, tokenId, deps);
 
         await deps.prisma.listing.upsert({
-          where: { listingId },
+          where: { chainId_listingId: {chainId:config.chainId,listingId} },
           update: {
             chainId: config.chainId,
             marketplaceVersion: "v2",
@@ -3828,7 +3840,7 @@ async function syncMarketplaceListings(
         const listed = listedById.get(logKey);
 
         await deps.prisma.listing.upsert({
-          where: { listingId },
+          where: { chainId_listingId: {chainId:config.chainId,listingId} },
           update: {
             chainId: config.chainId,
             marketplaceVersion: "v2",
@@ -4039,13 +4051,13 @@ async function fullSyncMarketplaceOffers(
         const tokenRefId = await findTokenRefIdForAsset(collectionAddress, tokenId, deps);
         const previousOffer = typeof offerDelegate.findUnique === "function"
           ? await offerDelegate.findUnique({
-              where: { offerId },
+              where: { chainId_offerId: {chainId:config.chainId,offerId} },
               select: { acceptedTxHash: true }
             })
           : null;
 
         await offerDelegate.upsert({
-          where: { offerId },
+          where: { chainId_offerId: {chainId:config.chainId,offerId} },
           update: {
             chainId: config.chainId,
             marketplaceVersion: "v2",
@@ -4254,13 +4266,13 @@ async function syncMarketplaceOffers(
         const tokenRefId = await findTokenRefIdForAsset(collectionAddress, tokenId, deps);
         const previousOffer = typeof offerDelegate.findUnique === "function"
           ? await offerDelegate.findUnique({
-              where: { offerId },
+              where: { chainId_offerId: {chainId:config.chainId,offerId} },
               select: { acceptedTxHash: true }
             })
           : null;
 
         await offerDelegate.upsert({
-          where: { offerId },
+          where: { chainId_offerId: {chainId:config.chainId,offerId} },
           update: {
             chainId: config.chainId,
             marketplaceVersion: "v2",
@@ -4505,8 +4517,12 @@ async function syncPreferredMarketplaceIfStale(
 
 async function readJsonBody<T>(req: IncomingMessage): Promise<T> {
   const chunks: Buffer[] = [];
+  let bytes = 0;
   for await (const chunk of req) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    const buffer=Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    bytes+=buffer.length;
+    if(bytes>1024*1024)throw new BadRequestError("Request body exceeds 1 MiB.");
+    chunks.push(buffer);
   }
   const raw = Buffer.concat(chunks).toString("utf8");
   if (!raw) throw new BadRequestError("Missing JSON body");
@@ -4759,7 +4775,7 @@ async function ensureTokenForListing(
   const standard = (payload.standard || "UNKNOWN").toUpperCase();
 
   const collection = await deps.prisma.collection.upsert({
-    where: { contractAddress: collectionAddress },
+    where: { chainId_contractAddress: {chainId:config.chainId,contractAddress:collectionAddress} },
     update: {
       ownerAddress: sellerAddress,
       standard
@@ -4804,7 +4820,7 @@ async function ensureTokenForListing(
     : "v1";
 
   const listing = await deps.prisma.listing.upsert({
-    where: { listingId: listingRecordId },
+    where: { chainId_listingId: {chainId:config.chainId,listingId:listingRecordId} },
     update: {
       chainId: config.chainId,
       collectionAddress,
@@ -4851,7 +4867,8 @@ async function ensureTokenForListing(
 async function upsertMintedToken(
   payload: SyncMintedTokenPayload,
   deps: IndexerDeps,
-  config: RequestHandlerConfig
+  config: RequestHandlerConfig,
+  receiptOnly = false
 ): Promise<any> {
   const contractAddress = String(payload.contractAddress || "").trim().toLowerCase();
   const collectionOwnerAddress = String(payload.collectionOwnerAddress || payload.ownerAddress || "").trim().toLowerCase();
@@ -4891,26 +4908,23 @@ async function upsertMintedToken(
   }
 
   const collection = await deps.prisma.collection.upsert({
-    where: { contractAddress },
+    where: { chainId_contractAddress: {chainId:config.chainId,contractAddress} },
     update: {
       ownerAddress: collectionOwnerAddress,
-      ensSubname: ensSubname || undefined,
+      ensSubname: receiptOnly ? undefined : ensSubname || undefined,
       standard,
-      isFactoryCreated: payload.isFactoryCreated === true,
-      isUpgradeable: payload.isUpgradeable !== false,
-      finalizedAt: finalizedAt || undefined,
-      ...(collectionCreatedAt ? { createdAt: collectionCreatedAt } : {})
+      ...(receiptOnly ? {} : {isFactoryCreated: payload.isFactoryCreated === true, isUpgradeable: payload.isUpgradeable !== false, finalizedAt: finalizedAt || undefined, ...(collectionCreatedAt ? { createdAt: collectionCreatedAt } : {})})
     },
     create: {
       chainId: config.chainId,
       contractAddress,
       ownerAddress: collectionOwnerAddress,
-      ensSubname,
+      ensSubname: receiptOnly ? null : ensSubname,
       standard,
-      isFactoryCreated: payload.isFactoryCreated === true,
-      isUpgradeable: payload.isUpgradeable !== false,
-      finalizedAt,
-      ...(collectionCreatedAt ? { createdAt: collectionCreatedAt } : {})
+      isFactoryCreated: receiptOnly ? false : payload.isFactoryCreated === true,
+      isUpgradeable: receiptOnly ? true : payload.isUpgradeable !== false,
+      finalizedAt: receiptOnly ? null : finalizedAt,
+      ...(!receiptOnly && collectionCreatedAt ? { createdAt: collectionCreatedAt } : {})
     }
   });
 
@@ -4934,8 +4948,7 @@ async function upsertMintedToken(
         : {}),
       metadataCid,
       mediaCid,
-      immutable: payload.immutable !== false,
-      mintedAt
+      ...(receiptOnly ? {} : {immutable: payload.immutable !== false, mintedAt})
     },
     create: {
       collectionId: collection.id,
@@ -4952,8 +4965,8 @@ async function upsertMintedToken(
         : {}),
       metadataCid,
       mediaCid,
-      immutable: payload.immutable !== false,
-      mintedAt
+      immutable: receiptOnly ? false : payload.immutable !== false,
+      mintedAt: receiptOnly ? new Date() : mintedAt
     },
     include: {
       collection: true,
@@ -4966,7 +4979,7 @@ async function upsertMintedToken(
     }
   });
 
-  if (!payload.skipHoldingSync) {
+  if (receiptOnly || !payload.skipHoldingSync) {
     const syncedHeldAmountRaw =
       standard === "ERC1155"
         ? (heldAmountRaw ?? mintedAmountRaw ?? "1")
@@ -5148,7 +5161,7 @@ async function backfillCollectionTokens(
   }
 
   const existingCollection = await deps.prisma.collection.findUnique({
-    where: { contractAddress },
+    where: { chainId_contractAddress: {chainId:config.chainId,contractAddress} },
     select: {
       ownerAddress: true,
       ensSubname: true,
@@ -5808,7 +5821,7 @@ async function syncParticipantContractsIfStale(
         const contractAddress = String(contract.contractAddress || "").trim().toLowerCase();
         if (!isAddress(contractAddress)) return;
         const existingCollection = await collectionDelegate.findUnique({
-          where: { contractAddress },
+          where: { chainId_contractAddress: {chainId:config.chainId,contractAddress} },
           select: {
             ownerAddress: true,
             ensSubname: true,
@@ -6120,6 +6133,34 @@ async function handleRequest(
   const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
   const path = url.pathname;
 
+  if (path === "/api/imports" || path === "/api/artwork/tags/search" || /^\/api\/artwork\/[^/]+\/[^/]+\/tags$/.test(path)) {
+    res.setHeader("Cache-Control", "private, no-store");
+    const session=readChainSession(parseBearerToken(req.headers.authorization), process.env.SESSION_SECRET, config.chainId);
+    if((req.method !== "GET" || path === "/api/artwork/tags/search") && !session){sendJson(res,401,{error:"Sign in with the wallet that owns this artwork."});return;}
+    if (deps.isRateLimitedImpl(deps.getClientIpImpl(req,config.trustProxy))) {sendJson(res,429,{error:"Too many requests. Please retry shortly."});return;}
+    try {
+      if(path === "/api/artwork/tags/search" && req.method === "GET") {sendJson(res,200,await searchOwnArtworkTags(deps.prisma,config.chainId,session!.address,url.searchParams.get("q")||"",url.searchParams.get("cursor")||undefined));return;}
+      if(path === "/api/imports" && req.method === "POST") {sendJson(res,200,await importArtwork(deps.prisma,createRpcClient(config),config.chainId,session!.address as `0x${string}`,await readJsonBody(req)));return;}
+      const parts=path.split("/");
+      if(req.method === "GET" && path !== "/api/imports") {sendJson(res,200,await readArtworkTags(deps.prisma,config.chainId,parts[3],parts[4],session?.address));return;}
+      if(req.method === "POST" && path !== "/api/imports") {sendJson(res,200,await saveArtworkTags(deps.prisma,createRpcClient(config),config.chainId,parts[3],parts[4],session!.address as `0x${string}`,await readJsonBody(req)));return;}
+      sendJson(res,405,{error:"Method not allowed."});return;
+    }catch(error){sendJson(res,400,{error:error instanceof Error?error.message:"Artwork request failed."});return;}
+  }
+
+  if (req.method === "POST" && path === "/api/auth/consume") {
+    const proof = readToken(parseBearerToken(req.headers.authorization), process.env.SESSION_SECRET, "nonce-consume");
+    if (!proof?.message || !/^[a-f0-9]{64}$/.test(proof.message) || proof.exp > Date.now() + 300_000) { sendJson(res, 401, {error:"Invalid sign-in proof."}); return; }
+    try {
+      await deps.prisma.authNonce.create({data:{id:proof.message,expiresAt:new Date(proof.exp)}});
+    } catch (error) {
+      if ((error as {code?:string}).code === "P2002") { sendJson(res,409,{error:"Sign-in was already used."}); return; }
+      throw error;
+    }
+    await deps.prisma.authNonce.deleteMany({where:{expiresAt:{lt:new Date()}}});
+    sendJson(res,200,{ok:true}); return;
+  }
+
   if (req.method === "GET" && path === "/health") {
     const adminProtection = summarizeAdminProtection(config);
     const [mintTxHashColumnAvailable, tokenPresentationColumnsAvailable, listingV2ColumnsAvailable, offerTableAvailable, tokenHoldingTableAvailable] =
@@ -6345,7 +6386,7 @@ async function handleRequest(
     }
 
     const payload = await readJsonBody<SyncMintedTokenPayload>(req);
-    const session = readToken(parseBearerToken(req.headers.authorization), process.env.SESSION_SECRET, 'session');
+    const session = readChainSession(parseBearerToken(req.headers.authorization), process.env.SESSION_SECRET, config.chainId);
     if (!session) { sendJson(res, 401, { error: 'Sign in to index your mint.' }); return; }
     try {
       const verified = await verifyMintReceipt(createRpcClient(config), payload, session.address);
@@ -6353,7 +6394,7 @@ async function handleRequest(
     } catch {
       sendJson(res, 403, { error: 'A confirmed mint owned by the signed-in wallet is required.' }); return;
     }
-    const token = await upsertMintedToken(payload, deps, config);
+    const token = await upsertMintedToken(payload, deps, config, true);
     await upsertTokenPresentationRecord({
       contractAddress: payload.contractAddress,
       tokenId: payload.tokenId,
@@ -6507,7 +6548,7 @@ async function handleRequest(
     }
     const includeActionListingRefs = await hasModerationActionListingColumns(deps);
     const listing = await deps.prisma.listing.findUnique({
-      where: { listingId },
+      where: { chainId_listingId: {chainId:config.chainId,listingId} },
       select: {
         tokenRefId: true,
         listingId: true
@@ -7859,7 +7900,7 @@ async function handleRequest(
       return;
     }
 
-    const session = readToken(parseBearerToken(req.headers.authorization), process.env.SESSION_SECRET, "session");
+    const session = readChainSession(parseBearerToken(req.headers.authorization), process.env.SESSION_SECRET, config.chainId);
     if (!session || session.address !== ownerAddress) { sendJson(res, 401, { error: "Sign in as the profile owner." }); return; }
     if (source === "wallet" && (String(payload.name || "").toLowerCase() !== ownerAddress || payload.routeSlug && payload.routeSlug !== ownerAddress)) { sendJson(res, 400, { error: "Wallet profiles use their verified wallet address." }); return; }
     const normalized = normalizeProfileInput(payload.name, source);
@@ -7898,7 +7939,7 @@ async function handleRequest(
 
     if (collectionAddress) {
       const attachedCollection = await deps.prisma.collection.findMany({
-        where: { contractAddress: collectionAddress },
+        where: { chainId:config.chainId,contractAddress:collectionAddress },
         select: { contractAddress: true, ownerAddress: true },
         take: 1
       });
@@ -7956,14 +7997,15 @@ async function handleRequest(
       source,
       ownerAddress,
       collectionAddress: collectionAddress || null,
-      tagline: sanitizeProfileText(payload.tagline, 120) || existingIdentity?.tagline || null,
-      displayName: sanitizeProfileText(payload.displayName, 80) || existingIdentity?.displayName || null,
-      bio: sanitizeProfileText(payload.bio, 1200) || existingIdentity?.bio || null,
+      design: payload.design !== undefined ? normalizeDesign(payload.design) : normalizeDesign(existingIdentity?.design),
+      tagline: payload.tagline !== undefined ? sanitizeProfileText(payload.tagline, 120) : existingIdentity?.tagline || null,
+      displayName: payload.displayName !== undefined ? sanitizeProfileText(payload.displayName, 80) : existingIdentity?.displayName || null,
+      bio: payload.bio !== undefined ? sanitizeProfileText(payload.bio, 1200) : existingIdentity?.bio || null,
       layoutMode: sanitizeProfileLayoutMode(payload.layoutMode) || existingIdentity?.layoutMode || "default",
-      aboutMe: sanitizeProfileText(payload.aboutMe, 1200) || existingIdentity?.aboutMe || null,
-      interests: sanitizeProfileText(payload.interests, 1200) || existingIdentity?.interests || null,
-      whoIdLikeToMeet: sanitizeProfileText(payload.whoIdLikeToMeet, 1200) || existingIdentity?.whoIdLikeToMeet || null,
-      statusHeadline: sanitizeProfileText(payload.statusHeadline, 160) || existingIdentity?.statusHeadline || null,
+      aboutMe: payload.aboutMe !== undefined ? sanitizeProfileText(payload.aboutMe, 1200) : existingIdentity?.aboutMe || null,
+      interests: payload.interests !== undefined ? sanitizeProfileText(payload.interests, 1200) : existingIdentity?.interests || null,
+      whoIdLikeToMeet: payload.whoIdLikeToMeet !== undefined ? sanitizeProfileText(payload.whoIdLikeToMeet, 1200) : existingIdentity?.whoIdLikeToMeet || null,
+      statusHeadline: payload.statusHeadline !== undefined ? sanitizeProfileText(payload.statusHeadline, 160) : existingIdentity?.statusHeadline || null,
       sidebarFacts: payload.sidebarFacts !== undefined ? sanitizeProfileSidebarFacts(payload.sidebarFacts) : existingIdentity?.sidebarFacts || [],
       mediaEmbeds: payload.mediaEmbeds !== undefined ? sanitizeProfileMediaEmbeds(payload.mediaEmbeds) : existingIdentity?.mediaEmbeds || [],
       retroBlocks: payload.retroBlocks !== undefined ? sanitizeProfileRetroBlocks(payload.retroBlocks) : existingIdentity?.retroBlocks || [],
@@ -7976,18 +8018,18 @@ async function handleRequest(
       mainColumnCompactModules: payload.mainColumnCompactModules !== undefined ? sanitizeProfileMainColumnCompactModules(payload.mainColumnCompactModules) : existingIdentity?.mainColumnCompactModules || [],
       topFriends: sanitizeProfileList(payload.topFriends, 8, 80).length > 0 ? sanitizeProfileList(payload.topFriends, 8, 80) : existingIdentity?.topFriends || [],
       testimonials: sanitizeProfileList(payload.testimonials, 12, 280).length > 0 ? sanitizeProfileList(payload.testimonials, 12, 280) : existingIdentity?.testimonials || [],
-      profileSongUrl: sanitizeProfileUrl(payload.profileSongUrl) || existingIdentity?.profileSongUrl || null,
+      profileSongUrl: payload.profileSongUrl !== undefined ? sanitizeProfileUrl(payload.profileSongUrl) : existingIdentity?.profileSongUrl || null,
       stamps: payload.stamps !== undefined ? sanitizeProfileList(payload.stamps, 24, 48) : existingIdentity?.stamps || [],
       customBoxes: payload.customBoxes !== undefined ? sanitizeProfileBoxes(payload.customBoxes) : existingIdentity?.customBoxes || [],
-      bannerUrl: sanitizeProfileUrl(payload.bannerUrl) || existingIdentity?.bannerUrl || null,
-      avatarUrl: sanitizeProfileUrl(payload.avatarUrl) || existingIdentity?.avatarUrl || null,
-      featuredUrl: sanitizeProfileUrl(payload.featuredUrl) || existingIdentity?.featuredUrl || null,
-      accentColor: sanitizeAccentColor(payload.accentColor) || existingIdentity?.accentColor || null,
+      bannerUrl: payload.bannerUrl !== undefined ? sanitizeProfileUrl(payload.bannerUrl) : existingIdentity?.bannerUrl || null,
+      avatarUrl: payload.avatarUrl !== undefined ? sanitizeProfileUrl(payload.avatarUrl) : existingIdentity?.avatarUrl || null,
+      featuredUrl: payload.featuredUrl !== undefined ? sanitizeProfileUrl(payload.featuredUrl) : existingIdentity?.featuredUrl || null,
+      accentColor: payload.accentColor !== undefined ? sanitizeAccentColor(payload.accentColor) : existingIdentity?.accentColor || null,
       customCss: sanitizeProfileCss(payload.customCss) || existingIdentity?.customCss || null,
       customHtml: sanitizeProfileHtml(payload.customHtml) || existingIdentity?.customHtml || null,
-      links: sanitizeProfileLinks(payload.links).length > 0 ? sanitizeProfileLinks(payload.links) : existingIdentity?.links || [],
+      links: payload.links !== undefined ? sanitizeProfileLinks(payload.links) : existingIdentity?.links || [],
       publishedProfileUri: sanitizeProfileIpfsUri(payload.publishedProfileUri) || existingIdentity?.publishedProfileUri || null,
-      publishedProfileGatewayUrl: sanitizeProfileUrl(payload.publishedProfileGatewayUrl) || existingIdentity?.publishedProfileGatewayUrl || null,
+      publishedProfileGatewayUrl: payload.publishedProfileGatewayUrl !== undefined ? sanitizeProfileUrl(payload.publishedProfileGatewayUrl) : existingIdentity?.publishedProfileGatewayUrl || null,
       publishedProfilePublishedAt: sanitizeIsoDate(payload.publishedProfilePublishedAt) || existingIdentity?.publishedProfilePublishedAt || null,
       createdAt: existingIdentity?.createdAt || now,
       updatedAt: now
@@ -8003,14 +8045,15 @@ async function handleRequest(
         source,
         ownerAddress,
         collectionAddress: collectionAddress || null,
-        tagline: sanitizeProfileText(payload.tagline, 120) || existingIdentity?.tagline || null,
-        displayName: sanitizeProfileText(payload.displayName, 80) || existingIdentity?.displayName || null,
-        bio: sanitizeProfileText(payload.bio, 1200) || existingIdentity?.bio || null,
+        design: payload.design !== undefined ? normalizeDesign(payload.design) : normalizeDesign(existingIdentity?.design),
+      tagline: payload.tagline !== undefined ? sanitizeProfileText(payload.tagline, 120) : existingIdentity?.tagline || null,
+        displayName: payload.displayName !== undefined ? sanitizeProfileText(payload.displayName, 80) : existingIdentity?.displayName || null,
+        bio: payload.bio !== undefined ? sanitizeProfileText(payload.bio, 1200) : existingIdentity?.bio || null,
         layoutMode: sanitizeProfileLayoutMode(payload.layoutMode) || existingIdentity?.layoutMode || "default",
-        aboutMe: sanitizeProfileText(payload.aboutMe, 1200) || existingIdentity?.aboutMe || null,
-        interests: sanitizeProfileText(payload.interests, 1200) || existingIdentity?.interests || null,
-        whoIdLikeToMeet: sanitizeProfileText(payload.whoIdLikeToMeet, 1200) || existingIdentity?.whoIdLikeToMeet || null,
-        statusHeadline: sanitizeProfileText(payload.statusHeadline, 160) || existingIdentity?.statusHeadline || null,
+        aboutMe: payload.aboutMe !== undefined ? sanitizeProfileText(payload.aboutMe, 1200) : existingIdentity?.aboutMe || null,
+        interests: payload.interests !== undefined ? sanitizeProfileText(payload.interests, 1200) : existingIdentity?.interests || null,
+        whoIdLikeToMeet: payload.whoIdLikeToMeet !== undefined ? sanitizeProfileText(payload.whoIdLikeToMeet, 1200) : existingIdentity?.whoIdLikeToMeet || null,
+        statusHeadline: payload.statusHeadline !== undefined ? sanitizeProfileText(payload.statusHeadline, 160) : existingIdentity?.statusHeadline || null,
         sidebarFacts: payload.sidebarFacts !== undefined ? sanitizeProfileSidebarFacts(payload.sidebarFacts) : existingIdentity?.sidebarFacts || [],
         mediaEmbeds: payload.mediaEmbeds !== undefined ? sanitizeProfileMediaEmbeds(payload.mediaEmbeds) : existingIdentity?.mediaEmbeds || [],
         retroBlocks: payload.retroBlocks !== undefined ? sanitizeProfileRetroBlocks(payload.retroBlocks) : existingIdentity?.retroBlocks || [],
@@ -8023,18 +8066,18 @@ async function handleRequest(
         mainColumnCompactModules: payload.mainColumnCompactModules !== undefined ? sanitizeProfileMainColumnCompactModules(payload.mainColumnCompactModules) : existingIdentity?.mainColumnCompactModules || [],
         topFriends: sanitizeProfileList(payload.topFriends, 8, 80).length > 0 ? sanitizeProfileList(payload.topFriends, 8, 80) : existingIdentity?.topFriends || [],
         testimonials: sanitizeProfileList(payload.testimonials, 12, 280).length > 0 ? sanitizeProfileList(payload.testimonials, 12, 280) : existingIdentity?.testimonials || [],
-        profileSongUrl: sanitizeProfileUrl(payload.profileSongUrl) || existingIdentity?.profileSongUrl || null,
+        profileSongUrl: payload.profileSongUrl !== undefined ? sanitizeProfileUrl(payload.profileSongUrl) : existingIdentity?.profileSongUrl || null,
         stamps: payload.stamps !== undefined ? sanitizeProfileList(payload.stamps, 24, 48) : existingIdentity?.stamps || [],
         customBoxes: payload.customBoxes !== undefined ? sanitizeProfileBoxes(payload.customBoxes) : existingIdentity?.customBoxes || [],
-        bannerUrl: sanitizeProfileUrl(payload.bannerUrl) || existingIdentity?.bannerUrl || null,
-        avatarUrl: sanitizeProfileUrl(payload.avatarUrl) || existingIdentity?.avatarUrl || null,
-        featuredUrl: sanitizeProfileUrl(payload.featuredUrl) || existingIdentity?.featuredUrl || null,
-        accentColor: sanitizeAccentColor(payload.accentColor) || existingIdentity?.accentColor || null,
+        bannerUrl: payload.bannerUrl !== undefined ? sanitizeProfileUrl(payload.bannerUrl) : existingIdentity?.bannerUrl || null,
+        avatarUrl: payload.avatarUrl !== undefined ? sanitizeProfileUrl(payload.avatarUrl) : existingIdentity?.avatarUrl || null,
+        featuredUrl: payload.featuredUrl !== undefined ? sanitizeProfileUrl(payload.featuredUrl) : existingIdentity?.featuredUrl || null,
+        accentColor: payload.accentColor !== undefined ? sanitizeAccentColor(payload.accentColor) : existingIdentity?.accentColor || null,
         customCss: sanitizeProfileCss(payload.customCss) || existingIdentity?.customCss || null,
         customHtml: sanitizeProfileHtml(payload.customHtml) || existingIdentity?.customHtml || null,
-        links: sanitizeProfileLinks(payload.links).length > 0 ? sanitizeProfileLinks(payload.links) : existingIdentity?.links || [],
+        links: payload.links !== undefined ? sanitizeProfileLinks(payload.links) : existingIdentity?.links || [],
         publishedProfileUri: sanitizeProfileIpfsUri(payload.publishedProfileUri) || existingIdentity?.publishedProfileUri || null,
-        publishedProfileGatewayUrl: sanitizeProfileUrl(payload.publishedProfileGatewayUrl) || existingIdentity?.publishedProfileGatewayUrl || null,
+        publishedProfileGatewayUrl: payload.publishedProfileGatewayUrl !== undefined ? sanitizeProfileUrl(payload.publishedProfileGatewayUrl) : existingIdentity?.publishedProfileGatewayUrl || null,
         publishedProfilePublishedAt: sanitizeIsoDate(payload.publishedProfilePublishedAt) || existingIdentity?.publishedProfilePublishedAt || null,
         createdAt: existingIdentity?.createdAt || now,
         updatedAt: now
@@ -8062,7 +8105,7 @@ async function handleRequest(
       return;
     }
 
-    const session = readToken(parseBearerToken(req.headers.authorization), process.env.SESSION_SECRET, "session");
+    const session = readChainSession(parseBearerToken(req.headers.authorization), process.env.SESSION_SECRET, config.chainId);
     if (!session || session.address !== currentOwnerAddress) { sendJson(res, 401, { error: "Sign in as the current owner." }); return; }
     const newOwnerAddress = String(payload.newOwnerAddress || "").trim().toLowerCase();
     if (!isAddress(newOwnerAddress)) {
@@ -8191,7 +8234,7 @@ async function handleRequest(
     const entryId = String(payload.entryId || "").trim();
     const currentOwnerAddress = String(payload.currentOwnerAddress || "").trim().toLowerCase();
     const actorAddress = String(payload.actorAddress || payload.currentOwnerAddress || "").trim().toLowerCase();
-    const session = readToken(parseBearerToken(req.headers.authorization), process.env.SESSION_SECRET, "session");
+    const session = readChainSession(parseBearerToken(req.headers.authorization), process.env.SESSION_SECRET, config.chainId);
     if (!session || session.address !== actorAddress) { sendJson(res, 401, { error: "Sign in as the acting wallet." }); return; }
     if (!entryId) {
       sendJson(res, 400, { error: "Invalid entryId" });
@@ -8248,7 +8291,7 @@ async function handleRequest(
     const entryId = String(payload.entryId || "").trim();
     const currentOwnerAddress = String(payload.currentOwnerAddress || "").trim().toLowerCase();
     const actorAddress = String(payload.actorAddress || payload.currentOwnerAddress || "").trim().toLowerCase();
-    const session = readToken(parseBearerToken(req.headers.authorization), process.env.SESSION_SECRET, "session");
+    const session = readChainSession(parseBearerToken(req.headers.authorization), process.env.SESSION_SECRET, config.chainId);
     if (!session || session.address !== actorAddress) { sendJson(res, 401, { error: "Sign in as the acting wallet." }); return; }
     if (!entryId) {
       sendJson(res, 400, { error: "Invalid entryId" });
@@ -8311,7 +8354,7 @@ async function handleRequest(
     const entryId = String(payload.entryId || "").trim();
     const currentOwnerAddress = String(payload.currentOwnerAddress || "").trim().toLowerCase();
     const actorAddress = String(payload.actorAddress || payload.currentOwnerAddress || "").trim().toLowerCase();
-    const session = readToken(parseBearerToken(req.headers.authorization), process.env.SESSION_SECRET, "session");
+    const session = readChainSession(parseBearerToken(req.headers.authorization), process.env.SESSION_SECRET, config.chainId);
     if (!session || session.address !== actorAddress) { sendJson(res, 401, { error: "Sign in as the acting wallet." }); return; }
     if (!entryId) {
       sendJson(res, 400, { error: "Invalid entryId" });
@@ -8364,7 +8407,7 @@ async function handleRequest(
       const actorAddress = String(url.searchParams.get("actorAddress") || "").trim().toLowerCase();
       const profileRecords = await readProfileRecords();
       const moderators = includeHidden ? await readEffectiveModeratorRecords(config) : [];
-      const session = readToken(parseBearerToken(req.headers.authorization), process.env.SESSION_SECRET, "session");
+      const session = readChainSession(parseBearerToken(req.headers.authorization), process.env.SESSION_SECRET, config.chainId);
       const canViewModerationEntries = includeHidden && session?.address === actorAddress
         ? (isAddress(actorAddress) && profileRecords.some((item) => item.slug === slug && item.ownerAddress === actorAddress))
           || moderators.some((item) => item.address === actorAddress)
@@ -8388,7 +8431,7 @@ async function handleRequest(
     const payload = await readJsonBody<ProfileGuestbookPayload>(req);
     const authorName = sanitizeProfileText(payload.authorName, 80) || null;
     const authorAddress = isAddress(String(payload.authorAddress || "").toLowerCase()) ? String(payload.authorAddress).toLowerCase() : null;
-    const authorSession = readToken(parseBearerToken(req.headers.authorization), process.env.SESSION_SECRET, "session");
+    const authorSession = readChainSession(parseBearerToken(req.headers.authorization), process.env.SESSION_SECRET, config.chainId);
     if (authorAddress && authorSession?.address !== authorAddress) { sendJson(res, 401, { error: "Sign in before attaching a wallet address to a comment." }); return; }
     const message = sanitizeProfileText(payload.message, 600) || null;
     if (!authorName || !message) {
@@ -8863,7 +8906,11 @@ async function handleRequest(
       sendJson(res, 400, { error: "Valid contract address is required" });
       return;
     }
-    const syncRequested = ["1", "true", "yes"].includes(String(url.searchParams.get("sync") || "").trim().toLowerCase());
+    const readOnly=url.searchParams.get('readOnly')==='1';
+    const specificToken=url.searchParams.get('tokenId');
+    const pageCursor=url.searchParams.get('cursor');
+    if(specificToken!==null && (!/^(0|[1-9]\d{0,77})$/.test(specificToken)||BigInt(specificToken)>=2n**256n)||pageCursor!==null&&!/^[a-zA-Z0-9_-]{1,64}$/.test(pageCursor)){sendJson(res,400,{error:'Invalid token or cursor.'});return;}
+    const syncRequested = !readOnly && ["1", "true", "yes"].includes(String(url.searchParams.get("sync") || "").trim().toLowerCase());
     const syncScope: CollectionSyncScope =
       String(url.searchParams.get("syncScope") || "").trim().toLowerCase() === "deep" ? "deep" : "collection";
     const requestedOwnerAddress = String(url.searchParams.get("ownerAddress") || "").trim().toLowerCase();
@@ -8873,9 +8920,9 @@ async function handleRequest(
       sendJson(res, 429, { error: "Too many requests" });
       return;
     }
-    try {
+    if(!readOnly) try {
       const collectionRecord = await deps.prisma.collection.findUnique({
-        where: { contractAddress },
+        where: { chainId_contractAddress: {chainId:config.chainId,contractAddress} },
         select: {
           ownerAddress: true,
           ensSubname: true,
@@ -8932,11 +8979,11 @@ async function handleRequest(
 
     const tokens = await (deps.prisma.token as any).findMany({
       where: {
-        collection: {
-          contractAddress
-        }
+        collection: {chainId:config.chainId,contractAddress},
+        ...(specificToken!==null?{tokenId:specificToken}:{})
       },
-      orderBy: [{ mintedAt: "desc" }, { id: "desc" }],
+      orderBy: readOnly ? [{id:"asc"}] : [{ mintedAt: "desc" }, { id: "desc" }],
+      ...(readOnly?{take:101,...(pageCursor?{cursor:{id:pageCursor},skip:1}:{})}:{}),
       select: {
         id: true,
         tokenId: true,
@@ -8972,7 +9019,8 @@ async function handleRequest(
       }
     });
 
-    const responseTokens = tokens.map((item: any) => ({
+    const nextCursor=readOnly&&tokens.length>100?tokens[99].id:null;
+    const responseTokens = (readOnly?tokens.slice(0,100):tokens).map((item: any) => ({
       ...toTokenApiShape(item, config, presentationIndex),
       collection: {
         chainId: item.collection.chainId,
@@ -8991,7 +9039,8 @@ async function handleRequest(
 
     sendJson(res, 200, {
       contractAddress,
-      count: tokens.length,
+      nextCursor,
+      count: responseTokens.length,
       tokens: responseTokens
     });
     return;
@@ -9090,7 +9139,7 @@ export async function main() {
     requestConfig
   );
   const server = createServer(handler);
-  server.requestTimeout = 0; // disable for long-running admin backfills
+  server.requestTimeout = 60_000; // Bound incoming request time without limiting completed-body backfills.
 
   server.listen(PORT, HOST, () => {
     log.info({ host: HOST, port: PORT }, "Indexer API listening");

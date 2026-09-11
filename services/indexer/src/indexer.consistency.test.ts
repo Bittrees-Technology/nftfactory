@@ -40,7 +40,7 @@ function createReq(params: {
   let actor: string | undefined;
   try { const body = JSON.parse(params.body || "{}"); actor = body.actorAddress || body.currentOwnerAddress || body.ownerAddress; } catch { /* malformed-body test */ }
   actor ||= new URL(params.url, "http://localhost").searchParams.get("actorAddress") || undefined;
-  const session = actor && /^0x[0-9a-f]{40}$/i.test(actor) ? issueToken({ purpose: "session", address: actor.toLowerCase(), exp: Date.now() + 60_000 }, secret) : undefined;
+  const session = actor && /^0x[0-9a-f]{40}$/i.test(actor) ? issueToken({ purpose: "session", chainId: 11155111, address: actor.toLowerCase(), exp: Date.now() + 60_000 }, secret) : undefined;
   req.headers = { host: "localhost", ...(session ? { authorization: `Bearer ${session}` } : {}), ...(params.headers || {}) };
   (req as any).socket = { remoteAddress: "127.0.0.1" };
   return req;
@@ -250,6 +250,16 @@ describe("indexer consistency hardening", () => {
       draftDescription: "Master edition",
       mintedAmountRaw: "25"
     });
+
+    // Browser claims cannot overwrite independently indexed permanence/identity.
+    const collectionWrite=(prisma.collection.upsert as any).mock.calls[0][0];
+    expect(collectionWrite.update).not.toHaveProperty('isUpgradeable');
+    expect(collectionWrite.update).not.toHaveProperty('finalizedAt');
+    expect(collectionWrite.update.ensSubname).toBeUndefined();
+    expect(collectionWrite.create).toMatchObject({isFactoryCreated:false,isUpgradeable:true,ensSubname:null});
+    const tokenWrite=(prisma.token.upsert as any).mock.calls[0][0];
+    expect(tokenWrite.update).not.toHaveProperty('immutable');
+    expect(tokenWrite.create.immutable).toBe(false);
 
     const feedResponse = await runHandler(handler, createReq({ method: "GET", url: "/api/feed?cursor=0&limit=10" }));
     expect(feedResponse.status).toBe(200);
@@ -808,7 +818,7 @@ describe("indexer consistency hardening", () => {
     expect(response.body.lastMarketplaceListingSyncCount).toBe(1);
     expect(response.body.lastOfferSyncCount).toBe(1);
     expect((prisma.listing.upsert as any).mock.calls[0][0]).toMatchObject({
-      where: { listingId: "v2:0" },
+      where: { chainId_listingId: {chainId:11155111,listingId: "v2:0"} },
       update: expect.objectContaining({
         marketplaceVersion: "v2",
         tokenRefId: "tok_v2_1",
@@ -816,7 +826,7 @@ describe("indexer consistency hardening", () => {
       })
     });
     expect((prisma.offer.upsert as any).mock.calls[0][0]).toMatchObject({
-      where: { offerId: "0" },
+      where: { chainId_offerId: {chainId:11155111,offerId: "0"} },
       update: expect.objectContaining({
         marketplaceVersion: "v2",
         tokenRefId: "tok_v2_1",
@@ -1292,7 +1302,7 @@ describe("indexer consistency hardening", () => {
     expect(incrementalResponse.status).toBe(200);
     expect(listingUpsert).toHaveBeenCalledTimes(2);
     expect((listingUpsert as any).mock.calls[1][0]).toMatchObject({
-      where: { listingId: "v2:1" },
+      where: { chainId_listingId: {chainId:11155111,listingId: "v2:1"} },
       update: expect.objectContaining({
         tokenId: "8",
         marketplaceVersion: "v2"
@@ -1407,7 +1417,7 @@ describe("indexer consistency hardening", () => {
     expect(incrementalResponse.status).toBe(200);
     expect(offerUpsert).toHaveBeenCalledTimes(2);
     expect((offerUpsert as any).mock.calls[1][0]).toMatchObject({
-      where: { offerId: "1" },
+      where: { chainId_offerId: {chainId:11155111,offerId: "1"} },
       update: expect.objectContaining({
         tokenId: "8",
         marketplaceVersion: "v2"
@@ -2055,7 +2065,7 @@ describe("indexer consistency hardening", () => {
       }
     });
     expect(collectionFindUnique).toHaveBeenCalledWith({
-      where: { contractAddress },
+      where: { chainId_contractAddress: {chainId:11155111,contractAddress} },
       select: {
         ownerAddress: true,
         ensSubname: true,
@@ -2917,7 +2927,7 @@ describe("indexer consistency hardening", () => {
 
     expect(response.status).toBe(200);
     expect(collectionFindMany).toHaveBeenCalledWith({
-      where: { contractAddress: "0x2222222222222222222222222222222222222222" },
+      where: { chainId:11155111, contractAddress: "0x2222222222222222222222222222222222222222" },
       select: { contractAddress: true, ownerAddress: true },
       take: 1
     });

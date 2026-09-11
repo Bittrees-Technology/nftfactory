@@ -2,6 +2,9 @@ const PATH_RULES: Array<{
   pattern: RegExp;
   methods: ReadonlySet<string>;
 }> = [
+  { pattern: /^\/api\/artwork\/tags\/search$/, methods: new Set(["GET"]) },
+  { pattern: /^\/api\/imports$/, methods: new Set(["POST"]) },
+  { pattern: /^\/api\/artwork\/[^/]+\/[^/]+\/tags$/, methods: new Set(["GET", "POST"]) },
   { pattern: /^\/health$/, methods: new Set(["GET"]) },
   { pattern: /^\/api\/moderation\/hidden-listings$/, methods: new Set(["GET"]) },
   { pattern: /^\/api\/moderation\/reports$/, methods: new Set(["POST"]) },
