@@ -3,7 +3,7 @@ import { requireSession } from '../../../../lib/server/session';
 import { assertPublishingConfigured, boundedBody, MAX_IMAGE_BYTES, publishFile, PublishingUnavailable } from '../../../../lib/server/publish';
 import { rateLimitRequest } from '../../../../lib/requestRateLimit';
 export const runtime = 'nodejs';
-export const maxDuration = 120;
+export const maxDuration = 300;
 export async function POST(request: Request) {
   try { requireSession(request); } catch (error) { return NextResponse.json({ error: (error as Error).message }, { status: 401 }); }
   const limited = rateLimitRequest(request, { bucket: 'publish-v1', maxRequests: 5, windowMs: 300_000, errorMessage: 'Please wait before uploading again.' });

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireSession } from '../../../../lib/server/session';
 import { boundedBody, publishFile, PublishingUnavailable } from '../../../../lib/server/publish';
 export const runtime = 'nodejs';
-export const maxDuration = 120;
+export const maxDuration = 300;
 export async function POST(request: Request) {
   let session;
   try { session = requireSession(request); } catch (error) { return NextResponse.json({ error: (error as Error).message }, { status: 401 }); }

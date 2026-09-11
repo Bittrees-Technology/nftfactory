@@ -19,7 +19,7 @@ Source: home-server provisioning task `01a08952-28df-7350-a662-3f81b38de134`, re
 | Storage maximum | 10,000,000,000 bytes |
 | Object count | 0 |
 
-The persistent repository has not been populated with NFTFactory content. Peer connectivity and running services do not establish public-origin availability, protected ingress, content retrieval, or application acceptance. The earlier harmless add/pin/read fixture used a separate temporary offline repository; it is not evidence of content in this persistent repository or external availability. No content was published and no mint was performed during this documentation reconciliation.
+The original handoff repository had no NFTFactory content. The September 11 triage below supersedes that observation for a single deliberate test fixture. Peer connectivity and running services do not establish public-origin availability, protected ingress, content retrieval, or application acceptance. The earlier harmless add/pin/read fixture used a separate temporary offline repository; it is not evidence of content in this persistent repository or external availability. No content was published and no mint was performed during this documentation reconciliation.
 
 ## Service boundaries
 
@@ -50,7 +50,7 @@ Add options accepted: `pin=true`, `cid-version=1`, `wrap-with-directory=false` o
 
 Requests have a 32 MiB body cap, 60-second total deadline, and maximum concurrency of two. Responses are capped at 1 MiB. The token is verified with a constant-time digest comparison and is not forwarded to Kubo. Redirects are rejected. Responses do not expose upstream headers or error details. Errors: 401 unauthorized, 404 unknown path, 405 wrong method, 400 unsupported query, 413 too large, 415 unsupported body, 429 capacity reached, 502 backend failure, 504 deadline exceeded. An incomplete request body is disconnected on deadline.
 
-NFTFactory publishes image (maximum 15 MiB), audio (maximum 25 MiB), and metadata in separate requests. CLI directory publishing uses multiple `file` parts and `wrap-with-directory=true`; the same aggregate 32 MiB cap applies. Larger artifacts require an explicitly designed publishing path. Validate the hosting platform and tunnel's own upload limits: this gateway does not increase those limits.
+The current web release accepts PNG/JPEG/WebP images within a 3 MiB total multipart request, with 64 KiB reserved for fields and headers. Audio publishing is paused. Artwork and generated metadata are published separately. CLI directory publishing uses multiple `file` parts and `wrap-with-directory=true`; the same aggregate 32 MiB cap applies. Larger artifacts require an explicitly designed publishing path. Validate the hosting platform and tunnel's own upload limits: this gateway does not increase those limits.
 
 ## Application configuration
 
@@ -90,6 +90,30 @@ Local gateway tests have already passed. Re-run `node --test scripts/lib/ipfsGat
 3. Install the confirmed write/read origins and token in the web server/publishing environment, and the read origin in the indexer environment. Keep the token out of browser variables and task messages. Run `npm run check:ipfs:backend` and deployment health checks from the intended hosting environment. The existing backend checker rejects private URLs; loopback installation alone cannot pass this public-deployment check.
 4. In a separately authorized live acceptance session, publish one intentionally public tiny JSON fixture through the authenticated application gateway into the persistent repository. Record its CID, verify it is pinned, and retrieve identical bytes through the intended public read origin. This persistent/public round-trip has not been performed.
 5. Verify the pinned fixture remains retrievable after service restart, test pin backup/restore, and confirm indexer metadata reads against its real database and configured chain services. The current empty repository and post-reboot service status do not validate persisted NFT content.
-6. Record Sepolia mint/profile acceptance, including actual image/audio uploads within hosting/tunnel limits, metadata retrieval, and indexed visibility. Record transaction hashes and results in the Sepolia acceptance log. No mainnet release follows until these and the other release gates pass.
+6. Record Sepolia mint/profile acceptance, including supported image uploads within hosting/tunnel limits, metadata retrieval, and indexed visibility. Record transaction hashes and results in the Sepolia acceptance log. No mainnet release follows until these and the other release gates pass.
 
 Rollback: revert the environment to a previously verified protected endpoint or disable publishing. Do not use the unauthenticated-public override to work around failures.
+
+
+## Independent live triage — September 11, 2026
+
+Acer `10.42.50.105` was inspected through its existing SSH jump configuration. Kubo 0.43.0 and `ipfs-app-gateway` are active. RPC remains loopback 5001, upload gateway loopback 8788, and Kubo content gateway loopback 8080. An unauthenticated upload-gateway version request returns 401. There is no installed/running Cloudflare connector or existing tunnel configuration on Acer. Both public NFTFactory IPFS and indexer origins return HTTP 530 with a Cloudflare tunnel error. This is a missing ingress connection, not evidence of a failed Kubo repository.
+
+One deliberately public 80-byte JSON acceptance fixture was added through SSH to the persistent local API and recursively pinned:
+
+`bafkreifql7zx5tfo4mns6t6zgajvxagyg7feo6s2h2oilzpc7bclbd2uaa`
+
+Local add/pin/read took 73 ms in this one tiny-file probe. SHA-256 of the returned bytes was `b05ff37eccaee31b2f4fd930135b80d837ca477a5a3e9c85e5e2f844b08f5400`. A 176-byte CAR export was imported into a new temporary offline repository; reading the same CID returned identical bytes. The temporary repository was removed; the public fixture remains pinned in the persistent node. This is an isolated local restore test, not an offsite backup or a service-restart test.
+
+Two initial 25-second public gateway probes timed out. Acer advertised relay addresses rather than a direct public listener, with seven peers at inspection. Peer count and relays can change; public retrieval must be measured again after ingress/replica configuration. The network guardrail report records a 2 Mbps internet upload cap and 10 Mbps download cap. A roughly 3 MiB transfer at 2 Mbps needs at least 12.6 seconds before overhead, so prior 10-second retrieval limits were too short for that path. Upload/retrieval limits are now 30 seconds and pin polling 60 seconds, with a 300-second web execution limit. These are bounded retry allowances, not latency guarantees.
+
+A new `services/ipfs-gateway/read-server.mjs` serves only explicitly recursively pinned roots via GET/HEAD and excludes RPC and writes. It is staged and live-tested on Acer but not installed persistently. `ops/ipfs/install-acer-read-gateway.sh` is staged beside it at `/home/raging/service-staging/`; it installs a separate restricted service on loopback 8789 without changing routers or public routes. Arbitrary unattended sudo is unavailable; the existing maintenance allowlist covers only updates/mount/status.
+
+Permanent routing must be: protected upload hostname -> Acer 127.0.0.1:8788; separate public content hostname -> Acer 127.0.0.1:8789; unmatched requests -> 404. Never send the public tunnel to port 5001. Read traffic must use its own origin, away from the application session cookies. The signed-out Cloudflare account and absent connector credential prevent completing those routes now.
+
+Authoritative setup references: [Cloudflare tunnel setup](https://developers.cloudflare.com/tunnel/setup/), [IPFS pinning services](https://docs.ipfs.tech/how-to/work-with-pinning-services/), and [Vercel function duration](https://vercel.com/docs/functions/configuring-functions/duration).
+
+
+A temporary, read-only diagnostic Cloudflare tunnel subsequently connected from Acer to the Lisbon edge successfully. Its checks passed outbound TCP/HTTP2, UDP/QUIC, DNS, and API reachability. Fetching the pinned fixture through the public diagnostic HTTPS address returned HTTP 200 and identical bytes in 433 ms; attempting `/api/v0/version` through that read origin returned 404. This proves the existing router/firewall permits a working outbound tunnel; changing router rules is unnecessary for this connection. The diagnostic had a 90-second lifetime, was shut down, and was never configured in Vercel. It does not replace the permanent named tunnel or offsite replica.
+
+Cloudflared 2026.9.0 is staged on Acer, verified against the official release SHA-256 `53b7a7a5420d188758d24341294acb0d1bca54296548ac05e38811a694ac6134`. The separate named-tunnel installer is also staged and refuses to make changes without its protected token file and active read/upload services. See [Acer ingress installation](../../ops/ipfs/README.md).
