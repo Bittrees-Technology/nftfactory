@@ -1,0 +1,42 @@
+{
+  "date": "2026-09-11",
+  "observedDeployment": "dpl_3rsfvc7qBfQmR7XkJQVfti6MUCkH",
+  "browser": "disconnected in-app review browser",
+  "checks": [
+    {
+      "action": "Load Explore profiles",
+      "result": "passed",
+      "observed": "Two public profiles rendered"
+    },
+    {
+      "action": "Search no-match-acceptance-392",
+      "result": "passed",
+      "observed": "No profiles match the current filters"
+    },
+    {
+      "action": "Clear search and select Collections",
+      "result": "failed",
+      "observed": "Loading results followed by Results are temporarily unavailable and Try again"
+    }
+  ],
+  "httpEvidence": {
+    "path": "/api/indexer/api/feed?cursor=0&limit=48",
+    "status": 504,
+    "body": "Indexer proxy request timed out after 8000ms.",
+    "elapsedSeconds": 8.27
+  },
+  "serverEvidence": {
+    "health": "HTTP 200; active service",
+    "listingSync": "completed with zero listings",
+    "offerSync": "in progress with no successful completion timestamp"
+  },
+  "cause": "Initial full offer synchronization awaited chunked logs from genesis on a fresh marketplace before serving the artwork feed.",
+  "fix": {
+    "pr": "https://github.com/Bittrees-Technology/nftfactory/pull/30",
+    "source": "7420b7fa9aa6da5c22020e3a42a4402d18fcb063",
+    "behavior": "Skip historical scans when nextOfferId is zero; initialize cursor. Nonempty initial scan begins at INDEXER_START_BLOCK.",
+    "validation": "25 consistency tests passed; regression asserts no log request for fresh marketplace. All three CI jobs passed.",
+    "acerPackage": "21 hashes verified; installation awaits local administrator prompt",
+    "liveRetest": "pending installation"
+  }
+}
