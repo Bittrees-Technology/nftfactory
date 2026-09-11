@@ -3974,16 +3974,25 @@ async function fullSyncMarketplaceOffers(
     functionName: "nextOfferId"
   })) as bigint;
 
+  // A fresh marketplace has no historical offers to reconcile. In particular,
+  // do not scan the chain from genesis before serving its first artwork feed.
+  if (nextOfferId === 0n) {
+    await writeMarketplaceSyncState({
+      offersLastBlock: String(currentBlock ?? (await client.getBlockNumber()))
+    });
+    return 0;
+  }
+
   const [cancelledLogs, acceptedLogs] = await Promise.all([
     getLogsChunked(client, {
       address: config.marketplaceAddress as `0x${string}`,
       event: marketplaceOfferCancelledEvent,
-      fromBlock: 0n
+      fromBlock: BigInt(INDEXER_START_BLOCK)
     }),
     getLogsChunked(client, {
       address: config.marketplaceAddress as `0x${string}`,
       event: marketplaceOfferAcceptedEvent,
-      fromBlock: 0n
+      fromBlock: BigInt(INDEXER_START_BLOCK)
     })
   ]);
 
