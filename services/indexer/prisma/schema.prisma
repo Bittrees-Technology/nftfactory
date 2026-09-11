@@ -176,3 +176,9 @@ model ModerationAction {
 
   @@index([listingRecordId, createdAt])
 }
+
+model AuthNonce {
+  id String @id
+  expiresAt DateTime
+  @@index([expiresAt])
+}

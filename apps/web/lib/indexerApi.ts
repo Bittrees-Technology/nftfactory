@@ -241,6 +241,7 @@ export type ApiProfileRetroBlock = {
 };
 
 export type ApiProfileRecord = {
+  design?: import("../../../packages/profile/design.mjs").ProfileDesign;
   slug: string;
   fullName: string;
   source: "wallet" | "ens" | "external-subname" | "nftfactory-subname";

@@ -4,6 +4,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import CreatorSetupClient from './CreatorSetupClient';
 vi.mock('wagmi',()=>({useAccount:()=>({address:'0x1111111111111111111111111111111111111111'}),useWalletClient:()=>({data:{signMessage:vi.fn()}})}));
+vi.mock('../../lib/profileViewApi',()=>({fetchProfileView:vi.fn().mockResolvedValue({resolution:{profiles:[]}})}));
 vi.mock('../../lib/walletSession',()=>({ensureWalletSession:vi.fn().mockResolvedValue(undefined)}));
 vi.mock('../HeaderWalletButton',()=>({default:()=>null}));
 afterEach(()=>{cleanup();vi.restoreAllMocks();vi.unstubAllGlobals();});

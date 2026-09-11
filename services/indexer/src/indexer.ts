@@ -1,3 +1,4 @@
+import { normalizeDesign, type ProfileDesign } from "../../../packages/profile/design.mjs";
 import { readToken } from "../../../packages/auth/session.mjs";
 import dotenv from "dotenv";
 import { verifyMintReceipt } from './mintReceipt.js';
@@ -82,6 +83,7 @@ type ModeratorRecord = {
 type ProfileLinkSource = "wallet" | "ens" | "external-subname" | "nftfactory-subname";
 
 type ProfileLinkPayload = {
+  design?: ProfileDesign;
   name: string;
   source: ProfileLinkSource;
   ownerAddress: string;
@@ -171,6 +173,7 @@ type ProfileRetroBlock = {
 };
 
 type ProfileRecord = {
+  design?: ProfileDesign;
   slug: string;
   fullName: string;
   source: ProfileLinkSource;
@@ -2177,7 +2180,7 @@ async function readProfileRecords(): Promise<ProfileRecord[]> {
     const parsed = JSON.parse(raw) as ProfileRecord[];
     return parsed
       .filter((item) => item && isAddress(String(item.ownerAddress || "").toLowerCase()))
-      .map((item) => {
+      .map((item): ProfileRecord | null => {
         const source = (item.source || "nftfactory-subname") as ProfileLinkSource;
         const normalized = normalizeProfileInput(String(item.fullName || item.slug || ""), source);
         if (!normalized) {
@@ -2190,6 +2193,7 @@ async function readProfileRecords(): Promise<ProfileRecord[]> {
           source,
           ownerAddress: item.ownerAddress.toLowerCase(),
           collectionAddress: collectionAddress && isAddress(collectionAddress) ? collectionAddress : null,
+          design: normalizeDesign(item.design),
           tagline: sanitizeProfileText(item.tagline || undefined, 120),
           displayName: sanitizeProfileText(item.displayName || undefined, 80),
           bio: sanitizeProfileText(item.bio || undefined, 1200),
@@ -6120,6 +6124,19 @@ async function handleRequest(
   const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
   const path = url.pathname;
 
+  if (req.method === "POST" && path === "/api/auth/consume") {
+    const proof = readToken(parseBearerToken(req.headers.authorization), process.env.SESSION_SECRET, "nonce-consume");
+    if (!proof?.message || !/^[a-f0-9]{64}$/.test(proof.message) || proof.exp > Date.now() + 300_000) { sendJson(res, 401, {error:"Invalid sign-in proof."}); return; }
+    try {
+      await deps.prisma.authNonce.create({data:{id:proof.message,expiresAt:new Date(proof.exp)}});
+    } catch (error) {
+      if ((error as {code?:string}).code === "P2002") { sendJson(res,409,{error:"Sign-in was already used."}); return; }
+      throw error;
+    }
+    await deps.prisma.authNonce.deleteMany({where:{expiresAt:{lt:new Date()}}});
+    sendJson(res,200,{ok:true}); return;
+  }
+
   if (req.method === "GET" && path === "/health") {
     const adminProtection = summarizeAdminProtection(config);
     const [mintTxHashColumnAvailable, tokenPresentationColumnsAvailable, listingV2ColumnsAvailable, offerTableAvailable, tokenHoldingTableAvailable] =
@@ -7956,14 +7973,15 @@ async function handleRequest(
       source,
       ownerAddress,
       collectionAddress: collectionAddress || null,
-      tagline: sanitizeProfileText(payload.tagline, 120) || existingIdentity?.tagline || null,
-      displayName: sanitizeProfileText(payload.displayName, 80) || existingIdentity?.displayName || null,
-      bio: sanitizeProfileText(payload.bio, 1200) || existingIdentity?.bio || null,
+      design: payload.design !== undefined ? normalizeDesign(payload.design) : normalizeDesign(existingIdentity?.design),
+      tagline: payload.tagline !== undefined ? sanitizeProfileText(payload.tagline, 120) : existingIdentity?.tagline || null,
+      displayName: payload.displayName !== undefined ? sanitizeProfileText(payload.displayName, 80) : existingIdentity?.displayName || null,
+      bio: payload.bio !== undefined ? sanitizeProfileText(payload.bio, 1200) : existingIdentity?.bio || null,
       layoutMode: sanitizeProfileLayoutMode(payload.layoutMode) || existingIdentity?.layoutMode || "default",
-      aboutMe: sanitizeProfileText(payload.aboutMe, 1200) || existingIdentity?.aboutMe || null,
-      interests: sanitizeProfileText(payload.interests, 1200) || existingIdentity?.interests || null,
-      whoIdLikeToMeet: sanitizeProfileText(payload.whoIdLikeToMeet, 1200) || existingIdentity?.whoIdLikeToMeet || null,
-      statusHeadline: sanitizeProfileText(payload.statusHeadline, 160) || existingIdentity?.statusHeadline || null,
+      aboutMe: payload.aboutMe !== undefined ? sanitizeProfileText(payload.aboutMe, 1200) : existingIdentity?.aboutMe || null,
+      interests: payload.interests !== undefined ? sanitizeProfileText(payload.interests, 1200) : existingIdentity?.interests || null,
+      whoIdLikeToMeet: payload.whoIdLikeToMeet !== undefined ? sanitizeProfileText(payload.whoIdLikeToMeet, 1200) : existingIdentity?.whoIdLikeToMeet || null,
+      statusHeadline: payload.statusHeadline !== undefined ? sanitizeProfileText(payload.statusHeadline, 160) : existingIdentity?.statusHeadline || null,
       sidebarFacts: payload.sidebarFacts !== undefined ? sanitizeProfileSidebarFacts(payload.sidebarFacts) : existingIdentity?.sidebarFacts || [],
       mediaEmbeds: payload.mediaEmbeds !== undefined ? sanitizeProfileMediaEmbeds(payload.mediaEmbeds) : existingIdentity?.mediaEmbeds || [],
       retroBlocks: payload.retroBlocks !== undefined ? sanitizeProfileRetroBlocks(payload.retroBlocks) : existingIdentity?.retroBlocks || [],
@@ -7976,18 +7994,18 @@ async function handleRequest(
       mainColumnCompactModules: payload.mainColumnCompactModules !== undefined ? sanitizeProfileMainColumnCompactModules(payload.mainColumnCompactModules) : existingIdentity?.mainColumnCompactModules || [],
       topFriends: sanitizeProfileList(payload.topFriends, 8, 80).length > 0 ? sanitizeProfileList(payload.topFriends, 8, 80) : existingIdentity?.topFriends || [],
       testimonials: sanitizeProfileList(payload.testimonials, 12, 280).length > 0 ? sanitizeProfileList(payload.testimonials, 12, 280) : existingIdentity?.testimonials || [],
-      profileSongUrl: sanitizeProfileUrl(payload.profileSongUrl) || existingIdentity?.profileSongUrl || null,
+      profileSongUrl: payload.profileSongUrl !== undefined ? sanitizeProfileUrl(payload.profileSongUrl) : existingIdentity?.profileSongUrl || null,
       stamps: payload.stamps !== undefined ? sanitizeProfileList(payload.stamps, 24, 48) : existingIdentity?.stamps || [],
       customBoxes: payload.customBoxes !== undefined ? sanitizeProfileBoxes(payload.customBoxes) : existingIdentity?.customBoxes || [],
-      bannerUrl: sanitizeProfileUrl(payload.bannerUrl) || existingIdentity?.bannerUrl || null,
-      avatarUrl: sanitizeProfileUrl(payload.avatarUrl) || existingIdentity?.avatarUrl || null,
-      featuredUrl: sanitizeProfileUrl(payload.featuredUrl) || existingIdentity?.featuredUrl || null,
-      accentColor: sanitizeAccentColor(payload.accentColor) || existingIdentity?.accentColor || null,
+      bannerUrl: payload.bannerUrl !== undefined ? sanitizeProfileUrl(payload.bannerUrl) : existingIdentity?.bannerUrl || null,
+      avatarUrl: payload.avatarUrl !== undefined ? sanitizeProfileUrl(payload.avatarUrl) : existingIdentity?.avatarUrl || null,
+      featuredUrl: payload.featuredUrl !== undefined ? sanitizeProfileUrl(payload.featuredUrl) : existingIdentity?.featuredUrl || null,
+      accentColor: payload.accentColor !== undefined ? sanitizeAccentColor(payload.accentColor) : existingIdentity?.accentColor || null,
       customCss: sanitizeProfileCss(payload.customCss) || existingIdentity?.customCss || null,
       customHtml: sanitizeProfileHtml(payload.customHtml) || existingIdentity?.customHtml || null,
-      links: sanitizeProfileLinks(payload.links).length > 0 ? sanitizeProfileLinks(payload.links) : existingIdentity?.links || [],
+      links: payload.links !== undefined ? sanitizeProfileLinks(payload.links) : existingIdentity?.links || [],
       publishedProfileUri: sanitizeProfileIpfsUri(payload.publishedProfileUri) || existingIdentity?.publishedProfileUri || null,
-      publishedProfileGatewayUrl: sanitizeProfileUrl(payload.publishedProfileGatewayUrl) || existingIdentity?.publishedProfileGatewayUrl || null,
+      publishedProfileGatewayUrl: payload.publishedProfileGatewayUrl !== undefined ? sanitizeProfileUrl(payload.publishedProfileGatewayUrl) : existingIdentity?.publishedProfileGatewayUrl || null,
       publishedProfilePublishedAt: sanitizeIsoDate(payload.publishedProfilePublishedAt) || existingIdentity?.publishedProfilePublishedAt || null,
       createdAt: existingIdentity?.createdAt || now,
       updatedAt: now
@@ -8003,14 +8021,15 @@ async function handleRequest(
         source,
         ownerAddress,
         collectionAddress: collectionAddress || null,
-        tagline: sanitizeProfileText(payload.tagline, 120) || existingIdentity?.tagline || null,
-        displayName: sanitizeProfileText(payload.displayName, 80) || existingIdentity?.displayName || null,
-        bio: sanitizeProfileText(payload.bio, 1200) || existingIdentity?.bio || null,
+        design: payload.design !== undefined ? normalizeDesign(payload.design) : normalizeDesign(existingIdentity?.design),
+      tagline: payload.tagline !== undefined ? sanitizeProfileText(payload.tagline, 120) : existingIdentity?.tagline || null,
+        displayName: payload.displayName !== undefined ? sanitizeProfileText(payload.displayName, 80) : existingIdentity?.displayName || null,
+        bio: payload.bio !== undefined ? sanitizeProfileText(payload.bio, 1200) : existingIdentity?.bio || null,
         layoutMode: sanitizeProfileLayoutMode(payload.layoutMode) || existingIdentity?.layoutMode || "default",
-        aboutMe: sanitizeProfileText(payload.aboutMe, 1200) || existingIdentity?.aboutMe || null,
-        interests: sanitizeProfileText(payload.interests, 1200) || existingIdentity?.interests || null,
-        whoIdLikeToMeet: sanitizeProfileText(payload.whoIdLikeToMeet, 1200) || existingIdentity?.whoIdLikeToMeet || null,
-        statusHeadline: sanitizeProfileText(payload.statusHeadline, 160) || existingIdentity?.statusHeadline || null,
+        aboutMe: payload.aboutMe !== undefined ? sanitizeProfileText(payload.aboutMe, 1200) : existingIdentity?.aboutMe || null,
+        interests: payload.interests !== undefined ? sanitizeProfileText(payload.interests, 1200) : existingIdentity?.interests || null,
+        whoIdLikeToMeet: payload.whoIdLikeToMeet !== undefined ? sanitizeProfileText(payload.whoIdLikeToMeet, 1200) : existingIdentity?.whoIdLikeToMeet || null,
+        statusHeadline: payload.statusHeadline !== undefined ? sanitizeProfileText(payload.statusHeadline, 160) : existingIdentity?.statusHeadline || null,
         sidebarFacts: payload.sidebarFacts !== undefined ? sanitizeProfileSidebarFacts(payload.sidebarFacts) : existingIdentity?.sidebarFacts || [],
         mediaEmbeds: payload.mediaEmbeds !== undefined ? sanitizeProfileMediaEmbeds(payload.mediaEmbeds) : existingIdentity?.mediaEmbeds || [],
         retroBlocks: payload.retroBlocks !== undefined ? sanitizeProfileRetroBlocks(payload.retroBlocks) : existingIdentity?.retroBlocks || [],
@@ -8023,18 +8042,18 @@ async function handleRequest(
         mainColumnCompactModules: payload.mainColumnCompactModules !== undefined ? sanitizeProfileMainColumnCompactModules(payload.mainColumnCompactModules) : existingIdentity?.mainColumnCompactModules || [],
         topFriends: sanitizeProfileList(payload.topFriends, 8, 80).length > 0 ? sanitizeProfileList(payload.topFriends, 8, 80) : existingIdentity?.topFriends || [],
         testimonials: sanitizeProfileList(payload.testimonials, 12, 280).length > 0 ? sanitizeProfileList(payload.testimonials, 12, 280) : existingIdentity?.testimonials || [],
-        profileSongUrl: sanitizeProfileUrl(payload.profileSongUrl) || existingIdentity?.profileSongUrl || null,
+        profileSongUrl: payload.profileSongUrl !== undefined ? sanitizeProfileUrl(payload.profileSongUrl) : existingIdentity?.profileSongUrl || null,
         stamps: payload.stamps !== undefined ? sanitizeProfileList(payload.stamps, 24, 48) : existingIdentity?.stamps || [],
         customBoxes: payload.customBoxes !== undefined ? sanitizeProfileBoxes(payload.customBoxes) : existingIdentity?.customBoxes || [],
-        bannerUrl: sanitizeProfileUrl(payload.bannerUrl) || existingIdentity?.bannerUrl || null,
-        avatarUrl: sanitizeProfileUrl(payload.avatarUrl) || existingIdentity?.avatarUrl || null,
-        featuredUrl: sanitizeProfileUrl(payload.featuredUrl) || existingIdentity?.featuredUrl || null,
-        accentColor: sanitizeAccentColor(payload.accentColor) || existingIdentity?.accentColor || null,
+        bannerUrl: payload.bannerUrl !== undefined ? sanitizeProfileUrl(payload.bannerUrl) : existingIdentity?.bannerUrl || null,
+        avatarUrl: payload.avatarUrl !== undefined ? sanitizeProfileUrl(payload.avatarUrl) : existingIdentity?.avatarUrl || null,
+        featuredUrl: payload.featuredUrl !== undefined ? sanitizeProfileUrl(payload.featuredUrl) : existingIdentity?.featuredUrl || null,
+        accentColor: payload.accentColor !== undefined ? sanitizeAccentColor(payload.accentColor) : existingIdentity?.accentColor || null,
         customCss: sanitizeProfileCss(payload.customCss) || existingIdentity?.customCss || null,
         customHtml: sanitizeProfileHtml(payload.customHtml) || existingIdentity?.customHtml || null,
-        links: sanitizeProfileLinks(payload.links).length > 0 ? sanitizeProfileLinks(payload.links) : existingIdentity?.links || [],
+        links: payload.links !== undefined ? sanitizeProfileLinks(payload.links) : existingIdentity?.links || [],
         publishedProfileUri: sanitizeProfileIpfsUri(payload.publishedProfileUri) || existingIdentity?.publishedProfileUri || null,
-        publishedProfileGatewayUrl: sanitizeProfileUrl(payload.publishedProfileGatewayUrl) || existingIdentity?.publishedProfileGatewayUrl || null,
+        publishedProfileGatewayUrl: payload.publishedProfileGatewayUrl !== undefined ? sanitizeProfileUrl(payload.publishedProfileGatewayUrl) : existingIdentity?.publishedProfileGatewayUrl || null,
         publishedProfilePublishedAt: sanitizeIsoDate(payload.publishedProfilePublishedAt) || existingIdentity?.publishedProfilePublishedAt || null,
         createdAt: existingIdentity?.createdAt || now,
         updatedAt: now

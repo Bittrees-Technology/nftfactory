@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { artworkSources } from "../profile/ArtworkImage";
+import ArtworkCard from "../artwork/ArtworkCard";
+import { collectionPath } from "../../lib/assetRoutes";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   fetchMintFeed,
@@ -19,6 +20,7 @@ type ListingFilter = "all" | "listed" | "unlisted";
 type MediaFilter = "all" | "with-media" | "metadata-only";
 
 type CollectionCard = {
+  chainId: number;
   contractAddress: string;
   ensSubname: string | null;
   standard: string;
@@ -205,7 +207,7 @@ export default function DiscoverClient() {
   const collectionCards = useMemo(() => {
     const byContract = new Map<string, CollectionCard>();
     for (const item of searchedFeedItems) {
-      const contract = item.collection.contractAddress.toLowerCase();
+      const contract = `${item.collection.chainId}:${item.collection.contractAddress.toLowerCase()}`;
       const existing = byContract.get(contract);
       if (existing) {
         existing.tokenSampleCount += 1;
@@ -216,6 +218,7 @@ export default function DiscoverClient() {
         continue;
       }
       byContract.set(contract, {
+        chainId: item.collection.chainId,
         contractAddress: item.collection.contractAddress,
         ensSubname: item.collection.ensSubname,
         standard: item.collection.standard,
@@ -314,14 +317,14 @@ export default function DiscoverClient() {
           <p className="hint">{activeResultLabel}</p>
         </div>
         <div className="discoverToolbar">
-          <div className="discoverTabs" role="tablist" aria-label="Discover views">
-            <button type="button" className={view === "profiles" ? "discoverTab discoverTabActive" : "discoverTab"} onClick={() => setView("profiles")}>
+          <div className="discoverTabs" role="group" aria-label="Discover views">
+            <button type="button" className={view === "profiles" ? "discoverTab discoverTabActive" : "discoverTab"} aria-pressed={view === "profiles"} onClick={() => setView("profiles")}>
               Profiles
             </button>
-            <button type="button" className={view === "collections" ? "discoverTab discoverTabActive" : "discoverTab"} onClick={() => setView("collections")}>
+            <button type="button" className={view === "collections" ? "discoverTab discoverTabActive" : "discoverTab"} aria-pressed={view === "collections"} onClick={() => setView("collections")}>
               Collections
             </button>
-            <button type="button" className={view === "nfts" ? "discoverTab discoverTabActive" : "discoverTab"} onClick={() => setView("nfts")}>
+            <button type="button" className={view === "nfts" ? "discoverTab discoverTabActive" : "discoverTab"} aria-pressed={view === "nfts"} onClick={() => setView("nfts")}>
               NFTs
             </button>
           </div>
@@ -345,6 +348,7 @@ export default function DiscoverClient() {
                     onChange={(event) => setProfileSourceFilter(event.target.value as ProfileSourceFilter)}
                   >
                     <option value="all">All profiles</option>
+                    <option value="wallet">Wallet creators</option>
                     <option value="nftfactory-subname">NFTFactory subnames</option>
                     <option value="ens">ENS names</option>
                     <option value="external-subname">External subnames</option>
@@ -358,6 +362,7 @@ export default function DiscoverClient() {
                     onChange={(event) => setProfileCollectionFilter(event.target.value as ProfileCollectionFilter)}
                   >
                     <option value="all">All profiles</option>
+                    <option value="wallet">Wallet creators</option>
                     <option value="with-collection">With collection</option>
                     <option value="without-collection">Without collection</option>
                   </select>
@@ -471,8 +476,8 @@ export default function DiscoverClient() {
                           Open profile
                         </Link>
                         {profile.collectionAddress ? (
-                          <Link href={`/mint?view=manage&address=${encodeURIComponent(profile.collectionAddress)}`} className="ctaLink secondaryLink">
-                            Manage collection
+                          <Link href={`/profile/${encodeURIComponent(profile.slug)}`} className="ctaLink secondaryLink">
+                            View creator
                           </Link>
                         ) : null}
                       </div>
@@ -499,7 +504,7 @@ export default function DiscoverClient() {
               <>
                 <div className="profileDirectoryGrid">
                   {filteredCollectionCards.map((item) => (
-                    <div key={item.contractAddress} className="card profileDirectoryProfileCard discoverRecordCard">
+                    <div key={`${item.chainId}:${item.contractAddress}`} className="card profileDirectoryProfileCard discoverRecordCard">
                       <div className="discoverRecordHeader">
                         <strong className="discoverRecordTitle">{collectionLabel(item)}</strong>
                         <span className="profileChip">{item.standard}</span>
@@ -514,12 +519,10 @@ export default function DiscoverClient() {
                       </div>
                       <p className="hint">Latest mint {new Date(item.latestMintedAt).toLocaleString()}</p>
                       <div className="row profileSelectorActions">
-                        <Link href={`/mint?view=view&address=${encodeURIComponent(item.contractAddress)}`} className="ctaLink">
+                        <Link href={collectionPath(item.chainId,item.contractAddress)} className="ctaLink">
                           View collection
                         </Link>
-                        <Link href={`/mint?view=manage&address=${encodeURIComponent(item.contractAddress)}`} className="ctaLink secondaryLink">
-                          Manage collection
-                        </Link>
+
                       </div>
                     </div>
                   ))}
@@ -544,33 +547,7 @@ export default function DiscoverClient() {
               <>
                 <div className="discoverGrid">
                   {filteredNftItems.map((item) => (
-                    <div key={item.id} className="card discoverCard discoverRecordCard">
-                      <div className="discoverRecordHeader">
-                        <strong className="discoverRecordTitle">{tokenLabel(item)}</strong>
-                        <span className="profileChip">{item.collection.standard}</span>
-                      </div>
-                      <p className="hint">{item.collection.ensSubname || item.collection.contractAddress}</p>
-                      <div className="profileChipRow">
-                        <span className="profileChip">Token #{item.tokenId}</span>
-                        {item.activeListing ? <span className="profileChip">listed</span> : null}
-                        {!item.mediaUrl ? <span className="profileChip">metadata only</span> : null}
-                      </div>
-                      <div className="profileSelectorMetaGrid discoverRecordMeta">
-                        <p className="hint">Creator <span className="mono">{item.creatorAddress}</span></p>
-                        <p className="hint">Owner <span className="mono">{item.ownerAddress}</span></p>
-                      </div>
-                      <p className="hint">Minted {new Date(item.mintedAt).toLocaleString()}</p>
-                      <div className="row profileSelectorActions">
-                        <Link href={`/mint?view=view&address=${encodeURIComponent(item.collection.contractAddress)}`} className="ctaLink">
-                          View collection
-                        </Link>
-                        {item.metadataUrl ? (
-                          <a href={artworkSources(item.metadataUrl)[0] || item.metadataUrl} target="_blank" rel="noreferrer" className="ctaLink secondaryLink">
-                            Metadata
-                          </a>
-                        ) : null}
-                      </div>
-                    </div>
+                    <ArtworkCard key={item.id} item={item} />
                   ))}
                 </div>
                 {feedCanLoadMore ? (

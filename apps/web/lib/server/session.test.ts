@@ -5,10 +5,14 @@ import { requireSession } from './session';
 const origin = 'http://localhost:3000';
 const account = privateKeyToAccount(`0x${'12'.repeat(32)}`);
 function request(body: unknown, cookie='') { return new Request(origin+'/api/auth', { method:'POST', headers:{Origin:origin,Cookie:cookie}, body:JSON.stringify(body) }); }
-afterEach(()=>vi.unstubAllEnvs());
+vi.mock('../chains',()=>({getEnabledAppChainIds:()=>[11155111],getPrimaryAppChainId:()=>11155111,getAppChain:()=>({id:11155111})}));
+vi.mock('../publicEnv',()=>({resolveScopedChainPublicRpcUrls:()=>['https://rpc.example.test']}));
+vi.mock('../indexerServerEnv',()=>({resolveIndexerServerUrl:()=> 'https://api.example.test'}));
+afterEach(()=>{vi.unstubAllEnvs();vi.unstubAllGlobals();});
 describe('wallet sign-in',()=>{
  it('verifies the wallet challenge and issues a same-origin owner session', async()=>{
   vi.stubEnv('SESSION_SECRET','test-secret-'.repeat(4));
+  vi.stubGlobal('fetch',vi.fn().mockResolvedValue({ok:true}));
   const challenge = await POST(request({address:account.address}));
   expect(challenge.status).toBe(200);
   const {message}=await challenge.json();

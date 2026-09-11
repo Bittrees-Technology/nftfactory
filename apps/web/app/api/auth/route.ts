@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
-import { randomBytes } from 'node:crypto';
-import { isAddress, verifyMessage, type Hex } from 'viem';
+import { makeSignInMessage, verifySignInMessage, consumeSignInMessage } from '../../../lib/server/siwe';
+import { getPrimaryAppChainId } from '../../../lib/chains';
+import { isAddress, type Hex } from 'viem';
 import { issueToken, readToken } from '../../../../../packages/auth/session.mjs';
 import { cookieValue, SESSION_COOKIE } from '../../../lib/server/session';
 export const runtime = 'nodejs';
@@ -22,16 +23,17 @@ export async function POST(request: Request) {
     if (!isAddress(address)) return NextResponse.json({ error: 'Invalid wallet address.' }, { status: 400 });
     if (!body.signature) {
       const exp = Date.now() + 5 * 60_000;
-      const message = `Sign in to NFTFactory\nOrigin: ${new URL(request.url).origin}\nWallet: ${address}\nNonce: ${randomBytes(24).toString('hex')}\nExpires: ${new Date(exp).toISOString()}\nThis does not send a transaction or grant permission to move assets.`;
+      const message = makeSignInMessage(address as Hex, new URL(request.url).origin, Number(body.chainId || getPrimaryAppChainId()));
       const response = NextResponse.json({ message }, { headers: { 'Cache-Control': 'no-store' } });
       response.cookies.set(CHALLENGE_COOKIE, issueToken({ purpose: 'challenge', address, exp, message }, process.env.SESSION_SECRET), cookieOptions(request, 300));
       return response;
     }
     const challenge = readToken(cookieValue(request, CHALLENGE_COOKIE), process.env.SESSION_SECRET, 'challenge');
-    if (!challenge?.message || challenge.address !== address || !await verifyMessage({ address: address as Hex, message: challenge.message, signature: body.signature })) {
+    if (!challenge?.message || challenge.address !== address || !await verifySignInMessage(address as Hex, new URL(request.url).origin, challenge.message, body.signature)) {
       return NextResponse.json({ error: 'Signature could not be verified. Start sign-in again.' }, { status: 401 });
     }
-    const response = NextResponse.json({ address });
+    await consumeSignInMessage(address, challenge.message, challenge.exp);
+    const response = NextResponse.json({ address }, { headers: { 'Cache-Control': 'no-store' } });
     response.cookies.set(SESSION_COOKIE, issueToken({ purpose: 'session', address, exp: Date.now() + 60 * 60_000 }, process.env.SESSION_SECRET), cookieOptions(request, 3600));
     response.cookies.set(CHALLENGE_COOKIE, '', cookieOptions(request, 0));
     return response;
@@ -41,5 +43,6 @@ export async function DELETE(request: Request) {
   if (request.headers.get('origin') !== new URL(request.url).origin) return NextResponse.json({ error: 'Invalid origin.' }, { status: 403 });
   const response = NextResponse.json({ ok: true });
   response.cookies.set(SESSION_COOKIE, '', cookieOptions(request, 0));
+  response.cookies.set(CHALLENGE_COOKIE, '', cookieOptions(request, 0));
   return response;
 }
