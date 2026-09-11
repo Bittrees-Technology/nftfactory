@@ -1,5 +1,6 @@
 "use client";
 
+import ProductPageHeader from '../ProductPageHeader';
 import Link from "next/link";
 import ArtworkCard from "../artwork/ArtworkCard";
 import ArtworkImage from "../profile/ArtworkImage";
@@ -278,7 +279,7 @@ export default function DiscoverClient() {
     if (view === "profiles" ? directoryError : feedError) return "Results are temporarily unavailable.";
     if (view === "profiles") {
       return directoryTotal === 0
-        ? "No profiles match the current filters."
+        ? "No creators match the current filters."
         : `Showing ${directoryProfiles.length} of ${directoryTotal} matching profiles.`;
     }
     if (view === "collections") {
@@ -303,29 +304,20 @@ export default function DiscoverClient() {
 
   return (
     <section className="wizard discoverPage">
-      <section className="card formCard discoverHero">
-        <div className="discoverHeroCopy">
-          <p className="eyebrow">Discover</p>
-          <h1>Discover artwork and the people behind it.</h1>
-          <p className="sectionLead">
-            Explore creator pages, collections, and artwork published or imported into NFTFactory.
-          </p>
-        </div>
-
-      </section>
+      <ProductPageHeader section="Discover the work" title="Explore" description="Browse creators, collections, and NFTs. Find the work first, then get to know the artist." />
 
       <section className="card formCard discoverPanel">
         <div className="discoverPanelHeader">
           <div>
-            <p className="eyebrow">Explore</p>
-            <h2>{view === "profiles" ? "Profiles" : view === "collections" ? "Collections" : "NFTs"}</h2>
+
+            <h2>{view === "profiles" ? "Creators" : view === "collections" ? "Collections" : "NFTs"}</h2>
           </div>
           <p className="hint">{activeResultLabel}</p>
         </div>
         <div className="discoverToolbar">
-          <div className="discoverTabs" role="group" aria-label="Discover views">
+          <div className="discoverTabs" role="group" aria-label="Explore views">
             <button type="button" className={view === "profiles" ? "discoverTab discoverTabActive" : "discoverTab"} aria-pressed={view === "profiles"} onClick={() => setView("profiles")}>
-              Profiles
+              Creators
             </button>
             <button type="button" className={view === "collections" ? "discoverTab discoverTabActive" : "discoverTab"} aria-pressed={view === "collections"} onClick={() => setView("collections")}>
               Collections
@@ -341,7 +333,7 @@ export default function DiscoverClient() {
                 className="discoverFieldControl"
                 value={searchValue}
                 onChange={(event) => setSearchValue(event.target.value)}
-                placeholder={view === "profiles" ? "name, slug, tagline, wallet" : "name, contract, token, wallet"}
+                placeholder={view === "profiles" ? "Creator name or wallet address" : "name, contract, token, wallet"}
               />
             </label>
             {view === "profiles" ? (
@@ -353,7 +345,7 @@ export default function DiscoverClient() {
                     value={profileSourceFilter}
                     onChange={(event) => setProfileSourceFilter(event.target.value as ProfileSourceFilter)}
                   >
-                    <option value="all">All profiles</option>
+                    <option value="all">All creators</option>
                     <option value="wallet">Wallet creators</option>
                     <option value="nftfactory-subname">NFTFactory subnames</option>
                     <option value="ens">ENS names</option>
@@ -367,7 +359,7 @@ export default function DiscoverClient() {
                     value={profileCollectionFilter}
                     onChange={(event) => setProfileCollectionFilter(event.target.value as ProfileCollectionFilter)}
                   >
-                    <option value="all">All profiles</option>
+                    <option value="all">All creators</option>
                     <option value="with-collection">With collection</option>
                     <option value="without-collection">Without collection</option>
                   </select>
@@ -456,7 +448,7 @@ export default function DiscoverClient() {
 
         {view === "profiles" ? (
           <div className="stack discoverStack">
-            {directoryLoading && directoryProfiles.length === 0 ? <p className="hint">Loading profiles...</p> : null}
+            {directoryLoading && directoryProfiles.length === 0 ? <p className="hint">Loading creators...</p> : null}
             {directoryError ? <div role="status"><p>Creator pages are temporarily unavailable.</p><button onClick={()=>{setProfileCursor(0);setRetryAttempt(value=>value+1);}}>Try again</button></div> : null}
             {!directoryError ? (
               <>
