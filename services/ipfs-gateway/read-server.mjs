@@ -37,7 +37,7 @@ export function createIpfsReadGateway({ api = 'http://127.0.0.1:5001', gateway =
       const bound = new Transform({ transform(chunk, encoding, callback) { bytes += chunk.length; callback(bytes > maxBytes ? new Error('Content limit') : null, chunk); } });
       await pipeline(Readable.fromWeb(result.body), bound, res, { signal: controller.signal });
     } catch { reject(controller.signal.aborted ? 504 : 502, 'Content is temporarily unavailable.'); }
-    finally { clearTimeout(timer); res.off('close', close); active -= 1; }
+    finally { clearTimeout(timer); res.off('close', close); controller.abort(); active -= 1; }
   });
   server.headersTimeout = 10000; server.requestTimeout = timeoutMs;
   return server;
