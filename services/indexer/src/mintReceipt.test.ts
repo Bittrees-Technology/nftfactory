@@ -11,7 +11,9 @@ function client() {
   };
 }
 it('derives wallet and collection authority from confirmed chain data', async () => {
-  expect(await verifyMintReceipt(client() as any, input, address)).toEqual({ ownerAddress: address, creatorAddress: zeroAddress, collectionOwnerAddress: address });
+  const submitted = {...input, mintedAmountRaw:'999', heldAmountRaw:'999'};
+  Object.assign(submitted, await verifyMintReceipt(client() as any, submitted, address));
+  expect(submitted).toMatchObject({ ownerAddress: address, creatorAddress: zeroAddress, collectionOwnerAddress: address, mintedAmountRaw:'1', heldAmountRaw:'1' });
 });
 it('rejects a receipt belonging to a different wallet or token', async () => {
   await expect(verifyMintReceipt(client() as any, input, contract)).rejects.toThrow('Receipt');

@@ -46,3 +46,17 @@ Public artwork reads use a bounded, paginated database-only mode instead of wait
 Latest local checks: 231 web tests, 90 indexer tests, contract and script suites pass. The local production-mode build passes. GitHub CI passed at 78a1343 after the Prisma-generation fix. These are software checks, not live two-wallet marketplace acceptance.
 
 The backend packager includes runtime sources, auth/profile modules, schema and every migration, creates a dependency lockfile, and records file hashes plus source commit/dirty-worktree status. It does not contain deployment credentials or application data and does not install onto Acer.
+
+## Runtime integrity and outage checkpoint
+
+The packaged backend was installed from its generated lockfile and exercised against the isolated PostgreSQL database. Real local-wallet SIWE, replay rejection, profile persistence and unauthorized-owner rejection passed against that packaged process. Read-only indexed artwork returned in 38 ms in the local measurement; this is not an Internet latency guarantee.
+
+A local backend outage rendered the exported public creator snapshot with dated read-only behavior. Snapshot artwork now explicitly labels live listing status unavailable. With the primary IPFS host intentionally invalid in local configuration, the browser loaded the acceptance artwork from `neat-lime-mite.myfilebase.com`; normal primary configuration was restored immediately. Vercel's public replica setting was empty and must be populated in the final release.
+
+The Sepolia runtime comparison at block 11680756 found all nine configured contracts/implementations differ from the reviewed output and baseline aa995b0, including when compiler metadata is excluded. The comparison masks compiler-declared immutable locations and does not verify their values. A mismatch can reflect source or compiler/build differences; it does not by itself prove an exploit. It does prevent claiming these deployments match the reviewed release. Full replacement/source verification remains a release gate.
+
+The complete Acer installer and recovery runbook are prepared but have not been run on production. Package verification rejects wrong commits, dirty manifests, tampered/untracked files, traversal and symbolic links (four regression tests pass). The installer stops on the deployment hold unless explicitly invoked at the final step. Linux execution and production restore validation remain pending. ERC-721 receipt ingestion now overwrites browser-supplied mint and holding quantities with the verified value of one; all 90 backend tests pass.
+
+Real ERC-1271 acceptance now passes on an isolated local Anvil deployment through the application's SIWE verifier, alongside EOA, invalid signer, wrong domain, expiry and wrong-chain checks. CI now runs this integration after contract builds. The internal contract report records mutable settlement fees and live single-account administration in addition to the code mismatch; these remain real-value launch gates.
+
+Marketplace fee terms are now fixed at listing/offer creation, including the treasury address. Regressions prove later administrator fee increases and treasury changes cannot change those orders' seller proceeds. The ERC-1155 price label now correctly says total per listing, matching settlement for the selected quantity. These changes require replacement contracts; they do not update existing deployments.

@@ -40,3 +40,9 @@ Disable an affected network in the application if its indexer or contracts are n
 Take and verify the local database backup before migration. A rehearsal has demonstrated preservation of existing collection/token/listing/offer rows and restoration of the old schema in a separate test database. Coordinate backend and web session changes: the new backend requires network-bound sessions, so users must sign in again.
 
 Acer remains the primary service. Public NFT copies use the configured Filebase replica within its free limits. Exported public profile snapshots can be shown read-only during a primary outage; they do not provide live ownership, marketplace or write failover. Private offsite database backup is deferred after launch by user instruction.
+
+## Exact source gate
+
+Run `scripts/compare-contract-runtime.mjs` with the intended network manifest, the artifacts built from the reviewed commit, and a report output path. Supply `RPC_URL` privately in the environment. The tool checks the RPC chain, uses a single block for all code reads and exits nonzero unless every runtime matches, masking only compiler-declared immutable byte locations. Metadata-excluded matches are diagnostic and do not pass the gate. Verify constructor values, treasury/admin and implementation configuration separately.
+
+The existing Sepolia manifest currently fails this gate. The reviewed marketplace also now stores fee rate and treasury at creation of each listing/offer, preventing later registry changes from altering those orders. This behavior requires a new marketplace deployment; do not infer it exists at the old address.

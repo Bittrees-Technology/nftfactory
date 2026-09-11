@@ -37,5 +37,5 @@ export async function verifyMintReceipt(client: Pick<PublicClient, 'getTransacti
   for (const log of parseEventLogs({abi:publishedAbi,logs:receipt.logs})) {
     if (log.address.toLowerCase()===contract.toLowerCase() && log.args.tokenId===tokenId && log.args.uri===input.metadataCid) creatorAddress=log.args.creator.toLowerCase();
   }
-  return {ownerAddress:signer.toLowerCase(),creatorAddress,collectionOwnerAddress:String(collectionOwner).toLowerCase(),...(input.standard==='ERC1155'?{mintedAmountRaw:quantity.toString(),heldAmountRaw:String(ownerOrBalance)}:{})};
+  return {ownerAddress:signer.toLowerCase(),creatorAddress,collectionOwnerAddress:String(collectionOwner).toLowerCase(),mintedAmountRaw:quantity.toString(),heldAmountRaw:input.standard==='ERC1155'?String(ownerOrBalance):'1'};
 }

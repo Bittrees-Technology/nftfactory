@@ -14,7 +14,7 @@ Production is unchanged. Work is on `feat/product-expansion`; automatic Vercel d
 
 ## Evidence
 
-On Node 24, `npm run check:all` passed: 220 web tests, 86 indexer tests, the Solidity suite and 43 script tests. A production-mode local build passed. The build uses local test configuration and is not a deployment artifact.
+On Node 24, `npm run check:all` passed: 231 web tests, 90 indexer tests, the Solidity suite and 43 script tests at commit a2b0364 (four package-integrity regressions added afterward). A production-mode local build passed. The build uses local test configuration and is not a deployment artifact.
 
 Seven migrations applied to an isolated PostgreSQL database. A repeatable database test checks identical addresses/token IDs on separate networks, duplicate rejection, 12 concurrent nonce claims with exactly one accepted, and exclusion of private tags for other wallets. A local signed-wallet integration run exercised SIWE, replay rejection, profile publication and unauthorized-owner rejection. These checks did not write production data.
 
@@ -30,12 +30,16 @@ The escrow invariant passed 256 runs and 128,000 calls without reverts. It cover
 
 ## Required before release
 
-- Finish every control/state entry in the UX inventory, mobile and keyboard visual checks, alias-profile consistency, featured artwork, and private studio arrangement.
-- Complete chain-bound authentication/session and contract-wallet tests, ENS ownership/expiry review, and mobile WalletConnect return/cancellation checks.
-- Finish bounded tag search/bulk organization and import previews, ownership reconciliation and imported listing eligibility.
-- Preserve existing data through a migration/restore rehearsal; package every new backend dependency/file into the Acer updater.
-- Complete contract review, deployed source/bytecode comparison, administrative configuration and chain deployment manifests.
+- Finish every control/state entry in the UX inventory and remaining mobile/keyboard checks. Alias-profile consistency, featured artwork and private studio arrangement are implemented; representative browser checks pass.
+- Complete contract-wallet acceptance, ENS expiry review, and mobile WalletConnect return/cancellation checks. Chain-bound authentication and replay tests pass, including a signed local-wallet integration against the packaged runtime.
+- Complete live third-party import/listing and transferred-ownership acceptance. Bounded tag search/bulk organization and import previews are implemented and tested.
+- Execute the prepared full Acer updater only at final release. Migration/restore rehearsal passed; a fresh locked runtime package installed, generated its database client and passed local signed profile/replay tests. The root installer is prepared with a deployment hold and recovery runbook; its Linux execution is still pending.
+- Resolve deployed source/bytecode mismatch, complete administrative configuration and chain deployment manifests. At Sepolia block 11680756, all nine configured contracts/implementations differ from reviewed runtime output even excluding compiler metadata. Do not claim the reviewed contracts are already deployed. See product-expansion/sepolia-runtime-comparison.json.
 - Run real testnet mint, import, list, buy, cancel and failure flows. Current automated tests do not substitute for two-wallet transaction acceptance.
 - Rebuild with actual deployment environment, then perform final Acer/Vercel release, verify health, and merge/prune only after checks pass.
 
 Private offsite database backup is deferred after launch by user instruction. No paid provider has been added. Base, Ethereum and Robinhood deployments still require per-network rehearsals, cost estimates and funded transaction approvals. Their chain definitions alone do not constitute deployed support.
+
+## Additional outage evidence
+
+The local browser loaded artwork from Filebase with an intentionally unavailable primary gateway. The primary configuration was restored after the drill. Vercel currently lacks the public replica gateway setting; configuring the verified replica is a final-release requirement. A separate backend outage showed the dated exported public profile read-only. Snapshot cards now explicitly state live listing status is unavailable. These tests do not prove write failover or private database redundancy.

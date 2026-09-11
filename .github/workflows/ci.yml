@@ -97,8 +97,19 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install integration dependencies
+        run: npm ci
+
       - name: Build contracts
         run: npm --workspace packages/contracts run build
 
       - name: Run Forge tests
         run: npm run test:contracts
+
+      - name: Verify real contract-wallet sign-in locally
+        run: node --import tsx scripts/test-siwe-contract-wallet.mjs

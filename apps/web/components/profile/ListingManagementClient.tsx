@@ -1284,7 +1284,7 @@ export default function ListingManagementClient({
               </label>
             ) : null}
             <label>
-              {paymentTokenType === "ETH" ? "Price per NFT (ETH)" : "Price per NFT (token units)"}
+              {paymentTokenType === "ETH" ? "Total price per listing (ETH)" : "Total price per listing (token units)"}
               <input
                 value={priceInput}
                 onChange={(e) => setPriceInput(e.target.value)}
