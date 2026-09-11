@@ -2,6 +2,9 @@
 
 import Link from "next/link";
 import ArtworkCard from "../artwork/ArtworkCard";
+import ArtworkImage from "../profile/ArtworkImage";
+import {useNftMetadataPreview} from "../../lib/nftMetadata";
+import {getAppChain} from "../../lib/chains";
 import { collectionPath } from "../../lib/assetRoutes";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -28,10 +31,25 @@ type CollectionCard = {
   tokenSampleCount: number;
   activeListingCount: number;
   latestMintedAt: string;
+  previewItem: ApiMintFeedItem;
 };
 
 function collectionLabel(item: CollectionCard): string {
-  return item.ensSubname || item.contractAddress;
+  return item.ensSubname || `Collection ${item.contractAddress.slice(0,6)}…${item.contractAddress.slice(-4)}`;
+}
+
+function CollectionDiscoveryCard({item}:{item:CollectionCard}) {
+  const sample=item.previewItem;
+  const metadata=useNftMetadataPreview({metadataUri:sample.metadataUrl||sample.metadataCid,mediaUri:sample.mediaUrl,gateway:(process.env.NEXT_PUBLIC_IPFS_GATEWAY||'https://ipfs.io')+'/ipfs'});
+  const title=collectionLabel(item);
+  return <article className="card profileDirectoryProfileCard discoverRecordCard">
+    <Link href={collectionPath(item.chainId,item.contractAddress)} className="artworkCardImage discoveryCollectionCover" aria-label={`View ${title}`}><ArtworkImage source={sample.mediaUrl||metadata.imageUrl||(sample.mediaCid?`ipfs://${sample.mediaCid}`:'')} alt={`Artwork from ${title}`}/></Link>
+    <p className="eyebrow">{getAppChain(item.chainId).name} · {item.standard==='ERC721'?'ERC-721':'ERC-1155'}</p>
+    <h3 className="discoverRecordTitle"><Link href={collectionPath(item.chainId,item.contractAddress)}>{title}</Link></h3>
+    <p className="hint">{item.tokenSampleCount} artwork{item.tokenSampleCount===1?'':'s'} shown{item.activeListingCount?` · ${item.activeListingCount} listed`:''}</p>
+    <p className="hint">{ /^0x0{40}$/i.test(item.ownerAddress)?'Collection administrator not verified':`Administrator ${item.ownerAddress.slice(0,6)}…${item.ownerAddress.slice(-4)}`}</p>
+    <Link href={collectionPath(item.chainId,item.contractAddress)} className="ctaLink">View collection</Link>
+  </article>;
 }
 
 function tokenLabel(item: ApiMintFeedItem): string {
@@ -54,6 +72,7 @@ function usePrevious<T>(value: T): T | undefined {
 }
 
 export default function DiscoverClient() {
+  const [retryAttempt,setRetryAttempt]=useState(0);
   const [view, setView] = useState<DiscoverView>("profiles");
   const [searchValue, setSearchValue] = useState("");
   const [profileSort, setProfileSort] = useState<ProfileSort>("popular");
@@ -150,7 +169,7 @@ export default function DiscoverClient() {
       cancelled = true;
       clearTimeout(timeout);
     };
-  }, [profileCollectionFilter, profileCursor, profileSort, profileSourceFilter, searchValue, view]);
+  }, [profileCollectionFilter, profileCursor, profileSort, profileSourceFilter, searchValue, view,retryAttempt]);
 
   useEffect(() => {
     if (view === "profiles") return;
@@ -181,7 +200,7 @@ export default function DiscoverClient() {
     return () => {
       cancelled = true;
     };
-  }, [feedCursor, view]);
+  }, [feedCursor, view,retryAttempt]);
 
   const searchedFeedItems = useMemo(() => {
     const query = searchValue.trim().toLowerCase();
@@ -225,6 +244,7 @@ export default function DiscoverClient() {
         ownerAddress: item.collection.ownerAddress,
         tokenSampleCount: 1,
         activeListingCount: item.activeListing ? 1 : 0,
+        previewItem: item,
         latestMintedAt: item.mintedAt
       });
     }
@@ -264,11 +284,11 @@ export default function DiscoverClient() {
     if (view === "collections") {
       return filteredCollectionCards.length === 0
         ? "No collections match the current filters."
-        : `Showing ${filteredCollectionCards.length} collection contracts from the NFTFactory public feed.`;
+        : `Showing ${filteredCollectionCards.length} collection${filteredCollectionCards.length===1?"":"s"} from indexed artwork.`;
     }
     return filteredNftItems.length === 0
       ? "No NFTs match the current filters."
-      : `Showing ${filteredNftItems.length} NFTs from NFTFactory-related collections.`;
+      : `Showing ${filteredNftItems.length} NFT${filteredNftItems.length===1?"":"s"} from indexed collections.`;
   }, [directoryProfiles.length, directoryTotal, filteredCollectionCards.length, filteredNftItems.length, view, directoryLoading, feedLoading, directoryError, feedError]);
 
   function loadMoreProfiles(): void {
@@ -288,7 +308,7 @@ export default function DiscoverClient() {
           <p className="eyebrow">Discover</p>
           <h1>Discover artwork and the people behind it.</h1>
           <p className="sectionLead">
-            Explore creator pages, collections, and NFTs published with NFTFactory.
+            Explore creator pages, collections, and artwork published or imported into NFTFactory.
           </p>
         </div>
 
@@ -298,7 +318,7 @@ export default function DiscoverClient() {
         <div className="discoverPanelHeader">
           <div>
             <p className="eyebrow">Explore</p>
-            <h3>{view === "profiles" ? "Profiles" : view === "collections" ? "Collections" : "NFTs"}</h3>
+            <h2>{view === "profiles" ? "Profiles" : view === "collections" ? "Collections" : "NFTs"}</h2>
           </div>
           <p className="hint">{activeResultLabel}</p>
         </div>
@@ -437,17 +457,18 @@ export default function DiscoverClient() {
         {view === "profiles" ? (
           <div className="stack discoverStack">
             {directoryLoading && directoryProfiles.length === 0 ? <p className="hint">Loading profiles...</p> : null}
-            {directoryError ? <p className="hint">{directoryError}</p> : null}
+            {directoryError ? <div role="status"><p>Creator pages are temporarily unavailable.</p><button onClick={()=>{setProfileCursor(0);setRetryAttempt(value=>value+1);}}>Try again</button></div> : null}
             {!directoryError ? (
               <>
                 <div className="profileDirectoryGrid">
                   {directoryProfiles.map((profile) => (
                     <div key={`${profile.slug}:${profile.ownerAddress}:${profile.collectionAddress || ""}:${profile.source}`} className="card profileDirectoryProfileCard discoverRecordCard">
                       <div className="discoverRecordHeader">
-                        <strong className="discoverRecordTitle">{profile.displayName || profile.fullName}</strong>
+                        <h3 className="discoverRecordTitle">{profile.displayName || (/^0x[0-9a-f]{40}$/i.test(profile.fullName)?`Creator ${profile.ownerAddress.slice(0,6)}…${profile.ownerAddress.slice(-4)}`:profile.fullName)}</h3>
                         <span className="profileChip">{profileSourceLabel(profile.source)}</span>
                       </div>
-                      <p className="hint">{profile.tagline || profile.fullName}</p>
+                      {profile.avatarUrl?<div className="discoveryAvatar"><ArtworkImage source={profile.avatarUrl} alt=""/></div>:null}
+                      {profile.tagline||profile.bio?<p className="hint">{profile.tagline||profile.bio}</p>:null}
                       <div className="profileChipRow">
                         {profile.collectionAddress ? <span className="profileChip">with collection</span> : null}
 
@@ -460,11 +481,7 @@ export default function DiscoverClient() {
                         <Link href={`/profile/${encodeURIComponent(profile.slug)}`} className="ctaLink">
                           Open profile
                         </Link>
-                        {profile.collectionAddress ? (
-                          <Link href={`/profile/${encodeURIComponent(profile.slug)}`} className="ctaLink secondaryLink">
-                            View creator
-                          </Link>
-                        ) : null}
+
                       </div>
                     </div>
                   ))}
@@ -484,32 +501,12 @@ export default function DiscoverClient() {
         {view === "collections" ? (
           <div className="stack discoverStack">
             {feedLoading && feedItems.length === 0 ? <p className="hint">Loading collections...</p> : null}
-            {feedError ? <p className="hint">{feedError}</p> : null}
+            {feedError ? <div role="status"><p>Artwork is temporarily unavailable.</p><button onClick={()=>{setFeedCursor(0);setRetryAttempt(value=>value+1);}}>Try again</button></div> : null}
             {!feedError ? (
               <>
                 <div className="profileDirectoryGrid">
                   {filteredCollectionCards.map((item) => (
-                    <div key={`${item.chainId}:${item.contractAddress}`} className="card profileDirectoryProfileCard discoverRecordCard">
-                      <div className="discoverRecordHeader">
-                        <strong className="discoverRecordTitle">{collectionLabel(item)}</strong>
-                        <span className="profileChip">{item.standard}</span>
-                      </div>
-                      <div className="profileChipRow">
-                        {item.activeListingCount > 0 ? <span className="profileChip">{item.activeListingCount} listings</span> : null}
-                        <span className="profileChip">{item.tokenSampleCount} tokens</span>
-                      </div>
-                      <div className="profileSelectorMetaGrid discoverRecordMeta">
-                        <p className="hint"><span className="mono">{item.contractAddress}</span></p>
-                        <p className="hint">Owner <span className="mono">{item.ownerAddress}</span></p>
-                      </div>
-                      <p className="hint">Latest mint {new Date(item.latestMintedAt).toLocaleString()}</p>
-                      <div className="row profileSelectorActions">
-                        <Link href={collectionPath(item.chainId,item.contractAddress)} className="ctaLink">
-                          View collection
-                        </Link>
-
-                      </div>
-                    </div>
+                    <CollectionDiscoveryCard key={`${item.chainId}:${item.contractAddress}`} item={item}/>
                   ))}
                 </div>
                 {feedCanLoadMore ? (
@@ -527,7 +524,7 @@ export default function DiscoverClient() {
         {view === "nfts" ? (
           <div className="stack discoverStack">
             {feedLoading && feedItems.length === 0 ? <p className="hint">Loading NFTs...</p> : null}
-            {feedError ? <p className="hint">{feedError}</p> : null}
+            {feedError ? <div role="status"><p>Artwork is temporarily unavailable.</p><button onClick={()=>{setFeedCursor(0);setRetryAttempt(value=>value+1);}}>Try again</button></div> : null}
             {!feedError ? (
               <>
                 <div className="discoverGrid">
