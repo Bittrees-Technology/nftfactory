@@ -1,5 +1,7 @@
 # Requirement-to-evidence release checklist
 
+**Status correction:** Use [Plan Evidence Reconciliation](./Plan-Evidence-Reconciliation.md) for the current requirement-by-requirement status and [control matrix](./control-acceptance-matrix.csv) for missing per-control verification. The historical table below predates completed Sepolia replacement/Safe acceptance and retains superseded release steps. It is not a completed acceptance sign-off.
+
 Current decision: **public promotion pending runtime and wallet acceptance**. The user has requested deployment completion; the remaining hold is technical, not a missing general permission. Expansion and brand work were merged in PRs #24 and #25. See Launch-Execution-2026-09-11.md for the certificate repair, confirmed Safe custody, SEO implementation and deployment rehearsal. Local simulation does not certify public-chain acceptance.
 
 | Plan area | Implemented / evidence | Still required |
