@@ -1,0 +1,29 @@
+{
+  "releaseCommit": "95eb7c969e0f5d366f40818c9e98af08467ba856",
+  "deployment": "dpl_662SPjtuoJRpHjqrGfS7hCjpyFFe",
+  "runtimeCommit": "2d0dc4fa10e8f2afed9a50415e726be6f4b1f5ae",
+  "pullRequest": "https://github.com/Bittrees-Technology/nftfactory/pull/34",
+  "ci": "https://github.com/Bittrees-Technology/nftfactory/actions/runs/34642850306",
+  "checks": {
+    "webTests": 261,
+    "webTypecheck": "pass",
+    "indexerTypecheck": "pass",
+    "allCIJobs": "pass",
+    "runtimeHealth": "active",
+    "runtimeDesignNormalization": "retro, palette, top8, panels retained",
+    "emptyWalletLookup": "HTTP 200, resolution present, resolutionError null",
+    "liveEditorHTTP": 200,
+    "retroTemplateControlPresent": true,
+    "desktopViewport": 1280,
+    "mobileViewport": 390,
+    "mobileDocumentWidth": 375,
+    "previewUsesPublicRenderer": true
+  },
+  "acceptancePending": [
+    "User wallet unlock",
+    "Restore and style user draft in production editor",
+    "Owner sign-in and publication",
+    "Reload published profile and verify saved customization"
+  ],
+  "scope": "Reusable profile editor and renderer only. No account-specific example route or authored profile content in repository."
+}
