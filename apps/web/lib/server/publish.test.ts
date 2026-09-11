@@ -1,0 +1,11 @@
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { assertPublishingConfigured, boundedBody, confirmReplica } from './publish';
+const cid='bafybeigdyrzt5sfp7udm7hu76uh7y26nf3uyhd7t4d4erwzu6du7izcd4e';
+const bytes=new TextEncoder().encode('original artwork');
+beforeEach(()=>{vi.stubEnv('IPFS_REPLICA_API_URL','https://pins.example');vi.stubEnv('IPFS_REPLICA_API_TOKEN','private-test-token');vi.stubEnv('IPFS_REPLICA_GATEWAY_URL','https://backup.example');});
+afterEach(()=>{vi.unstubAllEnvs();vi.unstubAllGlobals();});
+it('blocks publication without an independent replica',()=>{vi.stubEnv('IPFS_REPLICA_API_TOKEN','');expect(assertPublishingConfigured).toThrow('backup copy');});
+it('reuses a durable pin and verifies the exact bytes through the backup gateway',async()=>{const mock=vi.fn().mockResolvedValueOnce(Response.json({results:[{requestid:'existing',pin:{cid},status:'pinned'}]})).mockResolvedValueOnce(new Response(bytes));vi.stubGlobal('fetch',mock);expect(await confirmReplica(cid,bytes,'artwork')).toEqual(expect.objectContaining({requestId:'existing'}));expect(mock).toHaveBeenCalledTimes(2);expect(mock.mock.calls[1][1].headers).toBeUndefined();});
+it('does not accept a pin receipt when the backup serves different bytes',async()=>{vi.stubGlobal('fetch',vi.fn().mockResolvedValueOnce(Response.json({results:[]})).mockResolvedValueOnce(Response.json({requestid:'new',pin:{cid},status:'pinned'})).mockResolvedValueOnce(new Response('different')));await expect(confirmReplica(cid,bytes,'artwork')).rejects.toThrow('did not match');});
+it('rejects a receipt for a different CID',async()=>{vi.stubGlobal('fetch',vi.fn().mockResolvedValueOnce(Response.json({results:[]})).mockResolvedValueOnce(Response.json({requestid:'new',pin:{cid:'wrong'},status:'pinned'})));await expect(confirmReplica(cid,bytes,'artwork')).rejects.toThrow('invalid storage receipt');});
+it('enforces the upload ceiling on streamed bodies without content-length',async()=>{const request=new Request('https://site.example',{method:'POST',body:new Uint8Array(100)});await expect(boundedBody(request,50)).rejects.toThrow('smaller');});

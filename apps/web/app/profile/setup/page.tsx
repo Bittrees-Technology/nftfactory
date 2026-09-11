@@ -1,4 +1,5 @@
 export const dynamic = "force-dynamic";
+import CreatorSetupClient from "../../../components/profile/CreatorSetupClient";
 import ProfileLandingClient from "../../../components/profile/ProfileLandingClient";
 
 function normalizeLabel(value: string): string {
@@ -8,9 +9,10 @@ function normalizeLabel(value: string): string {
 export default async function ProfileSetupPage({
   searchParams
 }: {
-  searchParams?: Promise<{ label?: string; collection?: string; mode?: string }>;
+  searchParams?: Promise<{ label?: string; collection?: string; mode?: string; advanced?: string }>;
 }) {
   const params = searchParams ? await searchParams : undefined;
+  if (params?.advanced !== "1") return <CreatorSetupClient />;
   const initialLabel = normalizeLabel(params?.label || "");
   const initialCollectionAddress = String(params?.collection || "").trim();
   const initialMode = String(params?.mode || "").trim();

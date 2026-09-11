@@ -1,4 +1,5 @@
 export const dynamic = "force-dynamic";
+import CreateClient from "../../components/create/CreateClient";
 import MintClient from "../../components/mint/MintClient";
 
 type MintPageProps = {
@@ -19,6 +20,8 @@ export default async function MintPage({ searchParams }: MintPageProps) {
   const initialProfileLabel = params?.profile?.trim() || "";
   const initialCollectionAddress = params?.address?.trim() || "";
   const initialCollectionIdentityMode = params?.identityMode?.trim() || "";
+
+  if (initialPageMode === "mint" && initialMintMode === "shared") return <CreateClient />;
 
   return (
     <MintClient

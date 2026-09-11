@@ -1,12 +1,15 @@
+import { readToken } from "../../../packages/auth/session.mjs";
 import dotenv from "dotenv";
 
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile, rename } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import path from "node:path";
 import { URL } from "node:url";
 import { PrismaClient } from "@prisma/client";
 import { pino } from "pino";
 import { createPublicClient, fallback, http } from "viem";
+import { mainnet } from "viem/chains";
+import { normalize } from "viem/ens";
 import { isAddress, isZeroAddress, normalizeSubname, parseBearerToken, getClientIp, isRateLimited } from "./utils.js";
 import { getSharedBackfillTargets, isStaleIsoTimestamp, normalizeExplicitBackfillTargets } from "./registryBackfill.js";
 
@@ -75,7 +78,7 @@ type ModeratorRecord = {
   updatedAt: string;
 };
 
-type ProfileLinkSource = "ens" | "external-subname" | "nftfactory-subname";
+type ProfileLinkSource = "wallet" | "ens" | "external-subname" | "nftfactory-subname";
 
 type ProfileLinkPayload = {
   name: string;
@@ -466,6 +469,7 @@ type RequestHandlerConfig = {
 };
 type IndexerDeps = {
   prisma: PrismaClient;
+  verifyProfileIdentityImpl?: (name: string, owner: string) => Promise<boolean>;
   getClientIpImpl: typeof getClientIp;
   isRateLimitedImpl: typeof isRateLimited;
 };
@@ -526,7 +530,7 @@ export function summarizeAdminProtection(config: {
 
   if (allowlistCount > 0) {
     return {
-      protected: true,
+      protected: false,
       mode: "allowlist",
       tokenConfigured,
       allowlistCount,
@@ -1855,6 +1859,8 @@ function normalizeProfileInput(name: string, source: ProfileLinkSource): { slug:
   const raw = String(name || "").trim().toLowerCase();
   if (!raw) return null;
 
+  if (source === "wallet") return isAddress(raw) ? { slug: raw, fullName: raw } : null;
+
   if (source === "nftfactory-subname") {
     const slug = normalizeSubname(raw);
     if (!slug) return null;
@@ -2228,7 +2234,9 @@ async function readProfileRecords(): Promise<ProfileRecord[]> {
 
 async function writeProfileRecords(records: ProfileRecord[]): Promise<void> {
   await mkdir(path.dirname(PROFILE_FILE), { recursive: true });
-  await writeFile(PROFILE_FILE, JSON.stringify(records, null, 2), "utf8");
+  const temporary = `${PROFILE_FILE}.${process.pid}.tmp`;
+  await writeFile(temporary, JSON.stringify(records, null, 2), "utf8");
+  await rename(temporary, PROFILE_FILE);
 }
 
 
@@ -2282,6 +2290,9 @@ async function assertAdminRequest(
   actor?: string,
   options?: { includeDynamicModerators?: boolean }
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!config.adminToken && !config.allowUnprotectedAdmin) {
+    return { ok: false, error: "Admin token authentication is required; an address alone is not authentication" };
+  }
   if (config.adminToken) {
     const authToken = parseBearerToken(req.headers.authorization);
     if (!authToken || authToken !== config.adminToken) {
@@ -6842,7 +6853,7 @@ async function handleRequest(
       return;
     }
 
-    if (source && source !== "ens" && source !== "external-subname" && source !== "nftfactory-subname") {
+    if (source && source !== "wallet" && source !== "ens" && source !== "external-subname" && source !== "nftfactory-subname") {
       sendJson(res, 400, { error: "Invalid source query param" });
       return;
     }
@@ -7828,7 +7839,7 @@ async function handleRequest(
     }
     const payload = await readJsonBody<ProfileLinkPayload>(req);
     const source = payload.source;
-    if (!["ens", "external-subname", "nftfactory-subname"].includes(source)) {
+    if (!["wallet", "ens", "external-subname", "nftfactory-subname"].includes(source)) {
       sendJson(res, 400, { error: "Invalid profile source" });
       return;
     }
@@ -7839,10 +7850,25 @@ async function handleRequest(
       return;
     }
 
+    const session = readToken(parseBearerToken(req.headers.authorization), process.env.SESSION_SECRET, "session");
+    if (!session || session.address !== ownerAddress) { sendJson(res, 401, { error: "Sign in as the profile owner." }); return; }
+    if (source === "wallet" && (String(payload.name || "").toLowerCase() !== ownerAddress || payload.routeSlug && payload.routeSlug !== ownerAddress)) { sendJson(res, 400, { error: "Wallet profiles use their verified wallet address." }); return; }
     const normalized = normalizeProfileInput(payload.name, source);
     if (!normalized) {
       sendJson(res, 400, { error: "Invalid profile name" });
       return;
+    }
+    if (source !== "wallet") {
+      const verify = deps.verifyProfileIdentityImpl || (async (name: string, owner: string) => {
+        const rpc = process.env.ENS_IDENTITY_RPC_URL;
+        if (!rpc) return false;
+        const resolver = createPublicClient({ chain: mainnet, transport: http(rpc, { timeout: 8000, retryCount: 0 }) });
+        const resolved = await resolver.getEnsAddress({ name: normalize(name) });
+        return resolved?.toLowerCase() === owner;
+      });
+      let verified = false;
+      try { verified = await verify(normalized.fullName, ownerAddress); } catch { /* Fail closed when identity verification is unavailable. */ }
+      if (!verified) { sendJson(res, 403, { error: "This identity must resolve to your signed-in wallet. Use a wallet creator page until verification is available." }); return; }
     }
     const requestedRouteSlug = payload.routeSlug ? normalizeRouteSlug(payload.routeSlug) : null;
     if (payload.routeSlug && !requestedRouteSlug) {
@@ -8027,6 +8053,8 @@ async function handleRequest(
       return;
     }
 
+    const session = readToken(parseBearerToken(req.headers.authorization), process.env.SESSION_SECRET, "session");
+    if (!session || session.address !== currentOwnerAddress) { sendJson(res, 401, { error: "Sign in as the current owner." }); return; }
     const newOwnerAddress = String(payload.newOwnerAddress || "").trim().toLowerCase();
     if (!isAddress(newOwnerAddress)) {
       sendJson(res, 400, { error: "Invalid newOwnerAddress" });
@@ -8154,6 +8182,8 @@ async function handleRequest(
     const entryId = String(payload.entryId || "").trim();
     const currentOwnerAddress = String(payload.currentOwnerAddress || "").trim().toLowerCase();
     const actorAddress = String(payload.actorAddress || payload.currentOwnerAddress || "").trim().toLowerCase();
+    const session = readToken(parseBearerToken(req.headers.authorization), process.env.SESSION_SECRET, "session");
+    if (!session || session.address !== actorAddress) { sendJson(res, 401, { error: "Sign in as the acting wallet." }); return; }
     if (!entryId) {
       sendJson(res, 400, { error: "Invalid entryId" });
       return;
@@ -8209,6 +8239,8 @@ async function handleRequest(
     const entryId = String(payload.entryId || "").trim();
     const currentOwnerAddress = String(payload.currentOwnerAddress || "").trim().toLowerCase();
     const actorAddress = String(payload.actorAddress || payload.currentOwnerAddress || "").trim().toLowerCase();
+    const session = readToken(parseBearerToken(req.headers.authorization), process.env.SESSION_SECRET, "session");
+    if (!session || session.address !== actorAddress) { sendJson(res, 401, { error: "Sign in as the acting wallet." }); return; }
     if (!entryId) {
       sendJson(res, 400, { error: "Invalid entryId" });
       return;
@@ -8270,6 +8302,8 @@ async function handleRequest(
     const entryId = String(payload.entryId || "").trim();
     const currentOwnerAddress = String(payload.currentOwnerAddress || "").trim().toLowerCase();
     const actorAddress = String(payload.actorAddress || payload.currentOwnerAddress || "").trim().toLowerCase();
+    const session = readToken(parseBearerToken(req.headers.authorization), process.env.SESSION_SECRET, "session");
+    if (!session || session.address !== actorAddress) { sendJson(res, 401, { error: "Sign in as the acting wallet." }); return; }
     if (!entryId) {
       sendJson(res, 400, { error: "Invalid entryId" });
       return;
@@ -8321,7 +8355,8 @@ async function handleRequest(
       const actorAddress = String(url.searchParams.get("actorAddress") || "").trim().toLowerCase();
       const profileRecords = await readProfileRecords();
       const moderators = includeHidden ? await readEffectiveModeratorRecords(config) : [];
-      const canViewModerationEntries = includeHidden
+      const session = readToken(parseBearerToken(req.headers.authorization), process.env.SESSION_SECRET, "session");
+      const canViewModerationEntries = includeHidden && session?.address === actorAddress
         ? (isAddress(actorAddress) && profileRecords.some((item) => item.slug === slug && item.ownerAddress === actorAddress))
           || moderators.some((item) => item.address === actorAddress)
         : false;
@@ -8344,6 +8379,8 @@ async function handleRequest(
     const payload = await readJsonBody<ProfileGuestbookPayload>(req);
     const authorName = sanitizeProfileText(payload.authorName, 80) || null;
     const authorAddress = isAddress(String(payload.authorAddress || "").toLowerCase()) ? String(payload.authorAddress).toLowerCase() : null;
+    const authorSession = readToken(parseBearerToken(req.headers.authorization), process.env.SESSION_SECRET, "session");
+    if (authorAddress && authorSession?.address !== authorAddress) { sendJson(res, 401, { error: "Sign in before attaching a wallet address to a comment." }); return; }
     const message = sanitizeProfileText(payload.message, 600) || null;
     if (!authorName || !message) {
       sendJson(res, 400, { error: "authorName and message are required" });
@@ -8958,8 +8995,19 @@ export function createRequestHandler(
   deps: IndexerDeps,
   config: RequestHandlerConfig
 ): (req: IncomingMessage, res: ServerResponse) => void {
+  let profileWrites: Promise<void> = Promise.resolve();
+  let pendingProfileWrites = 0;
   return (req, res) => {
-    handleRequest(req, res, deps, config).catch((err) => {
+    const isProfileWrite = req.method !== "GET" && req.url?.startsWith("/api/profiles/");
+    if (isProfileWrite && pendingProfileWrites >= 50) { sendJson(res, 429, { error: "Profile saves are busy. Please retry." }); return; }
+    const run = () => handleRequest(req, res, deps, config);
+    let operation: Promise<void>;
+    if (isProfileWrite) {
+      pendingProfileWrites += 1;
+      operation = profileWrites.then(run);
+      profileWrites = operation.catch(() => {}).finally(() => { pendingProfileWrites -= 1; });
+    } else operation = run();
+    operation.catch((err) => {
       if (err instanceof BadRequestError) {
         sendJson(res, 400, { error: err.message });
         return;
@@ -8989,7 +9037,7 @@ export async function main() {
 
   if (!adminProtection.protected && !adminProtection.allowUnprotectedAdmin) {
     throw new Error(
-      "Unsafe indexer config: set INDEXER_ADMIN_TOKEN or INDEXER_ADMIN_ALLOWLIST. Use INDEXER_ALLOW_UNPROTECTED_ADMIN=1 only for local/dev environments."
+      "Unsafe indexer config: set INDEXER_ADMIN_TOKEN. An allowlist alone does not authenticate a request. Use INDEXER_ALLOW_UNPROTECTED_ADMIN=1 only for local/dev environments."
     );
   }
 

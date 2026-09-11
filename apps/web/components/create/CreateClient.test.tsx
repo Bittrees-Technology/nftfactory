@@ -1,0 +1,19 @@
+// @vitest-environment jsdom
+import React from 'react';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import CreateClient from './CreateClient';
+const mocks = vi.hoisted(() => ({ address: '0x1111111111111111111111111111111111111111', send: vi.fn(), receipt: vi.fn(), call: vi.fn(), save: vi.fn(), load: vi.fn(), session: vi.fn() }));
+vi.mock('wagmi', () => ({ useAccount: () => ({ address: mocks.address, chainId: 11155111 }), useWalletClient: () => ({ data: { signMessage: vi.fn(), sendTransaction: mocks.send } }), usePublicClient: () => ({ call: mocks.call, waitForTransactionReceipt: mocks.receipt }) }));
+vi.mock('../../lib/contracts', () => ({ getContractsConfig: () => ({ shared721: mocks.address }) }));
+vi.mock('../../lib/chains', () => ({ getPrimaryAppChainId: () => 11155111, getAppChain: () => ({ id: 11155111, name: 'Sepolia' }) }));
+vi.mock('../../lib/draftStore', () => ({ loadArtworkDraft: mocks.load, saveArtworkDraft: mocks.save }));
+vi.mock('../../lib/walletSession', () => ({ ensureWalletSession: mocks.session }));
+vi.mock('../HeaderWalletButton', () => ({ default: () => <span>Wallet</span> }));
+beforeEach(() => { vi.clearAllMocks(); mocks.load.mockResolvedValue(undefined); mocks.save.mockResolvedValue(undefined); mocks.call.mockResolvedValue({}); mocks.send.mockResolvedValue('0x'+'ab'.repeat(32)); mocks.receipt.mockResolvedValue({status:'success'}); vi.stubGlobal('fetch',vi.fn().mockResolvedValue({ok:true,json:async()=>({metadataUri:'ipfs://bafytest',storage:{copies:2}})})); URL.createObjectURL=vi.fn(()=> 'blob:preview'); URL.revokeObjectURL=vi.fn(); });
+afterEach(()=>{cleanup();vi.unstubAllGlobals();});
+async function review() { render(<CreateClient/>); const input=screen.getByLabelText('Artwork file'); await waitFor(()=>expect((input as HTMLInputElement).disabled).toBe(false)); fireEvent.change(input,{target:{files:[new File(['artwork'],'art.png',{type:'image/png'})]}}); fireEvent.click(screen.getByText('Continue')); fireEvent.change(screen.getByLabelText('Artwork name'),{target:{value:'First artwork'}}); fireEvent.click(screen.getByText('Continue')); }
+it('requires two storage copies, simulates, submits once, and shows the receipt',async()=>{ await review(); fireEvent.click(screen.getByText('Mint NFT')); await screen.findByText('Published'); expect(mocks.session).toHaveBeenCalledOnce(); expect(mocks.call).toHaveBeenCalledOnce(); expect(mocks.send).toHaveBeenCalledOnce(); expect(mocks.save).toHaveBeenCalledWith(expect.objectContaining({txHash:'0x'+'ab'.repeat(32)})); fireEvent.click(screen.getByText('Create another NFT')); expect(screen.getByText('Choose your artwork')).toBeTruthy(); });
+it('preserves the draft and never sends a mint when backup verification fails',async()=>{ vi.mocked(fetch).mockResolvedValue({ok:false,json:async()=>({error:'Backup unavailable'})} as Response); await review(); fireEvent.click(screen.getByText('Mint NFT')); await screen.findByText('Backup unavailable'); expect(mocks.send).not.toHaveBeenCalled(); expect(screen.getAllByText('First artwork').length).toBeGreaterThan(0); });
+it('checks an existing pending receipt without submitting another mint',async()=>{ mocks.load.mockResolvedValue({name:'Pending',description:'',wallet:mocks.address,chainId:11155111,txHash:'0x'+'ab'.repeat(32)}); render(<CreateClient/>); fireEvent.click(await screen.findByText('Check confirmation')); await screen.findByText('Published'); expect(mocks.send).not.toHaveBeenCalled(); expect(fetch).not.toHaveBeenCalled(); });
+it('does not send when simulation rejects the transaction',async()=>{mocks.call.mockRejectedValue(new Error('Contract paused')); await review();fireEvent.click(screen.getByText('Mint NFT'));await screen.findByText('Contract paused');expect(mocks.send).not.toHaveBeenCalled();});

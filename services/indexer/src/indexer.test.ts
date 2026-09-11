@@ -1,10 +1,15 @@
+import { issueToken } from "../../../packages/auth/session.mjs";
 import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { Readable } from "node:stream";
 import { describe, expect, it, onTestFinished, vi } from "vitest";
 import type { PrismaClient } from "@prisma/client";
-import { createRequestHandler, isTransientRpcProviderError, summarizeAdminProtection } from "./indexer.js";
+import { createRequestHandler as actualCreateRequestHandler, isTransientRpcProviderError, summarizeAdminProtection } from "./indexer.js";
+
+function createRequestHandler(deps: Parameters<typeof actualCreateRequestHandler>[0], config: Parameters<typeof actualCreateRequestHandler>[1]) {
+  return actualCreateRequestHandler({ verifyProfileIdentityImpl: async () => true, ...deps }, config);
+}
 
 function createMockPrisma(): PrismaClient {
   return {
@@ -93,7 +98,13 @@ function createReq(params: {
   const req = Readable.from(params.body ? [params.body] : []) as IncomingMessage;
   req.method = params.method;
   req.url = params.url;
-  req.headers = { host: "localhost", ...(params.headers || {}) };
+  const secret = "test-only-session-secret-32-characters-long";
+  process.env.SESSION_SECRET = secret;
+  let actor: string | undefined;
+  try { const body = JSON.parse(params.body || "{}"); actor = body.actorAddress || body.currentOwnerAddress || body.ownerAddress; } catch { /* malformed-body test */ }
+  actor ||= new URL(params.url, "http://localhost").searchParams.get("actorAddress") || undefined;
+  const session = actor && /^0x[0-9a-f]{40}$/i.test(actor) ? issueToken({ purpose: "session", address: actor.toLowerCase(), exp: Date.now() + 60_000 }, secret) : undefined;
+  req.headers = { host: "localhost", ...(session ? { authorization: `Bearer ${session}` } : {}), ...(params.headers || {}) };
   (req as any).socket = { remoteAddress: "127.0.0.1" };
   return req;
 }
@@ -176,6 +187,25 @@ describe("indexer handler", () => {
     const response = await runHandler(handler, createReq({ method: "GET", url: "/api/moderation/reports?status=oops" }));
     expect(response.status).toBe(400);
     expect(response.body.error).toContain("Invalid status query");
+  });
+
+  it("rejects unsigned profile claims and unverified ENS names", async () => {
+    const handler = actualCreateRequestHandler({ prisma: createMockPrisma(), getClientIpImpl: () => "127.0.0.1", isRateLimitedImpl: () => false, verifyProfileIdentityImpl: async () => false }, { chainId: 11155111, adminToken: "test-admin", adminAllowlist: new Set(), trustProxy: false });
+    const payload = { source: "ens", name: "artist.eth", ownerAddress: "0x1111111111111111111111111111111111111111" };
+    const unsigned = await runHandler(handler, createReq({ method: "POST", url: "/api/profiles/link", body: JSON.stringify(payload), headers: { authorization: "" } }));
+    expect(unsigned.status).toBe(401);
+    const unverified = await runHandler(handler, createReq({ method: "POST", url: "/api/profiles/link", body: JSON.stringify(payload) }));
+    expect(unverified.status).toBe(403);
+    const wrongWallet = await runHandler(handler, createReq({ method: "POST", url: "/api/profiles/link", body: JSON.stringify({ ...payload, source: "wallet", name: "0x2222222222222222222222222222222222222222" }) }));
+    expect(wrongWallet.status).toBe(400);
+  });
+
+  it("does not authenticate a caller-supplied allowlisted address", async () => {
+    const actor = "0x00000000000000000000000000000000000000aa";
+    expect(summarizeAdminProtection({ adminToken: "", adminAllowlist: new Set([actor]) }).protected).toBe(false);
+    const handler = createRequestHandler({ prisma: createMockPrisma(), getClientIpImpl: () => "127.0.0.1", isRateLimitedImpl: () => false }, { chainId: 11155111, adminToken: "", adminAllowlist: new Set([actor]), trustProxy: false });
+    const result = await runHandler(handler, createReq({ method: "POST", url: "/api/moderation/listings/42/visibility", headers: { "content-type": "application/json", "x-admin-address": actor }, body: JSON.stringify({ hidden: true, actor }) }));
+    expect(result.status).toBe(401);
   });
 
   it("enforces admin token for visibility mutation", async () => {

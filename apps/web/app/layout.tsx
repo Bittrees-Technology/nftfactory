@@ -3,8 +3,8 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import AppProviders from "../components/AppProviders";
 import DeployHealthBanner from "../components/DeployHealthBanner";
-import HeaderWalletButton from "../components/HeaderWalletButton";
-import { resolveWalletConnectProjectId } from "../lib/walletConnect";
+import SiteNavigation from "../components/SiteNavigation";
+import { resolveConfiguredWalletConnectProjectId } from "../lib/walletConnect";
 
 export const metadata: Metadata = {
   title: "NFTFactory",
@@ -12,31 +12,20 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  const walletConnectProjectId = resolveWalletConnectProjectId();
+  const walletConnectProjectId = resolveConfiguredWalletConnectProjectId();
 
   return (
     <html lang="en">
       <body>
         <AppProviders walletConnectProjectId={walletConnectProjectId}>
           <main>
-            <div className="topBar">
-              <nav>
-                <div className="brandCluster">
-                  <Link href="/" className="brandLink">NFTFactory</Link>
-                  <p className="brandMeta">Creator-owned mint, profile, and collection operations in one surface.</p>
-                </div>
-                <div className="navLinks">
-                  <Link href="/" className="navPill">Home</Link>
-                  <Link href="/mint" className="navPill">Mint</Link>
-                  <Link href="/discover" className="navPill">Discover</Link>
-                  <Link href="/profile" className="navPill">Profile</Link>
-                  <Link href="/wiki" className="navPill">Wiki</Link>
-                </div>
-                <HeaderWalletButton />
-              </nav>
-              <DeployHealthBanner />
-            </div>
+            <a className="skipLink" href="#page-content">Skip to content</a>
+            <SiteNavigation />
+            <DeployHealthBanner />
+            <div id="page-content">
             {children}
+            </div>
+            <footer className="siteFooter"><span>NFTFactory · Create and share</span><Link href="/wiki">Help & documentation</Link><Link href="/wiki/acer-ipfs-integration">Storage status</Link></footer>
           </main>
         </AppProviders>
       </body>

@@ -80,3 +80,7 @@ Out of scope for the current release unless explicitly implemented and validated
 - [Profiles and Identity](./Profiles-and-Identity.md)
 - [Deployment and Launch](./Deployment-and-Launch.md)
 - [Testing and Validation](./Testing-and-Validation.md)
+
+## Refresh implementation validation
+
+See [Product refresh implementation and release validation](Product-Refresh-Implementation-2026-09-11.md) for completed changes, test evidence, and the offsite infrastructure launch gates.

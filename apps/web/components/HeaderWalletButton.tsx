@@ -1,74 +1,12 @@
-"use client";
-
-import { ConnectButton } from "@rainbow-me/rainbowkit";
-import { getEnabledAppChainIds } from "../lib/chains";
-
+'use client';
+import { useRef, useState } from 'react';
+import { useAccount, useConnect, useConnectors, useDisconnect, useSwitchChain, useWalletClient } from 'wagmi';
+import { getPrimaryAppChainId, getAppChain } from '../lib/chains';
+import { ensureWalletSession } from '../lib/walletSession';
 export default function HeaderWalletButton() {
-  const supportedChainIds = getEnabledAppChainIds();
-
-  return (
-    <ConnectButton.Custom>
-      {({
-        account,
-        chain,
-        mounted,
-        openAccountModal,
-        openChainModal,
-        openConnectModal
-      }) => {
-        const ready = mounted;
-        const currentChainId = typeof chain?.id === "number" ? chain.id : null;
-        const connected = Boolean(ready && account && chain);
-        const unsupportedConfiguredNetwork = Boolean(
-          connected && currentChainId !== null && !supportedChainIds.includes(currentChainId)
-        );
-
-        function onClick() {
-          if (!connected) {
-            openConnectModal();
-            return;
-          }
-          if (chain?.unsupported || unsupportedConfiguredNetwork) {
-            openChainModal();
-            return;
-          }
-          openAccountModal();
-        }
-
-        const title = !connected
-          ? "Connect wallet"
-          : unsupportedConfiguredNetwork || chain?.unsupported
-              ? "Select a supported network"
-              : `Wallet connected on ${chain?.name || "Unknown network"}`;
-
-        const ariaLabel = !connected
-          ? "Open wallet login"
-          : unsupportedConfiguredNetwork || chain?.unsupported
-              ? "Open network selector"
-              : "Open wallet account";
-
-        const buttonLabel = !connected
-          ? "Connect"
-          : unsupportedConfiguredNetwork || chain?.unsupported
-              ? "Wrong network"
-              : account?.displayName || "Wallet";
-
-        return (
-          <button
-            type="button"
-            className={`headerWalletButton ${connected ? "walletConnected" : ""}`}
-            onClick={onClick}
-            aria-label={ariaLabel}
-            title={title}
-          >
-            <span className="walletGlyph" aria-hidden="true">
-              <span className="walletDot" />
-              <span className="walletStem" />
-            </span>
-            <span className="walletButtonLabel">{buttonLabel}</span>
-          </button>
-        );
-      }}
-    </ConnectButton.Custom>
-  );
+  const { address, chainId } = useAccount();
+  const connectors = useConnectors(); const { connectAsync, isPending } = useConnect(); const { disconnect } = useDisconnect(); const { switchChainAsync } = useSwitchChain(); const { data: wallet } = useWalletClient();
+  const dialog = useRef<HTMLDialogElement>(null); const [error,setError] = useState(''); const [busy,setBusy] = useState(false);
+  const target = getPrimaryAppChainId();
+  return <><button className={`headerWalletButton ${address ? 'walletConnected' : ''}`} onClick={()=>dialog.current?.showModal()} aria-label={address ? 'Open wallet account' : 'Connect wallet'}>{address ? `${address.slice(0,6)}…${address.slice(-4)}` : 'Connect'}</button><dialog ref={dialog} className="walletDialog" aria-labelledby="wallet-title"><div className="walletDialogHeader"><h2 id="wallet-title">{address?'Your wallet':'Connect a wallet'}</h2><button className="secondary" aria-label="Close wallet dialog" onClick={()=>dialog.current?.close()}>Close</button></div>{!address ? <div className="walletOptions">{connectors.map(connector=><button key={connector.uid} disabled={isPending} onClick={async()=>{setError('');try {await connectAsync({connector});dialog.current?.close();}catch{setError('Connection was not completed. Unlock your wallet and retry.');}}}>{connector.id==='injected'?'Browser wallet':connector.name}</button>)}<p className="hint">Use an installed wallet or scan with a supported mobile wallet.</p></div> : <><p className="receiptHash">{address}</p>{chainId!==target && <button onClick={async()=>{try{await switchChainAsync({chainId:target});}catch{setError('Network switch was not completed.');}}}>Switch to {getAppChain(target).name}</button>}<div className="walletOptions"><button disabled={busy || !wallet} onClick={async()=>{if(!wallet)return;setBusy(true);try{await ensureWalletSession(address,args=>wallet.signMessage(args));setError('Signed in. You can now save changes.');}catch{setError('Sign-in was not completed.');}finally{setBusy(false);}}}>Sign in to save changes</button><button className="secondary" onClick={()=>{void fetch('/api/auth',{method:'DELETE'});disconnect();dialog.current?.close();}}>Disconnect</button></div></>}<p role="status">{error}</p></dialog></>;
 }

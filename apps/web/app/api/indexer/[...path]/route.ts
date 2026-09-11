@@ -1,3 +1,4 @@
+import { requireSession, cookieValue, SESSION_COOKIE } from "../../../../lib/server/session";
 import { NextResponse } from "next/server";
 import { getIndexerBaseUrl } from "../../../../lib/indexerApi";
 import { evaluateIndexerProxyRequest } from "../../../../lib/indexerProxyPolicy";
@@ -58,7 +59,9 @@ async function proxyRequest(
       return NextResponse.json({ error: policy.error }, { status: policy.status });
     }
 
+    let sessionToken = cookieValue(request, SESSION_COOKIE);
     if (isIndexerProxyWriteMethod(method)) {
+      try { sessionToken = requireSession(request).token; } catch { return NextResponse.json({ error: "Sign in with your wallet before making changes." }, { status: 401 }); }
       const rateLimitError = rateLimitRequest(request, INDEXER_PROXY_WRITE_RATE_LIMIT);
       if (rateLimitError) {
         return NextResponse.json({ error: rateLimitError.error }, { status: rateLimitError.status, headers: rateLimitError.headers });
@@ -81,6 +84,7 @@ async function proxyRequest(
       }
     }
     const body = hasBody ? await request.text() : undefined;
+    if (body && Buffer.byteLength(body) > INDEXER_PROXY_MAX_BODY_BYTES) return NextResponse.json({ error: "Request too large." }, { status: 413 });
     const contentType = request.headers.get("Content-Type");
     const { signal, cleanup } = withTimeout();
 
@@ -88,9 +92,11 @@ async function proxyRequest(
       const response = await fetch(upstreamUrl, {
         method,
         headers: {
-          ...(contentType ? { "Content-Type": contentType } : {})
+          ...(contentType ? { "Content-Type": contentType } : {}),
+          ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {})
         },
         body,
+        redirect: "error",
         cache: "no-store",
         signal
       });

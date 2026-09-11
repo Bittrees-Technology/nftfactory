@@ -1,13 +1,13 @@
 import type { NextConfig } from "next";
 import path from "node:path";
-import { resolveBasicAuthConfig } from "./lib/basicAuth";
+import { resolveBasicAuthConfig } from "./lib/basicAuth.ts";
 import {
   buildIpfsAuthRequirementError,
   buildIpfsReachabilityError,
   isPrivateOrLocalUrl,
   isPublicIpfsApiMissingRequiredAuth,
   resolveIpfsApiUrl
-} from "./lib/ipfsUpload";
+} from "./lib/ipfsUpload.ts";
 
 const primaryChainId = process.env.NEXT_PUBLIC_PRIMARY_CHAIN_ID || process.env.NEXT_PUBLIC_CHAIN_ID || "1";
 
@@ -158,7 +158,7 @@ const nextConfig: NextConfig = {
   // Tree-shake large barrel packages so webpack only resolves the named exports
   // actually used. Dramatically reduces the module graph for wagmi/viem/rainbowkit.
   experimental: {
-    optimizePackageImports: ["wagmi", "viem", "@wagmi/core", "@rainbow-me/rainbowkit"]
+    optimizePackageImports: ["wagmi", "viem", "@wagmi/core"]
   },
   webpack: (config) => {
     config.resolve = config.resolve || {};
