@@ -6,7 +6,7 @@ Refresh the existing brand, retaining NFTFactory, URLs, navigation labels, creat
 
 ## Audit before implementation
 
-The homepage used cream backgrounds, a CSS placeholder image, three equal process columns, and generic publishing copy. Existing typography named IBM Plex Sans without loading it. Rounded buttons and surfaces had inconsistent radii. The root description referenced nftfactory.eth; most routes inherited the same title. No sitemap, robots file, or social sharing image was present. Protection already sends noindex headers and must remain. No Search Console, traffic, or ranking data was available; this is a source and UX review, not a measured ranking report.
+The homepage used cream backgrounds, a CSS placeholder image, three equal process columns, and generic publishing copy. Existing typography named IBM Plex Sans without loading it. Rounded buttons and surfaces had inconsistent radii. The root description referenced nftfactory.eth; most routes inherited the same title. No sitemap, robots file, or social sharing image was present. Protection already sends noindex headers and must remain. A live unauthenticated check on September 11 returned HTTP 401 and noindex headers at https://nftfactory.org. https://www.nftfactory.org failed TLS validation because its certificate does not cover that hostname; fix the Vercel hostname/certificate and redirect before indexing. No Search Console, traffic, or ranking data was available; this is a source and UX review, not a measured ranking report.
 
 Preserve: Create / Explore / Marketplace / My studio navigation, semantic links, skip link, wallet confirmation, existing profile themes, storage disclosures. Retire: placeholder artwork, decorative gradients on shared surfaces, repeated generic cards, vague ownership claims.
 
@@ -20,7 +20,7 @@ Preserve: Create / Explore / Marketplace / My studio navigation, semantic links,
 ## Launch and marketing recommendations, in order
 
 1. Complete the existing contract/runtime and live-wallet acceptance gates before publishing this revision. No deployment or Acer update is part of this refresh.
-2. After launch approval, remove site protection and set `SITE_SEARCH_INDEXING_ENABLED=true` and rebuild only for the public production site. Verify robots, canonical host redirects, and sitemap on nftfactory.org; submit the sitemap through the owner's Google Search Console account. Default is noindex even without a password.
+2. After launch approval, remove site protection and set `SITE_SEARCH_INDEXING_ENABLED=true` and rebuild only for the public production site. Repair the www.nftfactory.org certificate/hostname configuration and redirect www to the canonical apex. Verify robots, canonical host redirects, and sitemap on nftfactory.org; submit the sitemap through the owner's Google Search Console account. Default is noindex even without a password.
 3. Add server-rendered, verified artwork/profile descriptions and individual sharing images before expanding the sitemap to creator content. Avoid indexing thin, missing, or unverified records. Current detail pages remain outside this sitemap.
 4. Publish a real creator walkthrough: upload, preview, wallet confirmation, profile customization, collection import. Explain fees and storage without implying guaranteed permanence or copyright transfer.
 5. Invite a small group of artists to publish real work, with consent for editorial features. Promote their own collection links through owned channels; no paid campaign is needed at launch.
