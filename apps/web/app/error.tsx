@@ -22,8 +22,8 @@ export default function GlobalError({
             <button type="button" onClick={reset}>
               Retry app load
             </button>
-            <Link href="/wiki/infrastructure-and-operations" className="ctaLink secondaryLink">
-              Review ops notes
+            <Link href="/wiki" className="ctaLink secondaryLink">
+              Help & documentation
             </Link>
           </>
         }

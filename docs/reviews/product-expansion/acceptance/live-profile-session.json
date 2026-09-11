@@ -1,0 +1,50 @@
+{
+  "deployment": "dpl_3rsfvc7qBfQmR7XkJQVfti6MUCkH",
+  "source": "689d0c64e4a339c1f38811d96436dc9842c0a6fc",
+  "date": "2026-09-11",
+  "route": "https://nftfactory.org/profile/setup",
+  "wallet": "0xE5350D96FC3161BF5c385843ec5ee24E8B465B2f",
+  "chainId": 11155111,
+  "method": "Native Brave accessibility observations through CUA",
+  "checks": [
+    {
+      "controls": [
+        "R207",
+        "R214"
+      ],
+      "action": "Select NFTFactory Sepolia Acceptance; Save draft",
+      "observed": "Selected checkbox; Draft saved on this device. Your public page is unchanged.",
+      "result": "passed"
+    },
+    {
+      "controls": [
+        "R207",
+        "R215"
+      ],
+      "action": "Unselect featured NFT; Restore draft",
+      "observed": "Selection restored; Local draft restored. Preview it before publishing.",
+      "result": "passed"
+    },
+    {
+      "controls": [
+        "R213"
+      ],
+      "action": "Preview page",
+      "observed": "Featured and collected artwork render with chain-aware NFT and collection links",
+      "result": "passed"
+    },
+    {
+      "controls": [
+        "R216"
+      ],
+      "action": "Save creator page",
+      "observed": "Rabby sign-in request for nftfactory.org, expected EOA, chain 11155111, five-minute expiry; explicit no-transaction/no-asset-permission message",
+      "result": "signature pending; publication not verified"
+    }
+  ],
+  "limitations": [
+    "No completed signature or publication in this record",
+    "No mobile, keyboard or account-change result inferred",
+    "NFT displayed is an existing test NFT, not a new replacement-contract mint"
+  ]
+}

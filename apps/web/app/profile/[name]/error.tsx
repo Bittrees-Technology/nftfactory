@@ -37,8 +37,8 @@ export default function ProfileError({
             <Link href="/discover" className="ctaLink secondaryLink">
               Open creator directory
             </Link>
-            <Link href="/wiki/infrastructure-and-operations" className="ctaLink secondaryLink">
-              Ops notes
+            <Link href="/wiki" className="ctaLink secondaryLink">
+              Help & documentation
             </Link>
           </>
         }
