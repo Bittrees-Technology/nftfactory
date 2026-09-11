@@ -19,11 +19,23 @@
     "mobileDocumentWidth": 375,
     "previewUsesPublicRenderer": true
   },
-  "acceptancePending": [
-    "User wallet unlock",
-    "Restore and style user draft in production editor",
-    "Owner sign-in and publication",
-    "Reload published profile and verify saved customization"
-  ],
-  "scope": "Reusable profile editor and renderer only. No account-specific example route or authored profile content in repository."
+  "acceptancePending": [],
+  "scope": "Reusable profile editor and renderer only. No account-specific example route or authored profile content in repository.",
+  "liveCreationAcceptance": {
+    "path": "Production profile setup UI",
+    "draftRestore": "pass",
+    "customization": "Entered through form controls",
+    "ownerSignIn": "User signed successfully",
+    "publication": "Editor confirmed ready to share",
+    "savedProfileReadback": {
+      "theme": "retro",
+      "palette": "acid",
+      "top8Count": 8,
+      "panelCount": 2,
+      "headline": true,
+      "sticker": true
+    },
+    "disconnectedPublicPage": "Rendered saved profile title, interests and panels",
+    "profileContentStoredInRepository": false
+  }
 }
