@@ -3122,3 +3122,30 @@ describe("indexer consistency hardening", () => {
     });
   });
 });
+
+it("serves a fresh marketplace feed without scanning historical offer logs", async () => {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "nftfactory-empty-market-"));
+  vi.stubEnv("INDEXER_MARKETPLACE_SYNC_STATE_FILE", path.join(tempDir, "marketplace.json"));
+  vi.stubEnv("INDEXER_TOKEN_PRESENTATION_FILE", path.join(tempDir, "presentation.json"));
+  vi.stubEnv("INDEXER_MARKETPLACE_RETENTION_DAYS", "0");
+  readContractMock.mockResolvedValue(0n);
+  getLogsMock.mockImplementation(async () => { throw new Error("Historical logs must not be requested for an empty market"); });
+  const prisma = {
+    token: {findMany: vi.fn(async () => [])},
+    listing: {updateMany: vi.fn(async () => ({count: 0}))},
+    offer: {upsert: vi.fn()},
+    $queryRawUnsafe: createSchemaQueryMock({mintTxHash:true,tokenPresentation:true,listingV2:true,offerTable:true,tokenHoldingTable:true})
+  } as unknown as PrismaClient;
+  const createRequestHandler = await loadCreateRequestHandler();
+  const handler = createRequestHandler({prisma,getClientIpImpl:()=>"127.0.0.1",isRateLimitedImpl:()=>false}, {
+    chainId:11155111,rpcUrl:"http://127.0.0.1:8545",adminToken:"",adminAllowlist:new Set(),trustProxy:false,
+    marketplaceAddress:"0xbde18862bc7ff0b72dd0a47ae2b746a53a800b4d",registryAddress:null,moderatorRegistryAddress:null
+  });
+  try {
+    const response = await runHandler(handler, createReq({method:"GET",url:"/api/feed?cursor=0&limit=48"}));
+    expect(response.status).toBe(200);
+    expect(response.body.items).toEqual([]);
+    expect(readContractMock.mock.calls.some(([request]) => request.functionName === "nextOfferId")).toBe(true);
+    expect(getLogsMock).not.toHaveBeenCalled();
+  } finally { await rm(tempDir,{recursive:true,force:true}); }
+});
