@@ -73,5 +73,5 @@ Creators should:
 ## Related pages
 
 - [Contracts](./Contracts.md)
-- [Upgrade Runbook](./Upgrade-Runbook.md)
-- [Operations and Governance](./Operations-and-Governance.md)
+- [Upgrade Runbook](https://github.com/Bittrees-Technology/nftfactory/blob/main/docs/wiki/Upgrade-Runbook.md)
+- [Operations and Governance](https://github.com/Bittrees-Technology/nftfactory/blob/main/docs/wiki/Operations-and-Governance.md)

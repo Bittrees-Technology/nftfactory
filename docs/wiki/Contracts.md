@@ -124,6 +124,6 @@ It depends on registry blocklist and fee state at runtime. The original basic Ma
 
 - [ENS Integration](./ENS-Integration.md)
 - [Finality](./Finality.md)
-- [Contract Dependencies](./Contract-Dependencies.md)
-- [Operations and Governance](./Operations-and-Governance.md)
-- [Testing and Validation](./Testing-and-Validation.md)
+- [Contract Dependencies](https://github.com/Bittrees-Technology/nftfactory/blob/main/docs/wiki/Contract-Dependencies.md)
+- [Operations and Governance](https://github.com/Bittrees-Technology/nftfactory/blob/main/docs/wiki/Operations-and-Governance.md)
+- [Testing and Validation](https://github.com/Bittrees-Technology/nftfactory/blob/main/docs/wiki/Testing-and-Validation.md)

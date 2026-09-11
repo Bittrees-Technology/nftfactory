@@ -1,7 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import {useAccount,useWalletClient} from "wagmi";
+import {ensureWalletSession} from "../../lib/walletSession";
+import HeaderWalletButton from "../HeaderWalletButton";
 import {
   deleteProfileGuestbookEntry,
   fetchProfileGuestbook,
@@ -39,12 +42,24 @@ function getEntryStatus(entry: ApiProfileGuestbookEntry): "Visible" | "Hidden" |
 
 export default function ProfileModerationClient() {
   const [profileName, setProfileName] = useState("");
-  const [actorAddress, setActorAddress] = useState("");
+  const {address,chainId}=useAccount();
+  const {data:wallet}=useWalletClient();
+  const actorAddress=address||"";
+  const accountKey=`${address||""}:${chainId||""}`;
+  const currentAccount=useRef(accountKey);currentAccount.current=accountKey;
   const [entries, setEntries] = useState<ApiProfileGuestbookEntry[]>([]);
   const [activeEntryId, setActiveEntryId] = useState<string | null>(null);
   const [loadState, setLoadState] = useState<ActionState>(idleActionState());
   const [mutationState, setMutationState] = useState<ActionState>(idleActionState());
 
+  useEffect(()=>{setEntries([]);setActiveEntryId(null);setLoadState(idleActionState());setMutationState(idleActionState());},[address,chainId]);
+  async function signIn(){
+    if(!address||!wallet)throw new Error('Connect your wallet to moderate this profile.');
+    const key=accountKey;
+    await ensureWalletSession(address,args=>wallet.signMessage(args));
+    const assertCurrent=()=>{if(currentAccount.current!==key)throw new Error('Wallet changed. Load the profile again.');};
+    assertCurrent();return assertCurrent;
+  }
   const normalizedProfileName = useMemo(() => profileName.trim(), [profileName]);
   const normalizedActorAddress = useMemo(() => actorAddress.trim().toLowerCase(), [actorAddress]);
   const counts = useMemo(
@@ -67,10 +82,12 @@ export default function ProfileModerationClient() {
     }
     setLoadState(pendingActionState("Loading guestbook moderation view..."));
     try {
+      const assertCurrent=await signIn();
       const response = await fetchProfileGuestbook(normalizedProfileName, {
         includeHidden: true,
         actorAddress: normalizedActorAddress
       });
+      assertCurrent();
       setEntries(response.entries || []);
       setLoadState(successActionState("Guestbook moderation data loaded."));
     } catch (error) {
@@ -86,11 +103,13 @@ export default function ProfileModerationClient() {
     setActiveEntryId(entryId);
     setMutationState(pendingActionState("Hiding guestbook entry..."));
     try {
+      const assertCurrent=await signIn();
       const response = await hideProfileGuestbookEntry({
         name: normalizedProfileName,
         entryId,
         currentOwnerAddress: normalizedActorAddress
       });
+      assertCurrent();
       setEntries((current) =>
         current.map((entry) =>
           entry.id === entryId
@@ -114,11 +133,13 @@ export default function ProfileModerationClient() {
     setActiveEntryId(entryId);
     setMutationState(pendingActionState("Restoring guestbook entry..."));
     try {
+      const assertCurrent=await signIn();
       const response = await restoreProfileGuestbookEntry({
         name: normalizedProfileName,
         entryId,
         currentOwnerAddress: normalizedActorAddress
       });
+      assertCurrent();
       setEntries((current) =>
         current.map((entry) =>
           entry.id === entryId
@@ -148,11 +169,13 @@ export default function ProfileModerationClient() {
     setActiveEntryId(entryId);
     setMutationState(pendingActionState("Deleting guestbook entry..."));
     try {
+      const assertCurrent=await signIn();
       await deleteProfileGuestbookEntry({
         name: normalizedProfileName,
         entryId,
         currentOwnerAddress: normalizedActorAddress
       });
+      assertCurrent();
       setEntries((current) =>
         current.map((entry) =>
           entry.id === entryId ? { ...entry, deletedAt: new Date().toISOString(), deletedBy: normalizedActorAddress } : entry
@@ -169,10 +192,11 @@ export default function ProfileModerationClient() {
   return (
     <section className="wizard">
       <div className="card formCard profileStudioCard">
-        <h2>Profile Moderation</h2>
+        <h1>Profile moderation</h1>
         <p className="sectionLead">
           Owner and moderator tools for creator guestbook entries. This workspace loads the public queue plus hidden and deleted history for the actor wallet.
         </p>
+        {!address&&<HeaderWalletButton/>}
         <div className="gridMini">
           <label>
             Profile name
@@ -180,11 +204,11 @@ export default function ProfileModerationClient() {
           </label>
           <label>
             Actor wallet
-            <input value={actorAddress} onChange={(event) => setActorAddress(event.target.value)} placeholder="0x..." />
+            <input value={actorAddress} readOnly placeholder="Connect your wallet" />
           </label>
         </div>
         <div className="row">
-          <button type="button" onClick={() => void loadEntries()} disabled={loadState.status === "pending"}>
+          <button type="button" onClick={() => void loadEntries()} disabled={!address||!wallet||loadState.status === "pending"}>
             {loadState.status === "pending" ? "Loading..." : "Load Guestbook"}
           </button>
           {normalizedProfileName ? (
@@ -197,7 +221,7 @@ export default function ProfileModerationClient() {
       </div>
 
       <div className="card formCard profileStudioCard">
-        <h3>Guestbook Queue</h3>
+        <h2>Guestbook queue</h2>
         <p className="hint">Visible: {counts.visible} | Hidden: {counts.hidden} | Deleted: {counts.deleted}</p>
         {entries.length === 0 ? <p className="hint">No guestbook entries loaded yet.</p> : null}
         {entries.length > 0 ? (

@@ -1,6 +1,6 @@
 import type { IncomingMessage } from "node:http";
 import { describe, it, expect, beforeEach } from "vitest";
-import { getClientIp, isAddress, isZeroAddress, normalizeSubname, parseBearerToken, isRateLimited, resetRateLimits } from "./utils.js";
+import { publicRpcOrigin, getClientIp, isAddress, isZeroAddress, normalizeSubname, parseBearerToken, isRateLimited, resetRateLimits } from "./utils.js";
 
 describe("isAddress", () => {
   it("accepts valid checksummed address", () => {
@@ -155,3 +155,5 @@ describe("isRateLimited", () => {
     expect(isRateLimited("5.6.7.8")).toBe(false);
   });
 });
+
+it("redacts RPC path, query, fragments and URL userinfo from diagnostics",()=>{expect(publicRpcOrigin("https://user:password@rpc.example.org/v2/secret?key=hidden#token")).toBe("https://rpc.example.org");expect(publicRpcOrigin("not a URL with secret")).toBe("unavailable");expect(publicRpcOrigin("file:///private/key")).toBe("unavailable");});

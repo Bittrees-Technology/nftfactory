@@ -66,4 +66,4 @@ The build does **not**:
 
 - [Profiles and Identity](./Profiles-and-Identity.md)
 - [Contracts](./Contracts.md)
-- [Architecture](./Architecture.md)
+- [Architecture](https://github.com/Bittrees-Technology/nftfactory/blob/main/docs/wiki/Architecture.md)

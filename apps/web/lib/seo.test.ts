@@ -1,10 +1,11 @@
 vi.mock('./publicSeo', () => ({ publicCreatorSitemapPaths: async () => [] }));
+import {promises as fs} from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { canIndexSite, pageMetadata } from './seo';
 import robots from '../app/robots';
 import sitemap from '../app/sitemap';
 
-afterEach(() => vi.unstubAllEnvs());
+afterEach(() => {vi.unstubAllEnvs();vi.restoreAllMocks();});
 describe('search launch boundary', () => {
   it('requires explicit opt-in and never indexes preview or protected sites', () => {
     expect(canIndexSite({})).toBe(false);
@@ -29,7 +30,9 @@ describe('search launch boundary', () => {
     vi.stubEnv('SITE_SEARCH_INDEXING_ENABLED', 'true');
     vi.stubEnv('SITE_BASIC_AUTH_ENABLED', 'false');
     vi.stubEnv('VERCEL_ENV', 'production');
+    const read = vi.spyOn(fs,'readdir').mockRejectedValue(new Error('No Markdown files in serverless bundle'));
     const urls = (await sitemap()).map(entry => entry.url);
+    expect(read).not.toHaveBeenCalled();
     expect(urls).toContain('https://nftfactory.org/marketplace');
     expect(urls).toContain('https://nftfactory.org/wiki/storage');
     expect(urls.some(url => /\/(profile|mint|api)\b/.test(url))).toBe(false);

@@ -1,0 +1,95 @@
+{
+  "checkedAt": "2026-09-11T16:16:07.387904+00:00",
+  "environment": "local current source, CUA browser; no fabricated wallet connection",
+  "checks": [
+    {
+      "route": "/profile",
+      "state": "disconnected, desktop",
+      "actions": [
+        "open arrangement controls",
+        "reset order",
+        "press Enter on Move Your creator page later",
+        "reload"
+      ],
+      "observed": "Order persisted as Import artwork, Your creator page, Organize tags, Your listings, Marketplace. First/last boundary buttons disabled.",
+      "result": "pass"
+    },
+    {
+      "route": "/profile/setup",
+      "state": "disconnected, desktop",
+      "actions": [
+        "fill display name/bio/about/links",
+        "select Midnight and Editorial",
+        "press Enter on Move about up",
+        "Preview page"
+      ],
+      "observed": "Preview reflected fields, selected theme/font and section order; HTTPS link rendered; javascript URL excluded. Save draft, restore draft and publication disabled without wallet.",
+      "result": "pass"
+    },
+    {
+      "route": "/profile/setup",
+      "state": "disconnected, mobile viewport 390x844",
+      "actions": [
+        "inspect full-page screenshot",
+        "uncheck links section",
+        "reset appearance"
+      ],
+      "observed": "Preview link disappeared when section disabled; reset restored Gallery/Modern and default order. DOM scrollWidth/clientWidth both 375.",
+      "result": "pass",
+      "limitation": "Responsive desktop browser viewport, not physical phone or mobile wallet acceptance."
+    },
+    {
+      "route": "/profile/setup",
+      "state": "mobile menu",
+      "actions": [
+        "open Menu",
+        "press Escape",
+        "reopen and select My studio"
+      ],
+      "observed": "Escape closed the menu and returned focus to Menu. Navigation reached My studio.",
+      "result": "pass"
+    },
+    {
+      "route": "/profile/import",
+      "state": "disconnected, mobile 390x844",
+      "actions": [
+        "open Import artwork tile",
+        "fill contract and token IDs"
+      ],
+      "observed": "Sepolia selector, contract maxLength 42, token IDs maxLength 800. Preview remains disabled without wallet. No horizontal overflow.",
+      "result": "pass"
+    },
+    {
+      "route": "/profile/tags",
+      "state": "disconnected, mobile 390x844",
+      "actions": [
+        "fill search/contract/token IDs/tags",
+        "choose Public visibility",
+        "choose Remove tags"
+      ],
+      "observed": "Search and Remove public tags remain disabled without wallet; defaults were Private and Add. No horizontal overflow.",
+      "result": "pass"
+    },
+    {
+      "route": "/marketplace",
+      "state": "disconnected, empty index, mobile",
+      "actions": [
+        "search no-such-artwork",
+        "refresh listings",
+        "open Sell or manage listings"
+      ],
+      "observed": "Clear no-matching-ETH-listings state; seller link opened /profile/listings. No horizontal overflow.",
+      "result": "pass"
+    },
+    {
+      "route": "/profile/listings",
+      "state": "disconnected",
+      "actions": [
+        "inspect selectors, price/duration and submit controls"
+      ],
+      "observed": "Only ETH enabled for new listings; fee refresh and creation disabled without wallet. Section heading skip found and corrected in source; loaded-world trading not tested here.",
+      "result": "partial"
+    }
+  ],
+  "remaining": "Connected publication, import, tags, trading and full conditional control matrix still require evidence."
+}

@@ -1,0 +1,108 @@
+{
+  "scope": "HTTP route and link-target checks on local current source; not browser interaction acceptance",
+  "checkedAt": "2026-09-11T16:07:58.118Z",
+  "results": [
+    {
+      "path": "/",
+      "status": 200,
+      "h1Count": 1,
+      "title": "Create NFTs. Build your body of work. | NFTFactory"
+    },
+    {
+      "path": "/discover",
+      "status": 200,
+      "h1Count": 1,
+      "title": "Explore NFT artwork and creators | NFTFactory"
+    },
+    {
+      "path": "/marketplace",
+      "status": 200,
+      "h1Count": 1,
+      "title": "NFT marketplace | NFTFactory"
+    },
+    {
+      "path": "/mint",
+      "status": 200,
+      "h1Count": 1,
+      "title": "Create an NFT | NFTFactory"
+    },
+    {
+      "path": "/profile",
+      "status": 200,
+      "h1Count": 1,
+      "title": "My studio | NFTFactory"
+    },
+    {
+      "path": "/profile/setup",
+      "status": 200,
+      "h1Count": 1,
+      "title": "Customize your creator page | NFTFactory"
+    },
+    {
+      "path": "/profile/import",
+      "status": 200,
+      "h1Count": 1,
+      "title": "Import a collection | NFTFactory"
+    },
+    {
+      "path": "/profile/tags",
+      "status": 200,
+      "h1Count": 1,
+      "title": "Manage artwork tags | NFTFactory"
+    },
+    {
+      "path": "/profile/listings",
+      "status": 200,
+      "h1Count": 1,
+      "title": "Manage listings | NFTFactory"
+    },
+    {
+      "path": "/profile/moderation",
+      "status": 200,
+      "h1Count": 1,
+      "title": "Review artwork reports | NFTFactory"
+    },
+    {
+      "path": "/wiki",
+      "status": 200,
+      "h1Count": 1,
+      "title": "NFT creator guides | NFTFactory"
+    },
+    {
+      "path": "/wiki/creator-walkthrough",
+      "status": 200,
+      "h1Count": 1,
+      "title": "Your first artwork, from draft to creator page | NFTFactory"
+    },
+    {
+      "path": "/wiki/storage",
+      "status": 200,
+      "h1Count": 1,
+      "title": "Storage and outages | NFTFactory"
+    },
+    {
+      "path": "/wiki/contracts",
+      "status": 200,
+      "h1Count": 1,
+      "title": "Contracts | NFTFactory"
+    },
+    {
+      "path": "/wiki/ens-integration",
+      "status": 200,
+      "h1Count": 1,
+      "title": "ENS Integration | NFTFactory"
+    },
+    {
+      "path": "/wiki/finality",
+      "status": 200,
+      "h1Count": 1,
+      "title": "Finality | NFTFactory"
+    },
+    {
+      "path": "/wiki/profiles-and-identity",
+      "status": 200,
+      "h1Count": 1,
+      "title": "Profiles and Identity | NFTFactory"
+    }
+  ]
+}

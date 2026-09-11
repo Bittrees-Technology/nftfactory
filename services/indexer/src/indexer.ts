@@ -14,7 +14,7 @@ import { pino } from "pino";
 import { createPublicClient, fallback, http } from "viem";
 import { mainnet } from "viem/chains";
 import { normalize } from "viem/ens";
-import { isAddress, isZeroAddress, normalizeSubname, parseBearerToken, getClientIp, isRateLimited } from "./utils.js";
+import { publicRpcOrigin, isAddress, isZeroAddress, normalizeSubname, parseBearerToken, getClientIp, isRateLimited } from "./utils.js";
 import { getSharedBackfillTargets, isStaleIsoTimestamp, normalizeExplicitBackfillTargets } from "./registryBackfill.js";
 
 const IS_TEST_ENV = process.env.VITEST === "1" || process.env.NODE_ENV === "test";
@@ -6182,8 +6182,8 @@ async function handleRequest(
       ok: true,
       service: "indexer-api",
       rpc: {
-        primaryUrl: config.rpcUrl,
-        urls: config.rpcUrls && config.rpcUrls.length > 0 ? config.rpcUrls : [config.rpcUrl]
+        primaryUrl: publicRpcOrigin(config.rpcUrl),
+        urls: (config.rpcUrls && config.rpcUrls.length > 0 ? config.rpcUrls : [config.rpcUrl]).map(publicRpcOrigin)
       },
       contracts: {
         registryAddress: config.registryAddress,
@@ -9105,7 +9105,7 @@ export async function main() {
     );
   }
 
-  log.info({ rpcUrl, rpcUrls, db: dbUrl.slice(0, 18) + "..." }, "Indexer booting");
+  log.info({ rpcOrigin: publicRpcOrigin(rpcUrl), rpcOrigins: rpcUrls.map(publicRpcOrigin), databaseConfigured: Boolean(dbUrl) }, "Indexer booting");
 
   const requestConfig: RequestHandlerConfig = {
     chainId: CHAIN_ID,

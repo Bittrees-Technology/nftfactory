@@ -1121,7 +1121,7 @@ export default function ListingManagementClient({
   const content = (
     <form className="wizard" onSubmit={onSubmit}>
         <div className="card formCard">
-          <h3>1. Select NFT</h3>
+          <h2>1. Select NFT</h2>
           <p className="hint">Choose a standard and select artwork you own. This includes supported NFTs you have imported.</p>
           <div className="gridMini">
             <label>
@@ -1264,7 +1264,7 @@ export default function ListingManagementClient({
         </div>
 
         <div className="card formCard">
-          <h3>2. Create Listing</h3>
+          <h2>2. Create Listing</h2>
           <p className="hint">Set the payment asset, choose the fixed price, and choose how long the listing should stay live.</p>
           <p className="hint">
             Choose an NFT and set its price. Your wallet will show the network and any approval needed before you list it.

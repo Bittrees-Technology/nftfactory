@@ -1,3 +1,4 @@
+import {PUBLIC_WIKI_SLUGS} from "./wikiRoutes";
 import { existsSync, promises as fs } from "node:fs";
 import path from "node:path";
 import { extractWikiHeadings, type WikiHeading } from "./wikiFormat";
@@ -9,15 +10,7 @@ const wikiDirCandidates = [
 ];
 
 const wikiDir = wikiDirCandidates.find((candidate) => existsSync(candidate)) || wikiDirCandidates[0];
-const publicWikiSlugs = new Set([
-  "home",
-  "profiles-and-identity",
-  "ens-integration",
-  "contracts",
-  "finality",
-  "storage",
-  "creator-walkthrough"
-]);
+const publicWikiSlugs = new Set<string>(PUBLIC_WIKI_SLUGS);
 
 export type WikiPageSummary = {
   slug: string;
