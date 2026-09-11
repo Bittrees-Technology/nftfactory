@@ -1,0 +1,35 @@
+{
+  "example": "/examples/retro-profile",
+  "walletReference": "0xB0B0a4C1cDE583C97DA8B42c4E5E623bE4074287",
+  "scope": "Example only; no authenticated profile changes or holdings claims",
+  "checks": {
+    "webTests": 255,
+    "typecheck": "pass",
+    "targetedLint": "pass",
+    "localHTTP": 200,
+    "desktop": {
+      "viewport": 1280,
+      "documentScrollWidth": 1265
+    },
+    "mobile": {
+      "viewport": 390,
+      "documentScrollWidth": 375
+    },
+    "paletteSwitch": "bubblegum updates aria-pressed and page palette",
+    "guestbook": "note appears locally; reload removes note and restores acid palette",
+    "keyboard": "Tab reaches post button; Enter posts preview note",
+    "links": "studio setup, public wallet profile, guestbook anchor verified in DOM"
+  },
+  "production": {
+    "url": "https://nftfactory.org/examples/retro-profile",
+    "http": 200,
+    "addressPresent": true,
+    "sampleLabelPresent": true,
+    "noindex": true,
+    "livePaletteInteraction": "ice selected successfully"
+  },
+  "commit": "3de7b60b578eb88eba6d48581c2bd24209ba6a36",
+  "deployment": "dpl_BZbDA5iSrVg4EFagNKJrrn76YAyL",
+  "pullRequest": "https://github.com/Bittrees-Technology/nftfactory/pull/33",
+  "ci": "https://github.com/Bittrees-Technology/nftfactory/actions/runs/34640943518"
+}
