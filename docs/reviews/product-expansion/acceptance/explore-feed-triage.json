@@ -36,7 +36,12 @@
     "source": "7420b7fa9aa6da5c22020e3a42a4402d18fcb063",
     "behavior": "Skip historical scans when nextOfferId is zero; initialize cursor. Nonempty initial scan begins at INDEXER_START_BLOCK.",
     "validation": "25 consistency tests passed; regression asserts no log request for fresh marketplace. All three CI jobs passed.",
-    "acerPackage": "21 hashes verified; installation awaits local administrator prompt",
-    "liveRetest": "pending installation"
+    "acerPackage": "Installed source 7420b7fa9aa6da5c22020e3a42a4402d18fcb063 independently verified over SSH",
+    "liveRetest": {
+      "httpStatus": 200,
+      "elapsedSeconds": 1.104404,
+      "items": 1,
+      "browser": "Try again rendered one collection. NFTs tab rendered one NFT with chain-scoped links and Not listed state."
+    }
   }
 }

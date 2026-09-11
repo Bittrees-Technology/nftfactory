@@ -1,4 +1,13 @@
-# Live release and remaining acceptance
+# Current follow-up release
+
+The live site now serves deployment `dpl_89nPpQNKXLoH3q2tW9TbNQaJzbpx`, source `4c0bcbd057e008e6de6cc754bf06e8791e0c57da`. Acer runs verified package `7420b7fa9aa6da5c22020e3a42a4402d18fcb063`. PRs #29 and #30 merged with all three CI jobs passing. Recovery-screen help links are repaired. The fresh-market offer history scan that blocked Explore is fixed: feed returned HTTP 200 with one item in 1.1 seconds, and browser retry rendered one collection and one NFT. The NFT detail page displayed artwork, description, separate creator/indexed-owner links, unlisted state and offchain-tag explanation.
+
+All eight replacement contract addresses were reverified in the live mint bundles; home, marketplace, profile setup, robots and sitemap returned HTTP 200 without a password challenge. See `live-release-followup.json` and `explore-feed-triage.json`.
+
+The fresh inventory contains 392 JSX controls, tracked in `../control-acceptance-current.csv`. This is not a completed control audit. Profile draft save/restore and featured-artwork preview passed scoped connected desktop checks. The first sign-in request was not completed within its five-minute window; the editor displayed a recoverable sign-in failure. A fresh request is waiting for the user's signature. Publication, two-wallet trading, imports and physical-phone acceptance remain open.
+
+## Earlier release evidence
+
 
 NFTFactory.org was promoted to deployment `dpl_3rsfvc7qBfQmR7XkJQVfti6MUCkH` from main commit `689d0c64e4a339c1f38811d96436dc9842c0a6fc`. The previous rollback deployment remains `dpl_3s4jyWkSEt28i3R5ud6Wi1DEWCCq`. Site Basic password protection is disabled. Home, marketplace, profile setup, robots, sitemap and deployment health all returned HTTP 200 without credentials; www preserves paths with a 308 HTTPS redirect.
 
