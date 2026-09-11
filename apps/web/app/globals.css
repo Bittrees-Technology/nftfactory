@@ -3950,3 +3950,27 @@ nav.breadcrumb { flex-direction:row; align-items:center; justify-content:flex-st
 .discoveryAvatar { width: 64px; height: 64px; border-radius: 50%; overflow: hidden; }
 .discoveryAvatar img { width: 100%; height: 100%; object-fit: cover; }
 .discoverRecordTitle { margin: 0; overflow-wrap: anywhere; }
+
+/* Product workspaces share a quieter frame around the artwork. */
+.productPageHeader { display:flex; align-items:flex-end; justify-content:space-between; gap:24px; padding:8px 0 24px; border-bottom:1px solid var(--line); }
+.productPageIntro { max-width:680px; min-width:0; }
+.productPageHeader .productPageDescription { max-width:58ch; margin:12px 0 0; color:#62594f; font-size:1.05rem; }
+.productPageActions { display:flex; flex-wrap:wrap; gap:10px; flex-shrink:0; }
+.studioTool { background:#fffcf8; border:1px solid var(--line); border-radius:16px; box-shadow:none; }
+.studioTool h3 a { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+.studioToolArrow { color:var(--accent-dark); font-size:1.15rem; }
+.studioTool p { color:#62594f; max-width:42ch; }
+.studioTool:focus-within { border-color:var(--accent-dark); }
+.creatorArtworkGrid .artworkCard { padding:0; border:1px solid var(--line); border-radius:16px; box-shadow:none; }
+.artworkCardImage, .artworkDetailImage { background:#f2eee7; }
+.artworkCardBody h2, .artworkCardBody h3 { font-size:1.1rem; line-height:1.4; margin:.45rem 0; overflow-wrap:anywhere; }
+.productPageActions .ctaLink { white-space:nowrap; }
+@media(max-width:760px) {
+ .productPageHeader { flex-direction:column; align-items:flex-start; gap:18px; }
+ .productPageActions { width:100%; }
+ .productPageHeader .productPageDescription { font-size:1rem; }
+}
+
+.marketplaceFilters { display:grid; grid-template-columns:minmax(150px,220px) minmax(0,1fr); gap:16px; margin:20px 0; }
+.marketplaceFilters input, .marketplaceFilters select { width:100%; }
+@media(max-width:600px) { .marketplaceFilters { grid-template-columns:1fr; } }

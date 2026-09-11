@@ -1,4 +1,5 @@
 'use client';
+import ProductPageHeader from '../ProductPageHeader';
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi';
@@ -76,7 +77,7 @@ export default function CreateClient({initialChainId}:{initialChainId?:number}={
     finally { busyRef.current = false; setBusy(false); }
   }
   return <section className="studioPage">
-    <header className="pageHeading"><p className="eyebrow">Creator studio</p><h1>Create an NFT</h1><p>Turn your artwork into a one-of-one collectible.</p></header>
+    <ProductPageHeader section="Create" title="Create an NFT" description="Upload your artwork, preview the details, and publish a one-of-one collectible." />
     <ol className="creationSteps" aria-label="Creation progress">{['Artwork', 'Details & preview', 'Review & mint'].map((name, i) => <li key={name} aria-current={stage === i ? 'step' : undefined}>{i + 1}. {name}</li>)}</ol>
     <p className="hint">{draftNotice}</p>
     <div className="createLayout">
