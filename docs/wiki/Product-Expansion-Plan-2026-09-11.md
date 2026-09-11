@@ -1,6 +1,6 @@
 # NFTFactory product expansion plan
 
-Status: planned, following preliminary source inventory. This is not a completed UX or security audit. No application changes accompany this plan.
+Status: implementation authorized; deployment held until final validation. This is not a completed UX or security audit. No application changes accompany this plan.
 
 ## Objective and constraints
 
@@ -94,7 +94,7 @@ Acceptance: funded deployment approval, source verification, correct chain switc
 
 Repeat the page/control matrix against the implemented plan. Run appropriate unit, integration, contract, build, accessibility, desktop, and mobile wallet checks. Validate primary and replica reads, new-upload behavior during Acer outage, latency bounds, recovery, backup restoration, and limits on Filebase storage/bandwidth/pins.
 
-Private offsite database storage is not currently available. Public NFT replication does not provide profile/database failover. Do not claim full outage resilience until an independent private backup destination and a restore drill exist. Document graceful read-only/error behavior while the home service is unavailable and distinguish existing content reads from new uploads/profile writes.
+Private offsite database storage is not currently available and the user has explicitly deferred it until after launch. It is not a launch blocker. Evaluate public profile snapshots for read-only outage availability at $0; these are not private database failover. Do not claim full outage resilience until an independent private backup destination and a restore drill exist. Document graceful read-only/error behavior while the home service is unavailable and distinguish existing content reads from new uploads/profile writes.
 
 Acceptance: final requirement-to-evidence checklist, explicit deferred items, healthy Vercel production configuration, and a reviewed mainnet readiness decision. Preserve the current access restriction until public launch is explicitly authorized.
 

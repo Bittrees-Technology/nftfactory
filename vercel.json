@@ -2,5 +2,8 @@
   "framework": "nextjs",
   "installCommand": "npm ci",
   "buildCommand": "ALLOW_CONCURRENT_WEB=1 npm run build:web",
-  "outputDirectory": "apps/web/.next-build"
+  "outputDirectory": "apps/web/.next-build",
+  "git": {
+    "deploymentEnabled": false
+  }
 }
