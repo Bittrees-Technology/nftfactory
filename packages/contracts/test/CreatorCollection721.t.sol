@@ -17,6 +17,12 @@ contract CreatorCollection721Test is Test {
         collection.initialize(creator, "Creator 721", "C721", "studio", creator, 500);
     }
 
+    function testImplementationCannotBeInitialized() external {
+        CreatorCollection721 implementation = new CreatorCollection721();
+        vm.expectRevert();
+        implementation.initialize(creator, "Locked", "LOCK", "", creator, 500);
+    }
+
     function testPublishMintsSequentialToken() external {
         vm.prank(creator);
         uint256 tokenId = collection.publish(holder, "ipfs://one", true);

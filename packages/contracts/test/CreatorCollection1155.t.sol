@@ -17,6 +17,12 @@ contract CreatorCollection1155Test is Test {
         collection.initialize(creator, "Creator Multi", "CM", "studio", creator, 500);
     }
 
+    function testImplementationCannotBeInitialized() external {
+        CreatorCollection1155 implementation = new CreatorCollection1155();
+        vm.expectRevert();
+        implementation.initialize(creator, "Locked", "LOCK", "", creator, 500);
+    }
+
     function testPublishMintsNewTokenId() external {
         vm.prank(creator);
         collection.publish(holder, 1, 3, "ipfs://one", true);

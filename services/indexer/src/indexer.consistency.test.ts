@@ -251,6 +251,16 @@ describe("indexer consistency hardening", () => {
       mintedAmountRaw: "25"
     });
 
+    // Browser claims cannot overwrite independently indexed permanence/identity.
+    const collectionWrite=(prisma.collection.upsert as any).mock.calls[0][0];
+    expect(collectionWrite.update).not.toHaveProperty('isUpgradeable');
+    expect(collectionWrite.update).not.toHaveProperty('finalizedAt');
+    expect(collectionWrite.update.ensSubname).toBeUndefined();
+    expect(collectionWrite.create).toMatchObject({isFactoryCreated:false,isUpgradeable:true,ensSubname:null});
+    const tokenWrite=(prisma.token.upsert as any).mock.calls[0][0];
+    expect(tokenWrite.update).not.toHaveProperty('immutable');
+    expect(tokenWrite.create.immutable).toBe(false);
+
     const feedResponse = await runHandler(handler, createReq({ method: "GET", url: "/api/feed?cursor=0&limit=10" }));
     expect(feedResponse.status).toBe(200);
     expect(feedResponse.body.items).toHaveLength(1);

@@ -28,3 +28,9 @@ Help tables and internal application links render correctly, the footer storage 
 Migration rehearsal: populated the five-migration baseline with collection, token, listing and offer records; applied new migrations without changing those records; inserted an identical address on another network; restored the original dump into a second database and compared all fixture rows and old schema. No production database was touched.
 
 Remaining release work is listed in [the expansion checkpoint](../Expansion-Checkpoint-2026-09-11.md). Private offsite backups remain deferred. Deployment is still held.
+
+## Additional hardening and import review
+
+Receipt ingestion now distinguishes the creator publication event from the recipient and does not accept browser-supplied permanence, factory provenance, handle attribution, or finalization changes. Internal verified indexing can still populate those facts. Imports now preview metadata/quantity without database mutation and recheck ownership on confirmation. Name-based public pages share the wallet page renderer after a forward-resolution check; a regression covers transferred names.
+
+The first draft PR run found a clean-install CI gap: the indexer job did not generate its Prisma client before typechecking. The workflow now generates it from the committed schema; local typechecks alone had masked that missing step. CI must pass before release.

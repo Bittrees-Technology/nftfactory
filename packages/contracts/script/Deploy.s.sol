@@ -24,9 +24,11 @@ contract DeployScript is Script {
     }
 
     function run() external {
+        require(block.chainid == vm.envUint("EXPECTED_CHAIN_ID"), "Unexpected deployment network");
         uint256 pk = vm.envUint("PRIVATE_KEY");
         address deployer = vm.addr(pk);
         address treasury = vm.envAddress("TREASURY_SAFE");
+        require(treasury != address(0), "Treasury is required");
         address[] memory paymentTokens = _readOptionalPaymentTokenAllowlist();
 
         vm.startBroadcast(pk);

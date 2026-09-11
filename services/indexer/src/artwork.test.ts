@@ -10,3 +10,9 @@ describe('import and annotation boundaries',()=>{
  it('includes only the signed-in authors private annotations',async()=>{const findMany=vi.fn().mockResolvedValue([]);await readArtworkTags({tokenTag:{findMany}} as any,8453,contract,'1',owner);expect(findMany.mock.calls[0][0].where.OR).toEqual([{private:false},{addedByAddress:owner}]);});
  it('fails closed before database mutation if the RPC is on the wrong chain',async()=>{await expect(importArtwork({} as any,{getChainId:async()=>1} as any,8453,owner,{contractAddress:contract,tokenIds:['1']})).rejects.toThrow('wrong network');});
 });
+
+it('previews verified artwork without writing collection, token or holding records',async()=>{
+ const client={getChainId:async()=>11155111,readContract:vi.fn().mockImplementation(({functionName})=>Promise.resolve(functionName==='supportsInterface'?true:functionName==='ownerOf'?owner:'ipfs://preview'))};
+ const result=await importArtwork({} as any,client as any,11155111,owner,{contractAddress:contract,tokenIds:['1'],preview:true});
+ expect(result.results[0]).toMatchObject({ok:true,preview:true,standard:'ERC721',quantityRaw:'1',metadataUri:'ipfs://preview'});
+});

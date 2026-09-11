@@ -25,5 +25,17 @@ export async function verifyMintReceipt(client: Pick<PublicClient, 'getTransacti
   ]);
   const owns=input.standard==='ERC721'?String(ownerOrBalance).toLowerCase()===signer.toLowerCase():BigInt(ownerOrBalance)>=quantity;
   if(!owns||uri!==input.metadataCid)throw new Error('On-chain owner or metadata does not match the request.');
-  return {ownerAddress:signer.toLowerCase(),creatorAddress:signer.toLowerCase(),collectionOwnerAddress:String(collectionOwner).toLowerCase(),...(input.standard==='ERC1155'?{mintedAmountRaw:quantity.toString(),heldAmountRaw:String(ownerOrBalance)}:{})};
+  // A mint recipient is not necessarily its creator. Attribute only a matching
+  // publication event from the NFT contract; external mints remain unverified.
+  let creatorAddress: string = zeroAddress;
+  const publishedAbi = parseAbi([
+    'event TokenPublished(address indexed creator,uint256 indexed tokenId,string uri)',
+    'event TokenPublished(address indexed creator,uint256 indexed tokenId,uint256 amount,string uri)',
+    'event Published(address indexed creator,uint256 indexed tokenId,string creatorSubname,string uri)',
+    'event Published(address indexed creator,uint256 indexed tokenId,string creatorSubname,uint256 amount,string uri)'
+  ]);
+  for (const log of parseEventLogs({abi:publishedAbi,logs:receipt.logs})) {
+    if (log.address.toLowerCase()===contract.toLowerCase() && log.args.tokenId===tokenId && log.args.uri===input.metadataCid) creatorAddress=log.args.creator.toLowerCase();
+  }
+  return {ownerAddress:signer.toLowerCase(),creatorAddress,collectionOwnerAddress:String(collectionOwner).toLowerCase(),...(input.standard==='ERC1155'?{mintedAmountRaw:quantity.toString(),heldAmountRaw:String(ownerOrBalance)}:{})};
 }

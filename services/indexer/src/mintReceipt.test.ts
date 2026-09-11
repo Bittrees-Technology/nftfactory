@@ -11,7 +11,7 @@ function client() {
   };
 }
 it('derives wallet and collection authority from confirmed chain data', async () => {
-  expect(await verifyMintReceipt(client() as any, input, address)).toEqual({ ownerAddress: address, creatorAddress: address, collectionOwnerAddress: address });
+  expect(await verifyMintReceipt(client() as any, input, address)).toEqual({ ownerAddress: address, creatorAddress: zeroAddress, collectionOwnerAddress: address });
 });
 it('rejects a receipt belonging to a different wallet or token', async () => {
   await expect(verifyMintReceipt(client() as any, input, contract)).rejects.toThrow('Receipt');
@@ -31,4 +31,13 @@ it('verifies an ERC1155 mint quantity and rejects insufficient current holdings'
  const result=await verifyMintReceipt(mock as any,{...input,standard:'ERC1155'},address);expect(result.mintedAmountRaw).toBe('3');expect(result.heldAmountRaw).toBe('3');
  mock.readContract.mockImplementation(({functionName})=>Promise.resolve(functionName==='balanceOf'?2n:functionName==='uri'?'ipfs://test':address));
  await expect(verifyMintReceipt(mock as any,{...input,standard:'ERC1155'},address)).rejects.toThrow('owner');
+});
+
+it('does not attribute a creator collection mint to its recipient',async()=>{
+ const mock=client();const event=parseAbiItem('event TokenPublished(address indexed creator,uint256 indexed tokenId,string uri)');
+ const receipt=await mock.getTransactionReceipt();
+ receipt.logs.push({address:contract,topics:encodeEventTopics({abi:[event],eventName:'TokenPublished',args:{creator:contract,tokenId:5n}}),data:encodeAbiParameters([{type:'string'}],['ipfs://test'])});
+ mock.getTransactionReceipt.mockResolvedValue(receipt);
+ const result=await verifyMintReceipt(mock as any,input,address);
+ expect(result.ownerAddress).toBe(address);expect(result.creatorAddress).toBe(contract);
 });

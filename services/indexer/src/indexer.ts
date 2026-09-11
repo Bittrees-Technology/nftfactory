@@ -4867,7 +4867,8 @@ async function ensureTokenForListing(
 async function upsertMintedToken(
   payload: SyncMintedTokenPayload,
   deps: IndexerDeps,
-  config: RequestHandlerConfig
+  config: RequestHandlerConfig,
+  receiptOnly = false
 ): Promise<any> {
   const contractAddress = String(payload.contractAddress || "").trim().toLowerCase();
   const collectionOwnerAddress = String(payload.collectionOwnerAddress || payload.ownerAddress || "").trim().toLowerCase();
@@ -4910,23 +4911,20 @@ async function upsertMintedToken(
     where: { chainId_contractAddress: {chainId:config.chainId,contractAddress} },
     update: {
       ownerAddress: collectionOwnerAddress,
-      ensSubname: ensSubname || undefined,
+      ensSubname: receiptOnly ? undefined : ensSubname || undefined,
       standard,
-      isFactoryCreated: payload.isFactoryCreated === true,
-      isUpgradeable: payload.isUpgradeable !== false,
-      finalizedAt: finalizedAt || undefined,
-      ...(collectionCreatedAt ? { createdAt: collectionCreatedAt } : {})
+      ...(receiptOnly ? {} : {isFactoryCreated: payload.isFactoryCreated === true, isUpgradeable: payload.isUpgradeable !== false, finalizedAt: finalizedAt || undefined, ...(collectionCreatedAt ? { createdAt: collectionCreatedAt } : {})})
     },
     create: {
       chainId: config.chainId,
       contractAddress,
       ownerAddress: collectionOwnerAddress,
-      ensSubname,
+      ensSubname: receiptOnly ? null : ensSubname,
       standard,
-      isFactoryCreated: payload.isFactoryCreated === true,
-      isUpgradeable: payload.isUpgradeable !== false,
-      finalizedAt,
-      ...(collectionCreatedAt ? { createdAt: collectionCreatedAt } : {})
+      isFactoryCreated: receiptOnly ? false : payload.isFactoryCreated === true,
+      isUpgradeable: receiptOnly ? true : payload.isUpgradeable !== false,
+      finalizedAt: receiptOnly ? null : finalizedAt,
+      ...(!receiptOnly && collectionCreatedAt ? { createdAt: collectionCreatedAt } : {})
     }
   });
 
@@ -4950,8 +4948,7 @@ async function upsertMintedToken(
         : {}),
       metadataCid,
       mediaCid,
-      immutable: payload.immutable !== false,
-      mintedAt
+      ...(receiptOnly ? {} : {immutable: payload.immutable !== false, mintedAt})
     },
     create: {
       collectionId: collection.id,
@@ -4968,8 +4965,8 @@ async function upsertMintedToken(
         : {}),
       metadataCid,
       mediaCid,
-      immutable: payload.immutable !== false,
-      mintedAt
+      immutable: receiptOnly ? false : payload.immutable !== false,
+      mintedAt: receiptOnly ? new Date() : mintedAt
     },
     include: {
       collection: true,
@@ -4982,7 +4979,7 @@ async function upsertMintedToken(
     }
   });
 
-  if (!payload.skipHoldingSync) {
+  if (receiptOnly || !payload.skipHoldingSync) {
     const syncedHeldAmountRaw =
       standard === "ERC1155"
         ? (heldAmountRaw ?? mintedAmountRaw ?? "1")
@@ -6396,7 +6393,7 @@ async function handleRequest(
     } catch {
       sendJson(res, 403, { error: 'A confirmed mint owned by the signed-in wallet is required.' }); return;
     }
-    const token = await upsertMintedToken(payload, deps, config);
+    const token = await upsertMintedToken(payload, deps, config, true);
     await upsertTokenPresentationRecord({
       contractAddress: payload.contractAddress,
       tokenId: payload.tokenId,
