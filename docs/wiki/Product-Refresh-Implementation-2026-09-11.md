@@ -2,6 +2,19 @@
 
 This records implementation against [the ordered review](Product-Refresh-Review-2026-09-11.md). Code readiness and operational readiness are separate: the refreshed application can be built and deployed, but publishing must remain paused until independent storage and the indexer are reachable.
 
+## Operational progress after the initial review
+
+As of the latest 2026-09-11 checks:
+
+- Acer's permanent tunnel, restricted upload/read gateways, and fresh profile/indexer service are active. All five PostgreSQL migrations are applied. The user authorized a fresh database; no existing application data was overwritten.
+- Vercel's existing primary upload credential is aligned with Acer. Authenticated upload and exact-byte local retrieval passed. Filebase direct-upload replication is configured in production and preview; its independent gateway returned the matching fixture. The free account reports 5 GB storage, 5 GB bandwidth and 500 pins.
+- Production wallet challenge, a real acceptance-wallet signature, and session identity passed. The production-issued session successfully saved a wallet profile directly on Acer; an unsigned write returned 401. This is not a completed public browser setup or mint acceptance test.
+- The first local PostgreSQL/profile backup completed and was checked; a daily timer is enabled. An isolated restore drill is prepared but not yet verified. No private offsite backup destination is available. Filebase's public NFT replica is not a private database backup.
+- Namecheap accepted the switch to the recovered Cloudflare zone, preserving website, email forwarding, SPF and Vercel verification records. Routes cover api, ipfs-api and ipfs. The latest parent DNS check still returned the old nameservers; public service endpoints remained HTTP 530. Cloudflare reports waiting for registrar propagation.
+- PR20 was merged as f2771aa after all checks passed; its production Vercel deployment is Ready. Public setup, funded Sepolia mint, home-origin outage acceptance, and final release validation remain pending.
+
+The table below records the original review and must be read alongside this newer operational status. The project remains protected until the outstanding acceptance checks pass. Monthly infrastructure spending remains zero. The current profile service is on Acer and therefore shares the home-network failure domain; independent profile availability is not implemented.
+
 ## Ordered plan validation
 
 | Order | Recommendation | Implemented | Remaining acceptance condition |
