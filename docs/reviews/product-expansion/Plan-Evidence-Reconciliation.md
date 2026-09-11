@@ -39,3 +39,7 @@ A passing row must include the route/fixture, source revision or deployment, wal
 4. Run two-wallet fixed-price marketplace flows against the verified Sepolia deployment, including cancellation, rejected requests, revoked approvals and indexing recovery. Keep offer release acceptance separate.
 5. Perform the guarded Acer data migration, then rebuild/promote Vercel and repeat critical flows on the deployed site.
 6. Sign off the evidence matrix; keep remaining launch blockers visible.
+
+## Fresh inventory update
+
+The current merged web source contains 392 JSX source controls. [Current matrix](./control-acceptance-current.csv) tracks these separately from the historical 318-row matrix; repeated dynamic controls still require each relevant state. Four connected-profile controls have scoped desktop observations in [live profile evidence](./acceptance/live-profile-session.json). No untested dimension is marked passed.

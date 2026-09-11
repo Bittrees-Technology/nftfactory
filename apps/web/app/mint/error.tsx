@@ -25,11 +25,11 @@ export default function MintError({
             <button type="button" onClick={reset}>
               Retry workspace
             </button>
-            <Link href="/wiki/ipfs-upload-failure-triage" className="ctaLink secondaryLink">
-              IPFS recovery notes
+            <Link href="/wiki/storage" className="ctaLink secondaryLink">
+              About artwork storage
             </Link>
-            <Link href="/wiki/infrastructure-and-operations" className="ctaLink secondaryLink">
-              Ops notes
+            <Link href="/wiki" className="ctaLink secondaryLink">
+              Help & documentation
             </Link>
           </>
         }
