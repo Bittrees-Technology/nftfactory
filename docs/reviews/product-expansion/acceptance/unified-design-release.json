@@ -1,0 +1,65 @@
+{
+  "checkedAt": "2026-09-11T19:00:28.812960+00:00",
+  "source": "2e2664e95542b9cc38a4ffc929102a5f589bf27e",
+  "routes": [
+    {
+      "path": "/discover",
+      "status": 200,
+      "h1": "Explore",
+      "activeNavigation": [
+        "/discover",
+        "/discover"
+      ],
+      "deployment": "dpl_HPGXPNUHVqwoK4MqRknYF6SbRjJ3"
+    },
+    {
+      "path": "/marketplace",
+      "status": 200,
+      "h1": "Marketplace",
+      "activeNavigation": [
+        "/marketplace",
+        "/marketplace"
+      ],
+      "deployment": "dpl_HPGXPNUHVqwoK4MqRknYF6SbRjJ3"
+    },
+    {
+      "path": "/mint",
+      "status": 200,
+      "h1": "Create an NFT",
+      "activeNavigation": [
+        "/mint",
+        "/mint"
+      ],
+      "deployment": "dpl_HPGXPNUHVqwoK4MqRknYF6SbRjJ3"
+    },
+    {
+      "path": "/profile",
+      "status": 200,
+      "h1": "My studio",
+      "activeNavigation": [
+        "/profile",
+        "/profile"
+      ],
+      "deployment": "dpl_HPGXPNUHVqwoK4MqRknYF6SbRjJ3"
+    },
+    {
+      "path": "/profile/0xe5350d96fc3161bf5c385843ec5ee24e8b465b2f",
+      "status": 200,
+      "h1": "NFTFactory Test Creator",
+      "activeNavigation": [
+        "/discover",
+        "/discover"
+      ],
+      "deployment": "dpl_HPGXPNUHVqwoK4MqRknYF6SbRjJ3"
+    }
+  ],
+  "allEightReplacementContractsPresent": true,
+  "validation": "255 web tests; all CI jobs passed; scoped desktop and mobile visual review",
+  "visualReview": [
+    "Studio reviewed at desktop 1280px and mobile widths; saved arrangement preserved",
+    "Explore shared heading and creator filters reviewed",
+    "Marketplace stacked filters reviewed at 390px, document width equals scroll width",
+    "Create shared heading and form reviewed on mobile"
+  ],
+  "limitations": "This design pass does not certify the remaining wallet transaction or full control acceptance matrix."
+}
