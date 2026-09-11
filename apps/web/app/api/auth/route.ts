@@ -17,6 +17,7 @@ export async function GET(request: Request) {
   return NextResponse.json({ address: session?.address || null, chainId: session?.chainId || null }, { headers: { 'Cache-Control': 'no-store' } });
 }
 export async function POST(request: Request) {
+  let phase = "challenge";
   try {
     if (request.headers.get('origin') !== new URL(request.url).origin) return NextResponse.json({ error: 'Invalid request origin.' }, { status: 403 });
     const limit=rateLimitRequest(request,{bucket:"wallet-auth",maxRequests:20,windowMs:60000,errorMessage:"Too many sign-in attempts. Please wait a minute."});
@@ -33,16 +34,22 @@ export async function POST(request: Request) {
       response.cookies.set(CHALLENGE_COOKIE, issueToken({ purpose: 'challenge', address, exp, message }, process.env.SESSION_SECRET), cookieOptions(request, 300));
       return response;
     }
+    phase = "signature-verification";
     const challenge = readToken(cookieValue(request, CHALLENGE_COOKIE), process.env.SESSION_SECRET, 'challenge');
     if (!challenge?.message || challenge.address !== address || !await verifySignInMessage(address as Hex, new URL(request.url).origin, challenge.message, body.signature)) {
       return NextResponse.json({ error: 'Signature could not be verified. Start sign-in again.' }, { status: 401 });
     }
+    phase = "replay-storage";
     await consumeSignInMessage(address, challenge.message, challenge.exp);
     const response = NextResponse.json({ address }, { headers: { 'Cache-Control': 'no-store' } });
     response.cookies.set(SESSION_COOKIE, issueToken({ purpose: 'session', address, chainId: parseSiweMessage(challenge.message).chainId, exp: Date.now() + 60 * 60_000 }, process.env.SESSION_SECRET), cookieOptions(request, 3600));
     response.cookies.set(CHALLENGE_COOKIE, '', cookieOptions(request, 0));
     return response;
-  } catch { return NextResponse.json({ error: 'Wallet sign-in is unavailable. Please try again later.' }, { status: 503 }); }
+  } catch {
+    // Never log signatures, cookies, signing secrets or RPC request URLs.
+    console.error({ event: "wallet_signin_unavailable", phase });
+    return NextResponse.json({ error: 'Wallet sign-in is temporarily unavailable. Your signature did not grant asset permissions.', code: `signin-${phase}-unavailable` }, { status: 503 });
+  }
 }
 export async function DELETE(request: Request) {
   if (request.headers.get('origin') !== new URL(request.url).origin) return NextResponse.json({ error: 'Invalid origin.' }, { status: 403 });

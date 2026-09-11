@@ -8,5 +8,8 @@ export async function ensureWalletSession(address: Address, signMessage: (args: 
   if (!challengeResponse.ok) throw new Error(challenge.error || 'Wallet sign-in is unavailable.');
   const signature = await signMessage({ message: challenge.message });
   const result = await fetch('/api/auth', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ address, signature }) });
-  if (!result.ok) throw new Error('Wallet sign-in failed. Please retry.');
+  if (!result.ok) {
+    const failure = await result.json().catch(() => null);
+    throw new Error(failure?.error || 'Wallet sign-in failed. Please retry.');
+  }
 }
