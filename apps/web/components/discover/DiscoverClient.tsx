@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { artworkSources } from "../profile/ArtworkImage";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   fetchMintFeed,
@@ -280,9 +281,9 @@ export default function DiscoverClient() {
       <section className="card formCard discoverHero">
         <div className="discoverHeroCopy">
           <p className="eyebrow">Discover</p>
-          <h2>Browse NFTFactory profiles, collection contracts, and live NFTs from one public index.</h2>
+          <h2>Discover artwork and the people behind it.</h2>
           <p className="sectionLead">
-            This route stays scoped to NFTFactory identity records and NFTFactory-related collections so public browsing does not have to start inside the creator portal.
+            Explore creator pages, collections, and NFTs published with NFTFactory.
           </p>
         </div>
         <div className="discoverHeroStats" aria-label="Discover index summary">
@@ -564,7 +565,7 @@ export default function DiscoverClient() {
                           View collection
                         </Link>
                         {item.metadataUrl ? (
-                          <a href={item.metadataUrl} target="_blank" rel="noreferrer" className="ctaLink secondaryLink">
+                          <a href={artworkSources(item.metadataUrl)[0] || item.metadataUrl} target="_blank" rel="noreferrer" className="ctaLink secondaryLink">
                             Metadata
                           </a>
                         ) : null}
