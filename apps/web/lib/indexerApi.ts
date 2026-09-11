@@ -555,6 +555,7 @@ export type ApiOwnerSummary = {
 };
 
 export type ApiCollectionTokens = {
+  nextCursor?: string | null;
   contractAddress: string;
   count: number;
   tokens: Array<
@@ -850,6 +851,9 @@ export async function fetchCollectionTokens(
   contractAddress: string,
   options?: IndexerRequestOptions & {
     sync?: boolean;
+    readOnly?: boolean;
+    tokenId?: string;
+    cursor?: string;
     timeoutMs?: number;
     syncScope?: CollectionSyncScope;
     ownerAddress?: string;
@@ -858,6 +862,9 @@ export async function fetchCollectionTokens(
   }
 ): Promise<ApiCollectionTokens> {
   const params = new URLSearchParams();
+  if(options?.readOnly)params.set("readOnly","1");
+  if(options?.tokenId)params.set("tokenId",options.tokenId);
+  if(options?.cursor)params.set("cursor",options.cursor);
   if (options?.sync) {
     params.set("sync", "1");
     params.set("syncScope", options.syncScope || "collection");
@@ -905,7 +912,7 @@ export async function syncMintedToken(payload: {
   return fetchJson<{ ok: boolean; token: ApiMintFeedItem }>("/api/tokens/sync", {
     method: "POST",
     body: JSON.stringify(payload)
-  });
+  }, undefined, {chainId:payload.chainId});
 }
 
 export async function linkProfileIdentity(payload: {

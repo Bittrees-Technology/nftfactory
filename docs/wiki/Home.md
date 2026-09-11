@@ -10,6 +10,7 @@ Create, organize, and share artwork with your wallet. An ENS name is optional.
 | Publish an NFT | [Create](/mint) |
 | Customize my creator page | [My studio](/profile/setup) |
 | Add NFTs I already own | [Import artwork](/profile/import) |
+| Search or update my tags | [Organize tags](/profile/tags) |
 | Browse artwork for sale | [Marketplace](/marketplace) |
 | List or cancel a sale | [Manage listings](/profile/listings) |
 

@@ -861,6 +861,7 @@ export default function ListingManagementClient({
       return;
     }
 
+    if (!["ETH"].includes(paymentTokenType)) {setState(errorActionState("New listings currently use ETH. Choose ETH before continuing."));return;}
     const paymentToken =
       paymentTokenType === "ETH"
         ? (ZERO_ADDRESS as `0x${string}`)
@@ -1104,7 +1105,7 @@ export default function ListingManagementClient({
     <form className="wizard" onSubmit={onSubmit}>
         <div className="card formCard">
           <h3>1. Select NFT</h3>
-          <p className="hint">Choose a standard, then select one or more NFTs already in this inventory from NFTFactory shared or custom collections across supported chains.</p>
+          <p className="hint">Choose a standard and select artwork you own. This includes supported NFTs you have imported.</p>
           <div className="gridMini">
             <label>
               Standard
@@ -1171,7 +1172,7 @@ export default function ListingManagementClient({
             </div>
           ) : (
             <p className="hint">
-              {mintInventoryLoading
+              {!inventoryOwnerAddress ? "Connect your wallet to view eligible artwork." : mintInventoryLoading
                 ? "Loading owned NFTs..."
                 : "No eligible NFTs found. Try another network or import artwork you own."}
             </p>
@@ -1273,7 +1274,7 @@ export default function ListingManagementClient({
               Payment asset
               <select value={paymentTokenType} onChange={(e) => setPaymentTokenType(e.target.value as "ETH" | "ERC20")}>
                 <option value="ETH">ETH</option>
-                <option value="ERC20">Custom ERC20</option>
+                <option value="ERC20" disabled>Other tokens — unavailable for new listings</option>
               </select>
             </label>
             {paymentTokenType === "ERC20" ? (

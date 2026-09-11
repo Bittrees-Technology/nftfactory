@@ -572,6 +572,7 @@ function getSwitchErrorMessage({
 }
 
 type MintClientProps = {
+  initialChainId?: number;
   initialPageMode?: PageMode;
   initialMintMode?: MintMode;
   initialProfileLabel?: string;
@@ -1121,13 +1122,14 @@ const collectionOwnershipReadAbi = [
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function MintClient({
+  initialChainId,
   initialPageMode = "mint",
   initialMintMode = "shared",
   initialProfileLabel = "",
   initialCollectionAddress = "",
   initialCollectionIdentityMode = ""
 }: MintClientProps) {
-  const config = useMemo(() => getContractsConfig(), []);
+  const config = useMemo(() => getContractsConfig(initialChainId), [initialChainId]);
   const appChain = useMemo(() => getAppChain(config.chainId), [config.chainId]);
   const royaltySplitRegistryEnvHint = useMemo(
     () => getRoyaltySplitRegistryEnvHint(config.chainId, config.chainId === getPrimaryAppChainId()),
@@ -1135,7 +1137,7 @@ export default function MintClient({
   );
   const { address, isConnected, connector } = useAccount();
   const chainId = useChainId();
-  const publicClient = usePublicClient();
+  const publicClient = usePublicClient({chainId:config.chainId});
   const { data: walletClient } = useWalletClient();
   const {
     chains: walletChains,

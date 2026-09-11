@@ -16,3 +16,19 @@ it('previews verified artwork without writing collection, token or holding recor
  const result=await importArtwork({} as any,client as any,11155111,owner,{contractAddress:contract,tokenIds:['1'],preview:true});
  expect(result.results[0]).toMatchObject({ok:true,preview:true,standard:'ERC721',quantityRaw:'1',metadataUri:'ipfs://preview'});
 });
+
+it('limits tag search to the signed-in author and selected chain',async()=>{
+ const {searchOwnArtworkTags}=await import('./artwork.js');const findMany=vi.fn().mockResolvedValue([]);
+ await searchOwnArtworkTags({tokenTag:{findMany}} as any,8453,owner,'  Sketch ');
+ expect(findMany.mock.calls[0][0]).toMatchObject({where:{addedByAddress:owner,token:{collection:{chainId:8453}},tag:{label:{contains:'sketch'}}},take:51});
+});
+it('adds a private tag without erasing other tags and changes its previous public visibility',async()=>{
+ const {saveArtworkTags}=await import('./artwork.js');
+ const create=vi.fn(),deleteMany=vi.fn();
+ const tx={tokenTag:{findMany:vi.fn().mockResolvedValue([{private:false,tag:{label:'sketch'}},{private:true,tag:{label:'archive'}}]),deleteMany,create},tag:{upsert:vi.fn(async ({where})=>({id:where.slug}))}};
+ const prisma={token:{findFirst:vi.fn().mockResolvedValue({id:'token'})},$transaction:async(callback:any)=>callback(tx)};
+ const client={readContract:vi.fn().mockImplementation(({functionName})=>Promise.resolve(functionName==='supportsInterface'?true:owner))};
+ await saveArtworkTags(prisma as any,client as any,1,contract,'1',owner,{mode:'add',privateTags:['sketch']});
+ expect(deleteMany).toHaveBeenCalledWith({where:{tokenId:'token',addedByAddress:owner}});
+ expect(create.mock.calls.map(([value])=>value.data)).toEqual([{tokenId:'token',tagId:'archive',addedByAddress:owner,private:true},{tokenId:'token',tagId:'sketch',addedByAddress:owner,private:true}]);
+});

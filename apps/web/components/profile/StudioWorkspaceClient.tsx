@@ -5,6 +5,7 @@ import {useAccount} from 'wagmi';
 const tools=[
  {id:'page',title:'Your creator page',description:'Choose artwork, imagery, and a style that feels like you.',href:'/profile/setup'},
  {id:'import',title:'Import artwork',description:'Add NFTs you already own without moving them.',href:'/profile/import'},
+ {id:'tags',title:'Organize tags',description:'Find your annotations and edit tags across your artwork.',href:'/profile/tags'},
  {id:'listings',title:'Your listings',description:'Offer artwork for sale or cancel an existing listing.',href:'/profile/listings'},
  {id:'marketplace',title:'Marketplace',description:'Discover fixed-price artwork from other creators.',href:'/marketplace'}
 ];

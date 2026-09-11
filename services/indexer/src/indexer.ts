@@ -1,4 +1,4 @@
-import {importArtwork,readArtworkTags,saveArtworkTags} from "./artwork.js";
+import {importArtwork,readArtworkTags,saveArtworkTags,searchOwnArtworkTags} from "./artwork.js";
 import {chainWhere} from "./chainScope.js";
 import { normalizeDesign, type ProfileDesign } from "../../../packages/profile/design.mjs";
 import { readToken, readChainSession } from "../../../packages/auth/session.mjs";
@@ -6133,12 +6133,13 @@ async function handleRequest(
   const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
   const path = url.pathname;
 
-  if (path === "/api/imports" || /^\/api\/artwork\/[^/]+\/[^/]+\/tags$/.test(path)) {
+  if (path === "/api/imports" || path === "/api/artwork/tags/search" || /^\/api\/artwork\/[^/]+\/[^/]+\/tags$/.test(path)) {
     res.setHeader("Cache-Control", "private, no-store");
     const session=readChainSession(parseBearerToken(req.headers.authorization), process.env.SESSION_SECRET, config.chainId);
-    if(req.method !== "GET" && !session){sendJson(res,401,{error:"Sign in with the wallet that owns this artwork."});return;}
+    if((req.method !== "GET" || path === "/api/artwork/tags/search") && !session){sendJson(res,401,{error:"Sign in with the wallet that owns this artwork."});return;}
     if (deps.isRateLimitedImpl(deps.getClientIpImpl(req,config.trustProxy))) {sendJson(res,429,{error:"Too many requests. Please retry shortly."});return;}
     try {
+      if(path === "/api/artwork/tags/search" && req.method === "GET") {sendJson(res,200,await searchOwnArtworkTags(deps.prisma,config.chainId,session!.address,url.searchParams.get("q")||"",url.searchParams.get("cursor")||undefined));return;}
       if(path === "/api/imports" && req.method === "POST") {sendJson(res,200,await importArtwork(deps.prisma,createRpcClient(config),config.chainId,session!.address as `0x${string}`,await readJsonBody(req)));return;}
       const parts=path.split("/");
       if(req.method === "GET" && path !== "/api/imports") {sendJson(res,200,await readArtworkTags(deps.prisma,config.chainId,parts[3],parts[4],session?.address));return;}
@@ -8905,7 +8906,11 @@ async function handleRequest(
       sendJson(res, 400, { error: "Valid contract address is required" });
       return;
     }
-    const syncRequested = ["1", "true", "yes"].includes(String(url.searchParams.get("sync") || "").trim().toLowerCase());
+    const readOnly=url.searchParams.get('readOnly')==='1';
+    const specificToken=url.searchParams.get('tokenId');
+    const pageCursor=url.searchParams.get('cursor');
+    if(specificToken!==null && (!/^(0|[1-9]\d{0,77})$/.test(specificToken)||BigInt(specificToken)>=2n**256n)||pageCursor!==null&&!/^[a-zA-Z0-9_-]{1,64}$/.test(pageCursor)){sendJson(res,400,{error:'Invalid token or cursor.'});return;}
+    const syncRequested = !readOnly && ["1", "true", "yes"].includes(String(url.searchParams.get("sync") || "").trim().toLowerCase());
     const syncScope: CollectionSyncScope =
       String(url.searchParams.get("syncScope") || "").trim().toLowerCase() === "deep" ? "deep" : "collection";
     const requestedOwnerAddress = String(url.searchParams.get("ownerAddress") || "").trim().toLowerCase();
@@ -8915,7 +8920,7 @@ async function handleRequest(
       sendJson(res, 429, { error: "Too many requests" });
       return;
     }
-    try {
+    if(!readOnly) try {
       const collectionRecord = await deps.prisma.collection.findUnique({
         where: { chainId_contractAddress: {chainId:config.chainId,contractAddress} },
         select: {
@@ -8974,11 +8979,11 @@ async function handleRequest(
 
     const tokens = await (deps.prisma.token as any).findMany({
       where: {
-        collection: {
-          contractAddress
-        }
+        collection: {chainId:config.chainId,contractAddress},
+        ...(specificToken!==null?{tokenId:specificToken}:{})
       },
-      orderBy: [{ mintedAt: "desc" }, { id: "desc" }],
+      orderBy: readOnly ? [{id:"asc"}] : [{ mintedAt: "desc" }, { id: "desc" }],
+      ...(readOnly?{take:101,...(pageCursor?{cursor:{id:pageCursor},skip:1}:{})}:{}),
       select: {
         id: true,
         tokenId: true,
@@ -9014,7 +9019,8 @@ async function handleRequest(
       }
     });
 
-    const responseTokens = tokens.map((item: any) => ({
+    const nextCursor=readOnly&&tokens.length>100?tokens[99].id:null;
+    const responseTokens = (readOnly?tokens.slice(0,100):tokens).map((item: any) => ({
       ...toTokenApiShape(item, config, presentationIndex),
       collection: {
         chainId: item.collection.chainId,
@@ -9033,7 +9039,8 @@ async function handleRequest(
 
     sendJson(res, 200, {
       contractAddress,
-      count: tokens.length,
+      nextCursor,
+      count: responseTokens.length,
       tokens: responseTokens
     });
     return;

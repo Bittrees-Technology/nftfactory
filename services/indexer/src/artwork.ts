@@ -17,14 +17,23 @@ export function normalizeTags(value:unknown):string[]{
  if(!Array.isArray(value)||value.length>20)throw new Error('Use at most 20 tags per artwork.');
  return [...new Set(value.map(v=>{if(typeof v!=='string')throw new Error('Invalid tag.');const label=v.normalize('NFKC').trim().toLowerCase().replace(/\s+/g,' ');if(!/^[\p{L}\p{N}][\p{L}\p{N} _-]{0,31}$/u.test(label))throw new Error('Tags must be 1–32 letters, numbers, spaces, hyphens, or underscores.');return label;}))];
 }
-export async function saveArtworkTags(prisma:PrismaClient,client:Pick<PublicClient,'readContract'>,chainId:number,address:string,id:string,owner:Address,body:{publicTags?:unknown;privateTags?:unknown}){
+export async function saveArtworkTags(prisma:PrismaClient,client:Pick<PublicClient,'readContract'>,chainId:number,address:string,id:string,owner:Address,body:{publicTags?:unknown;privateTags?:unknown;mode?:'replace'|'add'|'remove'}){
  const asset=assetInput(address,id);const publicTags=normalizeTags(body.publicTags||[]),privateTags=normalizeTags(body.privateTags||[]).filter(t=>!publicTags.includes(t));
  if(publicTags.length+privateTags.length>20)throw new Error('Use at most 20 tags in total.');
  await verifyOwnedAsset(client,asset.contract,asset.id,owner);
  const token=await prisma.token.findFirst({where:{tokenId:asset.id,collection:{chainId,contractAddress:asset.contract}},select:{id:true}});if(!token)throw new Error('Import this NFT before adding tags.');
+ if(body.mode&&!['replace','add','remove'].includes(body.mode))throw new Error('Unsupported tag operation.');
  await prisma.$transaction(async tx=>{
+   let nextPublic=publicTags,nextPrivate=privateTags;
+   if(body.mode==='add'||body.mode==='remove'){
+     const current=await tx.tokenTag.findMany({where:{tokenId:token.id,addedByAddress:owner.toLowerCase()},include:{tag:true},take:21});
+     const existingPublic=current.filter(tag=>!tag.private).map(tag=>tag.tag.label),existingPrivate=current.filter(tag=>tag.private).map(tag=>tag.tag.label);
+     nextPublic=body.mode==='add'?[...new Set([...existingPublic.filter(tag=>!privateTags.includes(tag)),...publicTags])]:existingPublic.filter(tag=>!publicTags.includes(tag));
+     nextPrivate=(body.mode==='add'?[...new Set([...existingPrivate,...privateTags])]:existingPrivate.filter(tag=>!privateTags.includes(tag))).filter(tag=>!nextPublic.includes(tag));
+     if(nextPublic.length+nextPrivate.length>20)throw new Error('This artwork would exceed 20 tags. Remove some first.');
+   }
    await tx.tokenTag.deleteMany({where:{tokenId:token.id,addedByAddress:owner.toLowerCase()}});
-   for(const label of [...publicTags,...privateTags]){const tag=await tx.tag.upsert({where:{slug:label},create:{slug:label,label},update:{}});await tx.tokenTag.create({data:{tokenId:token.id,tagId:tag.id,addedByAddress:owner.toLowerCase(),private:privateTags.includes(label)}});}
+   for(const label of [...nextPublic,...nextPrivate]){const tag=await tx.tag.upsert({where:{slug:label},create:{slug:label,label},update:{}});await tx.tokenTag.create({data:{tokenId:token.id,tagId:tag.id,addedByAddress:owner.toLowerCase(),private:nextPrivate.includes(label)}});}
  },{isolationLevel:'Serializable'});
  return {ok:true};
 }
@@ -54,4 +63,12 @@ export async function importArtwork(prisma:PrismaClient,client:Pick<PublicClient
   }catch(error){results.push({tokenId:asset.id,ok:false,error:error instanceof Error?error.message:'Import unavailable.'});}
  }
  return {chainId,contractAddress:assets[0].contract,results};
+}
+
+export async function searchOwnArtworkTags(prisma:PrismaClient,chainId:number,owner:string,query:string,cursor?:string){
+ const label=query.normalize('NFKC').trim().toLowerCase();
+ if(!label||label.length>32||cursor&& !/^[a-zA-Z0-9_-]{1,64}$/.test(cursor))throw new Error('Search with 1–32 characters.');
+ const rows=await prisma.tokenTag.findMany({where:{addedByAddress:owner.toLowerCase(),tag:{label:{contains:label,mode:'insensitive'}},token:{collection:{chainId}}},include:{tag:{select:{label:true}},token:{select:{tokenId:true,draftName:true,collection:{select:{contractAddress:true}}}}},orderBy:{id:'asc'},take:51,...(cursor?{cursor:{id:cursor},skip:1}:{})});
+ const items=rows.slice(0,50).map(row=>({id:row.id,label:row.tag.label,private:row.private,tokenId:row.token.tokenId,name:row.token.draftName,contractAddress:row.token.collection.contractAddress,chainId}));
+ return {items,nextCursor:rows.length>50?items.at(-1)!.id:null};
 }

@@ -34,3 +34,15 @@ Remaining release work is listed in [the expansion checkpoint](../Expansion-Chec
 Receipt ingestion now distinguishes the creator publication event from the recipient and does not accept browser-supplied permanence, factory provenance, handle attribution, or finalization changes. Internal verified indexing can still populate those facts. Imports now preview metadata/quantity without database mutation and recheck ownership on confirmation. Name-based public pages share the wallet page renderer after a forward-resolution check; a regression covers transferred names.
 
 The first draft PR run found a clean-install CI gap: the indexer job did not generate its Prisma client before typechecking. The workflow now generates it from the committed schema; local typechecks alone had masked that missing step. CI must pass before release.
+
+## Browser, organization and release packaging
+
+Added signed-in tag search and bounded bulk add/remove with per-item ownership checks. Visibility changes and unrelated tags are preserved transactionally. New listing creation is restricted to ETH for this release; imported standard NFTs are included by the existing inventory adapter.
+
+Mobile checks at a 390px viewport found no horizontal overflow on the landing page, editor, imports, listing management, mint, tags or storage guide. Fixed the menu remaining open after navigation and a vertically stretched breadcrumb. The NFT detail page's failed read exposed a missing-owner comparison bug; visitors now never receive a management link when owner data is absent.
+
+Public artwork reads use a bounded, paginated database-only mode instead of waiting for automatic RPC sync. NFT detail requests select the token directly. Mint management honors the route's network, receipt synchronization uses that network's indexer, and pending drafts cannot be resumed on a different network. Visible image requests can switch to the replica after eight seconds of stalling.
+
+Latest local checks: 231 web tests, 90 indexer tests, contract and script suites pass. The local production-mode build passes. GitHub CI passed at 78a1343 after the Prisma-generation fix. These are software checks, not live two-wallet marketplace acceptance.
+
+The backend packager includes runtime sources, auth/profile modules, schema and every migration, creates a dependency lockfile, and records file hashes plus source commit/dirty-worktree status. It does not contain deployment credentials or application data and does not install onto Acer.

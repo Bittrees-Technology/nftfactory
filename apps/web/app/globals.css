@@ -3943,3 +3943,5 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .studioWorkspace { margin:2rem 0; }
 @media(min-width:901px) { .studioPage .artworkPreview { position:sticky; top:1.5rem; } }
 @media(max-width:600px) { .studioToolGrid { grid-template-columns:1fr; } }
+
+nav.breadcrumb { flex-direction:row; align-items:center; justify-content:flex-start; background:none; border:0; box-shadow:none; padding:0; border-radius:0; }

@@ -11,10 +11,10 @@ import { ensureWalletSession } from '../../lib/walletSession';
 import { loadArtworkDraft, saveArtworkDraft, type ArtworkDraft } from '../../lib/draftStore';
 import HeaderWalletButton from '../HeaderWalletButton';
 const LIMIT = 3 * 1024 * 1024 - 64 * 1024;
-export default function CreateClient() {
+export default function CreateClient({initialChainId}:{initialChainId?:number}={}) {
   const { address, chainId } = useAccount();
   const { data: wallet } = useWalletClient();
-  const targetChainId = getPrimaryAppChainId();
+  const targetChainId = initialChainId || getPrimaryAppChainId();
   const client = usePublicClient({ chainId: targetChainId });
   const [draft, setDraft] = useState<ArtworkDraft>({ name: '', description: '' });
   const [stage, setStage] = useState(0);
@@ -35,11 +35,12 @@ export default function CreateClient() {
     busyRef.current = true; setBusy(true); setMessage('');
     try {
       if (draft.wallet && draft.txHash && draft.wallet.toLowerCase() !== address.toLowerCase()) throw new Error('Reconnect the wallet that submitted this mint to check its receipt.');
+      if(draft.txHash&&draft.chainId!==targetChainId)throw new Error("This pending mint belongs to another network. Open its original network before checking confirmation.");
       let current = { ...draft };
       if (!current.txHash) {
         if (!current.file || !current.name.trim()) throw new Error('Choose artwork and enter a name.');
         setMessage('Confirm wallet sign-in. This does not move any assets.');
-        await ensureWalletSession(address, args => wallet.signMessage(args));
+        await ensureWalletSession(address, args => wallet.signMessage(args),targetChainId);
         setMessage('Uploading artwork and securing the backup copy…');
         const form = new FormData(); form.append('image', current.file); form.append('name', current.name.trim()); form.append('description', current.description);
         const response = await fetch('/api/ipfs/metadata', { method: 'POST', body: form });
@@ -63,7 +64,7 @@ export default function CreateClient() {
         .find(log => log.address.toLowerCase() === contract.toLowerCase() && log.args.from === zeroAddress && log.args.to.toLowerCase() === address.toLowerCase());
       if (!mint) throw new Error('Transaction confirmed, but its NFT mint could not be identified. Keep the transaction hash for review.');
       setMessage('Your NFT is minted. Adding it to your creator page…');
-      await ensureWalletSession(address, args => wallet.signMessage(args));
+      await ensureWalletSession(address, args => wallet.signMessage(args),targetChainId);
       const metadataUri = current.metadataUri || await client.readContract({ address: contract, abi: [{ type: 'function', name: 'tokenURI', stateMutability: 'view', inputs: [{type:'uint256'}], outputs: [{type:'string'}] }], functionName: 'tokenURI', args: [mint.args.tokenId] });
       try {
         await syncMintedToken({ chainId: targetChainId, contractAddress: contract, tokenId: mint.args.tokenId.toString(), creatorAddress: address, ownerAddress: address, standard: 'ERC721', isFactoryCreated: true, isUpgradeable: false, mintTxHash: current.txHash, draftName: current.name, draftDescription: current.description, metadataCid: metadataUri, mediaCid: current.imageGatewayUrl?.includes('/ipfs/') ? `ipfs://${current.imageGatewayUrl.split('/ipfs/')[1]}` : null, immutable: true });
@@ -88,6 +89,6 @@ export default function CreateClient() {
       </div>
       <aside className="artworkPreview card" aria-label="Artwork preview">{preview ? <img src={preview} alt={draft.name || 'Your artwork preview'} /> : <div className="artworkPlaceholder">Your artwork<br />starts here.</div>}<h2>{draft.name || 'Untitled artwork'}</h2><p>{draft.description || 'Your preview will update as you add details.'}</p><span className="hint">One of one · NFTFactory</span></aside>
     </div>
-    <details className="advancedTools"><summary>Advanced collection tools</summary><p><Link href="/mint?view=manage">Manage a collection</Link> · <Link href="/mint?view=mint&collection=custom">Use your own collection</Link></p></details>
+    <details className="advancedTools"><summary>Advanced collection tools</summary><p><Link href={`/mint?view=manage&chainId=${targetChainId}`}>Manage a collection</Link> · <Link href={`/mint?view=mint&collection=custom&chainId=${targetChainId}`}>Use your own collection</Link></p></details>
   </section>;
 }
