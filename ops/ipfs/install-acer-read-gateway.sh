@@ -33,5 +33,6 @@ WantedBy=multi-user.target
 UNIT
 systemctl daemon-reload
 systemctl enable --now ipfs-read-gateway.service
-curl --fail --silent http://127.0.0.1:8789/ipfs/bafkreifql7zx5tfo4mns6t6zgajvxagyg7feo6s2h2oilzpc7bclbd2uaa
+# systemctl returns before Node necessarily starts listening. Bound the readiness wait.
+curl --fail --silent --show-error --retry 10 --retry-connrefused --retry-delay 1 --retry-max-time 20 --max-time 5 http://127.0.0.1:8789/ipfs/bafkreifql7zx5tfo4mns6t6zgajvxagyg7feo6s2h2oilzpc7bclbd2uaa
 printf '\nPinned-content filter installed on loopback port 8789. No public ingress was changed.\n'
