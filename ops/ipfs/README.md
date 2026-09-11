@@ -9,7 +9,7 @@ The persistent Kubo node already exists. These installers add only the missing a
 5. Verify unauthenticated/wrong-token writes return 401, raw RPC paths return 404, and the exact acceptance fixture is readable through the content hostname. Retrieve the existing gateway credential through an administrator-controlled secret handoff to Vercel; do not replace the token to make a failing test pass.
 6. Change Vercel only after those checks. Clear obsolete primary/fallback addresses. Keep server credentials private; set the public gateway separately. Enable replication only after a genuinely offsite node or pinning service is configured and verified.
 
-An offsite gateway cache is not a backup. Keep the offsite pin and its read gateway in a different network/power failure domain. Verify both image and metadata, then test with the Acer origin unavailable. The approved monthly budget is $0. A Filebase Free account and `nftfactory-replica` IPFS bucket now exist; automated replication is not yet connected. Temporary diagnostic tunnels are not production endpoints and should never be entered into Vercel production configuration.
+An offsite gateway cache is not a backup. Keep the offsite pin and its read gateway in a different network/power failure domain. Verify both image and metadata, then test with the Acer origin unavailable. The approved monthly budget is $0. A Filebase Free account and `nftfactory-replica` IPFS bucket now exist; the verified direct-upload settings are now saved in Vercel production. The primary Acer tunnel remains unavailable, so end-to-end publication is still blocked. Temporary diagnostic tunnels are not production endpoints and should never be entered into Vercel production configuration.
 
 Rollback: disable `nftfactory-tunnel.service`, restore prior Cloudflare routing if it was verified, and keep publishing paused. The read service can be stopped independently without touching Kubo, its pins, or its repository.
 
@@ -25,3 +25,16 @@ An opt-in `IPFS_REPLICA_MODE=kubo-upload` supports direct multipart uploads to a
 Before enabling the opt-in mode, use the approved bucket-scoped token to verify `https://rpc.filebase.io` accepts CID-v1 adds and recursive pin queries on Free. The console describes these tokens as short-lived; verify expiry and establish supported renewal before production use. Test both small metadata and multi-block artwork, retries, quota failures, and retrieval with the Acer origin unavailable. Do not treat successful console uploads as proof that the RPC API passes these checks. Keep the token private in server-only Vercel variables. Never put it in source, browser-public variables, or task messages.
 
 Sources: https://filebase.com/pricing/, https://filebase.com/free/, https://filebase.com/docs/ipfs/rpc-api. Console limits take precedence over conflicting marketing claims.
+
+
+### Live API acceptance completed
+
+On 2026-09-11, the user approved generating the `nftfactory-replica` bucket token and storing it privately in Vercel. The RPC API accepted CID-v1 direct uploads on the Free plan, and `pin/ls?type=recursive` confirmed persistence. The 80-byte fixture matched the Acer CID `bafkreifql7zx5tfo4mns6t6zgajvxagyg7feo6s2h2oilzpc7bclbd2uaa` and exact SHA-256 above.
+
+A 3,080,192-byte synthetic public fixture also matched Acer CID `bafybeif27f7p5siedhr37ymv64ka7et6cucg76uupbb4izqun57glkvnx4`, SHA-256 `64cec1a9d8d3c9b570c6775e1b83479c8f576560ae64c0f3f2b5d627e744c62d`. Upload, recursive pin confirmation, and exact gateway download completed in 2,945 ms; repeating with the same name/content completed in 1,895 ms. No paid import endpoint was used.
+
+The authenticated Billing page reports **Free, $0/month, 5 GB pooled storage, 5 GB IPFS bandwidth, 500 pins, one gateway**. This resolves the conflicting marketing allowances for this account. Do not upgrade or add paid overages. Quota failures must keep publishing paused.
+
+Production configuration uses `IPFS_REPLICA_MODE=kubo-upload`, `IPFS_REPLICA_API_URL=https://rpc.filebase.io`, and `IPFS_REPLICA_GATEWAY_URL=https://neat-lime-mite.myfilebase.com`, with `IPFS_REPLICA_API_TOKEN` stored only as a private environment secret. The token UI describes short-lived tokens but supplies no expiry setting; ongoing expiry/renewal behavior is not established by these acceptance tests. Authentication failures remain fail-closed.
+
+Still outstanding: permanent authenticated Acer ingress, correct Cloudflare DNS-account access, independent whole-home-outage retrieval, indexer availability, and final signed-wallet mint/profile acceptance. These successful storage checks do not mark the full product plan complete.
