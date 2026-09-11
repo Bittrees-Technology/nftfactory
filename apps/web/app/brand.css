@@ -1,0 +1,95 @@
+/* NFTFactory: graphite, paper and factory orange. Creator themes remain independent. */
+:root {
+  --bg: #f4f5f3;
+  --ink: #202523;
+  --accent: #b83c12;
+  --accent-dark: #96300d;
+  --chrome: #202523;
+  --surface: #ffffff;
+  --surface-strong: #e9ece9;
+  --line: #d2d8d3;
+  --muted: #58615b;
+}
+body { background: var(--bg); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+main { max-width: 1320px; padding: 24px 40px; }
+.siteHeader { padding: 12px 0 24px; margin-bottom: 12px; }
+.brandLink { font-size: 1.35rem; letter-spacing: -.04em; }
+.siteHeader nav { backdrop-filter: none; }
+.siteFooter { color: var(--muted); }
+.card { border-radius: 12px; box-shadow: none; }
+.ctaLink, .headerWalletButton { border-radius: 6px; box-shadow: none; }
+.ctaLink { padding: 12px 20px; white-space: nowrap; }
+button { border-color: var(--accent-dark); border-radius: 6px; }
+.ctaLink:hover, button:not(:disabled):hover { filter: brightness(.92); }
+.ctaLink:active, button:not(:disabled):active { transform: translateY(1px); }
+.ctaLink.secondary, button.secondary { border-color: #87938a; }
+input, select, textarea { background: var(--surface); color: var(--ink); border-color: #87938a; border-radius: 6px; }
+input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
+.createLayout .formCard, .artworkPreview:not([class*="creatorTheme-"]), .walletDialog { background: var(--surface); }
+.walletDialog { border-radius: 12px; }
+.artworkPlaceholder, .artworkCardImage, .artworkDetailImage { background: var(--surface-strong); }
+.hint { color: var(--muted); }
+.eyebrow { color: var(--accent); }
+.studioNavigation { border-color: var(--line); background: var(--surface); box-shadow: none; border-radius: 6px; }
+.purchaseReview { border-color: var(--accent); }
+a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible, summary:focus-visible { outline-color: var(--accent); }
+
+.homeRefresh { padding-top: 16px; }
+.landingHero { grid-template-columns: 1fr 1.08fr; gap: 44px; padding: 36px 0 60px; }
+.landingHero h1 { font-size: clamp(2.25rem, 4vw, 3.65rem); line-height: 1.08; letter-spacing: -.055em; margin: 24px 0; font-weight: 650; }
+.landingLead { color: var(--muted); font-size: 1.16rem; line-height: 1.65; max-width: 34ch; margin-bottom: 30px; }
+.homeRefresh .eyebrow { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .72rem; letter-spacing: .09em; }
+.factoryArtwork { margin: 0; }
+.factoryArtwork img { display: block; width: 100%; height: auto; aspect-ratio: 3 / 2; object-fit: cover; border-radius: 3px; }
+.factoryArtwork figcaption { display: flex; justify-content: space-between; gap: 12px; padding-top: 12px; color: var(--muted); font: .72rem/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.workshopSection { display: grid; grid-template-columns: 1fr 1.08fr; gap: 44px; border-top: 1px solid var(--line); padding: 64px 0; }
+.homeRefresh h2 { font-size: clamp(1.7rem, 2.8vw, 2.4rem); letter-spacing: -.04em; line-height: 1.18; margin: 0 0 24px; font-weight: 600; }
+.workshopSection > div > p { max-width: 35ch; color: var(--muted); line-height: 1.75; }
+.workshopProcess { margin: 0; padding: 0; list-style: none; }
+.workshopProcess li { display: grid; grid-template-columns: 36px 1fr; gap: 20px; padding: 0 0 24px; margin-bottom: 24px; border-bottom: 1px solid var(--line); }
+.workshopProcess li:last-child { margin-bottom: 0; padding-bottom: 0; border-bottom: 0; }
+.workshopProcess li > span { color: var(--accent); font: .8rem/1.8 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.workshopProcess h3 { margin: 0 0 8px; font-size: 1.15rem; }
+.workshopProcess p { margin: 0; color: var(--muted); line-height: 1.65; max-width: 48ch; }
+.studioInvitation { display: grid; grid-template-columns: 1fr 1.08fr; gap: 44px; padding: 44px; background: var(--surface-strong); border-left: 4px solid var(--accent); }
+.studioInvitation h2 { margin: 0; }
+.studioInvitation p { margin: 0 0 28px; color: var(--muted); line-height: 1.75; }
+.studioLinks { display: grid; gap: 12px; }
+.studioLinks a { display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--line); padding: 10px 0; }
+.homeRefresh a:not(.ctaLink):hover { text-decoration: underline; text-underline-offset: 4px; }
+.factoryDetails { display: grid; grid-template-columns: 1fr 1fr; gap: 64px; padding: 64px 0 12px; }
+.factoryDetails h2 { font-size: 1.35rem; margin-bottom: 16px; }
+.factoryDetails p { color: var(--muted); line-height: 1.75; max-width: 51ch; }
+.factoryDetails a { display: inline-block; padding: 8px 0; text-decoration: underline; text-underline-offset: 4px; }
+
+/* The marketing page follows the system preference. Workspaces keep their own
+   theme until their complete component palette has been reviewed in dark mode. */
+@media (prefers-color-scheme: dark) {
+  body:has(.homeRefresh) { --bg: #191c1b; --ink: #edf1ee; --muted: #b3bdb5; --surface: #242927; --surface-strong: #29302d; --line: #47554b; --accent: #ff9168; --accent-dark: #ff9168; color-scheme: dark; }
+  body:has(.homeRefresh) .ctaLink:not(.secondary), body:has(.homeRefresh) .headerWalletButton:not(.walletConnected), body:has(.homeRefresh) .walletDialog button:not(.secondary) { color: #202523; }
+  body:has(.homeRefresh) .walletDialog .hint { color: var(--muted); }
+  body:has(.homeRefresh) .mobileNavigation nav { background: var(--surface); }
+  body:has(.homeRefresh) .skipLink { background: var(--surface); }
+}
+@media (max-width: 1000px) {
+  main { padding: 20px 28px; }
+  .landingHero { gap: 28px; }
+  .landingHero h1 { font-size: clamp(2rem, 4vw, 2.8rem); }
+  .desktopNavigation { gap: 16px; }
+}
+@media (max-width: 760px) {
+  main { padding: 16px; }
+  .landingHero, .workshopSection, .studioInvitation, .factoryDetails { grid-template-columns: 1fr; gap: 28px; }
+  .landingHero { padding: 24px 0 40px; }
+  .landingHero h1 { font-size: clamp(2.2rem, 7.8vw, 3.5rem); }
+  .landingLead { max-width: 38ch; }
+  .factoryArtwork { margin-top: 12px; }
+  .workshopSection, .factoryDetails { padding: 40px 0; }
+  .studioInvitation { padding: 28px 24px; }
+  .siteHeader .desktopNavigation { display: none; }
+  .mobileNavigation { display: block; position: relative; }
+  .mobileNavigation summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; }
+  .mobileNavigation nav { position: absolute; right: 0; top: 48px; background: var(--surface); padding: 20px; border: 1px solid var(--line); z-index: 10; display: grid; min-width: 160px; }
+  .siteHeader { gap: 12px; }
+  .brandLink { font-size: 1.15rem; }
+}

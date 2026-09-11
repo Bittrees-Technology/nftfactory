@@ -1,3 +1,5 @@
+import { pageMetadata } from '../../lib/seo';
+export const metadata = pageMetadata('Create an NFT', 'Upload your artwork, preview its details, and review network fees before minting.', '/mint', true);
 export const dynamic = "force-dynamic";
 import {notFound} from "next/navigation";
 import {getEnabledAppChainIds,getPrimaryAppChainId} from "../../lib/chains";

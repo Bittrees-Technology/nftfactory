@@ -1,3 +1,5 @@
+import { pageMetadata } from '../../../lib/seo';
+export const metadata = pageMetadata('Customize your creator page', 'Choose your theme, cover image, and featured work.', '/profile/setup', true);
 export const dynamic = "force-dynamic";
 import CreatorSetupClient from "../../../components/profile/CreatorSetupClient";
 import ProfileLandingClient from "../../../components/profile/ProfileLandingClient";
