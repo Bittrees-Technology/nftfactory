@@ -1,0 +1,15 @@
+{
+  "checkedAt": "2026-09-11T18:34:13.178Z",
+  "deployment": "dpl_64eVGPHdJK7UUjgoTRjYhZ54nadv",
+  "sourceCommit": "206504e15a52335634e993a360950517b94a7502",
+  "method": "Ephemeral unfunded in-memory test identity; no user wallet keys, transactions or profile writes",
+  "challengeStatus": 200,
+  "signatureStatus": 200,
+  "sessionIdentityMatches": true,
+  "sessionChainId": 11155111,
+  "replayStatus": 503,
+  "logoutStatus": 200,
+  "logoutClearsCookie": true,
+  "fix": "Configured INDEXER_API_URL_11155111 for production replay storage; safe phase diagnostics and client recovery errors",
+  "userProfilePublication": "Not inferred from synthetic identity test"
+}
