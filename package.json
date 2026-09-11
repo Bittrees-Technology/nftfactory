@@ -8,16 +8,31 @@
     "services/*"
   ],
   "overrides": {
-    "axios": "1.16.0",
+    "@coinbase/cdp-sdk": {
+      "axios": "1.19.0"
+    },
+    "@walletconnect/jsonrpc-ws-connection": {
+      "ws": "7.5.13"
+    },
+    "axios": "1.19.0",
     "defu": "^6.1.5",
+    "engine.io-client": "^6.6.6",
     "follow-redirects": "^1.15.12",
     "h3": "^1.15.9",
-    "hono": "4.12.21",
+    "form-data": "^4.0.6",
+    "hono": "4.13.3",
     "lodash": "^4.17.24",
     "picomatch": "^4.0.4",
-    "postcss": "^8.5.12",
-    "socket.io-parser": "^4.2.6",
-    "vite": "^6.4.2"
+    "nanoid": "^3.3.18",
+    "postcss": "^8.5.26",
+    "sharp": "^0.35.3",
+    "socket.io-parser": "^4.2.7",
+    "vite": "^6.4.3",
+    "viem": {
+      "ws": "8.21.3"
+    },
+    "ws@^7.0.0": "7.5.13",
+    "ws@^8.0.0": "8.21.3"
   },
   "scripts": {
     "dev:web": "npm --workspace apps/web run dev",
@@ -76,16 +91,17 @@
     "print:mainnet-readiness": "node scripts/check-mainnet-readiness.mjs",
     "check:mainnet-readiness": "node scripts/check-mainnet-readiness.mjs --strict",
     "print:mainnet-cutover": "node scripts/print-mainnet-cutover.mjs",
-    "validate:release": "npm run typecheck:web && npm run test:web && npm run build:web:clean && npm run typecheck:indexer && npm run test:indexer && npm run test:contracts",
+    "validate:release": "npm run typecheck:web && npm run test:web && npm run build:web:clean && npm run typecheck:indexer && npm run test:indexer && npm run test:contracts && npm run test:scripts",
     "check:release": "bash scripts/release-readiness.sh",
     "typecheck:all": "npm run typecheck:web && npm run typecheck:indexer",
-    "test:all": "npm run test:web && npm run test:indexer && npm run test:contracts",
+    "test:all": "npm run test:web && npm run test:indexer && npm run test:contracts && npm run test:scripts",
     "check:all": "npm run typecheck:all && npm run test:all",
+    "test:scripts": "node --test scripts/lib/*.test.mjs",
     "ipfs:publish": "node scripts/publish-artifact.mjs",
     "ipfs:publish:metadata": "node scripts/publish-metadata-json.mjs",
     "ipfs:publish:profile-snapshot": "node scripts/publish-profile-snapshot.mjs"
   },
   "devDependencies": {
-    "postcss": "^8.5.12"
+    "postcss": "^8.5.26"
   }
 }

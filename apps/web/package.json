@@ -5,8 +5,8 @@
   "scripts": {
     "dev": "bash ../../scripts/web-runtime-preflight.sh dev && next dev",
     "dev:clean": "bash ../../scripts/web-runtime-preflight.sh dev:clean && rm -rf .next && next dev",
-    "build": "bash ../../scripts/web-runtime-preflight.sh build && NEXT_DIST_DIR=.next-build next build",
-    "build:clean": "bash ../../scripts/web-runtime-preflight.sh build:clean && rm -rf .next-build && NEXT_DIST_DIR=.next-build next build",
+    "build": "bash ../../scripts/web-runtime-preflight.sh build && NEXT_DIST_DIR=.next-build node ../../scripts/run-next-build.mjs",
+    "build:clean": "bash ../../scripts/web-runtime-preflight.sh build:clean && rm -rf .next-build && NEXT_DIST_DIR=.next-build node ../../scripts/run-next-build.mjs",
     "start": "NEXT_DIST_DIR=.next-build next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit --incremental false",
@@ -14,13 +14,12 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@workspace/ipfs-storage": "file:../../../ipfs-evm-system",
-    "@rainbow-me/rainbowkit": "^2.2.10",
+    "@rainbow-me/rainbowkit": "^2.2.11",
     "@tanstack/react-query": "^5.90.21",
-    "next": "15.5.19",
+    "next": "16.3.2",
     "react": "19.0.0",
     "react-dom": "19.0.0",
-    "viem": "^2.46.3",
+    "viem": "^2.55.19",
     "wagmi": "^2.19.5"
   },
   "devDependencies": {

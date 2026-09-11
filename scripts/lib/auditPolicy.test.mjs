@@ -1,6 +1,18 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { summarizeAuditPolicy } from "./auditPolicy.mjs";
+import { getAuditReportError, summarizeAuditPolicy } from "./auditPolicy.mjs";
+
+test("getAuditReportError rejects npm registry failures and incomplete reports", () => {
+  assert.match(
+    getAuditReportError({ message: "audit endpoint returned an error", error: { detail: "network unavailable" } }),
+    /network unavailable/
+  );
+  assert.match(getAuditReportError({ vulnerabilities: {} }), /incomplete advisory report/);
+  assert.equal(
+    getAuditReportError({ vulnerabilities: {}, metadata: { vulnerabilities: { total: 0 } } }),
+    ""
+  );
+});
 
 test("summarizeAuditPolicy allows the known wallet advisory family", () => {
   const summary = summarizeAuditPolicy({

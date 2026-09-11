@@ -1,10 +1,12 @@
 # Roadmap
 
+Current planning reference: [Product refresh and reliability review — 11 September 2026](./Product-Refresh-Review-2026-09-11.md). Its ordered recommendations supersede the older prioritization below; they are proposed work, not completed deployment. Acer provisioning evidence is recorded in [Acer IPFS integration](./Acer-IPFS-Integration.md).
+
 This page tracks the path from the current Sepolia-wired build toward a mainnet-ready release.
 
-## What is live
+## Previously implemented scope
 
-Live today:
+Historical implementation claims (not confirmation of current live availability):
 
 - [x] unified `/mint` flow for shared and creator-owned paths
 - [x] creator collection management inside the mint surface

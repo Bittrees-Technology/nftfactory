@@ -63,6 +63,8 @@ async function pinJsonWithFailover(
         response = await fetch(apiUrl, {
           method: "POST",
           headers: authHeaders,
+          redirect: "error",
+          signal: AbortSignal.timeout(60_000),
           body: form
         });
       } catch (error) {
@@ -149,10 +151,10 @@ export async function POST(request: Request) {
     const apiUrls = configuredApiUrls.length > 0
       ? configuredApiUrls.map((url) => buildIpfsAddUrl(url))
       : [buildIpfsAddUrl(resolveIpfsApiUrl(process.env) || requireEnv("IPFS_API_URL"))];
-    const primaryApiUrl = apiUrls[0];
+    const unprotectedApiUrl = apiUrls.find((url) => isPublicIpfsApiMissingRequiredAuth(url, process.env));
 
-    if (isPublicIpfsApiMissingRequiredAuth(primaryApiUrl, process.env)) {
-      throw new Error(buildIpfsAuthRequirementError(primaryApiUrl));
+    if (unprotectedApiUrl) {
+      throw new Error(buildIpfsAuthRequirementError(unprotectedApiUrl));
     }
 
     const authHeaders = buildIpfsAuthHeaders(process.env);

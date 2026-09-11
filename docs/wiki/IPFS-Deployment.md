@@ -19,15 +19,17 @@ That means the current deployment model is still:
 
 IPFS only gives you step 1.
 
-## Current live deployment topology
+## Recorded deployment topology
 
-Current production upload path:
+Recorded production upload path (live status must be rechecked):
 
 1. browser
 2. Vercel web app at `https://nftfactory.org`
 3. `https://ipfs-api.nftfactory.org`
 4. Cloudflare Tunnel
 5. Kubo API on `127.0.0.1:5001`
+
+For the Acer replacement, use the [authenticated application gateway contract](./Acer-IPFS-Integration.md); the tunnel must target the restricted gateway instead of raw Kubo RPC.
 
 This means the public writable IPFS API is not running on Vercel. Vercel forwards mint uploads to the Kubo node behind the tunnel.
 
