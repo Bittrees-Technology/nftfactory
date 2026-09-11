@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { execFileSync } from "node:child_process";
-import { summarizeAuditPolicy } from "./lib/auditPolicy.mjs";
+import { getAuditReportError, summarizeAuditPolicy } from "./lib/auditPolicy.mjs";
 
 function main() {
   let stdout = "";
@@ -17,6 +17,10 @@ function main() {
     }
   }
   const report = JSON.parse(stdout);
+  const reportError = getAuditReportError(report);
+  if (reportError) {
+    throw new Error(reportError);
+  }
   const summary = summarizeAuditPolicy(report);
 
   if (summary.metadata) {
@@ -31,7 +35,7 @@ function main() {
       console.log(`- ${finding.name}: ${finding.severity}${finding.isDirect ? " (direct)" : ""}`);
     }
     console.log(
-      "- These are currently tracked as a single wallet-stack migration item: RainbowKit 2.2.10 still peers on wagmi ^2, while the audit fix path wants wagmi 3.x."
+      "- These are currently tracked as a single wallet-stack migration item: RainbowKit 2.2.x still peers on wagmi ^2, while the audit fix path wants wagmi 3.x."
     );
   }
 

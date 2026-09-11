@@ -1,3 +1,4 @@
+import { issueToken } from "../../../packages/auth/session.mjs";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
@@ -32,7 +33,13 @@ function createReq(params: {
   const req = Readable.from(params.body ? [params.body] : []) as IncomingMessage;
   req.method = params.method;
   req.url = params.url;
-  req.headers = { host: "localhost", ...(params.headers || {}) };
+  const secret = "test-only-session-secret-32-characters-long";
+  process.env.SESSION_SECRET = secret;
+  let actor: string | undefined;
+  try { const body = JSON.parse(params.body || "{}"); actor = body.actorAddress || body.currentOwnerAddress || body.ownerAddress; } catch { /* malformed-body test */ }
+  actor ||= new URL(params.url, "http://localhost").searchParams.get("actorAddress") || undefined;
+  const session = actor && /^0x[0-9a-f]{40}$/i.test(actor) ? issueToken({ purpose: "session", address: actor.toLowerCase(), exp: Date.now() + 60_000 }, secret) : undefined;
+  req.headers = { host: "localhost", ...(session ? { authorization: `Bearer ${session}` } : {}), ...(params.headers || {}) };
   (req as any).socket = { remoteAddress: "127.0.0.1" };
   return req;
 }
@@ -61,7 +68,7 @@ async function runHandler(
 async function loadCreateRequestHandler() {
   vi.resetModules();
   const mod = await import("./indexer.js");
-  return mod.createRequestHandler;
+  return (deps: Parameters<typeof mod.createRequestHandler>[0], config: Parameters<typeof mod.createRequestHandler>[1]) => mod.createRequestHandler({ verifyProfileIdentityImpl: async () => true, ...deps }, config);
 }
 
 function createSchemaQueryMock(options?: {
@@ -309,7 +316,7 @@ describe("indexer consistency hardening", () => {
       {
         chainId: 11155111,
         rpcUrl: "http://127.0.0.1:8545",
-        adminToken: "",
+        adminToken: "test-admin-token",
         adminAllowlist: new Set(),
         trustProxy: false,
         marketplaceAddress: null,
@@ -334,7 +341,7 @@ describe("indexer consistency hardening", () => {
     expect(logResponse.status).toBe(200);
     expect(logResponse.body.tokens[0].onchainAllowed).toBe(true);
 
-    const tokensResponse = await runHandler(handler, createReq({ method: "GET", url: "/api/admin/payment-tokens" }));
+    const tokensResponse = await runHandler(handler, createReq({ method: "GET", url: "/api/admin/payment-tokens", headers: { authorization: "Bearer test-admin-token" } }));
     expect(tokensResponse.status).toBe(200);
     expect(tokensResponse.body.tokens).toHaveLength(1);
     expect(tokensResponse.body.tokens[0].tokenAddress).toBe(allowedToken);

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ensureWalletSession } from "../../lib/walletSession";
 import { useAccount, useChainId, usePublicClient, useSwitchChain, useWalletClient } from "wagmi";
 import { encodeFunctionData, formatEther } from "viem";
 import type { Address, Hex } from "viem";
@@ -2226,6 +2227,8 @@ export default function MintClient({
   // ── Upload metadata to IPFS ───────────────────────────────────────────────
 
   async function uploadMetadata(): Promise<string> {
+    if (!walletClient?.account) throw new Error("Connect your wallet first.");
+    await ensureWalletSession(walletClient.account.address, args => walletClient.signMessage(args));
     if (useCustomMetadataUri) {
       const customUri = metadataUri.trim();
       if (!customUri) {
@@ -2853,6 +2856,7 @@ export default function MintClient({
     e.preventDefault();
     setMintTx({ status: "idle" });
     if (!account) { setMintTx({ status: "error", message: "Connect wallet first." }); return; }
+    if (useCustomMetadataUri) { setMintTx({ status: "error", message: "Custom metadata minting is paused until its backup can be verified. Use the artwork upload flow." }); return; }
     if (wrongNetwork) { setMintTx({ status: "error", message: `Select ${appChain.name} in the wallet menu first.` }); return; }
 
     const amount = Number.parseInt(copies || "1", 10);

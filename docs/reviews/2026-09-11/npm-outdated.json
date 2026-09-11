@@ -1,0 +1,162 @@
+{
+  "@openzeppelin/contracts": {
+    "current": "5.4.0",
+    "wanted": "5.4.0",
+    "latest": "5.6.1",
+    "dependent": "contracts",
+    "location": "/Users/jhineline/bob/Library/Assistants/idagents/id-agents/workspace/projects/nftfactory/node_modules/@openzeppelin/contracts"
+  },
+  "@openzeppelin/contracts-upgradeable": {
+    "current": "5.4.0",
+    "wanted": "5.4.0",
+    "latest": "5.6.1",
+    "dependent": "contracts",
+    "location": "/Users/jhineline/bob/Library/Assistants/idagents/id-agents/workspace/projects/nftfactory/node_modules/@openzeppelin/contracts-upgradeable"
+  },
+  "@prisma/client": {
+    "current": "6.4.1",
+    "wanted": "6.4.1",
+    "latest": "7.10.0",
+    "dependent": "indexer",
+    "location": "/Users/jhineline/bob/Library/Assistants/idagents/id-agents/workspace/projects/nftfactory/node_modules/@prisma/client"
+  },
+  "@tanstack/react-query": {
+    "current": "5.97.0",
+    "wanted": "5.102.8",
+    "latest": "5.102.8",
+    "dependent": "web",
+    "location": "/Users/jhineline/bob/Library/Assistants/idagents/id-agents/workspace/projects/nftfactory/node_modules/@tanstack/react-query"
+  },
+  "@types/node": {
+    "current": "22.13.4",
+    "wanted": "22.13.4",
+    "latest": "22.20.2",
+    "dependent": "web",
+    "location": "/Users/jhineline/bob/Library/Assistants/idagents/id-agents/workspace/projects/nftfactory/node_modules/@types/node"
+  },
+  "@types/react": {
+    "current": "19.0.10",
+    "wanted": "19.0.10",
+    "latest": "19.3.0",
+    "dependent": "web",
+    "location": "/Users/jhineline/bob/Library/Assistants/idagents/id-agents/workspace/projects/nftfactory/node_modules/@types/react"
+  },
+  "@types/react-dom": {
+    "current": "19.0.4",
+    "wanted": "19.0.4",
+    "latest": "19.3.0",
+    "dependent": "web",
+    "location": "/Users/jhineline/bob/Library/Assistants/idagents/id-agents/workspace/projects/nftfactory/node_modules/@types/react-dom"
+  },
+  "dotenv": {
+    "current": "16.4.7",
+    "wanted": "16.4.7",
+    "latest": "17.4.2",
+    "dependent": "indexer",
+    "location": "/Users/jhineline/bob/Library/Assistants/idagents/id-agents/workspace/projects/nftfactory/node_modules/dotenv"
+  },
+  "next": {
+    "current": "16.3.2",
+    "wanted": "16.3.2",
+    "latest": "16.3.4",
+    "dependent": "web",
+    "location": "/Users/jhineline/bob/Library/Assistants/idagents/id-agents/workspace/projects/nftfactory/node_modules/next"
+  },
+  "pino": {
+    "current": "9.6.0",
+    "wanted": "9.6.0",
+    "latest": "10.3.1",
+    "dependent": "indexer",
+    "location": "/Users/jhineline/bob/Library/Assistants/idagents/id-agents/workspace/projects/nftfactory/node_modules/pino"
+  },
+  "postcss": {
+    "current": "8.5.26",
+    "wanted": "8.5.28",
+    "latest": "8.5.28",
+    "dependent": "nftfactory",
+    "location": "/Users/jhineline/bob/Library/Assistants/idagents/id-agents/workspace/projects/nftfactory/node_modules/postcss"
+  },
+  "prisma": {
+    "current": "6.4.1",
+    "wanted": "6.4.1",
+    "latest": "8.0.0-rc.13",
+    "dependent": "indexer",
+    "location": "/Users/jhineline/bob/Library/Assistants/idagents/id-agents/workspace/projects/nftfactory/node_modules/prisma"
+  },
+  "react": {
+    "current": "19.0.0",
+    "wanted": "19.0.0",
+    "latest": "19.3.0",
+    "dependent": "web",
+    "location": "/Users/jhineline/bob/Library/Assistants/idagents/id-agents/workspace/projects/nftfactory/node_modules/react"
+  },
+  "react-dom": {
+    "current": "19.0.0",
+    "wanted": "19.0.0",
+    "latest": "19.3.0",
+    "dependent": "web",
+    "location": "/Users/jhineline/bob/Library/Assistants/idagents/id-agents/workspace/projects/nftfactory/node_modules/react-dom"
+  },
+  "tsx": {
+    "current": "4.19.3",
+    "wanted": "4.19.3",
+    "latest": "4.23.13",
+    "dependent": "indexer",
+    "location": "/Users/jhineline/bob/Library/Assistants/idagents/id-agents/workspace/projects/nftfactory/node_modules/tsx"
+  },
+  "typescript": [
+    {
+      "current": "5.7.3",
+      "wanted": "5.7.3",
+      "latest": "7.0.2",
+      "dependent": "indexer",
+      "location": "/Users/jhineline/bob/Library/Assistants/idagents/id-agents/workspace/projects/nftfactory/node_modules/typescript"
+    },
+    {
+      "current": "5.7.3",
+      "wanted": "5.7.3",
+      "latest": "7.0.2",
+      "dependent": "web",
+      "location": "/Users/jhineline/bob/Library/Assistants/idagents/id-agents/workspace/projects/nftfactory/node_modules/typescript"
+    }
+  ],
+  "viem": [
+    {
+      "current": "2.55.19",
+      "wanted": "2.56.3",
+      "latest": "2.56.3",
+      "dependent": "indexer",
+      "location": "/Users/jhineline/bob/Library/Assistants/idagents/id-agents/workspace/projects/nftfactory/node_modules/viem"
+    },
+    {
+      "current": "2.55.19",
+      "wanted": "2.56.3",
+      "latest": "2.56.3",
+      "dependent": "web",
+      "location": "/Users/jhineline/bob/Library/Assistants/idagents/id-agents/workspace/projects/nftfactory/node_modules/viem"
+    }
+  ],
+  "vitest": [
+    {
+      "current": "3.2.6",
+      "wanted": "3.2.6",
+      "latest": "4.1.11",
+      "dependent": "indexer",
+      "location": "/Users/jhineline/bob/Library/Assistants/idagents/id-agents/workspace/projects/nftfactory/services/indexer/node_modules/vitest"
+    },
+    {
+      "current": "3.2.6",
+      "wanted": "3.2.6",
+      "latest": "4.1.11",
+      "dependent": "web",
+      "location": "/Users/jhineline/bob/Library/Assistants/idagents/id-agents/workspace/projects/nftfactory/apps/web/node_modules/vitest"
+    }
+  ],
+  "wagmi": {
+    "current": "2.19.5",
+    "wanted": "2.19.5",
+    "latest": "3.7.7",
+    "dependent": "web",
+    "location": "/Users/jhineline/bob/Library/Assistants/idagents/id-agents/workspace/projects/nftfactory/node_modules/wagmi"
+  }
+}

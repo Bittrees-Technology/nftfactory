@@ -784,7 +784,7 @@ function buildCollectionIdentityFixHref(params: {
   identityValue?: string | null;
   source?: ApiProfileRecord["source"] | null;
 }): string {
-  const mode = params.source || inferIdentityModeFromValue(params.identityValue);
+  const mode = params.source === "wallet" ? "nftfactory-subname" : params.source || inferIdentityModeFromValue(params.identityValue);
   const label = normalizeIdentityLabelForSetup(params.identityValue, mode);
   const search = new URLSearchParams();
   search.set("view", "manage");
@@ -2071,7 +2071,7 @@ export default function ProfileClient({ name }: { name: string }) {
         <div className="profileMyspaceShell">
           <section className="card formCard profileMyspaceIntroCard">
             <p className="eyebrow">Published Creator Page</p>
-            <h3>{creatorDisplayName}'s Public Page</h3>
+            <h3>{creatorDisplayName}&apos;s Public Page</h3>
             <p className="sectionLead">
               This profile uses the unified creator-page layout: expressive blurbs, bold modules, profile-song energy,
               and creator-controlled sections that should read like a personal page first and a storefront second.
@@ -2124,7 +2124,7 @@ export default function ProfileClient({ name }: { name: string }) {
                 <p>{presentationProfile?.interests?.trim() || "No Interests blurb yet."}</p>
               </div>
               <div className="profileMyspaceBlurbCard">
-                <h4>Who I'd Like To Meet</h4>
+                <h4>Who I&apos;d Like To Meet</h4>
                 <p>{presentationProfile?.whoIdLikeToMeet?.trim() || "No dream collabs or friend list notes yet."}</p>
               </div>
               <div className="profileMyspaceTopCard">
@@ -3071,7 +3071,7 @@ export default function ProfileClient({ name }: { name: string }) {
                         <textarea value={editInterests} onChange={(e) => setEditInterests(e.target.value)} />
                       </label>
                       <label>
-                        Who I'd Like To Meet
+                        Who I&apos;d Like To Meet
                         <textarea value={editWhoIdLikeToMeet} onChange={(e) => setEditWhoIdLikeToMeet(e.target.value)} />
                       </label>
                       <label>

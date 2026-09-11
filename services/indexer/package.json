@@ -45,12 +45,12 @@
     "@prisma/client": "6.4.1",
     "dotenv": "16.4.7",
     "pino": "9.6.0",
-    "viem": "^2.46.3"
+    "viem": "^2.55.19"
   },
   "devDependencies": {
     "prisma": "6.4.1",
     "tsx": "4.19.3",
-    "typescript": "5.7.3",
-    "vitest": "3.2.6"
+    "typescript": "5.9.3",
+    "vitest": "4.1.11"
   }
 }

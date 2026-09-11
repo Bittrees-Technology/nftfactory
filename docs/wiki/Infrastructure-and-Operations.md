@@ -21,7 +21,7 @@ nftfactory/
 Service layout:
 
 - **Web app**
-  - Next.js 15
+  - Next.js 16
   - local dev usually runs on port `3000`
   - production is currently hosted on Vercel at `https://nftfactory.org`
 - **Indexer**

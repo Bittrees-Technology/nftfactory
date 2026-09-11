@@ -5,7 +5,7 @@ import {
   getIpfsStorageConfig,
   IpfsStorageClient,
   publishProjectPath,
-} from "../../ipfs-evm-system/src/index.js";
+} from "./lib/ipfsPublisher.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

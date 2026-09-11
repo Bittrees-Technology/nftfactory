@@ -243,7 +243,7 @@ export type ApiProfileRetroBlock = {
 export type ApiProfileRecord = {
   slug: string;
   fullName: string;
-  source: "ens" | "external-subname" | "nftfactory-subname";
+  source: "wallet" | "ens" | "external-subname" | "nftfactory-subname";
   ownerAddress: string;
   collectionAddress: string | null;
   tagline: string | null;

@@ -235,7 +235,12 @@ export async function GET() {
     ...chainIds.map((chainId) => checkIndexer(chainId))
   ]);
 
-  const checks = [walletConnect, ipfs, ...indexers];
+  const storageReady = Boolean(process.env.IPFS_REPLICA_API_URL && process.env.IPFS_REPLICA_API_TOKEN && process.env.IPFS_REPLICA_GATEWAY_URL);
+  const sessionReady = (process.env.SESSION_SECRET?.length || 0) >= 32;
+  const checks = [walletConnect, ipfs, ...indexers,
+    { label: "backup-storage", ok: storageReady, message: storageReady ? "Configured; each upload verifies its copy" : "Publishing paused: offsite storage is not configured" },
+    { label: "wallet-session", ok: sessionReady, message: sessionReady ? "Configured" : "Wallet sign-in is not configured" }
+  ];
   const ok = checks.every((check) => check.ok);
 
   return NextResponse.json(
@@ -243,6 +248,6 @@ export async function GET() {
       ok,
       checks
     },
-    { status: ok ? 200 : 503 }
+    { status: ok ? 200 : 503, headers: { "Cache-Control": "public, s-maxage=30, stale-while-revalidate=30" } }
   );
 }

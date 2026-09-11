@@ -36,6 +36,7 @@ function tokenLabel(item: ApiMintFeedItem): string {
 }
 
 function profileSourceLabel(source: ApiProfileRecord["source"]): string {
+  if (source === "wallet") return "Creator";
   if (source === "nftfactory-subname") return "NFTFactory subname";
   if (source === "external-subname") return "External subname";
   return "ENS";

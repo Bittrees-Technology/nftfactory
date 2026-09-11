@@ -19,6 +19,7 @@ async function fetchWithTimeout(url, init = {}) {
   try {
     return await fetch(url, {
       ...init,
+      redirect: "error",
       signal: controller.signal
     });
   } finally {

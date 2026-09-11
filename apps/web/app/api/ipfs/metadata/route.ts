@@ -1,259 +1,32 @@
-import { NextResponse } from "next/server";
-import {
-  buildIpfsAddUrl,
-  buildIpfsAuthRequirementError,
-  buildIpfsAuthHeaders,
-  buildGatewayUrl,
-  buildIpfsReachabilityError,
-  buildIpfsTerminatedError,
-  isRetryableIpfsUploadErrorMessage,
-  isRetryableIpfsUploadStatus,
-  isPrivateOrLocalUrl,
-  isPublicIpfsApiMissingRequiredAuth,
-  parseIpfsAddResponse,
-  resolveIpfsApiUrl,
-  resolveIpfsApiUrls,
-  resolveIpfsGatewayBaseUrl
-} from "../../../../lib/ipfsUpload";
-import { sanitizeBackendErrorMessage } from "../../../../lib/networkErrors";
-import { parseFormDataRequestBody } from "../../../../lib/requestBody";
-import { validateRequestContentType } from "../../../../lib/requestContentType";
-import { rateLimitRequest, resolveRequestRateLimitConfig } from "../../../../lib/requestRateLimit";
-import { validateRequestContentLength } from "../../../../lib/requestSize";
-
-const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
-const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
-const MAX_METADATA_REQUEST_BYTES = 48 * 1024 * 1024;
-const MAX_IPFS_UPLOAD_ATTEMPTS = 3;
-const IPFS_UPLOAD_RETRY_DELAYS_MS = [250, 750];
-const IPFS_METADATA_RATE_LIMIT = {
-  bucket: "ipfs-metadata",
-  errorMessage: "Too many IPFS metadata upload requests. Retry later.",
-  ...resolveRequestRateLimitConfig(process.env, "IPFS_METADATA", {
-    maxRequests: 10,
-    windowMs: 5 * 60_000
-  })
-} as const;
-
-function requireEnv(name: string): string {
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(`Missing required env var: ${name}`);
-  }
-  return value;
-}
-
-async function pinFile(file: File, fileName: string, apiUrl: string, authHeaders: HeadersInit): Promise<string> {
-  let lastError: Error | null = null;
-
-  for (let attempt = 1; attempt <= MAX_IPFS_UPLOAD_ATTEMPTS; attempt += 1) {
-    const form = new FormData();
-    form.append("file", file, fileName);
-
-    let response: Response;
-    try {
-      response = await fetch(apiUrl, {
-        method: "POST",
-        headers: authHeaders,
-        body: form
-      });
-    } catch (error) {
-      const message =
-        error instanceof Error && isPrivateOrLocalUrl(apiUrl)
-          ? buildIpfsReachabilityError(apiUrl)
-          : error instanceof Error
-            ? `IPFS upload request failed: ${error.message}`
-            : "IPFS upload request failed.";
-      lastError = new Error(message);
-
-      if (attempt < MAX_IPFS_UPLOAD_ATTEMPTS && isRetryableIpfsUploadErrorMessage(message)) {
-        await new Promise((resolve) => setTimeout(resolve, IPFS_UPLOAD_RETRY_DELAYS_MS[attempt - 1] || 1000));
-        continue;
-      }
-      throw lastError;
-    }
-
-    if (!response.ok) {
-      const text = await response.text();
-      const fallbackMessage = `IPFS upload failed (HTTP ${response.status}).`;
-      const sanitizedMessage = sanitizeBackendErrorMessage(text, fallbackMessage, {
-        serviceLabel: "IPFS upload backend"
-      });
-      lastError = new Error(sanitizedMessage);
-      if (attempt < MAX_IPFS_UPLOAD_ATTEMPTS && isRetryableIpfsUploadStatus(response.status)) {
-        await new Promise((resolve) => setTimeout(resolve, IPFS_UPLOAD_RETRY_DELAYS_MS[attempt - 1] || 1000));
-        continue;
-      }
-      throw lastError;
-    }
-
-    let responseText: string;
-    try {
-      responseText = await response.text();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "";
-      lastError = new Error(
-        isRetryableIpfsUploadErrorMessage(message)
-          ? buildIpfsTerminatedError(apiUrl)
-          : "IPFS upload response could not be read."
-      );
-      if (attempt < MAX_IPFS_UPLOAD_ATTEMPTS && isRetryableIpfsUploadErrorMessage(message)) {
-        await new Promise((resolve) => setTimeout(resolve, IPFS_UPLOAD_RETRY_DELAYS_MS[attempt - 1] || 1000));
-        continue;
-      }
-      throw lastError;
-    }
-
-    return parseIpfsAddResponse(responseText);
-  }
-
-  throw lastError || new Error("IPFS upload failed.");
-}
-
-async function pinFileWithFailover(
-  file: File,
-  fileName: string,
-  apiUrls: string[],
-  authHeaders: HeadersInit
-): Promise<string> {
-  let lastError: Error | null = null;
-
-  for (const apiUrl of apiUrls) {
-    try {
-      return await pinFile(file, fileName, apiUrl, authHeaders);
-    } catch (error) {
-      lastError = error instanceof Error ? error : new Error("IPFS upload failed.");
-    }
-  }
-
-  throw lastError || new Error("IPFS upload failed.");
-}
-
+import { NextResponse } from 'next/server';
+import { requireSession } from '../../../../lib/server/session';
+import { assertPublishingConfigured, boundedBody, MAX_IMAGE_BYTES, publishFile, PublishingUnavailable } from '../../../../lib/server/publish';
+import { rateLimitRequest } from '../../../../lib/requestRateLimit';
+export const runtime = 'nodejs';
+export const maxDuration = 120;
 export async function POST(request: Request) {
+  try { requireSession(request); } catch (error) { return NextResponse.json({ error: (error as Error).message }, { status: 401 }); }
+  const limited = rateLimitRequest(request, { bucket: 'publish-v1', maxRequests: 5, windowMs: 300_000, errorMessage: 'Please wait before uploading again.' });
+  if (limited) return NextResponse.json({ error: limited.error }, { status: 429, headers: limited.headers });
   try {
-    const rateLimitError = rateLimitRequest(request, IPFS_METADATA_RATE_LIMIT);
-    if (rateLimitError) {
-      return NextResponse.json({ error: rateLimitError.error }, { status: rateLimitError.status, headers: rateLimitError.headers });
-    }
-
-    const contentTypeError = validateRequestContentType(request, "multipart/form-data", "Upload payload");
-    if (contentTypeError) {
-      return NextResponse.json({ error: contentTypeError.error }, { status: contentTypeError.status });
-    }
-
-    const contentLengthError = validateRequestContentLength(request, MAX_METADATA_REQUEST_BYTES, "Upload payload");
-    if (contentLengthError) {
-      return NextResponse.json({ error: contentLengthError.error }, { status: contentLengthError.status });
-    }
-
-    const configuredApiUrls = resolveIpfsApiUrls(process.env);
-    const apiUrls = configuredApiUrls.length > 0
-      ? configuredApiUrls.map((url) => buildIpfsAddUrl(url))
-      : [buildIpfsAddUrl(resolveIpfsApiUrl(process.env) || requireEnv("IPFS_API_URL"))];
-    const primaryApiUrl = apiUrls[0];
-    if (isPublicIpfsApiMissingRequiredAuth(primaryApiUrl, process.env)) {
-      throw new Error(buildIpfsAuthRequirementError(primaryApiUrl));
-    }
-    const authHeaders = buildIpfsAuthHeaders(process.env);
-    const gateway = resolveIpfsGatewayBaseUrl(process.env);
-
-    const formDataResult = await parseFormDataRequestBody(request, "Upload payload");
-    if (!formDataResult.ok) {
-      return NextResponse.json({ error: formDataResult.error }, { status: formDataResult.status });
-    }
-
-    const formData = formDataResult.value;
-    const image = formData.get("image");
-    const audio = formData.get("audio");
-    const name = String(formData.get("name") || "").trim();
-    const description = String(formData.get("description") || "").trim();
-    const externalUrl = String(formData.get("external_url") || "").trim();
-    const customMetadataUri = String(formData.get("custom_metadata_uri") || "").trim();
-
-    if (customMetadataUri) {
-      if (!/^ipfs:\/\/.+/.test(customMetadataUri)) {
-        return NextResponse.json({ error: "custom_metadata_uri must be a valid ipfs:// URI" }, { status: 400 });
-      }
-      return NextResponse.json({
-        metadataUri: customMetadataUri
-      });
-    }
-
-    if (image instanceof File) {
-      if (!image.type.startsWith("image/")) {
-        return NextResponse.json({ error: "Image must be a valid image/* file type" }, { status: 400 });
-      }
-      if (image.size <= 0 || image.size > MAX_IMAGE_BYTES) {
-        return NextResponse.json({ error: "Image file size must be between 1 byte and 15MB" }, { status: 400 });
-      }
-    }
-
-    if (audio instanceof File) {
-      if (!audio.type.startsWith("audio/")) {
-        return NextResponse.json({ error: "Audio must be a valid audio/* file type" }, { status: 400 });
-      }
-      if (audio.size <= 0 || audio.size > MAX_AUDIO_BYTES) {
-        return NextResponse.json({ error: "Audio file size must be between 1 byte and 25MB" }, { status: 400 });
-      }
-    }
-
-    let imageHash: string | null = null;
-    let audioHash: string | null = null;
-    let imageUri: string | null = null;
-    let audioUri: string | null = null;
-
-    if (image instanceof File) {
-      imageHash = await pinFileWithFailover(image, image.name || "asset.png", apiUrls, authHeaders);
-      imageUri = `ipfs://${imageHash}`;
-    }
-
-    if (audio instanceof File) {
-      audioHash = await pinFileWithFailover(audio, audio.name || "audio.mp3", apiUrls, authHeaders);
-      audioUri = `ipfs://${audioHash}`;
-    }
-
-    const metadata: Record<string, unknown> = {
-      name: name || "Untitled NFT",
-      description
-    };
-
-    if (imageUri) {
-      metadata.image = imageUri;
-    }
-    if (audioUri) {
-      metadata.animation_url = audioUri;
-    }
-
-    if (externalUrl) {
-      try {
-        const parsed = new URL(externalUrl);
-        if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-          return NextResponse.json({ error: "external_url must use http or https" }, { status: 400 });
-        }
-        metadata.external_url = parsed.toString();
-      } catch {
-        return NextResponse.json({ error: "external_url must be a valid URL" }, { status: 400 });
-      }
-    }
-
-    const metadataFile = new File([JSON.stringify(metadata, null, 2)], "metadata.json", {
-      type: "application/json"
-    });
-    const metadataHash = await pinFileWithFailover(metadataFile, "metadata.json", apiUrls, authHeaders);
-    const metadataUri = `ipfs://${metadataHash}`;
-
-    return NextResponse.json({
-      imageUri,
-      audioUri,
-      metadataUri,
-      imageGatewayUrl: imageHash ? buildGatewayUrl({ gatewayBaseUrl: gateway, cid: imageHash }) : null,
-      audioGatewayUrl: audioHash ? buildGatewayUrl({ gatewayBaseUrl: gateway, cid: audioHash }) : null,
-      metadataGatewayUrl: buildGatewayUrl({ gatewayBaseUrl: gateway, cid: metadataHash })
-    });
-  } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "IPFS upload failed" },
-      { status: 500 }
-    );
+    assertPublishingConfigured();
+    if (!request.headers.get('content-type')?.startsWith('multipart/form-data')) return NextResponse.json({ error: 'Choose an artwork file.' }, { status: 415 });
+    const bytes = await boundedBody(request);
+    const form = await new Request(request.url, { method: 'POST', headers: { 'Content-Type': request.headers.get('content-type')! }, body: new Uint8Array(bytes) }).formData();
+    const image = form.get('image');
+    const name = String(form.get('name') || '').trim();
+    const description = String(form.get('description') || '').trim();
+    if (!name || name.length > 120 || description.length > 2000) return NextResponse.json({ error: 'Add a name of up to 120 characters and a description of up to 2,000 characters.' }, { status: 400 });
+    if (form.get('audio') || form.get('custom_metadata_uri')) return NextResponse.json({ error: 'This release supports artwork images with generated metadata.' }, { status: 400 });
+    if (!(image instanceof File) || !['image/png', 'image/jpeg', 'image/webp'].includes(image.type) || image.size <= 0 || image.size > MAX_IMAGE_BYTES) return NextResponse.json({ error: 'Choose a PNG, JPEG, or WebP image smaller than 3 MiB.' }, { status: 400 });
+    const signature = new Uint8Array(await image.slice(0, 12).arrayBuffer());
+    const validImage = image.type === 'image/png' ? Buffer.from(signature.slice(0,8)).equals(Buffer.from([137,80,78,71,13,10,26,10])) : image.type === 'image/jpeg' ? signature[0] === 255 && signature[1] === 216 && signature[2] === 255 : Buffer.from(signature.slice(0,4)).toString() === 'RIFF' && Buffer.from(signature.slice(8,12)).toString() === 'WEBP';
+    if (!validImage) return NextResponse.json({ error: 'The file contents do not match a supported image format.' }, { status: 400 });
+    const media = await publishFile(image, image.name || 'artwork');
+    const metadata = new File([JSON.stringify({ name, description, image: media.uri })], 'metadata.json', { type: 'application/json' });
+    const result = await publishFile(metadata, 'metadata.json');
+    return NextResponse.json({ imageUri: media.uri, metadataUri: result.uri, imageGatewayUrl: media.gatewayUrl, metadataGatewayUrl: result.gatewayUrl, storage: result.storage });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof PublishingUnavailable ? error.message : 'The upload could not be completed. Check file size and retry.' }, { status: error instanceof PublishingUnavailable ? 503 : 400 });
   }
 }
