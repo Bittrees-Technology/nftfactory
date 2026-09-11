@@ -1,0 +1,61 @@
+{
+  "scope": "Literal same-site href targets in current source; excludes conditional/computed targets, query states and interaction behavior",
+  "date": "2026-09-11",
+  "results": [
+    {
+      "path": "/",
+      "status": 200,
+      "finalUrl": "https://nftfactory.org/"
+    },
+    {
+      "path": "/discover",
+      "status": 200,
+      "finalUrl": "https://nftfactory.org/discover"
+    },
+    {
+      "path": "/marketplace",
+      "status": 200,
+      "finalUrl": "https://nftfactory.org/marketplace"
+    },
+    {
+      "path": "/mint",
+      "status": 200,
+      "finalUrl": "https://nftfactory.org/mint"
+    },
+    {
+      "path": "/profile",
+      "status": 200,
+      "finalUrl": "https://nftfactory.org/profile"
+    },
+    {
+      "path": "/profile/import",
+      "status": 200,
+      "finalUrl": "https://nftfactory.org/profile/import"
+    },
+    {
+      "path": "/profile/listings",
+      "status": 200,
+      "finalUrl": "https://nftfactory.org/profile/listings"
+    },
+    {
+      "path": "/profile/setup",
+      "status": 200,
+      "finalUrl": "https://nftfactory.org/profile/setup"
+    },
+    {
+      "path": "/wiki",
+      "status": 200,
+      "finalUrl": "https://nftfactory.org/wiki"
+    },
+    {
+      "path": "/wiki/creator-walkthrough",
+      "status": 200,
+      "finalUrl": "https://nftfactory.org/wiki/creator-walkthrough"
+    },
+    {
+      "path": "/wiki/storage",
+      "status": 200,
+      "finalUrl": "https://nftfactory.org/wiki/storage"
+    }
+  ]
+}
