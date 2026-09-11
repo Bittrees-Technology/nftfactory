@@ -14,7 +14,7 @@ Production is unchanged. Work is on `feat/product-expansion`; automatic Vercel d
 
 ## Evidence
 
-On Node 24, `npm run check:all` passed: 234 web tests, 90 indexer tests, the Solidity suite and 47 script tests. A production-mode local build passed. The build uses local test configuration and is not a deployment artifact.
+On Node 24, `npm run check:all` passed: 238 web tests, 90 indexer tests, the Solidity suite and 47 script tests. A production-mode local build passed. The build uses local test configuration and is not a deployment artifact.
 
 Seven migrations applied to an isolated PostgreSQL database. A repeatable database test checks identical addresses/token IDs on separate networks, duplicate rejection, 12 concurrent nonce claims with exactly one accepted, and exclusion of private tags for other wallets. A local signed-wallet integration run exercised SIWE, replay rejection, profile publication and unauthorized-owner rejection. These checks did not write production data.
 
