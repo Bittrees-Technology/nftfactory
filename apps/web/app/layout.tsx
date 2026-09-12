@@ -1,3 +1,4 @@
+import InsightsScript from "next/script";
 import "./globals.css";
 import "./brand.css";
 import Link from "next/link";
@@ -32,6 +33,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <footer className="siteFooter"><span>NFTFactory · Create and share</span><Link href="/wiki">Help & documentation</Link><Link href="/wiki/storage">About storage</Link></footer>
           </main>
         </AppProviders>
+      <InsightsScript src="https://insights.bittrees.org/consent.js" data-insights-site="nftfactory" strategy="afterInteractive" />
       </body>
     </html>
   );
