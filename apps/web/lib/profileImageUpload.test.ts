@@ -1,0 +1,12 @@
+import {afterEach,expect,it,vi} from 'vitest';
+vi.mock('./server/session',()=>({requireSession:vi.fn()}));
+vi.mock('./requestRateLimit',()=>({rateLimitRequest:()=>null}));
+vi.mock('./server/publish',()=>({MAX_IMAGE_BYTES:3000000,PublishingUnavailable:class extends Error{},assertPublishingConfigured:vi.fn(),boundedBody:async(r:Request)=>new Uint8Array(await r.arrayBuffer()),publishFile:vi.fn().mockResolvedValue({gatewayUrl:'https://ipfs.example/image',uri:'ipfs://image',storage:{replicated:true}})}));
+import {requireSession} from './server/session';
+import {publishFile} from './server/publish';
+import {POST} from '../app/api/profile/image/route';
+afterEach(()=>vi.clearAllMocks());
+const request=(file:File)=>{const form=new FormData();form.append('image',file);return new Request('https://nftfactory.org/api/profile/image',{method:'POST',body:form});};
+it('publishes a verified image without minting metadata',async()=>{const r=await POST(request(new File([new Uint8Array([137,80,78,71,13,10,26,10,0,0,0,0])],'avatar.png',{type:'image/png'})));expect(r.status).toBe(200);expect((await r.json()).imageUrl).toBe('https://ipfs.example/image');expect(publishFile).toHaveBeenCalledOnce();});
+it('rejects mismatched image contents',async()=>{const r=await POST(request(new File(['<svg/>'],'avatar.png',{type:'image/png'})));expect(r.status).toBe(400);expect(publishFile).not.toHaveBeenCalled();});
+it('requires sign-in before any upload',async()=>{vi.mocked(requireSession).mockImplementationOnce(()=>{throw new Error('Sign in');});expect((await POST(request(new File(['x'],'x.png',{type:'image/png'})))).status).toBe(401);expect(publishFile).not.toHaveBeenCalled();});
