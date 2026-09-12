@@ -6,8 +6,9 @@ mountpoint -q /srv/storage
 [[ $(findmnt -n -o FSTYPE /srv/storage) == ext4 ]]
 # Trigger the existing encrypted, quota-limited MyCloud automount.
 timeout 30 stat /srv/network-storage/. >/dev/null
-[[ $(findmnt -n -o SOURCE /srv/network-storage) == //192.168.1.164/acer-storage ]]
-[[ $(findmnt -n -o FSTYPE /srv/network-storage) == cifs ]]
+# The automount and its mounted CIFS share both appear in findmnt output.
+# Select the actual filesystem so the autofs entry cannot fail validation.
+[[ $(findmnt -rn -t cifs -o SOURCE --mountpoint /srv/network-storage) == //192.168.1.164/acer-storage ]] || { echo 'Expected MyCloud CIFS share is not mounted.'; exit 1; }
 [[ $(df --output=avail -B1 /srv/storage | tail -1) -gt 80000000000 ]]
 install -d -o raging -g raging -m 0700 /srv/network-storage/nftfactory-ipfs-archive
 runuser -u raging -- python3 - <<'CHECK'
