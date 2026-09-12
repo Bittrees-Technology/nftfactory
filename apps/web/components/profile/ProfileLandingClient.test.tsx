@@ -33,11 +33,21 @@ it('directs mainnet registration to ENS without exposing transaction controls',(
  expect(screen.queryByRole('button',{name:/Complete registration|Start registration/})).toBeNull();
 });
 
-it('recognizes a verified existing link without requesting another save',async()=>{
+it('automatically shows a verified existing link without selecting a name or saving',async()=>{
  state.profiles=[{ownerAddress:state.address,fullName:'artist.eth'}];state.verify.mockResolvedValue(undefined);
  vi.stubGlobal('fetch',vi.fn().mockResolvedValue({ok:true,json:async()=>({names:['artist.eth']})}));
- render(<ProfileLandingClient initialLabel="artist.eth"/>);
+ render(<ProfileLandingClient/>);
  await waitFor(()=>expect(screen.getByRole('button',{name:'Name linked'})).toBeTruthy());
  expect((screen.getByRole('button',{name:'Name linked'}) as HTMLButtonElement).disabled).toBe(true);
  expect(screen.getByRole('link',{name:'/profile/eth.artist'})).toBeTruthy();
+});
+
+it('keeps a user-selected name when another linked name is available',async()=>{
+ state.profiles=[{ownerAddress:state.address,fullName:'artist.eth'}];state.verify.mockResolvedValue(undefined);
+ vi.stubGlobal('fetch',vi.fn().mockResolvedValue({ok:true,json:async()=>({names:['artist.eth','other.eth']})}));
+ render(<ProfileLandingClient/>);
+ await waitFor(()=>expect(screen.getByRole('button',{name:'Name linked'})).toBeTruthy());
+ fireEvent.change(screen.getByRole('combobox',{name:'Your ENS names'}),{target:{value:'other.eth'}});
+ await waitFor(()=>expect(screen.getByText('other.eth',{selector:'strong'})).toBeTruthy());
+ expect((screen.getByRole('combobox',{name:'Your ENS names'}) as HTMLSelectElement).value).toBe('other.eth');
 });
