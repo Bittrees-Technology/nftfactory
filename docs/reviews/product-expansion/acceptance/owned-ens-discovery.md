@@ -9,3 +9,5 @@ Evidence: local API returned `{"names":["bobofbuilding.eth"],"incomplete":false,
 Limitations: provider indexing may lag transfers/registration; refresh has a 15-second server cache. Unwrapped subnames are registry records rather than NFTs and are not included by this ownership provider. No paid service or contract transaction was introduced. Mainnet name discovery is separate from testnet registration.
 
 Provider references: https://www.alchemy.com/docs/reference/nft-api-quickstart and https://docs.ens.domains/learn/deployments/ .
+
+Release evidence: PR #41 merged into main at 944747a. All three GitHub checks passed (run 34680360892). Deployment dpl_6n72vtnx2DTFN7HB5DRTBNDr5WF6 was promoted to nftfactory.org. The live API returned bobofbuilding.eth with incomplete=false; the connected Brave wallet displayed “Your ENS names” and the opened dropdown contained only its placeholder and bobofbuilding.eth. The manual entry was absent. Selected the name without signing or modifying profile data.
