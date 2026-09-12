@@ -23,7 +23,14 @@ const indexer=JSON.parse(await readFile(join(root,'services/indexer/package.json
 const workspace=JSON.parse(await readFile(join(root,'package.json'),'utf8'));
 const manifest={name:'nftfactory-indexer-runtime',version:'1.0.0',private:true,type:'module',engines:workspace.engines,dependencies:{...indexer.dependencies,prisma:indexer.devDependencies.prisma,tsx:indexer.devDependencies.tsx},overrides:workspace.overrides};
 await writeFile(join(output,'package.json'),JSON.stringify(manifest,null,2)+'\n');files.push('package.json');
-execFileSync('npm',['install','--package-lock-only','--ignore-scripts','--omit=dev'],{cwd:output,stdio:'pipe'});files.push('package-lock.json');
+const lockSourceIndex=process.argv.indexOf('--lock-from');
+if(lockSourceIndex>=0){
+ const previous=resolve(process.argv[lockSourceIndex+1]);
+ const previousManifest=JSON.parse(await readFile(join(previous,'package.json'),'utf8'));
+ if(JSON.stringify(previousManifest)!==JSON.stringify(manifest))throw new Error('Previous runtime dependencies differ; generate a fresh lockfile.');
+ await copyFile(join(previous,'package-lock.json'),join(output,'package-lock.json'));
+}else execFileSync('npm',['install','--package-lock-only','--ignore-scripts','--omit=dev'],{cwd:output,stdio:'pipe'});
+files.push('package-lock.json');
 const sourceCommit=execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim();
 const hashes=Object.fromEntries(await Promise.all(files.sort().map(async file=>[file,createHash('sha256').update(await readFile(join(output,file))).digest('hex')])));
 await writeFile(join(output,'release-manifest.json'),JSON.stringify({sourceCommit,dirtyWorktree,deployable:!dirtyWorktree,createdAt:new Date().toISOString(),files:hashes},null,2)+'\n');
