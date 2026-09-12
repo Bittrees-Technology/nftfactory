@@ -1,3 +1,4 @@
+import {resolveProfileEns} from "../../../packages/profile/resolve-ens.mjs";
 import {importArtwork,readArtworkTags,saveArtworkTags,searchOwnArtworkTags} from "./artwork.js";
 import {chainWhere} from "./chainScope.js";
 import { normalizeDesign, type ProfileDesign } from "../../../packages/profile/design.mjs";
@@ -7920,9 +7921,7 @@ async function handleRequest(
     if (source !== "wallet") {
       const verify = deps.verifyProfileIdentityImpl || (async (name: string, owner: string) => {
         const rpc = process.env.ENS_IDENTITY_RPC_URL;
-        if (!rpc) return false;
-        const resolver = createPublicClient({ chain: mainnet, transport: http(rpc, { timeout: 8000, retryCount: 0 }) });
-        const resolved = await resolver.getEnsAddress({ name: normalize(name) });
+        const resolved = await resolveProfileEns(name,rpc);
         return resolved?.toLowerCase() === owner;
       });
       let verified = false;
@@ -7962,7 +7961,7 @@ async function handleRequest(
         return;
       }
       await deps.prisma.collection.updateMany({
-        where: { contractAddress: collectionAddress, ownerAddress },
+        where: { chainId: config.chainId, contractAddress: collectionAddress, ownerAddress },
         data: { ensSubname: collectionIdentity }
       });
     }

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createPublicClient, http } from "viem";
+import {resolveProfileEns} from "../../../../../../packages/profile/resolve-ens.mjs";
 import {normalize} from "viem/ens";
 import { mainnet } from "viem/chains";
 import { getScopedChainPublicEnv } from "../../../../lib/publicEnv";
@@ -12,7 +12,7 @@ const MAINNET_RPC_URL =
   mainnet.rpcUrls.default.http[0] ||
   "";
 
-const CACHE_TTL_MS = 10 * 60 * 1000;
+const CACHE_TTL_MS = 60 * 1000;
 
 type CacheEntry = {
   address: string | null;
@@ -50,14 +50,10 @@ export async function GET(req: Request) {
   }
 
   try {
-    const client = createPublicClient({
-      chain: mainnet,
-      transport: http(MAINNET_RPC_URL,{timeout:8000,retryCount:0})
-    });
-    const resolved = await client.getEnsAddress({ name });
+    const resolved = await resolveProfileEns(name,MAINNET_RPC_URL);
     const address = isAddress(String(resolved || "")) ? String(resolved) : null;
     if(ensCache.size>=1000)ensCache.delete(ensCache.keys().next().value!);
-    ensCache.set(name, {
+    if(address)ensCache.set(name, {
       address,
       expiresAt: Date.now() + CACHE_TTL_MS
     });
