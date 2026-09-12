@@ -1,0 +1,12 @@
+import {assetInput} from './artwork.js';
+const explorers:Record<number,string>={1:'https://eth.blockscout.com',8453:'https://base.blockscout.com',4663:'https://robinhoodchain.blockscout.com',11155111:'https://eth-sepolia.blockscout.com'};
+export async function discoverOwnedArtwork(chainId:number,owner:string,contract:string,cursor?:unknown,fetcher:typeof fetch=fetch){
+ assetInput(contract,'0');assetInput(owner,'0');const origin=explorers[chainId];if(!origin)throw new Error('Discovery is unavailable for this network. Enter token IDs instead.');
+ const key=process.env.BLOCKSCOUT_API_KEY;const url=key?new URL(`/${chainId}/api/v2/addresses/${owner.toLowerCase()}/nft`,'https://api.blockscout.com'):new URL(`/api/v2/addresses/${owner.toLowerCase()}/nft`,origin);if(key)url.searchParams.set('apikey',key);url.searchParams.set('type','ERC-721,ERC-1155');
+ if(cursor!=null){if(typeof cursor!=='object'||Array.isArray(cursor))throw new Error('Invalid discovery cursor.');for(const [key,value] of Object.entries(cursor)){if(!['token_contract_address_hash','token_id','token_type','items_count','unique_token'].includes(key)||!['string','number','boolean'].includes(typeof value)||String(value).length>100)throw new Error('Invalid discovery cursor.');url.searchParams.set(key,String(value));}}
+ const response=await fetcher(url,{headers:{'User-Agent':'NFTFactory/1.0'},redirect:'error',signal:AbortSignal.timeout(15000)});if(!response.ok)throw new Error(chainId===4663&&!key?'Robinhood automatic discovery needs an explorer API connection. You can still import by entering token IDs.':'Collection discovery is temporarily unavailable. Retry or enter token IDs.');
+ const reader=response.body?.getReader();if(!reader)throw new Error('Empty discovery response.');let bytes=0;const chunks:Uint8Array[]=[];try{for(;;){const item=await reader.read();if(item.done)break;bytes+=item.value.length;if(bytes>4*1024*1024)throw new Error('Discovery response is too large.');chunks.push(item.value);}}finally{await reader.cancel();}
+ const data=JSON.parse(Buffer.concat(chunks).toString());if(!Array.isArray(data.items)||data.items.length>100)throw new Error('Invalid discovery response.');
+ const tokenIds=[...new Set<string>(data.items.filter((item:any)=>String(item.token?.address_hash||'').toLowerCase()===contract.toLowerCase()).map((item:any)=>assetInput(contract,String(item.id)).id))];
+ return {tokenIds,nextCursor:data.next_page_params||null};
+}

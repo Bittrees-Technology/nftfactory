@@ -1,3 +1,4 @@
+import {queueArtworkSeed} from './artworkSeedQueue.js';
 import {parseAbi,zeroAddress,type Address,type PublicClient} from 'viem';
 import type {PrismaClient} from '@prisma/client';
 const abi=parseAbi(['function supportsInterface(bytes4) view returns (bool)','function ownerOf(uint256) view returns (address)','function balanceOf(address,uint256) view returns (uint256)','function tokenURI(uint256) view returns (string)','function uri(uint256) view returns (string)','function owner() view returns (address)']);
@@ -59,7 +60,8 @@ export async function importArtwork(prisma:PrismaClient,client:Pick<PublicClient
    const token=await prisma.token.upsert({where:{collectionId_tokenId:{collectionId:collection.id,tokenId:asset.id}},create:{collectionId:collection.id,tokenId:asset.id,ownerAddress:owner.toLowerCase(),creatorAddress:zeroAddress,metadataCid:uri,immutable:false},update:{...(standard==='ERC721'?{ownerAddress:owner.toLowerCase()}:{}),metadataCid:uri}});
    await prisma.tokenHolding.upsert({where:{tokenId_ownerAddress:{tokenId:token.id,ownerAddress:owner.toLowerCase()}},create:{tokenId:token.id,ownerAddress:owner.toLowerCase(),quantityRaw:quantity.toString()},update:{quantityRaw:quantity.toString()}});
    if(standard==='ERC721')await prisma.tokenHolding.updateMany({where:{tokenId:token.id,ownerAddress:{not:owner.toLowerCase()}},data:{quantityRaw:'0'}});
-   results.push({tokenId:asset.id,ok:true});
+   let storage='unavailable';try{storage=await queueArtworkSeed(token.id,uri);}catch{/* Import stays valid; storage can be retried. */}
+   results.push({tokenId:asset.id,ok:true,storage});
   }catch(error){results.push({tokenId:asset.id,ok:false,error:error instanceof Error?error.message:'Import unavailable.'});}
  }
  return {chainId,contractAddress:assets[0].contract,results};

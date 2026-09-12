@@ -38,7 +38,7 @@ for(const chainId of [1,8453,4663])it(`persists verified imports with network id
  const prisma={collection:{upsert:collection},token:{upsert:token},tokenHolding:{upsert:holding,updateMany:vi.fn()}};
  const client={getChainId:async()=>chainId,readContract:vi.fn(async({functionName})=>functionName==='supportsInterface'?true:functionName==='tokenURI'?'ipfs://art':owner)};
  const result=await importArtwork(prisma as any,client as any,chainId,owner,{contractAddress:contract,tokenIds:['1']});
- expect(result.results).toEqual([{tokenId:'1',ok:true}]);
+ expect(result.results).toEqual([{tokenId:'1',ok:true,storage:'unavailable'}]);
  expect(collection.mock.calls[0][0]).toMatchObject({where:{chainId_contractAddress:{chainId,contractAddress:contract}},create:{chainId}});
  expect(holding).toHaveBeenCalledOnce();
 });
