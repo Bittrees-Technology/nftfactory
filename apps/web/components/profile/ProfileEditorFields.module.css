@@ -1,0 +1,47 @@
+.section {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  padding-block: 24px 8px;
+  border-top: 1px solid #dce2dc;
+}
+:global(.studioPage) .section.section :is(h2, p) { margin: 0; }
+:global(.studioPage) .section.section h2 { line-height: 1.25; }
+.section > p { color: #526057; line-height: 1.55; }
+.socialForm, .artworkToolbar { display: grid; gap: 12px; align-items: end; min-width: 0; }
+.socialForm { grid-template-columns: minmax(140px, .65fr) minmax(220px, 1.5fr) auto; }
+.artworkToolbar { grid-template-columns: minmax(220px, 1fr) auto auto; }
+.section label, .imageField label { display: grid; gap: 8px; min-width: 0; }
+.socialForm :is(input, select), .artworkToolbar input { width: 100%; min-width: 0; height: 46px; }
+.socialForm > button, .artworkToolbar > button, .importLink { min-height: 46px; height: 46px; white-space: nowrap; padding: 10px 18px; margin: 0; }
+.importLink { display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; }
+.linkList { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+.linkList:empty, .selectedList:empty { display: none; }
+.linkRow { display: flex; align-items: center; gap: 20px; padding: 12px 16px; border: 1px solid #dce2dc; border-radius: 8px; background: #f7f9f5; min-width: 0; }
+.linkRow > span { flex: 1; min-width: 0; overflow-wrap: anywhere; line-height: 1.5; }
+.linkRow button { flex: none; min-height: 40px; padding: 8px 14px; margin: 0; }
+.details { padding-top: 14px; border-top: 1px solid #e1e5df; }
+.details summary { cursor: pointer; padding: 4px 0; line-height: 1.5; }
+.details[open] > label { margin-top: 14px; }
+.count { font-size: .85rem; color: #59665c; }
+.selectedList { display: grid; gap: 10px; padding-left: 24px; margin: 0; }
+.selectedList li { padding: 10px 0; }
+.selectedList li > span { display: block; overflow-wrap: anywhere; margin-bottom: 10px; }
+.selectedList button { margin-right: 10px; }
+.imageField { gap: 16px; padding: 20px; }
+.imageField.imageField legend { padding: 0 6px; font-weight: 650; }
+.imageField input[type=file] { padding: 10px; min-width: 0; width: 100%; }
+.imageField input::file-selector-button { border: 1px solid #c4cec5; background: #eef2eb; color: #263b2e; border-radius: 5px; padding: 7px 12px; margin-right: 12px; cursor: pointer; }
+:global(.studioPage) .imageField.imageField p { margin: 0; line-height: 1.55; font-size: .875rem; }
+.removeImage { justify-self: start; width: auto; min-height: 40px; padding: 8px 14px; }
+.target { display: grid; gap: 14px; border: 1px solid #dce2dc; border-radius: 8px; padding: 18px; min-width: 0; }
+.target legend { padding-inline: 6px; }
+@media (max-width: 760px) {
+  .socialForm { grid-template-columns: minmax(0, 1fr); }
+  .artworkToolbar { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .artworkToolbar > label { grid-column: 1 / -1; }
+  .socialForm > button { justify-self: start; }
+  .artworkToolbar > button, .importLink { padding-inline: 10px; }
+  .linkRow { padding: 12px; gap: 12px; }
+  .imageField { padding: 16px; }
+}
