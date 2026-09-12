@@ -1,0 +1,26 @@
+{
+  "commit": "209387990a12e8d983026b013923c4ad65474e88",
+  "runtimeCommit": "ff7e0a4567a57003e2870c882ca0ac193c905e9d",
+  "deployment": "dpl_6WdxcSNfmMsWYTyZeZdhDhy7fdGa",
+  "pr": "https://github.com/Bittrees-Technology/nftfactory/pull/35",
+  "ci": "https://github.com/Bittrees-Technology/nftfactory/actions/runs/34675044469",
+  "checks": {
+    "webTests": 266,
+    "allCIJobs": "pass",
+    "webAndIndexerTypechecks": "pass",
+    "runtime": "active",
+    "productionHTTP": 200,
+    "templateCount": 6,
+    "liveStarterInteraction": "custom iframe rendered with empty sandbox permissions",
+    "templateUndo": "preserves custom section and restores palette",
+    "mobileViewport": 390,
+    "documentWidth": 375
+  },
+  "limits": {
+    "customHtmlCharacters": 20000,
+    "customCssCharacters": 20000,
+    "scope": "isolated custom section only",
+    "scriptsFormsExternalResources": "disabled"
+  },
+  "validationScope": "Signed save payload covered in automated tests. Live editor controls and starter rendering verified without publishing changes to a user account."
+}
