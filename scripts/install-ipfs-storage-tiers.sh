@@ -21,7 +21,7 @@ cp -a /etc/fstab /etc/fstab.before-nftfactory-ipfs-$stamp
 install -d -o ipfs-node -g ipfs-node -m 0700 /srv/storage/nftfactory-ipfs-blocks
 if ! mountpoint -q /var/lib/ipfs-node/blocks; then
  systemctl stop ipfs-node
- trap 'systemctl start ipfs-node || true' ERR
+ trap 'systemctl start ipfs-node ipfs-read-gateway || true' ERR
  cp -a /var/lib/ipfs-node/config /var/lib/ipfs-node/config.before-storage-$stamp
  rsync -a --checksum /var/lib/ipfs-node/blocks/ /srv/storage/nftfactory-ipfs-blocks/
  [[ -z $(rsync -anic /var/lib/ipfs-node/blocks/ /srv/storage/nftfactory-ipfs-blocks/) ]]
@@ -40,18 +40,20 @@ RequiresMountsFor=/var/lib/ipfs-node/blocks
 ExecStartPre=/usr/bin/mountpoint -q /var/lib/ipfs-node/blocks
 UNIT
  systemctl daemon-reload
- systemctl start ipfs-node
+ systemctl start ipfs-node ipfs-read-gateway
  trap - ERR
 fi
+systemctl stop ipfs-archive 2>/dev/null || true
 install -d -o raging -g raging -m 0700 /var/lib/ipfs-archive
 if [[ ! -f /var/lib/ipfs-archive/config ]]; then
  runuser -u raging -- env IPFS_PATH=/var/lib/ipfs-archive ipfs init --profile=server
  runuser -u raging -- env IPFS_PATH=/var/lib/ipfs-archive ipfs config Addresses.API /ip4/127.0.0.1/tcp/5002
- runuser -u raging -- env IPFS_PATH=/var/lib/ipfs-archive ipfs config Addresses.Gateway /ip4/127.0.0.1/tcp/8081
+ runuser -u raging -- env IPFS_PATH=/var/lib/ipfs-archive ipfs config Addresses.Gateway /ip4/127.0.0.1/tcp/8082
  runuser -u raging -- env IPFS_PATH=/var/lib/ipfs-archive ipfs config --json Addresses.Swarm '["/ip4/127.0.0.1/tcp/4002"]'
  runuser -u raging -- env IPFS_PATH=/var/lib/ipfs-archive ipfs config Datastore.StorageMax 1500GB
  runuser -u raging -- env IPFS_PATH=/var/lib/ipfs-archive ipfs bootstrap rm --all
 fi
+runuser -u raging -- env IPFS_PATH=/var/lib/ipfs-archive ipfs config Addresses.Gateway /ip4/127.0.0.1/tcp/8082
 if ! mountpoint -q /var/lib/ipfs-archive/blocks; then
  rsync -a /var/lib/ipfs-archive/blocks/ /srv/network-storage/nftfactory-ipfs-archive/
  grep -q '^/srv/network-storage/nftfactory-ipfs-archive ' /etc/fstab || printf '
@@ -71,7 +73,7 @@ Environment=IPFS_PATH=/var/lib/ipfs-archive
 Environment=HOME=/var/lib/ipfs-archive
 Environment=XDG_CONFIG_HOME=/var/lib/ipfs-archive/.config
 ExecStartPre=/usr/bin/mountpoint -q /var/lib/ipfs-archive/blocks
-ExecStart=/usr/local/bin/ipfs daemon --enable-gc
+ExecStart=/usr/local/bin/ipfs daemon --offline --enable-gc
 Restart=on-failure
 RestartSec=30
 NoNewPrivileges=true
@@ -86,7 +88,4 @@ systemctl daemon-reload
 systemctl enable ipfs-archive
 systemctl restart ipfs-archive
 curl --fail --silent --retry 12 --retry-connrefused --retry-delay 1 -X POST http://127.0.0.1:5002/api/v0/version >/dev/null
-archive_peer=$(curl --fail --silent -X POST http://127.0.0.1:5002/api/v0/id | python3 -c 'import json,sys;print(json.load(sys.stdin)["ID"])')
-curl --fail --silent -X POST "http://127.0.0.1:5001/api/v0/bootstrap/add?arg=/ip4/127.0.0.1/tcp/4002/p2p/$archive_peer" >/dev/null
-curl --fail --silent -X POST "http://127.0.0.1:5001/api/v0/swarm/connect?arg=/ip4/127.0.0.1/tcp/4002/p2p/$archive_peer" >/dev/null
 printf 'IPFS storage tiers are installed. Existing blocks and rollback copies retained.\n'

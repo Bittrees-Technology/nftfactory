@@ -42,9 +42,12 @@ cp -a /opt/ipfs-gateway/read-server.mjs /opt/ipfs-gateway/read-server.before-arc
 install -m 0644 "$source_dir/read-server.mjs" /opt/ipfs-gateway/read-server.mjs
 install -d /etc/systemd/system/ipfs-read-gateway.service.d
 cat > /etc/systemd/system/ipfs-read-gateway.service.d/archive.conf <<'UNIT'
+[Unit]
+Requires=
+Wants=ipfs-node.service
 [Service]
 Environment=IPFS_ARCHIVE_API=http://127.0.0.1:5002
-Environment=IPFS_ARCHIVE_GATEWAY=http://127.0.0.1:8081
+Environment=IPFS_ARCHIVE_GATEWAY=http://127.0.0.1:8082
 UNIT
 systemctl daemon-reload
 systemctl restart nftfactory-indexer ipfs-read-gateway
