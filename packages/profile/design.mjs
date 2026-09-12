@@ -1,4 +1,4 @@
-export const PROFILE_MODULES = ['featured', 'artwork', 'about', 'links', 'collections', 'top8', 'panels', 'custom'];
+export const PROFILE_MODULES = ['about', 'featured', 'artwork', 'links', 'collections', 'top8', 'panels', 'custom'];
 export function normalizeDesign(value) {
   const input=value && typeof value==='object' ? value : {};
   const featured = Array.isArray(input.featured) ? [...new Set(input.featured.filter(item => typeof item === 'string' && /^\d+:0x[0-9a-f]{40}:\d{1,78}$/.test(item)))].slice(0,6) : [];

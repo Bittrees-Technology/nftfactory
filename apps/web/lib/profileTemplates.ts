@@ -10,5 +10,5 @@ export const profileTemplates = [
 export function applyProfileTemplate(current:ProfileDesign,id:string){
  const template=profileTemplates.find(t=>t.id===id);if(!template)return current;
  // Preserve authored content and a user's enabled custom section.
- return normalizeDesign({...current,...template,modules:[...template.modules,...(current.modules.includes('custom')?['custom']:[])]});
+ return normalizeDesign({...current,...template,modules:[...template.modules.filter(module=>current.modules.includes(module)),...current.modules.filter(module=>!(template.modules as readonly string[]).includes(module))]});
 }
