@@ -23,3 +23,11 @@ test('read gateway refuses oversized content and expires a stalled Kubo request'
  assert.equal((await fetch(origin+'/ipfs/'+cid)).status,413);
  stall=true;assert.equal((await fetch(origin+'/ipfs/'+cid)).status,504);
 });
+test('serves an archived pin when primary storage is unavailable',async t=>{
+ const primary=http.createServer((req,res)=>{res.writeHead(500);res.end('{}');});
+ const archive=http.createServer((req,res)=>{if(req.url.startsWith('/api/v0/pin/ls'))res.end(JSON.stringify({Keys:{[cid]:{Type:'recursive'}}}));else{res.setHeader('Content-Type','text/plain');res.end('archive copy');}});
+ const first=await listen(primary),second=await listen(archive);
+ const server=createIpfsReadGateway({api:first,gateway:first,archiveApi:second,archiveGateway:second});const origin=await listen(server);
+ t.after(()=>{server.closeAllConnections();server.close();primary.closeAllConnections();primary.close();archive.closeAllConnections();archive.close();});
+ const response=await fetch(`${origin}/ipfs/${cid}`);assert.equal(response.status,200);assert.equal(await response.text(),'archive copy');
+});

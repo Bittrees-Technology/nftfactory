@@ -1,0 +1,6 @@
+import {it,expect,vi} from 'vitest';
+import {discoverOwnedArtwork} from './artworkDiscovery.js';
+const owner='0x'+'11'.repeat(20),contract='0x'+'22'.repeat(20);
+it('filters a wallet inventory by contract and exposes pagination',async()=>{const fetcher=vi.fn(async(_url:unknown)=>new Response(JSON.stringify({items:[{id:'0',token:{address_hash:contract}},{id:'2',token:{address_hash:owner}}],next_page_params:{token_id:'2',token_type:'ERC-721'}})));const result=await discoverOwnedArtwork(8453,owner,contract,null,fetcher);expect(result.tokenIds).toEqual(['0']);expect(result.nextCursor.token_id).toBe('2');expect(String(fetcher.mock.calls[0][0])).toContain('base.blockscout.com');});
+it('does not accept arbitrary cursor fields or caller-controlled destinations',async()=>{const fetcher=vi.fn();await expect(discoverOwnedArtwork(1,owner,contract,{url:'http://localhost'},fetcher)).rejects.toThrow('Invalid discovery cursor');expect(fetcher).not.toHaveBeenCalled();});
+it('reports inventory outages instead of reporting a completed empty collection',async()=>{await expect(discoverOwnedArtwork(4663,owner,contract,null,async()=>new Response('',{status:503}))).rejects.toThrow('explorer API connection');});

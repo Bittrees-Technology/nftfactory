@@ -4,8 +4,9 @@ import { pipeline } from 'node:stream/promises';
 import { pathToFileURL } from 'node:url';
 
 // Public content only: a CID must be explicitly pinned on this node.
-export function createIpfsReadGateway({ api = 'http://127.0.0.1:5001', gateway = 'http://127.0.0.1:8080', maxBytes = 16 * 1024 * 1024, concurrency = 4, timeoutMs = 30000 } = {}) {
-  for (const origin of [api, gateway]) {
+export function createIpfsReadGateway({ api = 'http://127.0.0.1:5001', gateway = 'http://127.0.0.1:8080', maxBytes = 16 * 1024 * 1024, concurrency = 4, timeoutMs = 30000, archiveApi = process.env.IPFS_ARCHIVE_API, archiveGateway = process.env.IPFS_ARCHIVE_GATEWAY } = {}) {
+  if(Boolean(archiveApi)!==Boolean(archiveGateway))throw new Error('Both archive origins are required.');
+  for (const origin of [api, gateway, ...archiveApi?[archiveApi,archiveGateway]:[]]) {
     const url = new URL(origin);
     if (url.protocol !== 'http:' || !['127.0.0.1', '[::1]'].includes(url.hostname) || url.username || url.password || url.pathname !== '/' || url.search || url.hash) throw new Error('Upstreams must be HTTP loopback origins.');
   }
@@ -23,11 +24,13 @@ export function createIpfsReadGateway({ api = 'http://127.0.0.1:5001', gateway =
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     const close = () => controller.abort(); res.on('close', close);
     try {
-      const pin = await fetch(`${api}/api/v0/pin/ls?arg=${match[1]}&type=recursive`, { method: 'POST', signal: controller.signal, redirect: 'error' });
+      let selectedGateway=gateway;
+      let pin = await fetch(`${api}/api/v0/pin/ls?arg=${match[1]}&type=recursive`, { method: 'POST', signal: AbortSignal.any([controller.signal,AbortSignal.timeout(3000)]), redirect: 'error' }).catch(error=>{if(!archiveApi||controller.signal.aborted)throw error;return {ok:false};});
+      if(!pin.ok&&archiveApi){pin=await fetch(`${archiveApi}/api/v0/pin/ls?arg=${match[1]}&type=recursive`,{method:'POST',signal:controller.signal,redirect:'error'});selectedGateway=archiveGateway;}
       if (!pin.ok) return reject(404, 'Content is not published on this node.');
       const pinBytes = await pin.text();
       if (pinBytes.length > 65536 || !JSON.parse(pinBytes).Keys?.[match[1]]) return reject(404, 'Content is not published on this node.');
-      const result = await fetch(`${gateway}${req.url}`, { method: req.method, signal: controller.signal, redirect: 'error' });
+      const result = await fetch(`${selectedGateway}${req.url}`, { method: req.method, signal: controller.signal, redirect: 'error' });
       if (!result.ok) return reject(result.status === 404 ? 404 : 502, 'Content is unavailable.');
       if (Number(result.headers.get('content-length') || 0) > maxBytes) return reject(413, 'Content exceeds this gateway limit.');
       res.writeHead(200, { 'Content-Type': result.headers.get('content-type') || 'application/octet-stream', 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "sandbox; default-src 'none'; style-src 'unsafe-inline'", 'Cache-Control': 'public, max-age=300', 'Access-Control-Allow-Origin': '*' });
