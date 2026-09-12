@@ -21,7 +21,7 @@ cp -a /etc/fstab /etc/fstab.before-nftfactory-ipfs-$stamp
 install -d -o ipfs-node -g ipfs-node -m 0700 /srv/storage/nftfactory-ipfs-blocks
 if ! mountpoint -q /var/lib/ipfs-node/blocks; then
  systemctl stop ipfs-node
- trap 'systemctl start ipfs-node ipfs-read-gateway || true' ERR
+ trap 'systemctl start ipfs-node ipfs-read-gateway ipfs-app-gateway || true' ERR
  cp -a /var/lib/ipfs-node/config /var/lib/ipfs-node/config.before-storage-$stamp
  rsync -a --checksum /var/lib/ipfs-node/blocks/ /srv/storage/nftfactory-ipfs-blocks/
  [[ -z $(rsync -anic /var/lib/ipfs-node/blocks/ /srv/storage/nftfactory-ipfs-blocks/) ]]
@@ -36,11 +36,12 @@ if ! mountpoint -q /var/lib/ipfs-node/blocks; then
  cat > /etc/systemd/system/ipfs-node.service.d/storage.conf <<'UNIT'
 [Unit]
 RequiresMountsFor=/var/lib/ipfs-node/blocks
+Wants=ipfs-app-gateway.service ipfs-read-gateway.service
 [Service]
 ExecStartPre=/usr/bin/mountpoint -q /var/lib/ipfs-node/blocks
 UNIT
  systemctl daemon-reload
- systemctl start ipfs-node ipfs-read-gateway
+ systemctl start ipfs-node ipfs-read-gateway ipfs-app-gateway
  trap - ERR
 fi
 systemctl stop ipfs-archive 2>/dev/null || true
