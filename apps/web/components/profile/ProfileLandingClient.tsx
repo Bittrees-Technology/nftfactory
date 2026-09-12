@@ -7,7 +7,7 @@ import {normalize} from 'viem/ens';
 import ExistingEnsNameField from './ExistingEnsNameField';
 import {getContractsConfig} from '../../lib/contracts';
 import {getAppChain} from '../../lib/chains';
-import {fetchCollectionsByOwner, type ApiOwnedCollections} from '../../lib/indexerApi';
+import {fetchCollectionsByOwner, fetchProfilesByOwner, type ApiOwnedCollections} from '../../lib/indexerApi';
 import {verifyOwnedCollectionsOnChain} from '../../lib/onchainCollections';
 import {linkCreatorIdentity, verifyCreatorName} from '../../lib/linkCreatorIdentity';
 import {readWalletSession, subscribeWalletSession} from '../../lib/walletSession';
@@ -32,6 +32,7 @@ export default function ProfileLandingClient({initialLabel = '', initialCollecti
   const [refresh, setRefresh] = useState(0);
   const [inventory, setInventory] = useState({owner: '', names: [] as string[], loading: false, error: '', incomplete: false});
   const [sessionOwner, setSessionOwner] = useState('');
+  const [linkedNames, setLinkedNames] = useState({owner: '', names: [] as string[]});
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [retryCheck, setRetryCheck] = useState(0);
   const [collection, setCollection] = useState(initialCollectionAddress.toLowerCase());
@@ -48,6 +49,7 @@ export default function ProfileLandingClient({initialLabel = '', initialCollecti
   const selectedName = names.includes(name) ? name : '';
   const visibleFeedback = feedback?.key === selectionKey ? feedback : null;
   const busy = visibleFeedback?.status === 'saving';
+  const alreadyLinked = visibleFeedback?.status === 'success' || (visibleFeedback?.status === 'ready' && linkedNames.owner === owner && linkedNames.names.includes(selectedName));
   const collections = owner && collectionState.owner === owner ? collectionState.items : [];
   const collectionKey = `${owner}:${collection}:${collectionName}`;
   const currentCollection = useRef(collectionKey);
@@ -73,6 +75,9 @@ export default function ProfileLandingClient({initialLabel = '', initialCollecti
     if (!owner) return;
     try {setLegacyPending(Boolean(localStorage.getItem(`nftfactory:ens-registration:${owner}`)));} catch { /* Storage is optional. */ }
     const controller = new AbortController();
+    void fetchProfilesByOwner(owner, {chainId: config.chainId}).then(result => {
+      if (!controller.signal.aborted) setLinkedNames({owner, names: result.profiles.filter(profile => profile.ownerAddress.toLowerCase() === owner).map(profile => normalizeName(profile.fullName))});
+    }).catch(() => { /* Profile lookup does not block ENS discovery. */ });
     setInventory({owner, names: [], loading: true, error: '', incomplete: false});
     void fetch(`/api/ens/owned?owner=${owner}`, {signal: controller.signal, cache: 'no-store'}).then(async response => {
       const data = await response.json();
@@ -80,7 +85,7 @@ export default function ProfileLandingClient({initialLabel = '', initialCollecti
       if (!controller.signal.aborted) setInventory({owner, names: data.names, loading: false, error: '', incomplete: Boolean(data.incomplete)});
     }).catch(() => {if (!controller.signal.aborted) setInventory({owner, names: [], loading: false, error: 'Your names could not be loaded. Please retry.', incomplete: false});});
     return () => controller.abort();
-  }, [owner, refresh]);
+  }, [owner, refresh, config.chainId]);
 
   useEffect(() => {
     if (!owner || !selectedName || mode !== 'link') return;
@@ -138,12 +143,12 @@ export default function ProfileLandingClient({initialLabel = '', initialCollecti
             <fieldset disabled={busy || collectionBusy} className={styles.fieldset}><ExistingEnsNameField value={selectedName} onChange={setName} options={names} connected={Boolean(owner)} loading={Boolean(owner) && (inventory.owner !== owner || inventory.loading)} error={inventory.owner === owner ? inventory.error : ''} incomplete={inventory.owner === owner && inventory.incomplete} onRefresh={() => setRefresh(value => value + 1)}/></fieldset>
             {visibleFeedback && <p role={visibleFeedback.status === 'error' ? 'alert' : 'status'} className={visibleFeedback.status === 'error' ? 'error' : styles.feedback}>{visibleFeedback.message}</p>}
             {visibleFeedback?.status === 'error' && <div className={styles.actions}><button className="secondary" onClick={() => setRetryCheck(value => value + 1)}>Check again</button><a href="https://app.ens.domains/" target="_blank" rel="noopener noreferrer">Manage address record ↗</a></div>}
-            <button className={styles.save} disabled={!owner || !walletClient || collectionBusy || visibleFeedback?.status !== 'ready'} onClick={() => void save()}>{busy ? 'Linking profile…' : visibleFeedback?.status === 'success' ? 'Name linked' : 'Link name to profile'}</button><p className="hint">Linking is free. A sign-in signature may be requested; it grants no permission to transfer assets.</p>
+            <button className={styles.save} disabled={!owner || !walletClient || collectionBusy || alreadyLinked || visibleFeedback?.status !== 'ready'} onClick={() => void save()}>{busy ? 'Linking profile…' : alreadyLinked ? 'Name linked' : 'Link name to profile'}</button><p className="hint">Linking is free. A sign-in signature may be requested; it grants no permission to transfer assets.</p>
           </>}
         </section>
         <details className={`card ${styles.panel}`} open={initialCollectionAddress ? true : undefined}><summary>Collection naming <span>Separate from your profile</span></summary><div className={styles.collection}><p>Attach an ENS label to a collection you administer. This updates its NFTFactory listing, not its contract name or ENS records.</p><p className={styles.badge}>Collection network: {appChain.name}{appChain.testnet ? ' · Testnet' : ''}</p><label>Collection<select disabled={!owner || busy || collectionBusy || collectionState.loading} value={collections.some(item => item.contractAddress.toLowerCase() === collection) ? collection : ''} onChange={event => setCollection(event.target.value)}><option value="">Choose a verified collection</option>{collections.map(item => <option value={item.contractAddress.toLowerCase()} key={item.contractAddress}>{item.ensSubname || item.contractAddress}</option>)}</select></label>{owner && !collectionState.loading && !collections.length && <p role="status">{collectionState.error || 'No administered collections found on this network.'}</p>}{owner && <button type="button" className="secondary" disabled={collectionState.loading || collectionBusy} onClick={() => setCollectionRefresh(value => value + 1)}>{collectionState.loading ? 'Verifying collections…' : 'Refresh collections'}</button>}<label>Collection ENS name<input value={collectionName} disabled={!owner || busy || collectionBusy} onChange={event => setCollectionName(event.target.value)} placeholder="collection.artist.eth" autoCapitalize="none" autoComplete="off" spellCheck={false} maxLength={255}/></label>{collectionName && !normalizeName(collectionName) && <p className="error">Enter a complete ENS name ending in .eth.</p>}<button disabled={!owner || !walletClient || !collections.some(item => item.contractAddress.toLowerCase() === collection) || !normalizeName(collectionName) || collectionBusy || busy} onClick={() => void save(true)}>{collectionBusy ? 'Linking collection…' : 'Verify & link collection name'}</button>{visibleCollectionFeedback && <p role={visibleCollectionFeedback.status === 'error' ? 'alert' : 'status'}>{visibleCollectionFeedback.message}</p>}<Link href="/mint?view=manage&collection=custom">Manage collections →</Link></div></details>
       </div>
-      <aside className={styles.aside}><section className={`card ${styles.panel}`}><p className={styles.eyebrow}>YOUR PUBLIC PAGE</p><h2>One profile. Another way in.</h2><p>Your wallet link always leads to your creator page.</p>{profilePath ? <Link href={profilePath} className={styles.route}>{profilePath}</Link> : <p className="hint">Connect a wallet to see your profile link.</p>}{aliasPath && <div className={styles.preview}><span className={styles.eyebrow}>{visibleFeedback?.status === 'success' ? 'LINKED ENS ADDRESS' : 'ENS LINK PREVIEW'}</span><strong>{selectedName}</strong>{visibleFeedback?.status === 'success' ? <Link href={aliasPath} className={styles.route}>{aliasPath}</Link> : <span className={styles.route}>{aliasPath}</span>}<p className="hint">{visibleFeedback?.status === 'success' ? 'Ready to share.' : 'This address becomes active after you link the name.'}</p></div>}<Link href="/profile/setup">Edit your profile design →</Link></section><p className={styles.note}>Names are read from Ethereum mainnet, regardless of the network selected in your wallet. Recently registered or transferred names may take time to appear. Unwrapped subnames are not listed yet.</p></aside>
+      <aside className={styles.aside}><section className={`card ${styles.panel}`}><p className={styles.eyebrow}>YOUR PUBLIC PAGE</p><h2>One profile. Another way in.</h2><p>Your wallet link always leads to your creator page.</p>{profilePath ? <Link href={profilePath} className={styles.route}>{profilePath}</Link> : <p className="hint">Connect a wallet to see your profile link.</p>}{aliasPath && <div className={styles.preview}><span className={styles.eyebrow}>{alreadyLinked ? 'LINKED ENS ADDRESS' : 'ENS LINK PREVIEW'}</span><strong>{selectedName}</strong>{alreadyLinked ? <Link href={aliasPath} className={styles.route}>{aliasPath}</Link> : <span className={styles.route}>{aliasPath}</span>}<p className="hint">{alreadyLinked ? 'Ready to share.' : 'Link this name to confirm its profile destination.'}</p></div>}<Link href="/profile/setup">Edit your profile design →</Link></section><p className={styles.note}>Names are read from Ethereum mainnet, regardless of the network selected in your wallet. Recently registered or transferred names may take time to appear. Unwrapped subnames are not listed yet.</p></aside>
     </div>
   </section>;
 }
