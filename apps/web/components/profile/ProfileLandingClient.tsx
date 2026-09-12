@@ -28,7 +28,7 @@ export default function ProfileLandingClient({initialLabel = '', initialCollecti
   const {data: walletClient} = useWalletClient();
   const publicClient = usePublicClient({chainId: config.chainId});
   const [mode, setMode] = useState(initialIdentityMode.startsWith('register-') ? 'register' : 'link');
-  const [name, setName] = useState(normalizeName(initialLabel));
+  const [selection, setSelection] = useState({owner, name: normalizeName(initialLabel)});
   const [refresh, setRefresh] = useState(0);
   const [inventory, setInventory] = useState({owner: '', names: [] as string[], loading: false, error: '', incomplete: false});
   const [sessionOwner, setSessionOwner] = useState('');
@@ -43,9 +43,11 @@ export default function ProfileLandingClient({initialLabel = '', initialCollecti
   const [legacyPending, setLegacyPending] = useState(false);
   const operation = useRef(false);
   const current = useRef('');
+  const names = owner && inventory.owner === owner ? inventory.names : [];
+  const savedName = linkedNames.owner === owner ? linkedNames.names.find(value => names.includes(value)) || '' : '';
+  const name = (selection.owner === owner ? selection.name : '') || savedName;
   const selectionKey = `${owner}:${mode}:${name}`;
   current.current = selectionKey;
-  const names = owner && inventory.owner === owner ? inventory.names : [];
   const selectedName = names.includes(name) ? name : '';
   const visibleFeedback = feedback?.key === selectionKey ? feedback : null;
   const busy = visibleFeedback?.status === 'saving';
@@ -140,7 +142,7 @@ export default function ProfileLandingClient({initialLabel = '', initialCollecti
         <section className={`card ${styles.panel}`} aria-labelledby="profile-name-title"><h2 id="profile-name-title">Profile name</h2><p className={styles.lead}>Your ENS name gives people another way to find your profile. Your artwork and design stay in place.</p>
           <div className={styles.actions} aria-label="Name action"><button type="button" aria-pressed={mode === 'link'} className={mode === 'link' ? '' : 'secondary'} disabled={busy || collectionBusy} onClick={() => setMode('link')}>Link a name I own</button><button type="button" aria-pressed={mode === 'register'} className={mode === 'register' ? '' : 'secondary'} disabled={busy || collectionBusy} onClick={() => setMode('register')}>Get a new name</button></div>
           {mode === 'register' ? <div className={styles.registration}><h3>Register with ENS</h3><p>Choose and register your name in the official ENS app on Ethereum mainnet. Review the registration price and network fee there.</p><ol><li>Register a name or manage a subname in ENS.</li><li>Set its Ethereum address record to your profile wallet.</li><li>Return here, refresh your names, and link your profile.</li></ol><a href="https://app.ens.domains/" target="_blank" rel="noopener noreferrer" className="ctaLink">Open ENS app ↗</a><p className="hint">Opens a new tab. NFTFactory does not submit a registration transaction from this page.</p>{legacyPending && <p role="status">An earlier registration draft is still stored in this browser. It has been preserved. Check its original network and transaction receipt before starting a new purchase; a testnet name does not register a mainnet name.</p>}</div> : <>
-            <fieldset disabled={busy || collectionBusy} className={styles.fieldset}><ExistingEnsNameField value={selectedName} onChange={setName} options={names} connected={Boolean(owner)} loading={Boolean(owner) && (inventory.owner !== owner || inventory.loading)} error={inventory.owner === owner ? inventory.error : ''} incomplete={inventory.owner === owner && inventory.incomplete} onRefresh={() => setRefresh(value => value + 1)}/></fieldset>
+            <fieldset disabled={busy || collectionBusy} className={styles.fieldset}><ExistingEnsNameField value={selectedName} onChange={value => setSelection({owner, name: value})} options={names} connected={Boolean(owner)} loading={Boolean(owner) && (inventory.owner !== owner || inventory.loading)} error={inventory.owner === owner ? inventory.error : ''} incomplete={inventory.owner === owner && inventory.incomplete} onRefresh={() => setRefresh(value => value + 1)}/></fieldset>
             {visibleFeedback && <p role={visibleFeedback.status === 'error' ? 'alert' : 'status'} className={visibleFeedback.status === 'error' ? 'error' : styles.feedback}>{visibleFeedback.message}</p>}
             {visibleFeedback?.status === 'error' && <div className={styles.actions}><button className="secondary" onClick={() => setRetryCheck(value => value + 1)}>Check again</button><a href="https://app.ens.domains/" target="_blank" rel="noopener noreferrer">Manage address record ↗</a></div>}
             <button className={styles.save} disabled={!owner || !walletClient || collectionBusy || alreadyLinked || visibleFeedback?.status !== 'ready'} onClick={() => void save()}>{busy ? 'Linking profile…' : alreadyLinked ? 'Name linked' : 'Link name to profile'}</button><p className="hint">Linking is free. A sign-in signature may be requested; it grants no permission to transfer assets.</p>
