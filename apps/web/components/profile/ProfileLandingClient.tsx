@@ -486,30 +486,27 @@ export default function ProfileLandingClient({
       ]),
     [collections, discoveredEnsNames, profiles]
   );
-  const existingEnsOptions = useMemo(
-    () =>
-      collectExistingEnsIdentityOptions(
-        [
-          ...profiles.map((profile) => profile.fullName),
-          ...collections.map((collection) => collection.ensSubname),
-          ...discoveredEnsNames
-        ],
-        "ens"
-      ),
-    [collections, discoveredEnsNames, profiles]
-  );
-  const existingSubnameOptions = useMemo(
-    () =>
-      collectExistingEnsIdentityOptions(
-        [
-          ...profiles.map((profile) => profile.fullName),
-          ...collections.map((collection) => collection.ensSubname),
-          ...discoveredEnsNames
-        ],
-        "external-subname"
-      ),
-    [collections, discoveredEnsNames, profiles]
-  );
+  const [ownedEns, setOwnedEns] = useState<{owner: string; names: string[]; loading: boolean; error: string; incomplete: boolean}>({owner: '', names: [], loading: false, error: '', incomplete: false});
+  const [ensRefresh, setEnsRefresh] = useState(0);
+  const ownedEnsCurrent = isConnected && ownedEns.owner === address?.toLowerCase();
+  const ownedNames = ownedEnsCurrent ? ownedEns.names : [];
+  const existingEnsOptions = collectExistingEnsIdentityOptions(ownedNames, "ens");
+  const existingSubnameOptions = collectExistingEnsIdentityOptions(ownedNames, "external-subname");
+  useEffect(() => {
+    const owner = address?.toLowerCase();
+    if (!isConnected || !owner) return;
+    const controller = new AbortController();
+    setOwnedEns({owner, names: [], loading: true, error: '', incomplete: false});
+    void fetch(`/api/ens/owned?owner=${encodeURIComponent(owner)}`, {signal: controller.signal, cache: 'no-store'})
+      .then(async response => {
+        const data = await response.json();
+        if (!response.ok || !Array.isArray(data.names)) throw new Error('Unable to load ENS names');
+        if (!controller.signal.aborted) setOwnedEns({owner, names: data.names, loading: false, error: '', incomplete: Boolean(data.incomplete)});
+      }).catch(() => {
+        if (!controller.signal.aborted) setOwnedEns({owner, names: [], loading: false, error: 'We could not load your ENS names. Please retry.', incomplete: false});
+      });
+    return () => controller.abort();
+  }, [address, isConnected, ensRefresh]);
   const selectedSubnameParentOption = useMemo(() => {
     const normalized = String(subnameParent || "").trim().toLowerCase();
     return ensParentCandidates.includes(normalized) ? normalized : "";
@@ -759,9 +756,9 @@ export default function ProfileLandingClient({
         ? "Enter a new subname label and select an existing parent ENS name you already control. The created subname is linked to this creator identity when minting completes."
         : "No parent ENS names are available in your inventory. Register a parent .eth name first.";
     if (identityMode === "ens" || identityMode === "external-subname")
-      return "Enter the complete ENS name, such as artist.eth or studio.artist.eth. Verify its Ethereum mainnet address record, then sign in to link it. This does not register a name, transfer assets, or rename a collection.";
+      return "Choose a name from your wallet’s Ethereum mainnet inventory. Verify its address record, then sign in to link it. This does not register a name, transfer assets, or rename a collection.";
     return "Enter a plain label like artist to create artist.nftfactory.eth on-chain. This is the default identity path here.";
-  }, [ensParentCandidates.length, existingEnsOptions.length, existingSubnameOptions.length, identityMode]);
+  }, [ensParentCandidates.length, identityMode]);
 
   const ensRegistrationStep = useMemo(() => {
     if (identityMode !== "register-eth") return "";
@@ -784,6 +781,7 @@ export default function ProfileLandingClient({
   }, [checkedIdentityReady, identityMode, lookupNote, normalizedFullName, slug]);
   const primaryActionDisabled =
     !slug ||
+    ((identityMode === "ens" || identityMode === "external-subname") && !ownedNames.includes(normalizedFullName)) ||
     !normalizedFullName ||
     (identityMode === "register-eth-subname" && !String(subnameParent || "").trim()) ||
     setupState.status === "pending";
@@ -1518,7 +1516,7 @@ export default function ProfileLandingClient({
             ) : (
               <>
                 {identityMode === "ens" || identityMode === "external-subname" ? (
-                  <ExistingEnsNameField key={identityMode} value={identityName} onChange={setIdentityName} options={identityMode === 'ens' ? existingEnsOptions : existingSubnameOptions} subname={identityMode === 'external-subname'}/>
+                  <ExistingEnsNameField key={identityMode} value={identityName} onChange={setIdentityName} options={identityMode === 'ens' ? existingEnsOptions : existingSubnameOptions} subname={identityMode === 'external-subname'} connected={isConnected} loading={isConnected && (!ownedEnsCurrent || ownedEns.loading)} error={ownedEnsCurrent ? ownedEns.error : ''} incomplete={ownedEnsCurrent && ownedEns.incomplete} onRefresh={() => setEnsRefresh(count => count + 1)}/>
                 ) : (
                   <input id="profile-identity-name" value={identityName} onChange={(e) => setIdentityName(e.target.value)} />
                 )}
@@ -1583,7 +1581,7 @@ export default function ProfileLandingClient({
             </button>
           </div>
         ) : null}
-        <div className="card"><h4>Where this name leads</h4>{normalizedFullName&&<p>Name: <strong>{normalizedFullName}</strong></p>}{derivedRouteSlug?<p>Profile route: <Link href={`/profile/${encodeURIComponent(derivedRouteSlug)}`}>/profile/{derivedRouteSlug}</Link></p>:<p>Enter a name to preview its profile link.</p>}<p>ENS labels are reversed in the URL: artist.eth becomes /profile/eth.artist; studio.artist.eth becomes /profile/eth.artist.studio. The label is a name, not your display name or a collection title.</p><p>This link works after verification and linking. It shows the same creator page as your wallet address. Registration uses {appChain.name}; public ENS aliases are verified on Ethereum mainnet.</p><a href="https://app.ens.domains/" target="_blank" rel="noopener noreferrer">Manage ENS address records ↗</a></div>
+        <div className="card"><h4>Where this name leads</h4>{normalizedFullName&&<p>Name: <strong>{normalizedFullName}</strong></p>}{derivedRouteSlug?<p>Profile route: <Link href={`/profile/${encodeURIComponent(derivedRouteSlug)}`}>/profile/{derivedRouteSlug}</Link></p>:<p>Select or register a name to preview its profile link.</p>}<p>ENS labels are reversed in the URL: artist.eth becomes /profile/eth.artist; studio.artist.eth becomes /profile/eth.artist.studio. The label is a name, not your display name or a collection title.</p><p>This link works after verification and linking. It shows the same creator page as your wallet address. Registration uses {appChain.name}; public ENS aliases are verified on Ethereum mainnet.</p><a href="https://app.ens.domains/" target="_blank" rel="noopener noreferrer">Manage ENS address records ↗</a></div>
 
         {identityMode === "register-eth" && pendingEnsRegistration ? (
           <p className="hint">
