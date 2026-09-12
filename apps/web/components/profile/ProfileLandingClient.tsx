@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import {linkCreatorIdentity,verifyCreatorName} from "../../lib/linkCreatorIdentity";
 import { useAccount, useChainId, usePublicClient, useWalletClient } from "wagmi";
 import { encodeFunctionData, formatEther, keccak256, stringToBytes } from "viem";
 import type { Address, Hex } from "viem";
@@ -18,7 +19,6 @@ import {
 } from "../../lib/ensSubnameCreation";
 import {
   fetchProfileResolution,
-  linkProfileIdentity,
   syncWalletScope,
   type ApiOwnedCollections,
   type ApiProfileRecord
@@ -441,6 +441,9 @@ export default function ProfileLandingClient({
   const [verifiedCollections, setVerifiedCollections] = useState<ApiOwnedCollections["collections"]>([]);
   const [discoveredEnsNames, setDiscoveredEnsNames] = useState<string[]>([]);
   const [selectedCollection, setSelectedCollection] = useState("");
+  const [collectionName,setCollectionName]=useState("");
+  const [collectionMessage,setCollectionMessage]=useState("");
+  const [collectionBusy,setCollectionBusy]=useState(false);
   const [identityMode, setIdentityMode] = useState<
     "register-eth" | "register-eth-subname" | "ens" | "external-subname" | "nftfactory-subname"
   >(normalizedInitialIdentityMode);
@@ -454,6 +457,16 @@ export default function ProfileLandingClient({
   const [setupState, setSetupState] = useState<SetupState>({ status: "idle" });
   const previousIdentityModeRef = useRef(identityMode);
 
+  async function saveIdentity(payload:Parameters<typeof linkCreatorIdentity>[0]) {
+    if(!walletClient||!address||walletClient.account?.address.toLowerCase()!==address.toLowerCase())throw new Error('Connect the profile wallet first.');
+    return linkCreatorIdentity(payload,args=>walletClient.signMessage(args));
+  }
+  async function linkCollectionName(){
+    if(!address||!selectedCollection)return;
+    setCollectionBusy(true);setCollectionMessage('Verify the name and confirm wallet sign-in if requested.');
+    try{await saveIdentity({name:collectionName.trim().toLowerCase(),source:collectionName.trim().split('.').length>2?'external-subname':'ens',ownerAddress:address,collectionAddress:selectedCollection,collectionOnly:true});setCollectionMessage('Verified name linked to this collection. Your wallet creator page is unchanged.');}
+    catch(error){setCollectionMessage(error instanceof Error?error.message:'Collection linking failed.');}finally{setCollectionBusy(false);}
+  }
   const explorerBase = getExplorerBaseUrl(config.chainId);
   const wrongNetwork = isConnected && chainId !== config.chainId;
   const slug = normalizeSlug(identityName);
@@ -579,12 +592,12 @@ export default function ProfileLandingClient({
             ) {
               return requestedCollection;
             }
-            return nextCollections[0]?.contractAddress || "";
+            return "";
           });
         } else {
           setCollections(nextCollections);
           setDiscoveredEnsNames(nextEnsNames);
-          setSelectedCollection((current) => current || nextCollections[0]?.contractAddress || "");
+          setSelectedCollection((current) => current);
         }
       })
       .catch(() => {
@@ -632,7 +645,7 @@ export default function ProfileLandingClient({
         if (current && nextCollections.some((item) => item.contractAddress.toLowerCase() === current.toLowerCase())) {
           return current;
         }
-        return nextCollections[0]?.contractAddress || "";
+        return "";
       });
     });
 
@@ -679,6 +692,19 @@ export default function ProfileLandingClient({
     }
   }, [address]);
 
+  useEffect(()=>{
+    if(!pendingEnsRegistration||!publicClient||!address)return;
+    let cancelled=false;
+    void resolveEnsEffectiveOwner(publicClient,pendingEnsRegistration.fullName).then(({owner})=>{
+      if(cancelled||String(owner).toLowerCase()!==address.toLowerCase())return;
+      const completedName=pendingEnsRegistration.fullName;
+      setPendingEnsRegistration(null);try{globalThis.localStorage.removeItem(createEnsPendingKey(address));}catch{}
+      setIdentityMode('ens');setIdentityName(completedName);setCheckedIdentityReady(false);setLookupNote('');
+      setSetupState({status:'success',message:`${completedName} is already registered on ${appChain.name}. Registration is complete; verify and link the existing name below. No registration transaction is needed.`});
+    }).catch(()=>{});
+    return()=>{cancelled=true;};
+  },[pendingEnsRegistration,publicClient,address,appChain.name]);
+
   useEffect(() => {
     if (!pendingEnsRegistration) {
       setRegistrationCountdown(0);
@@ -711,7 +737,7 @@ export default function ProfileLandingClient({
       return;
     }
     if (identityMode === "ens" || identityMode === "external-subname") {
-      setIdentityName("");
+      setIdentityName(current=>current.includes(".")?current:current?`${current}.eth`:"");
       setSubnameParent("");
     }
   }, [identityMode]);
@@ -731,20 +757,14 @@ export default function ProfileLandingClient({
       return ensParentCandidates.length > 0
         ? "Enter a new subname label and select an existing parent ENS name you already control. The created subname is linked to this creator identity when minting completes."
         : "No parent ENS names are available in your inventory. Register a parent .eth name first.";
-    if (identityMode === "ens")
-      return existingEnsOptions.length > 0
-        ? "Select an existing ENS name from your indexed inventory to link it to this creator profile."
-        : "No existing ENS names are available in your inventory. Register or mint one first.";
-    if (identityMode === "external-subname")
-      return existingSubnameOptions.length > 0
-        ? "Select an existing ENS subname from your indexed inventory to link it to this creator profile."
-        : "No existing ENS subnames are available in your inventory. Create or mint one first.";
+    if (identityMode === "ens" || identityMode === "external-subname")
+      return "Enter the complete ENS name, such as artist.eth or studio.artist.eth. Verify its Ethereum mainnet address record, then sign in to link it. This does not register a name, transfer assets, or rename a collection.";
     return "Enter a plain label like artist to create artist.nftfactory.eth on-chain. This is the default identity path here.";
   }, [ensParentCandidates.length, existingEnsOptions.length, existingSubnameOptions.length, identityMode]);
 
   const ensRegistrationStep = useMemo(() => {
     if (identityMode !== "register-eth") return "";
-    if (setupState.status === "pending") return "Commit";
+    if (setupState.status === "pending") return "Waiting for wallet or confirmation";
     if (!pendingEnsRegistration) return "Check";
     if (registrationCountdown > 0) return "Wait";
     return "Register";
@@ -756,7 +776,7 @@ export default function ProfileLandingClient({
       if (identityMode === "register-eth") return "Status: available in ENS";
       if (identityMode === "register-eth-subname") return "Status: parent ownership confirmed and ready to create";
       if (identityMode === "nftfactory-subname") return "Status: available on-chain";
-      return "Status: owned in ENS and ready to link";
+      return "Status: resolves to your wallet on Ethereum mainnet; ready to link";
     }
     if (lookupNote) return "Status: review the current check result";
     return "";
@@ -765,23 +785,22 @@ export default function ProfileLandingClient({
     !slug ||
     !normalizedFullName ||
     (identityMode === "register-eth-subname" && !String(subnameParent || "").trim()) ||
-    (identityMode === "ens" && existingEnsOptions.length === 0) ||
-    (identityMode === "external-subname" && existingSubnameOptions.length === 0);
+    setupState.status === "pending";
   const primaryActionLabel = checkedIdentityReady
     ? identityMode === "register-eth"
-      ? "Start registration"
+      ? pendingEnsRegistration ? "Continue registration" : "Start registration"
       : identityMode === "nftfactory-subname"
         ? "Create now"
         : identityMode === "register-eth-subname"
           ? "Create now"
-          : "Link now"
+          : "Sign in & link profile"
     : identityMode === "register-eth"
       ? "Check availability"
       : identityMode === "nftfactory-subname"
         ? "Check label"
         : identityMode === "register-eth-subname"
           ? "Check parent ownership"
-          : "Check in ENS";
+          : "Verify name";
   const collectionOptions = verifiedCollections.length > 0 ? verifiedCollections : collections;
   async function runIdentityAction(): Promise<void> {
     if (identityMode === "register-eth") {
@@ -804,7 +823,7 @@ export default function ProfileLandingClient({
       return;
     }
     if (identityMode === "ens") {
-      await linkIdentity("ens", { launchMint: true });
+      await linkIdentity("ens");
       return;
     }
     if (identityMode === "external-subname") {
@@ -815,44 +834,11 @@ export default function ProfileLandingClient({
   }
 
   async function checkEnsRegistryIdentity(cancelled = false): Promise<void> {
-    if (!publicClient) {
-      if (!cancelled) {
-        setCheckedIdentityReady(false);
-        setLookupNote("ENS registry lookup is unavailable right now.");
-      }
-      return;
-    }
-
-    try {
-      const { owner, wrapped } = await resolveEnsEffectiveOwner(publicClient, normalizedFullName);
-      if (cancelled) return;
-
-      const ownerAddress = String(owner).toLowerCase();
-      if (ownerAddress !== ZERO_ADDRESS.toLowerCase()) {
-        if (address && ownerAddress === address.toLowerCase()) {
-          setCheckedIdentityReady(true);
-          setLookupNote(
-            `${normalizedFullName} exists in ENS and is owned by the connected wallet${wrapped ? " (via NameWrapper)" : ""}.`
-          );
-          return;
-        }
-        setCheckedIdentityReady(false);
-        setLookupNote(
-          `${normalizedFullName} exists in ENS, but it is not owned by the connected wallet${wrapped ? " (via NameWrapper)" : ""}.`
-        );
-        return;
-      }
-
-      setCheckedIdentityReady(false);
-      setLookupNote(
-        `${normalizedFullName} is not currently registered in the ENS registry. Use Register .eth for new .eth names, or create an nftfactory.eth subname here.`
-      );
-    } catch {
-      if (!cancelled) {
-        setCheckedIdentityReady(false);
-        setLookupNote("ENS registry lookup is unavailable right now.");
-      }
-    }
+    try{
+      if(!address)throw new Error('Connect the wallet you want this profile name to point to.');
+      await verifyCreatorName(normalizedFullName,address);
+      if(!cancelled){setCheckedIdentityReady(true);setLookupNote(`${normalizedFullName} resolves to your connected wallet on Ethereum mainnet. Ready to link your creator page.`);}
+    }catch(error){if(!cancelled){setCheckedIdentityReady(false);setLookupNote(error instanceof Error?error.message:'Name verification failed.');}}
   }
 
   async function checkEthRegistrationAvailability(cancelled = false): Promise<void> {
@@ -1068,12 +1054,11 @@ export default function ProfileLandingClient({
       let nextProfile: ApiProfileRecord | null = null;
       let linkWarning = "";
       try {
-        const response = await linkProfileIdentity({
+        const response = await saveIdentity({
           name: fullName,
           source: "external-subname",
           ownerAddress: walletClient.account.address,
-          collectionAddress: selectedCollection || undefined,
-          routeSlug: derivedRouteSlug || undefined
+            routeSlug: derivedRouteSlug || undefined
         });
         nextProfile = response.profile;
         globalThis.localStorage.setItem(
@@ -1293,6 +1278,16 @@ export default function ProfileLandingClient({
     }
 
     try {
+      const available=await publicClient.readContract({address:ENS_ETH_REGISTRAR_CONTROLLER_ADDRESS,abi:ENS_ETH_REGISTRAR_CONTROLLER_ABI,functionName:'available',args:[pendingEnsRegistration.label]});
+      if(!available){
+        const existing=await resolveEnsEffectiveOwner(publicClient,pendingEnsRegistration.fullName);
+        if(String(existing.owner).toLowerCase()!==walletClient.account.address.toLowerCase())throw new Error('This name is registered to another wallet. No registration transaction was sent.');
+        const fullName=pendingEnsRegistration.fullName;
+        setPendingEnsRegistration(null);if(address)globalThis.localStorage.removeItem(createEnsPendingKey(address));
+        setIdentityName(fullName);setIdentityMode('ens');setCheckedIdentityReady(false);setLookupNote('');
+        setSetupState({status:'success',message:`${fullName} is already registered on ${appChain.name}. No second registration was sent. Use Verify & link below. Public aliases require this name to resolve to your wallet on Ethereum mainnet.`});
+        return;
+      }
       const duration = BigInt(pendingEnsRegistration.durationSeconds);
       const [base, premium] = await publicClient.readContract({
         address: ENS_ETH_REGISTRAR_CONTROLLER_ADDRESS,
@@ -1322,13 +1317,17 @@ export default function ProfileLandingClient({
         }),
         value
       });
-      await publicClient.waitForTransactionReceipt({ hash: registerHash });
+      const receipt=await publicClient.waitForTransactionReceipt({ hash: registerHash });
+      if(receipt.status!=='success')throw new Error('Registration transaction reverted. Your pending commitment was retained.');
+      const registeredName=pendingEnsRegistration.fullName;
+      setPendingEnsRegistration(null);if(address)globalThis.localStorage.removeItem(createEnsPendingKey(address));
+      setIdentityMode('ens');setIdentityName(registeredName);setCheckedIdentityReady(false);setLookupNote('');
+      if(config.chainId!==1){setSetupState({status:'success',hash:registerHash,message:`${registeredName} registered on ${appChain.name}. Registration is complete. To link a public profile alias, verify the name’s Ethereum mainnet address record below.`});return;}
 
-      const response = await linkProfileIdentity({
+      const response = await saveIdentity({
         name: pendingEnsRegistration.fullName,
         source: "ens",
         ownerAddress: walletClient.account.address,
-        collectionAddress: selectedCollection || undefined,
         routeSlug: derivedRouteSlug || undefined
       });
       globalThis.localStorage.setItem(
@@ -1353,7 +1352,7 @@ export default function ProfileLandingClient({
     } catch (err) {
       setSetupState({
         status: "error",
-        message: err instanceof Error ? err.message : "Failed to complete ENS registration"
+        message: err instanceof Error ? err.message : "Registration or profile linking could not complete. Check the transaction receipt before retrying."
       });
     }
   }
@@ -1377,40 +1376,19 @@ export default function ProfileLandingClient({
       return;
     }
 
-    if (source !== "nftfactory-subname" && publicClient) {
-      try {
-        const { owner } = await resolveEnsEffectiveOwner(
-          publicClient,
-          normalizeIdentityFullName(identityName, sourceToIdentityMode(source))
-        );
-        const ownerAddress = String(owner).toLowerCase();
-        if (ownerAddress === ZERO_ADDRESS.toLowerCase()) {
-          setSetupState({ status: "error", message: "This ENS name is not registered in the ENS registry." });
-          return;
-        }
-        if (ownerAddress !== address.toLowerCase()) {
-          setSetupState({ status: "error", message: "The connected wallet does not own this ENS name." });
-          return;
-        }
-      } catch {
-        setSetupState({ status: "error", message: "ENS registry lookup failed. Try again before linking this name." });
-        return;
-      }
-    }
 
     try {
       setSetupState({ status: "pending", message: "Saving creator identity..." });
       setCheckedIdentityReady(false);
       setPostLinkProfile(null);
       setPostLinkMintCta(false);
-      const response = await linkProfileIdentity({
+      const response = await saveIdentity({
         name: identityName,
         source,
         ownerAddress: address,
-        collectionAddress: selectedCollection || undefined,
         routeSlug: derivedRouteSlug || undefined
       });
-      globalThis.localStorage.setItem(createPrimaryProfileKey(address), JSON.stringify(response.profile));
+      try{globalThis.localStorage.setItem(createPrimaryProfileKey(address), JSON.stringify(response.profile));}catch{}
 
       const nextProfiles = dedupeProfiles([...profiles, response.profile]);
       setProfiles(nextProfiles);
@@ -1420,7 +1398,7 @@ export default function ProfileLandingClient({
         status: "success",
         message:
           source === "ens"
-            ? `${response.profile.fullName} linked. Continue into shared mint to publish with this ENS identity.`
+            ? `${response.profile.fullName} linked to your existing wallet creator page.`
             : `${response.profile.fullName} linked to this creator profile.`
       });
     } catch (err) {
@@ -1443,7 +1421,7 @@ export default function ProfileLandingClient({
   }
 
   return (
-    <section className="wizard">
+    <section className="wizard"><header className="pageHeading"><h1>Names & identity</h1><p>Link a name to your creator page, or manage a collection name separately.</p><Link href="/profile/setup">Back to profile design</Link></header>
       <div className="card formCard">
         <h3>Wallet</h3>
         <p className="hint">{address || "Connect a wallet from the header to link a creator profile."}</p>
@@ -1464,18 +1442,16 @@ export default function ProfileLandingClient({
       <div className="card formCard">
         <h3>Creator Identity</h3>
         <p className="sectionLead">
-          Choose how this creator identity should be created or linked. By default, NFTFactory creates a{" "}
-          <span className="mono">nftfactory.eth</span> handle registration is unavailable. Link a verified ENS name or use your wallet creator page.
+          Link an existing ENS name to your creator page, or register a new name. Connecting a wallet and signing in are separate steps; we request a sign-in signature when saving. Your profile design stays on your wallet page.
         </p>
         {isConnected && profiles.length > 0 ? (
           <p className="hint">
-            This wallet already has a linked profile. Identity actions here update the canonical name. Use{" "}
-            <Link href={`/profile/${encodeURIComponent(profiles[0].slug)}`}>the profile page</Link> to edit display details.
+            Your existing creator page is preserved. <Link href={`/profile/${address?.toLowerCase()}`}>View your profile</Link> or <Link href="/profile/setup">edit its appearance</Link>. A verified ENS name adds another link to that page.
           </p>
         ) : null}
         <div className="profileIdentityControlRow">
           <label className="profileIdentityControlLeft">
-            Identity action
+            Profile identity action
             <select
               value={identityMode}
               onChange={(e) =>
@@ -1495,7 +1471,7 @@ export default function ProfileLandingClient({
                 <option value="register-eth-subname">Register .eth subname</option>
               </optgroup>
               <optgroup label="Link Existing">
-                <option value="ens">Link existing ENS</option>
+                <option value="ens">Link my existing .eth</option>
                 <option value="external-subname">Link existing ENS subname</option>
               </optgroup>
             </select>
@@ -1539,30 +1515,11 @@ export default function ProfileLandingClient({
             ) : (
               <>
                 {identityMode === "ens" || identityMode === "external-subname" ? (
-                  <select
-                    value={identityName}
-                    onChange={(e) => setIdentityName(e.target.value)}
-                    disabled={(identityMode === "ens" ? existingEnsOptions : existingSubnameOptions).length === 0}
-                  >
-                    <option value="">
-                      {identityMode === "ens" ? "Select existing ENS name" : "Select existing ENS subname"}
-                    </option>
-                    {(identityMode === "ens" ? existingEnsOptions : existingSubnameOptions).map((candidate) => (
-                      <option key={candidate} value={candidate}>
-                        {candidate}
-                      </option>
-                    ))}
-                  </select>
+                  <><input value={identityName} onChange={e=>setIdentityName(e.target.value)} placeholder={identityMode==='ens'?'artist.eth':'studio.artist.eth'} list="existing-profile-names"/><datalist id="existing-profile-names">{(identityMode==='ens'?existingEnsOptions:existingSubnameOptions).map(candidate=><option key={candidate} value={candidate}/>)}</datalist></>
                 ) : (
                   <input value={identityName} onChange={(e) => setIdentityName(e.target.value)} />
                 )}
-                {(identityMode === "ens" || identityMode === "external-subname") &&
-                (identityMode === "ens" ? existingEnsOptions : existingSubnameOptions).length === 0 ? (
-                  <p className="hint">
-                    No {identityMode === "ens" ? "ENS names" : "ENS subnames"} exist in your inventory yet.{" "}
-                    {identityMode === "ens" ? "Register or mint one first." : "Create or mint one first."}
-                  </p>
-                ) : null}
+
               </>
             )}
           </label>
@@ -1604,19 +1561,6 @@ export default function ProfileLandingClient({
             {registrationYears} year{registrationYears === "1" ? "" : "s"}.
           </p>
         ) : null}
-        <div className="gridMini">
-          <label>
-            Linked collection (optional)
-            <select value={selectedCollection} onChange={(e) => setSelectedCollection(e.target.value)}>
-              <option value="">No collection linked</option>
-              {collectionOptions.map((collection) => (
-                <option key={collection.contractAddress} value={collection.contractAddress}>
-                  {collection.ensSubname?.trim() || collection.contractAddress}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
         <p className="hint">{identityHint}</p>
         {identityMode === "register-eth" && pendingEnsRegistration ? (
           <div className="row">
@@ -1636,11 +1580,8 @@ export default function ProfileLandingClient({
             </button>
           </div>
         ) : null}
-        <p className="hint">
-          {derivedRouteSlug
-            ? `Profile route: /profile/${derivedRouteSlug}`
-            : "Profile routes use reversed ENS labels like /profile/eth.artist, and plain labels for nftfactory subnames."}
-        </p>
+        <div className="card"><h4>Where this name leads</h4>{normalizedFullName&&<p>Name: <strong>{normalizedFullName}</strong></p>}{derivedRouteSlug?<p>Profile route: <Link href={`/profile/${encodeURIComponent(derivedRouteSlug)}`}>/profile/{derivedRouteSlug}</Link></p>:<p>Enter a name to preview its profile link.</p>}<p>ENS labels are reversed in the URL: artist.eth becomes /profile/eth.artist; studio.artist.eth becomes /profile/eth.artist.studio. The label is a name, not your display name or a collection title.</p><p>This link works after verification and linking. It shows the same creator page as your wallet address. Registration uses {appChain.name}; public ENS aliases are verified on Ethereum mainnet.</p><a href="https://app.ens.domains/" target="_blank" rel="noopener noreferrer">Manage ENS address records ↗</a></div>
+
         {identityMode === "register-eth" && pendingEnsRegistration ? (
           <p className="hint">
             Pending commit: {pendingEnsRegistration.fullName}.{" "}
@@ -1686,6 +1627,7 @@ export default function ProfileLandingClient({
           </>
         ) : null}
       </div>
+      <div className="card formCard"><h3>Collection naming & linking</h3><p>This is separate from your creator identity. Choose a collection you administer, then enter the complete ENS name you want associated with it. Linking here updates the indexed collection name; it does not rename the contract or change ENS records.</p><label>Collection<select value={selectedCollection} onChange={e=>setSelectedCollection(e.target.value)}><option value="">Select a collection</option>{collectionOptions.filter(c=>!c.chainId||c.chainId===config.chainId).map(c=><option key={c.contractAddress} value={c.contractAddress}>{c.ensSubname||c.contractAddress}</option>)}</select></label><label>Collection ENS name<input value={collectionName} onChange={e=>setCollectionName(e.target.value)} placeholder="collection.artist.eth"/></label><button disabled={!address||!selectedCollection||!collectionName.trim()||collectionBusy} onClick={()=>void linkCollectionName()}>{collectionBusy?'Linking…':'Verify & link collection name'}</button><p role="status">{collectionMessage}</p><Link href="/mint?view=manage&collection=custom">Open collection tools</Link></div>
     </section>
   );
 }
