@@ -68,6 +68,8 @@ RequiresMountsFor=/var/lib/ipfs-archive/blocks
 [Service]
 User=raging
 Environment=IPFS_PATH=/var/lib/ipfs-archive
+Environment=HOME=/var/lib/ipfs-archive
+Environment=XDG_CONFIG_HOME=/var/lib/ipfs-archive/.config
 ExecStartPre=/usr/bin/mountpoint -q /var/lib/ipfs-archive/blocks
 ExecStart=/usr/local/bin/ipfs daemon --enable-gc
 Restart=on-failure
@@ -81,7 +83,8 @@ ReadWritePaths=/var/lib/ipfs-archive /srv/network-storage/nftfactory-ipfs-archiv
 WantedBy=multi-user.target
 UNIT
 systemctl daemon-reload
-systemctl enable --now ipfs-archive
+systemctl enable ipfs-archive
+systemctl restart ipfs-archive
 curl --fail --silent --retry 12 --retry-connrefused --retry-delay 1 -X POST http://127.0.0.1:5002/api/v0/version >/dev/null
 archive_peer=$(curl --fail --silent -X POST http://127.0.0.1:5002/api/v0/id | python3 -c 'import json,sys;print(json.load(sys.stdin)["ID"])')
 curl --fail --silent -X POST "http://127.0.0.1:5001/api/v0/bootstrap/add?arg=/ip4/127.0.0.1/tcp/4002/p2p/$archive_peer" >/dev/null
