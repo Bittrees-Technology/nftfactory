@@ -477,6 +477,7 @@ type RequestHandlerConfig = {
   chainId: number;
   rpcUrl: string;
   rpcUrls?: string[];
+  rpcTimeoutMs?: number;
   adminToken: string;
   webhookSecret: string;
   adminAllowlist: Set<string>;
@@ -584,9 +585,9 @@ function resolveRpcUrls(): string[] {
   return [...new Set(urls)];
 }
 
-function createRpcClient(config: Pick<RequestHandlerConfig, "rpcUrl" | "rpcUrls">) {
+export function createRpcClient(config: Pick<RequestHandlerConfig, "rpcUrl" | "rpcUrls" | "rpcTimeoutMs">) {
   const urls = config.rpcUrls && config.rpcUrls.length > 0 ? config.rpcUrls : [config.rpcUrl];
-  const transports = urls.map((url) => http(url));
+  const transports = urls.map((url) => http(url, config.rpcTimeoutMs ? {timeout: config.rpcTimeoutMs, retryCount: 0} : undefined));
   return createPublicClient({
     transport: transports.length === 1 ? transports[0] : fallback(transports, { rank: false })
   });
@@ -9083,7 +9084,7 @@ export function createRequestHandler(
           if(!/^[1-9]\d*$/.test(requested))throw new Error('Invalid artwork network.');
           const network=importNetwork(Number(requested));
           const rpcUrl=process.env[`IMPORT_RPC_URL_${network.id}`]||network.rpcUrl;
-          const selected={...config,authChainId:config.chainId,chainId:network.id,rpcUrl,rpcUrls:[rpcUrl],...(network.id!==config.chainId?{marketplaceAddress:null,registryAddress:null,moderatorRegistryAddress:null}:{})};
+          const selected={...config,authChainId:config.chainId,chainId:network.id,rpcUrl,rpcTimeoutMs:8000,rpcUrls:[...new Set([rpcUrl,network.rpcUrl,...(network.rpcFallbacks||[])])],...(network.id!==config.chainId?{marketplaceAddress:null,registryAddress:null,moderatorRegistryAddress:null}:{})};
           return artworkChainScope.run(network.id,()=>handleRequest(req,res,deps,selected));
         }catch(error){sendJson(res,400,{error:error instanceof Error?error.message:'Invalid network.'});return Promise.resolve();}
       }

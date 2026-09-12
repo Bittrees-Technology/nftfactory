@@ -1,5 +1,5 @@
 import {queueArtworkSeed} from './artworkSeedQueue.js';
-import {parseAbi,zeroAddress,type Address,type PublicClient} from 'viem';
+import {BaseError,parseAbi,zeroAddress,type Address,type PublicClient} from 'viem';
 import type {PrismaClient} from '@prisma/client';
 const abi=parseAbi(['function supportsInterface(bytes4) view returns (bool)','function ownerOf(uint256) view returns (address)','function balanceOf(address,uint256) view returns (uint256)','function tokenURI(uint256) view returns (string)','function uri(uint256) view returns (string)','function owner() view returns (address)']);
 export function assetInput(address:unknown,tokenId:unknown){
@@ -44,7 +44,9 @@ export async function readArtworkTags(prisma:PrismaClient,chainId:number,address
  return {tags:rows.map(row=>({label:row.tag.label,author:row.addedByAddress,private:row.private}))};
 }
 export async function importArtwork(prisma:PrismaClient,client:Pick<PublicClient,'readContract'|'getChainId'>,chainId:number,owner:Address,body:{contractAddress?:unknown;tokenIds?:unknown;preview?:boolean}){
- if(await client.getChainId()!==chainId)throw new Error('The configured RPC returned the wrong network.');
+ let actualChain:number;
+ try{actualChain=await client.getChainId();}catch{throw new Error('The network connection is temporarily unavailable. Your entries are saved. Please try previewing again shortly.');}
+ if(actualChain!==chainId)throw new Error('The configured RPC returned the wrong network.');
  if(!Array.isArray(body.tokenIds)||!body.tokenIds.length||body.tokenIds.length>10)throw new Error('Import 1–10 token IDs at a time.');
  const assets=[...new Set(body.tokenIds.map(String))].map(id=>assetInput(body.contractAddress,id));
  const results=[];
@@ -62,7 +64,7 @@ export async function importArtwork(prisma:PrismaClient,client:Pick<PublicClient
    if(standard==='ERC721')await prisma.tokenHolding.updateMany({where:{tokenId:token.id,ownerAddress:{not:owner.toLowerCase()}},data:{quantityRaw:'0'}});
    let storage='unavailable';try{storage=await queueArtworkSeed(token.id,uri);}catch{/* Import stays valid; storage can be retried. */}
    results.push({tokenId:asset.id,ok:true,storage});
-  }catch(error){results.push({tokenId:asset.id,ok:false,error:error instanceof Error?error.message:'Import unavailable.'});}
+  }catch(error){results.push({tokenId:asset.id,ok:false,error:error instanceof BaseError?'Unable to verify this NFT on the network right now. Check the contract and token ID, then retry.':error instanceof Error?error.message:'Import unavailable.'});}
  }
  return {chainId,contractAddress:assets[0].contract,results};
 }

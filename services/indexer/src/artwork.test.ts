@@ -42,3 +42,9 @@ for(const chainId of [1,8453,4663])it(`persists verified imports with network id
  expect(collection.mock.calls[0][0]).toMatchObject({where:{chainId_contractAddress:{chainId,contractAddress:contract}},create:{chainId}});
  expect(holding).toHaveBeenCalledOnce();
 });
+
+ it('keeps transport details private and does not mutate when the network is unavailable',async()=>{
+ const db={token:{upsert:vi.fn()}};
+ await expect(importArtwork(db as any,{getChainId:async()=>{throw new Error('fetch failed https://private-provider/key')}} as any,1,'0x0000000000000000000000000000000000000001',{tokenIds:['1']})).rejects.toThrow('network connection is temporarily unavailable');
+ expect(db.token.upsert).not.toHaveBeenCalled();
+ });

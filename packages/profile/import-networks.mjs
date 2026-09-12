@@ -1,6 +1,6 @@
 export const IMPORT_NETWORKS = [
-  {id:1,name:'Ethereum mainnet',rpcUrl:'https://ethereum-rpc.publicnode.com'},
-  {id:8453,name:'Base',rpcUrl:'https://mainnet.base.org'},
+  {id:1,name:'Ethereum mainnet',rpcUrl:'https://ethereum-rpc.publicnode.com',rpcFallbacks:['https://eth.drpc.org']},
+  {id:8453,name:'Base',rpcUrl:'https://mainnet.base.org',rpcFallbacks:['https://base-rpc.publicnode.com']},
   {id:4663,name:'Robinhood Chain',rpcUrl:'https://rpc.mainnet.chain.robinhood.com'},
   {id:11155111,name:'Sepolia (testnet)',rpcUrl:'https://ethereum-sepolia-rpc.publicnode.com'}
 ];
