@@ -1,5 +1,6 @@
 'use client';
 import Link from 'next/link';
+import {customProfileDocument} from '../../lib/profileCustomCode';
 import ArtworkImage from './ArtworkImage';
 import ArtworkCard from '../artwork/ArtworkCard';
 import {normalizeDesign,safeProfileLink} from '../../../../packages/profile/design.mjs';
@@ -27,6 +28,7 @@ export default function CreatorPresentation({address,profile,items,readOnly,hold
  </header>
  <div className={s.modules}>{d.modules.map(module=>{
  let content=null;
+ if(module==='custom'&&d.customHtml.trim())content=<><h2>Custom creator section</h2><p style={{fontSize:12}}>Designed by this creator</p><iframe title="Creator custom HTML and CSS" sandbox="" referrerPolicy="no-referrer" srcDoc={customProfileDocument(d.customHtml,d.customCss)} style={{width:'100%',height:d.customHeight,border:0,display:'block',background:'#15182c'}}/></>;
  if(module==='about'&&profile?.aboutMe)content=<><h2>About the artist</h2><p className={s.prose}>{profile.aboutMe}</p></>;
  if(module==='top8'&&d.top8.length)content=<><h2>My Top 8</h2><ol className={s.top8}>{d.top8.map((value,i)=><li key={i}><span aria-hidden="true">{['✦','⌘','☾','✳','▧','◈','☺','?'][i]}</span><b>{value}</b></li>)}</ol></>;
  if(module==='panels'&&d.panels.length)content=<><h2>From my corner</h2><div className={s.panels}>{d.panels.filter(p=>p.title||p.body).map((p,i)=><article key={i}><h3>{p.title}</h3><p className={s.prose}>{p.body}</p></article>)}</div></>;
