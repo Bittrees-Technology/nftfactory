@@ -25,6 +25,6 @@ export default function ExistingEnsNameField({value, onChange, options, subname 
     {subname && <p className="hint">This list includes wrapped subnames held as ENS tokens.</p>}
     {incomplete && <p className="hint">Some names could not be loaded. Refresh to check again. Unwrapped subnames are not included in this inventory.</p>}
     {connected && <button type="button" className="secondary" disabled={loading} onClick={onRefresh}>{error ? 'Retry loading names' : 'Refresh names'}</button>}
-    <p className="hint">Want a new name? Choose “Register a .eth name” under Profile identity action.</p>
+
   </div>;
 }
