@@ -733,7 +733,7 @@ export default function ProfileLandingClient({
       return;
     }
     if (identityMode === "register-eth" || identityMode === "nftfactory-subname") {
-      setIdentityName("");
+      setIdentityName(identityMode === "register-eth" && pendingEnsRegistration ? pendingEnsRegistration.label : "");
       return;
     }
     if (identityMode === "ens" || identityMode === "external-subname") {
@@ -1389,6 +1389,9 @@ export default function ProfileLandingClient({
         routeSlug: derivedRouteSlug || undefined
       });
       try{globalThis.localStorage.setItem(createPrimaryProfileKey(address), JSON.stringify(response.profile));}catch{}
+      if (pendingEnsRegistration?.fullName.toLowerCase() === response.profile.fullName.toLowerCase()) {
+        clearPendingEthRegistration();
+      }
 
       const nextProfiles = dedupeProfiles([...profiles, response.profile]);
       setProfiles(nextProfiles);
