@@ -16,6 +16,6 @@ export function fetchSeedHttps(uri:string,limit:number,redirects=0):Promise<Buff
  });
 }
 export async function fetchSeedContent(uri:string,limit:number){
- if(uri.startsWith('ipfs://')){const path=uri.slice(7);if(!/^[a-zA-Z0-9]{32,120}(?:\/[^?#]*)?$/.test(path)||decodeURIComponent(path).split('/').some(p=>p==='..'||p==='.'||p.includes('\\')))throw new Error('Invalid IPFS path.');return boundedSeedBody(await fetch(`http://127.0.0.1:5001/api/v0/cat?arg=${encodeURIComponent(path)}`,{method:'POST',signal:AbortSignal.timeout(30000)}),limit);}
+ if(uri.startsWith('ipfs://')){const path=uri.slice(7).replace(/^ipfs\//,'');if(!/^[a-zA-Z0-9]{32,120}(?:\/[^?#]*)?$/.test(path)||decodeURIComponent(path).split('/').some(p=>p==='..'||p==='.'||p.includes('\\')))throw new Error('Invalid IPFS path.');return boundedSeedBody(await fetch(`http://127.0.0.1:5001/api/v0/cat?arg=${encodeURIComponent(path)}`,{method:'POST',signal:AbortSignal.timeout(30000)}),limit);}
  return fetchSeedHttps(uri,limit);
 }

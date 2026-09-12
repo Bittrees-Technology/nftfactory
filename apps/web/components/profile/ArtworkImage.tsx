@@ -2,11 +2,12 @@
 import { useEffect, useRef, useState } from 'react';
 
 export function artworkSources(source: string, primary = process.env.NEXT_PUBLIC_IPFS_GATEWAY, replica = process.env.NEXT_PUBLIC_IPFS_REPLICA_GATEWAY) {
-  const path = source.startsWith('ipfs://') ? source.slice(7) : source.match(/\/ipfs\/([^?#]+)/)?.[1];
+  const path = source.startsWith('ipfs://') ? source.slice(7).replace(/^ipfs\//,'') : source.match(/\/ipfs\/([^?#]+)/)?.[1];
   const gateways = path && /^[a-zA-Z0-9]+(?:\/[^?#]*)?$/.test(path)
     ? [primary, replica].filter(Boolean).map(gateway => `${gateway!.replace(/\/$/, '').replace(/\/ipfs$/, '')}/ipfs/${path}`)
     : [];
-  return [...new Set([...gateways, source].filter(url => /^https:\/\//i.test(url)))];
+  const publicSource=path&&/^[a-zA-Z0-9]+(?:\/[^?#]*)?$/.test(path)?(path.startsWith('b')?`https://${path.split('/')[0]}.ipfs.dweb.link/${path.split('/').slice(1).join('/')}`:`https://ipfs.io/ipfs/${path}`):'';
+  return [...new Set([...gateways, source, publicSource].filter(url => /^https:\/\//i.test(url)))];
 }
 
 export default function ArtworkImage({ source, alt }: { source: string; alt: string }) {

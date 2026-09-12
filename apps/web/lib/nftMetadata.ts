@@ -30,7 +30,7 @@ const PREVIEW_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 function previewCacheKey(metadataUri: string | null | undefined, mediaUri: string | null | undefined, gateway: string): string {
   const metadataKey = metadataUri || "none";
   const mediaKey = mediaUri || "none";
-  return `nftfactory:nft-preview:v1:${encodeURIComponent(gateway)}:${encodeURIComponent(metadataKey)}:${encodeURIComponent(mediaKey)}`;
+  return `nftfactory:nft-preview:v2:${encodeURIComponent(gateway)}:${encodeURIComponent(metadataKey)}:${encodeURIComponent(mediaKey)}`;
 }
 
 function getFallbackPreview(mediaUri: string | null): NftMetadataPreview {
@@ -76,7 +76,7 @@ function writeCachedPreview(metadataUri: string | null, mediaUri: string | null,
 export function ipfsToGatewayUrl(value: string | null | undefined, gateway: string): string | null {
   if (typeof value!=="string" || !value) return null;
   if (value.startsWith("ipfs://")) {
-    return `${gateway.replace(/\/$/, "")}/${value.replace(/^ipfs:\/\//, "")}`;
+    return `${gateway.replace(/\/$/, "")}/${value.replace(/^ipfs:\/\/(?:ipfs\/)?/, "")}`;
   }
   try {const url=new URL(value);return url.protocol==="https:"&&!url.username&&!url.password?url.href:null;}catch{return null;}
 }
