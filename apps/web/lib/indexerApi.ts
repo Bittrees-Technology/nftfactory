@@ -916,6 +916,7 @@ export async function syncMintedToken(payload: {
 }
 
 export async function linkProfileIdentity(payload: {
+  collectionOnly?: boolean;
   name: string;
   source: ApiProfileRecord["source"];
   ownerAddress: string;

@@ -2933,6 +2933,7 @@ describe("indexer consistency hardening", () => {
     });
     expect(collectionUpdateMany).toHaveBeenCalledWith({
       where: {
+        chainId: 11155111,
         contractAddress: "0x2222222222222222222222222222222222222222",
         ownerAddress: "0x1111111111111111111111111111111111111111"
       },
@@ -3110,6 +3111,7 @@ describe("indexer consistency hardening", () => {
     expect(response.status).toBe(200);
     expect(collectionUpdateMany).toHaveBeenCalledWith({
       where: {
+        chainId: 11155111,
         contractAddress: "0x2222222222222222222222222222222222222222",
         ownerAddress: "0x1111111111111111111111111111111111111111"
       },
@@ -3120,6 +3122,101 @@ describe("indexer consistency hardening", () => {
       fullName: "artist.nftfactory.eth",
       source: "nftfactory-subname"
     });
+  });
+  it("links collection names without creating a profile alias", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "nftfactory-indexer-link-nftfactory-"));
+    vi.stubEnv("INDEXER_PROFILE_FILE", path.join(tempDir, "profiles.json"));
+
+    const collectionFindMany = vi.fn(async () => [
+      {
+        contractAddress: "0x2222222222222222222222222222222222222222",
+        ownerAddress: "0x1111111111111111111111111111111111111111"
+      }
+    ]);
+    const collectionUpdateMany = vi.fn(async () => ({ count: 1 }));
+
+    const prisma = {
+      report: {
+        findMany: vi.fn(async () => []),
+        create: vi.fn(),
+        findUnique: vi.fn(),
+        update: vi.fn(),
+        count: vi.fn(async () => 0)
+      },
+      moderationAction: {
+        findMany: vi.fn(async () => []),
+        create: vi.fn()
+      },
+      listing: {
+        findMany: vi.fn(async () => []),
+        findUnique: vi.fn(async () => null),
+        upsert: vi.fn(),
+        updateMany: vi.fn(async () => ({ count: 0 })),
+        count: vi.fn(async () => 0)
+      },
+      collection: {
+        findMany: collectionFindMany,
+        updateMany: collectionUpdateMany,
+        upsert: vi.fn(async () => ({ id: "col_1" })),
+        count: vi.fn(async () => 0)
+      },
+      token: {
+        upsert: vi.fn(),
+        findMany: vi.fn(async () => []),
+        count: vi.fn(async () => 0)
+      },
+      $queryRawUnsafe: createSchemaQueryMock()
+    } as unknown as PrismaClient;
+
+    const createRequestHandler = await loadCreateRequestHandler();
+    const handler = createRequestHandler(
+      {
+        prisma,
+        getClientIpImpl: () => "127.0.0.1",
+        isRateLimitedImpl: () => false
+      },
+      {
+        chainId: 11155111,
+        rpcUrl: "http://127.0.0.1:8545",
+        adminToken: "",
+        adminAllowlist: new Set(),
+        trustProxy: false,
+        marketplaceAddress: null,
+        registryAddress: null,
+        moderatorRegistryAddress: null
+      }
+    );
+
+    const response = await runHandler(
+      handler,
+      createReq({
+        method: "POST",
+        url: "/api/profiles/link",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          collectionOnly: true,
+          name: "artist",
+          source: "nftfactory-subname",
+          ownerAddress: "0x1111111111111111111111111111111111111111",
+          routeSlug: "artist",
+          collectionAddress: "0x2222222222222222222222222222222222222222"
+        })
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(collectionUpdateMany).toHaveBeenCalledWith({
+      where: {
+        chainId: 11155111,
+        contractAddress: "0x2222222222222222222222222222222222222222",
+        ownerAddress: "0x1111111111111111111111111111111111111111"
+      },
+      data: { ensSubname: "artist" }
+    });
+    expect(response.body.profile).toBeUndefined();
+    expect(response.body.name).toBe("artist.nftfactory.eth");
+    const profiles = await runHandler(handler, createReq({method:"GET",url:"/api/profiles?owner=0x1111111111111111111111111111111111111111"}));
+    expect(profiles.body.profiles || []).toHaveLength(0);
   });
 });
 

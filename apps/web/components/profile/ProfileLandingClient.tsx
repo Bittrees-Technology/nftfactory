@@ -464,7 +464,7 @@ export default function ProfileLandingClient({
   async function linkCollectionName(){
     if(!address||!selectedCollection)return;
     setCollectionBusy(true);setCollectionMessage('Verify the name and confirm wallet sign-in if requested.');
-    try{await saveIdentity({name:collectionName.trim().toLowerCase(),source:collectionName.trim().split('.').length>2?'external-subname':'ens',ownerAddress:address,collectionAddress:selectedCollection});setCollectionMessage('Verified name linked to this collection. Your wallet creator page is unchanged.');}
+    try{await saveIdentity({name:collectionName.trim().toLowerCase(),source:collectionName.trim().split('.').length>2?'external-subname':'ens',ownerAddress:address,collectionAddress:selectedCollection,collectionOnly:true});setCollectionMessage('Verified name linked to this collection. Your wallet creator page is unchanged.');}
     catch(error){setCollectionMessage(error instanceof Error?error.message:'Collection linking failed.');}finally{setCollectionBusy(false);}
   }
   const explorerBase = getExplorerBaseUrl(config.chainId);

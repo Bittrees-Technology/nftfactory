@@ -86,6 +86,7 @@ type ModeratorRecord = {
 type ProfileLinkSource = "wallet" | "ens" | "external-subname" | "nftfactory-subname";
 
 type ProfileLinkPayload = {
+  collectionOnly?: boolean;
   design?: ProfileDesign;
   name: string;
   source: ProfileLinkSource;
@@ -7945,6 +7946,7 @@ async function handleRequest(
       return;
     }
 
+    if (payload.collectionOnly && !collectionAddress) { sendJson(res, 400, { error: "Select a collection." }); return; }
     if (collectionAddress) {
       const attachedCollection = await deps.prisma.collection.findMany({
         where: { chainId:config.chainId,contractAddress:collectionAddress },
@@ -7964,6 +7966,7 @@ async function handleRequest(
         where: { chainId: config.chainId, contractAddress: collectionAddress, ownerAddress },
         data: { ensSubname: collectionIdentity }
       });
+      if (payload.collectionOnly) { sendJson(res, 200, { ok: true, collectionAddress, name: normalized.fullName }); return; }
     }
 
     const now = new Date().toISOString();

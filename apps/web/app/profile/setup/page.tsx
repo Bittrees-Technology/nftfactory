@@ -5,7 +5,7 @@ import CreatorSetupClient from "../../../components/profile/CreatorSetupClient";
 import ProfileLandingClient from "../../../components/profile/ProfileLandingClient";
 
 function normalizeLabel(value: string): string {
-  return value.trim().toLowerCase().replace(/\.nftfactory\.eth$/, "");
+  return value.trim().toLowerCase();
 }
 
 export default async function ProfileSetupPage({
