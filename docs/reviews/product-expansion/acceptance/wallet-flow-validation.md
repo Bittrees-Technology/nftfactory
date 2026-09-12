@@ -17,7 +17,9 @@ Browser: Brave with Rabby; Sepolia; the existing B0B0 profile wallet.
 
 15 focused automated tests passed. Added regression coverage for session reuse and rejected signatures. No asset transaction or approval was submitted.
 
-## Open finding: overlapping sign-in and disconnect
+## Original finding: overlapping sign-in and disconnect
+
+Resolved by [wallet session hardening](./wallet-session-hardening.md), PR 39. The following records the pre-fix validation.
 
 `HeaderWalletButton.tsx` sends logout without awaiting its result, and `ensureWalletSession.ts` has no cancellation or identity-generation guard. A controlled client test confirmed the sequence GET session, POST challenge, DELETE logout, POST signature when a pending signer resolves after logout. The real server normally rejects that final request once the challenge cookie is cleared, so this test does not demonstrate live session recreation. However, an already in-flight verification response could arrive after logout and restore a session cookie. Logout request failures are also not surfaced.
 
