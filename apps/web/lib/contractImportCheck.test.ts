@@ -1,0 +1,11 @@
+import {it,expect,vi,beforeEach} from 'vitest';
+import {NextRequest} from 'next/server';
+const {client}=vi.hoisted(()=>({client:{getChainId:vi.fn(),getCode:vi.fn(),readContract:vi.fn()}}));
+vi.mock('viem',async original=>({...await original<typeof import('viem')>(),createPublicClient:()=>client}));
+vi.mock('./requestRateLimit',()=>({rateLimitRequest:()=>null}));
+import {GET} from '../app/api/artwork/contract-check/route';
+const wallet='0x'+'1'.repeat(40),contract='0x'+'2'.repeat(40);
+beforeEach(()=>{vi.clearAllMocks();vi.stubEnv('ETHERSCAN_API_KEY','');client.getChainId.mockResolvedValue(1);client.getCode.mockResolvedValue('0x1234');});
+it('reports contract roles as evidence without granting import authority',async()=>{client.readContract.mockImplementation(async({functionName})=>functionName==='owner'?wallet:functionName==='name'?'Studio':true);const response=await GET(new NextRequest(`https://nftfactory.org/api/artwork/contract-check?chainId=1&contract=${contract}&wallet=${wallet}`));const result=await response.json();expect(result.matches).toEqual(['Current contract owner','Default administrator role','MINTER_ROLE']);expect(result.notice).toContain('not authorship');expect(result).not.toHaveProperty('authorized');});
+it('reports unsupported role interfaces as unknown rather than ownership',async()=>{client.readContract.mockRejectedValue(Error('Unsupported'));const result=await(await GET(new NextRequest(`https://nftfactory.org/api/artwork/contract-check?chainId=1&contract=${contract}&wallet=${wallet}`))).json();expect(result.matches).toEqual([]);});
+it('rejects invalid contract input before using an RPC',async()=>{expect((await GET(new NextRequest('https://nftfactory.org/api/artwork/contract-check?contract=bad'))).status).toBe(400);expect(client.getChainId).not.toHaveBeenCalled();});

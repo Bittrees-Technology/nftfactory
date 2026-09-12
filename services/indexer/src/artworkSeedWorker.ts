@@ -1,4 +1,5 @@
 import {readdir,readFile,writeFile,rename,mkdir} from 'node:fs/promises';
+import {recoverMetadata} from '../../../packages/profile/metadata-fallback.mjs';
 import {PrismaClient} from '@prisma/client';
 import {fetchSeedContent} from './seedFetch.js';
 const directory=process.env.NFTFACTORY_SEED_QUEUE_DIR||'/var/lib/nftfactory-indexer/ipfs-seed';
@@ -8,14 +9,20 @@ async function hotAvailable(){try{const r=await fetch('http://127.0.0.1:5001/api
 async function main(){await mkdir(directory,{recursive:true,mode:0o700});await mkdir(`${directory}/done`,{recursive:true,mode:0o700});const names=(await readdir(directory)).filter(n=>/^[a-f0-9]{64}\.json$/.test(n));let processed=0;
  let budget={day:new Date().toISOString().slice(0,10),reserved:0};try{const saved=JSON.parse(await readFile(`${directory}/budget.json`,'utf8'));if(saved.day===budget.day)budget=saved;}catch{}
  for(const name of names){const path=`${directory}/${name}`;const job=JSON.parse(await readFile(path,'utf8'));if(job.retryAt>Date.now())continue;if(processed++>=10)break;
-  if(budget.reserved+33*1024*1024>256*1024*1024)break;budget.reserved+=33*1024*1024;await writeFile(`${directory}/budget.json`,JSON.stringify(budget),{mode:0o600});
-  try{const metadata=await fetchSeedContent(job.metadataUri,1024*1024);const parsed=JSON.parse(metadata.toString());const image=typeof parsed.image==='string'?parsed.image:typeof parsed.image_url==='string'?parsed.image_url:null;
+  if(budget.reserved+35*1024*1024>256*1024*1024)break;budget.reserved+=35*1024*1024;await writeFile(`${directory}/budget.json`,JSON.stringify(budget),{mode:0o600});
+  try{let metadata:Buffer;let metadataSource='original';
+   try{metadata=await fetchSeedContent(job.metadataUri,1024*1024);}catch{
+    const token=await prisma.token.findUnique({where:{id:job.tokenRefId},select:{tokenId:true,collection:{select:{chainId:true,contractAddress:true}}}});if(!token)throw Error('Imported token unavailable');
+    const recovered=await recoverMetadata(token.collection.chainId,token.collection.contractAddress,token.tokenId,{openSeaKey:process.env.OPENSEA_API_KEY});if(!recovered)throw Error('Metadata unavailable');
+    metadataSource=recovered.source;metadata=Buffer.from(JSON.stringify({name:recovered.name,description:recovered.description,image:recovered.imageUrl,animation_url:recovered.audioUrl,recovery:{source:recovered.source,url:recovered.sourceUrl,originalUri:job.metadataUri}}));
+   }
+   const parsed=JSON.parse(metadata.toString());const image=typeof parsed.image==='string'?parsed.image:typeof parsed.image_url==='string'?parsed.image_url:null;
    const metadataCid=await add('http://127.0.0.1:5002',metadata);let mediaCid:string|null=null;
    if(image){const media=await fetchSeedContent(image,16*1024*1024);mediaCid=await add('http://127.0.0.1:5002',media);if(await hotAvailable())await add('http://127.0.0.1:5001',media);}
    let animationCid:string|null=null;if(typeof parsed.animation_url==='string'){const animation=await fetchSeedContent(parsed.animation_url,16*1024*1024);animationCid=await add('http://127.0.0.1:5002',animation);if(await hotAvailable())await add('http://127.0.0.1:5001',animation);}
    if(await hotAvailable())await add('http://127.0.0.1:5001',metadata);
    if(mediaCid)await prisma.token.updateMany({where:{id:job.tokenRefId,metadataCid:job.metadataUri,mediaCid:null},data:{mediaCid:`ipfs://${mediaCid}`}});
-   await writeFile(path,JSON.stringify({...job,status:'seeded',metadataCopy:`ipfs://${metadataCid}`,mediaCopy:mediaCid?`ipfs://${mediaCid}`:null,animationCopy:animationCid?`ipfs://${animationCid}`:null,finishedAt:Date.now()}),{mode:0o600});await rename(path,`${directory}/done/${name}`);
+   await writeFile(path,JSON.stringify({...job,status:'seeded',metadataSource,metadataCopy:`ipfs://${metadataCid}`,mediaCopy:mediaCid?`ipfs://${mediaCid}`:null,animationCopy:animationCid?`ipfs://${animationCid}`:null,finishedAt:Date.now()}),{mode:0o600});await rename(path,`${directory}/done/${name}`);
   }catch{job.attempts=(job.attempts||0)+1;job.retryAt=Date.now()+Math.min(86400000,60000*2**Math.min(job.attempts,10));job.status='retry';await writeFile(path,JSON.stringify(job),{mode:0o600});}
  }
 }
