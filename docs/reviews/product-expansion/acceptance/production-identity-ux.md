@@ -17,3 +17,8 @@ Typecheck passed; 289 tests passed across 72 files. Focused late-response and ch
 
 ## Limits
 ENS inventory does not enumerate unwrapped subnames. Indexing may lag transfers. Live wallet signature acceptance is not repeated in this release; previous signed link acceptance remains separate. Collection network is still the configured Sepolia testnet. No paid service was introduced.
+
+## Production release acceptance
+PRs #42 and #43 merged into main (final functional merge dc35b11). Final Vercel deployment dpl_941YZwotF6wndDi2TnX7Bh6J7JAv promoted to nftfactory.org. GitHub run 34681157635 passed all checks: 290 web tests, 93 indexer tests, and the Solidity check. Production deploy health returned ok=true.
+
+Live Brave acceptance: B0B0 wallet automatically discovered bobofbuilding.eth; mainnet address verification passed; the page recognized the stored link, showed a disabled “Name linked” button and an active /profile/eth.bobofbuilding share link. No signature or profile mutation was performed. Returning-user state has a regression test. Desktop width 1440/document 1425; phone width 390/document 375; all rendered form fields had labels.
