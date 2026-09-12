@@ -3974,3 +3974,10 @@ nav.breadcrumb { flex-direction:row; align-items:center; justify-content:flex-st
 .marketplaceFilters { display:grid; grid-template-columns:minmax(150px,220px) minmax(0,1fr); gap:16px; margin:20px 0; }
 .marketplaceFilters input, .marketplaceFilters select { width:100%; }
 @media(max-width:600px) { .marketplaceFilters { grid-template-columns:1fr; } }
+
+/* The profile editor and its preview each use the full workspace width. */
+.createLayout.profileSetupLayout { grid-template-columns: minmax(0, 1fr); }
+.profileSetupLayout > *, .profileSetupLayout fieldset { min-width: 0; }
+.profileSetupLayout input:not([type="checkbox"]),
+.profileSetupLayout textarea, .profileSetupLayout select { width: 100%; max-width: 100%; box-sizing: border-box; }
+.profileSetupLayout textarea { resize: vertical; }
