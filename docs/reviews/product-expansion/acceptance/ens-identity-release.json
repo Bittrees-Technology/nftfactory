@@ -1,0 +1,34 @@
+{
+  "date": "2026-09-12",
+  "scope": "ENS identity setup and collection-name separation",
+  "pullRequests": [
+    37,
+    38
+  ],
+  "indexerSource": "8cd235018df279d75aba0335fd33d22860212504",
+  "checks": {
+    "webTests": 269,
+    "indexerTests": 93,
+    "webTypecheck": "passed",
+    "indexerCI": "passed",
+    "solidityCI": "passed",
+    "existingEnsMainnetResolution": "expected wallet confirmed locally, on Acer using ethereum.publicnode.com, and on staged and live web endpoints",
+    "liveSignedIdentityWrite": "passed through wallet-enabled browser using existing valid session; no new registration transaction",
+    "publicAliasConnected": "passed",
+    "publicAliasDisconnected": "passed; existing creator content preserved",
+    "profileRouteLink": "clickable and verified",
+    "collectionOnlyIsolation": "backend regression passed; no profile alias returned or created",
+    "desktop1440": "document width 1425; no horizontal overflow",
+    "narrow319": "document width 304; no horizontal overflow",
+    "finalCI": "all three checks passed on PR 38",
+    "registrationDraftRecovery": "Live final release retained restored label, linked existing name successfully, then reloaded with connected wallet: existing-name mode and no pending commit or Complete registration controls."
+  },
+  "limitations": [
+    "No new paid ENS registration was submitted during this acceptance run.",
+    "Collection-name separation verified with regression tests; no user collection was renamed."
+  ],
+  "providerRepair": "Acer DNS failed for ethereum-rpc.publicnode.com. ethereum.publicnode.com resolved the test name; configuration installer was provided. Subsequent live signed profile linking succeeded.",
+  "webSourceMerged": "9039a20a42ad0302234c8ab99871a124bbaa0104",
+  "deployment": "dpl_HsqFSprhN6g5XuMMgGRr4qdK6B4B",
+  "production": "https://nftfactory.org"
+}
