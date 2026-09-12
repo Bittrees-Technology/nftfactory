@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import ExistingEnsNameField from "./ExistingEnsNameField";
 import {linkCreatorIdentity,verifyCreatorName} from "../../lib/linkCreatorIdentity";
 import { useAccount, useChainId, usePublicClient, useWalletClient } from "wagmi";
 import { encodeFunctionData, formatEther, keccak256, stringToBytes } from "viem";
@@ -1468,19 +1469,18 @@ export default function ProfileLandingClient({
                 )
               }
             >
-              <optgroup label="Create New">
-                <option value="nftfactory-subname" disabled>Legacy handle registration unavailable</option>
-                <option value="register-eth">Register .eth</option>
-                <option value="register-eth-subname">Register .eth subname</option>
+              <optgroup label="Link a name you have">
+                <option value="ens">Link an existing .eth name</option>
+                <option value="external-subname">Link an existing subname</option>
               </optgroup>
-              <optgroup label="Link Existing">
-                <option value="ens">Link my existing .eth</option>
-                <option value="external-subname">Link existing ENS subname</option>
+              <optgroup label="Register a new name">
+                <option value="register-eth">Register a .eth name</option>
+                <option value="register-eth-subname">Create a subname</option>
               </optgroup>
             </select>
           </label>
-          <label className="profileIdentityControlCenter">
-            {identityLabel}
+          <div className="profileIdentityControlCenter">
+            {identityMode !== "ens" && identityMode !== "external-subname" && identityMode !== "register-eth-subname" && <label htmlFor="profile-identity-name">{identityLabel}</label>}
             {identityMode === "register-eth-subname" ? (
               <>
                 <div className="gridMini">
@@ -1518,14 +1518,14 @@ export default function ProfileLandingClient({
             ) : (
               <>
                 {identityMode === "ens" || identityMode === "external-subname" ? (
-                  <><input value={identityName} onChange={e=>setIdentityName(e.target.value)} placeholder={identityMode==='ens'?'artist.eth':'studio.artist.eth'} list="existing-profile-names"/><datalist id="existing-profile-names">{(identityMode==='ens'?existingEnsOptions:existingSubnameOptions).map(candidate=><option key={candidate} value={candidate}/>)}</datalist></>
+                  <ExistingEnsNameField key={identityMode} value={identityName} onChange={setIdentityName} options={identityMode === 'ens' ? existingEnsOptions : existingSubnameOptions} subname={identityMode === 'external-subname'}/>
                 ) : (
-                  <input value={identityName} onChange={(e) => setIdentityName(e.target.value)} />
+                  <input id="profile-identity-name" value={identityName} onChange={(e) => setIdentityName(e.target.value)} />
                 )}
 
               </>
             )}
-          </label>
+          </div>
           <div className="profileIdentityControlRight">
             <span className="detailLabel">{checkedIdentityReady ? "Next action" : "Name check"}</span>
             <button

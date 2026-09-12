@@ -3981,3 +3981,10 @@ nav.breadcrumb { flex-direction:row; align-items:center; justify-content:flex-st
 .profileSetupLayout input:not([type="checkbox"]),
 .profileSetupLayout textarea, .profileSetupLayout select { width: 100%; max-width: 100%; box-sizing: border-box; }
 .profileSetupLayout textarea { resize: vertical; }
+
+.existingEnsNameField { display: grid; gap: 10px; min-width: 0; }
+.existingEnsNameField label { display: grid; gap: 8px; min-width: 0; }
+.existingEnsNameField :is(select, input) { width: 100%; min-width: 0; }
+.existingEnsNameField .hint { margin: 0; font-size: 0.85rem; }
+.profileIdentityControlCenter { display: grid; gap: 8px; align-self: start; }
+.profileIdentityControlRight { align-self: start; }
