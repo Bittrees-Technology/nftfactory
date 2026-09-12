@@ -1,3 +1,4 @@
+import {discoverCollectionArtwork} from './collectionImport.js';
 import {discoverOwnedArtwork} from './artworkDiscovery.js';
 import {AsyncLocalStorage} from 'node:async_hooks';
 import {importNetwork,isArtworkNetworkPath} from '../../../packages/profile/import-networks.mjs';
@@ -6157,7 +6158,7 @@ async function handleRequest(
     if (deps.isRateLimitedImpl(deps.getClientIpImpl(req,config.trustProxy))) {sendJson(res,429,{error:"Too many requests. Please retry shortly."});return;}
     try {
       if(path === "/api/artwork/tags/search" && req.method === "GET") {sendJson(res,200,await searchOwnArtworkTags(deps.prisma,config.chainId,session!.address,url.searchParams.get("q")||"",url.searchParams.get("cursor")||undefined));return;}
-      if(path === "/api/imports" && req.method === "POST") {const body=await readJsonBody<{discover?:boolean;contractAddress?:unknown;cursor?:unknown;tokenIds?:unknown;preview?:boolean}>(req);sendJson(res,200,body.discover===true?await discoverOwnedArtwork(config.chainId,session!.address,String(body.contractAddress||""),body.cursor):await importArtwork(deps.prisma,createRpcClient(config),config.chainId,session!.address as `0x${string}`,body));return;}
+      if(path === "/api/imports" && req.method === "POST") {const body=await readJsonBody<{mode?:unknown;discover?:boolean;contractAddress?:unknown;cursor?:unknown;tokenIds?:unknown;preview?:boolean}>(req);sendJson(res,200,body.discover===true&&body.mode==='collection'?await discoverCollectionArtwork(createRpcClient(config),config.chainId,session!.address as `0x${string}`,String(body.contractAddress||''),body.cursor):body.discover===true?await discoverOwnedArtwork(config.chainId,session!.address,String(body.contractAddress||""),body.cursor):await importArtwork(deps.prisma,createRpcClient(config),config.chainId,session!.address as `0x${string}`,body));return;}
       const parts=path.split("/");
       if(req.method === "GET" && path !== "/api/imports") {sendJson(res,200,await readArtworkTags(deps.prisma,config.chainId,parts[3],parts[4],session?.address));return;}
       if(req.method === "POST" && path !== "/api/imports") {const client=createRpcClient(config);if(await client.getChainId()!==config.chainId)throw new Error('The configured RPC returned the wrong network.');sendJson(res,200,await saveArtworkTags(deps.prisma,client,config.chainId,parts[3],parts[4],session!.address as `0x${string}`,await readJsonBody(req)));return;}
@@ -8778,7 +8779,7 @@ async function handleRequest(
       return;
     }
 
-    await withSoftTimeout(syncOwnerCollectionsIfAllowed(owner, deps, config), 3_500, undefined);
+    if(!artworkChainScope.getStore())await withSoftTimeout(syncOwnerCollectionsIfAllowed(owner, deps, config), 3_500, undefined);
 
     const includeListingV2 = await hasListingV2Columns(deps);
     const dbCollections = await deps.prisma.collection.findMany({
@@ -8807,7 +8808,7 @@ async function handleRequest(
 
     let registryCollections: RegistryCreatorContractRecord[] = [];
     try {
-      registryCollections = await getCachedOwnerCollectionsFromRegistry(owner, config);
+      if(!artworkChainScope.getStore())registryCollections = await getCachedOwnerCollectionsFromRegistry(owner, config);
     } catch (err) {
       log.warn({ err, ownerAddress: owner }, "owner_collection_registry_read_failed");
     }

@@ -1,0 +1,13 @@
+'use client';
+import {useEffect,useState,useRef} from 'react';
+type Item={contract:string;name:string;source:string};
+type Page={items:Item[];nextCursor:string|null;note?:string;error?:string};
+export default function CollectionSuggestions({address,chainId,onSelect,disabled}:{address?:string;chainId:number;onSelect:(contract:string)=>void;disabled:boolean}){
+ const [pages,setPages]=useState<Record<string,Page>>({});const [loading,setLoading]=useState<string[]>([]);const generation=useRef(0);
+ async function load(source:string,cursor?:string,gen=generation.current){if(!address)return;setLoading(old=>[...old,source]);try{const q=new URLSearchParams({wallet:address,chainId:String(chainId),source,...cursor?{cursor}:{}});const r=await fetch(`/api/artwork/suggestions?${q}`,{signal:AbortSignal.timeout(20000)});const data=await r.json();if(gen!==generation.current)return;
+ setPages(old=>({...old,[source]:{...data,items:[...new Map([...(cursor?old[source]?.items||[]:[]),...data.items||[]].map((v:Item)=>[v.contract,v])).values()]}}));
+ }catch{if(gen===generation.current)setPages(old=>({...old,[source]:{items:old[source]?.items||[],nextCursor:cursor||null,error:'Could not load suggestions. Retry or paste a contract.'}}));}finally{if(gen===generation.current)setLoading(old=>old.filter(v=>v!==source));}}
+ useEffect(()=>{const gen=++generation.current;setPages({});setLoading([]);if(address){void load('holdings',undefined,gen);void load('deployments',undefined,gen);}return()=>{generation.current++;};},[address,chainId]);
+ if(!address)return null;
+ return <details><summary>Suggested contracts {loading.length?'— loading…':''}</summary><p>Choose a known collection to fill its address. Suggestions do not grant authority.</p>{['holdings','deployments'].map(source=><section key={source}><h3>{source==='holdings'?'From your NFTs':'From your deployments'}</h3><p className="hint">{pages[source]?.note}</p><label>Choose a suggested contract<select value="" disabled={disabled||!pages[source]?.items.length} onChange={e=>{if(e.target.value)onSelect(e.target.value);}}><option value="">Select a collection…</option>{pages[source]?.items.map(item=><option key={item.contract} value={item.contract}>{item.name} · {item.contract.slice(0,6)}…{item.contract.slice(-4)}</option>)}</select></label>{pages[source]?.error&&<p role="status">{pages[source].error}</p>}{(pages[source]?.nextCursor||pages[source]?.error)&&<button type="button" className="secondary" disabled={disabled||loading.includes(source)} onClick={()=>void load(source,pages[source].nextCursor||undefined)}>{pages[source]?.error?'Retry suggestions':'Load more'}</button>}</section>)}</details>;
+}

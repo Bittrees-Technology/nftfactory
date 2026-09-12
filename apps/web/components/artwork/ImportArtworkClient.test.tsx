@@ -9,18 +9,20 @@ import ImportArtworkClient from './ImportArtworkClient';
 afterEach(()=>{cleanup();localStorage.clear();account.address=undefined;account.status='disconnected';});
 it('offers mainnet imports without mint deployments or a connected wallet',()=>{
  render(<ImportArtworkClient/>);
- expect(screen.getAllByRole('option').map(n=>n.textContent)).toEqual(['Ethereum mainnet','Base','Robinhood Chain','Sepolia (testnet)']);
- expect((screen.getByRole('combobox') as HTMLSelectElement).value).toBe('1');
+ expect(Array.from((screen.getByLabelText('Network') as HTMLSelectElement).options).map(n=>n.textContent)).toEqual(['Ethereum mainnet','Base','Robinhood Chain','Sepolia (testnet)']);
+ expect((screen.getByLabelText('Network') as HTMLSelectElement).value).toBe('1');
  expect((screen.getByRole('button',{name:'Find and preview my artwork'}) as HTMLButtonElement).disabled).toBe(true);
 });
 
 it('restores partially entered values after remount and clears only on request',()=>{
  const first=render(<ImportArtworkClient/>);
  fireEvent.change(screen.getByLabelText('Network'),{target:{value:'8453'}});
+ fireEvent.change(screen.getByLabelText('What are you importing?'),{target:{value:'collection'}});
  fireEvent.change(screen.getByLabelText('Collection contract'),{target:{value:'0x123'}});
  fireEvent.change(screen.getByLabelText('Token IDs (optional)'),{target:{value:'1, 2,'}});
  first.unmount();render(<ImportArtworkClient/>);
  expect((screen.getByLabelText('Network') as HTMLSelectElement).value).toBe('8453');
+ expect((screen.getByLabelText('What are you importing?') as HTMLSelectElement).value).toBe('collection');
  expect((screen.getByLabelText('Collection contract') as HTMLInputElement).value).toBe('0x123');
  expect((screen.getByLabelText('Token IDs (optional)') as HTMLTextAreaElement).value).toBe('1, 2,');
  expect(screen.queryByText('Import verified artwork')).toBeNull();

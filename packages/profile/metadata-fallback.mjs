@@ -1,10 +1,10 @@
 const origins={1:'https://eth.blockscout.com',8453:'https://base.blockscout.com',4663:'https://robinhoodchain.blockscout.com',11155111:'https://eth-sepolia.blockscout.com'};
 const chains={1:'ethereum',8453:'base',11155111:'sepolia'};
-export async function boundedProviderJson(url,headers={},fetcher=fetch){
+export async function boundedProviderJson(url,headers={},fetcher=fetch,maxBytes=524288){
  const response=await fetcher(url,{headers:{'User-Agent':'NFTFactory/1.0',...headers},redirect:'error',signal:AbortSignal.timeout(8000)});
  if(!response.ok||!response.body)throw Error('Provider unavailable');
  const reader=response.body.getReader();const parts=[];let size=0;
- try{for(;;){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>524288)throw Error('Provider response too large');parts.push(value);}}finally{await reader.cancel();}
+ try{for(;;){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>maxBytes)throw Error('Provider response too large');parts.push(value);}}finally{await reader.cancel();}
  const bytes=new Uint8Array(size);let offset=0;for(const part of parts){bytes.set(part,offset);offset+=part.length;}return JSON.parse(new TextDecoder().decode(bytes));
 }
 export function safeMetadataLink(value){if(typeof value!=='string'||value.length>4096)return null;if(/^ipfs:\/\/(?:ipfs\/)?[a-zA-Z0-9]{32,120}(?:\/[^?#]*)?$/.test(value))return value;try{const u=new URL(value);return u.protocol==='https:'&&!u.username&&!u.password?u.href:null;}catch{return null;}}

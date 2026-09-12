@@ -1,3 +1,4 @@
+import {verifyCollectionAuthority,verifyCollectionAsset} from './collectionImport.js';
 import {queueArtworkSeed} from './artworkSeedQueue.js';
 import {BaseError,parseAbi,zeroAddress,type Address,type PublicClient} from 'viem';
 import type {PrismaClient} from '@prisma/client';
@@ -43,25 +44,31 @@ export async function readArtworkTags(prisma:PrismaClient,chainId:number,address
  const rows=await prisma.tokenTag.findMany({where:{token:{tokenId:asset.id,collection:{chainId,contractAddress:asset.contract}},OR:[{private:false},...(owner?[{addedByAddress:owner.toLowerCase()}]:[])]},include:{tag:{select:{label:true}}},take:200,orderBy:{createdAt:'desc'}});
  return {tags:rows.map(row=>({label:row.tag.label,author:row.addedByAddress,private:row.private}))};
 }
-export async function importArtwork(prisma:PrismaClient,client:Pick<PublicClient,'readContract'|'getChainId'>,chainId:number,owner:Address,body:{contractAddress?:unknown;tokenIds?:unknown;preview?:boolean}){
+export async function importArtwork(prisma:PrismaClient,client:Pick<PublicClient,'readContract'|'getChainId'>,chainId:number,owner:Address,body:{contractAddress?:unknown;tokenIds?:unknown;preview?:boolean;mode?:unknown}){
  let actualChain:number;
  try{actualChain=await client.getChainId();}catch{throw new Error('The network connection is temporarily unavailable. Your entries are saved. Please try previewing again shortly.');}
  if(actualChain!==chainId)throw new Error('The configured RPC returned the wrong network.');
  if(!Array.isArray(body.tokenIds)||!body.tokenIds.length||body.tokenIds.length>10)throw new Error('Import 1–10 token IDs at a time.');
  const assets=[...new Set(body.tokenIds.map(String))].map(id=>assetInput(body.contractAddress,id));
+ if(body.mode!==undefined&&!['collected','collection'].includes(String(body.mode)))throw Error('Invalid import mode.');
+ const collectionMode=body.mode==='collection';
  const results=[];
  for(const asset of assets){
   try{
-   const {standard,quantity}=await verifyOwnedAsset(client,asset.contract,asset.id,owner);
+   if(collectionMode)await verifyCollectionAuthority(client,chainId,asset.contract,owner);
+   const verified=collectionMode?await verifyCollectionAsset(client,asset.contract,asset.id,owner):{...await verifyOwnedAsset(client,asset.contract,asset.id,owner),actualOwner:owner};
+   const {standard,quantity,actualOwner}=verified;
    let uri=await client.readContract({address:asset.contract,abi,functionName:standard==='ERC721'?'tokenURI':'uri',args:[BigInt(asset.id)]});
    uri=String(uri).replaceAll('{id}',BigInt(asset.id).toString(16).padStart(64,'0'));
    if(uri.length>4096||! /^(ipfs:\/\/|https:\/\/)/i.test(uri))throw new Error('Only IPFS or HTTPS metadata is supported.');
-   if(body.preview===true){results.push({tokenId:asset.id,ok:true,metadataUri:uri,standard,quantityRaw:quantity.toString(),preview:true});continue;}
+   if(body.preview===true){results.push({tokenId:asset.id,ok:true,metadataUri:uri,standard,quantityRaw:quantity.toString(),ownerAddress:actualOwner,scope:collectionMode?'collection':'collected',preview:true});continue;}
    let controller:Address=zeroAddress;try{controller=await client.readContract({address:asset.contract,abi,functionName:'owner'});}catch{/* Collection administration remains unknown. */}
-   const collection=await prisma.collection.upsert({where:{chainId_contractAddress:{chainId,contractAddress:asset.contract}},create:{chainId,contractAddress:asset.contract,ownerAddress:controller.toLowerCase(),standard,isFactoryCreated:false,isUpgradeable:true},update:{}});
-   const token=await prisma.token.upsert({where:{collectionId_tokenId:{collectionId:collection.id,tokenId:asset.id}},create:{collectionId:collection.id,tokenId:asset.id,ownerAddress:owner.toLowerCase(),creatorAddress:zeroAddress,metadataCid:uri,immutable:false},update:{...(standard==='ERC721'?{ownerAddress:owner.toLowerCase()}:{}),metadataCid:uri}});
-   await prisma.tokenHolding.upsert({where:{tokenId_ownerAddress:{tokenId:token.id,ownerAddress:owner.toLowerCase()}},create:{tokenId:token.id,ownerAddress:owner.toLowerCase(),quantityRaw:quantity.toString()},update:{quantityRaw:quantity.toString()}});
-   if(standard==='ERC721')await prisma.tokenHolding.updateMany({where:{tokenId:token.id,ownerAddress:{not:owner.toLowerCase()}},data:{quantityRaw:'0'}});
+   if(collectionMode)await verifyCollectionAuthority(client,chainId,asset.contract,owner);
+   const collection=await prisma.collection.upsert({where:{chainId_contractAddress:{chainId,contractAddress:asset.contract}},create:{chainId,contractAddress:asset.contract,ownerAddress:controller.toLowerCase(),standard,isFactoryCreated:false,isUpgradeable:true},update:collectionMode?{ownerAddress:controller.toLowerCase()}:{}});
+   const token=await prisma.token.upsert({where:{collectionId_tokenId:{collectionId:collection.id,tokenId:asset.id}},create:{collectionId:collection.id,tokenId:asset.id,ownerAddress:actualOwner.toLowerCase(),creatorAddress:zeroAddress,metadataCid:uri,immutable:false},update:{...(standard==='ERC721'?{ownerAddress:actualOwner.toLowerCase()}:{}),metadataCid:uri}});
+   const holdingOwner=standard==='ERC721'?actualOwner:owner;
+   if(quantity>0n)await prisma.tokenHolding.upsert({where:{tokenId_ownerAddress:{tokenId:token.id,ownerAddress:holdingOwner.toLowerCase()}},create:{tokenId:token.id,ownerAddress:holdingOwner.toLowerCase(),quantityRaw:quantity.toString()},update:{quantityRaw:quantity.toString()}});
+   if(standard==='ERC721')await prisma.tokenHolding.updateMany({where:{tokenId:token.id,ownerAddress:{not:holdingOwner.toLowerCase()}},data:{quantityRaw:'0'}});
    let storage='unavailable';try{storage=await queueArtworkSeed(token.id,uri);}catch{/* Import stays valid; storage can be retried. */}
    results.push({tokenId:asset.id,ok:true,storage});
   }catch(error){results.push({tokenId:asset.id,ok:false,error:error instanceof BaseError?'Unable to verify this NFT on the network right now. Check the contract and token ID, then retry.':error instanceof Error?error.message:'Import unavailable.'});}

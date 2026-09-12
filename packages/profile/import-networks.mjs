@@ -10,7 +10,8 @@ export function importNetwork(id) {
   return network;
 }
 export function isArtworkNetworkPath(path, method, readOnly) {
-  return /^\/api\/artwork\/[^/]+\/[^/]+\/tags$/.test(path) && ['GET','POST'].includes(method)
+  return path==='/api/collections' && method==='GET' && readOnly==='1'
+    || /^\/api\/artwork\/[^/]+\/[^/]+\/tags$/.test(path) && ['GET','POST'].includes(method)
     || path==='/api/imports' && method==='POST'
     || /^\/api\/users\/[^/]+\/holdings$/.test(path) && method==='GET'
     || /^\/api\/collections\/[^/]+\/tokens$/.test(path) && method==='GET' && readOnly==='1';
