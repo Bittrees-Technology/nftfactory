@@ -1,3 +1,4 @@
+import {IMPORT_NETWORKS} from '../../../packages/profile/import-networks.mjs';
 import { defineChain, type Chain } from "viem";
 import {
   avalanche,
@@ -203,3 +204,5 @@ export function getAppChain(chainId: number) {
 export function getExplorerBaseUrl(chainId: number): string | null {
   return getAppChain(chainId).blockExplorers?.default?.url || null;
 }
+
+export function getReadableAppChainIds(): number[] { return [...new Set([...getEnabledAppChainIds(), ...IMPORT_NETWORKS.map(n=>n.id)])]; }

@@ -1,5 +1,5 @@
 import {afterEach,describe,expect,it,vi} from 'vitest';
-vi.mock('./chains',()=>({getEnabledAppChainIds:()=>[11155111],getAppChain:()=>({name:'Sepolia'})}));
+vi.mock('./chains',()=>({getEnabledAppChainIds:()=>[11155111],getReadableAppChainIds:()=>[1,8453,4663,11155111],getAppChain:()=>({name:'Sepolia'})}));
 vi.mock('./indexerApi',()=>({getIndexerBaseUrl:()=> 'https://indexer.example'}));
 import {plainText,publicCreatorRecord,validPublicTokens,getPublicCreator,getPublicArtwork,artworkMetadata,creatorMetadata,publicCreatorSitemapPaths} from './publicSeo';
 const address='0x'+'1'.repeat(40);
@@ -28,7 +28,7 @@ describe('public SEO boundaries',()=>{
  it('uses configured read-only URLs and fails closed on outages',async()=>{
   const fetcher=vi.fn().mockResolvedValue({ok:true,json:async()=>({contractAddress:address,tokens:[token]})});vi.stubGlobal('fetch',fetcher);
   await getPublicArtwork(11155111,address,'0');
-  expect(fetcher.mock.calls[0][0]).toBe(`https://indexer.example/api/collections/${address}/tokens?readOnly=1&tokenId=0`);
+  expect(fetcher.mock.calls[0][0]).toBe(`https://indexer.example/api/collections/${address}/tokens?readOnly=1&assetChainId=11155111&tokenId=0`);
   expect(fetcher.mock.calls[0][1]).toMatchObject({cache:'no-store',redirect:'error'});
   fetcher.mockRejectedValue(new Error('offline'));expect(await getPublicCreator(address)).toBeNull();
  });

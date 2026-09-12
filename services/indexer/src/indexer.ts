@@ -1,3 +1,6 @@
+import {AsyncLocalStorage} from 'node:async_hooks';
+import {importNetwork,isArtworkNetworkPath} from '../../../packages/profile/import-networks.mjs';
+const artworkChainScope=new AsyncLocalStorage<number>();
 import {resolveProfileEns} from "../../../packages/profile/resolve-ens.mjs";
 import {importArtwork,readArtworkTags,saveArtworkTags,searchOwnArtworkTags} from "./artwork.js";
 import {chainWhere} from "./chainScope.js";
@@ -426,7 +429,7 @@ function createPrismaClient(): PrismaClient {
     return new PrismaClient().$extends({query:{$allModels:{$allOperations({model,operation,args,query}) {
       if (['findMany','findFirst','findUnique','count','aggregate','updateMany','deleteMany','update','delete','upsert'].includes(operation)) {
         const input=args as unknown as {where?:Record<string,unknown>};
-        input.where=chainWhere(model,input.where,CHAIN_ID);
+        input.where=chainWhere(model,input.where,artworkChainScope.getStore() ?? CHAIN_ID);
       }
       return query(args);
     }}}}) as unknown as PrismaClient;
@@ -469,6 +472,7 @@ function isGuestbookPostRateLimited(params: { slug: string; ip: string; authorAd
 
 class BadRequestError extends Error {}
 type RequestHandlerConfig = {
+  authChainId?: number;
   chainId: number;
   rpcUrl: string;
   rpcUrls?: string[];
@@ -6146,7 +6150,7 @@ async function handleRequest(
 
   if (path === "/api/imports" || path === "/api/artwork/tags/search" || /^\/api\/artwork\/[^/]+\/[^/]+\/tags$/.test(path)) {
     res.setHeader("Cache-Control", "private, no-store");
-    const session=readChainSession(parseBearerToken(req.headers.authorization), process.env.SESSION_SECRET, config.chainId);
+    const session=readChainSession(parseBearerToken(req.headers.authorization), process.env.SESSION_SECRET, config.authChainId ?? config.chainId);
     if((req.method !== "GET" || path === "/api/artwork/tags/search") && !session){sendJson(res,401,{error:"Sign in with the wallet that owns this artwork."});return;}
     if (deps.isRateLimitedImpl(deps.getClientIpImpl(req,config.trustProxy))) {sendJson(res,429,{error:"Too many requests. Please retry shortly."});return;}
     try {
@@ -6154,7 +6158,7 @@ async function handleRequest(
       if(path === "/api/imports" && req.method === "POST") {sendJson(res,200,await importArtwork(deps.prisma,createRpcClient(config),config.chainId,session!.address as `0x${string}`,await readJsonBody(req)));return;}
       const parts=path.split("/");
       if(req.method === "GET" && path !== "/api/imports") {sendJson(res,200,await readArtworkTags(deps.prisma,config.chainId,parts[3],parts[4],session?.address));return;}
-      if(req.method === "POST" && path !== "/api/imports") {sendJson(res,200,await saveArtworkTags(deps.prisma,createRpcClient(config),config.chainId,parts[3],parts[4],session!.address as `0x${string}`,await readJsonBody(req)));return;}
+      if(req.method === "POST" && path !== "/api/imports") {const client=createRpcClient(config);if(await client.getChainId()!==config.chainId)throw new Error('The configured RPC returned the wrong network.');sendJson(res,200,await saveArtworkTags(deps.prisma,client,config.chainId,parts[3],parts[4],session!.address as `0x${string}`,await readJsonBody(req)));return;}
       sendJson(res,405,{error:"Method not allowed."});return;
     }catch(error){sendJson(res,400,{error:error instanceof Error?error.message:"Artwork request failed."});return;}
   }
@@ -7260,7 +7264,7 @@ async function handleRequest(
       sendJson(res, 400, { error: "Valid user address is required" });
       return;
     }
-    await withSoftTimeout(syncOwnerCollectionsIfAllowed(address, deps, config), 4_000, undefined);
+    if(!artworkChainScope.getStore())await withSoftTimeout(syncOwnerCollectionsIfAllowed(address, deps, config), 4_000, undefined);
 
     const cursor = Math.max(0, Number.parseInt(String(url.searchParams.get("cursor") || "0"), 10) || 0);
     const limit = Math.min(100, Math.max(1, Number.parseInt(String(url.searchParams.get("limit") || "50"), 10) || 50));
@@ -9069,7 +9073,21 @@ export function createRequestHandler(
   return (req, res) => {
     const isProfileWrite = req.method !== "GET" && req.url?.startsWith("/api/profiles/");
     if (isProfileWrite && pendingProfileWrites >= 50) { sendJson(res, 429, { error: "Profile saves are busy. Please retry." }); return; }
-    const run = () => handleRequest(req, res, deps, config);
+    const run = () => {
+      const url=new URL(req.url||'/', 'http://localhost');
+      const requested=url.searchParams.get('assetChainId');
+      if(requested!==null){
+        try {
+          if(!isArtworkNetworkPath(url.pathname,req.method||'',url.searchParams.get('readOnly')))throw new Error('Network selection is not supported for this action.');
+          if(!/^[1-9]\d*$/.test(requested))throw new Error('Invalid artwork network.');
+          const network=importNetwork(Number(requested));
+          const rpcUrl=process.env[`IMPORT_RPC_URL_${network.id}`]||network.rpcUrl;
+          const selected={...config,authChainId:config.chainId,chainId:network.id,rpcUrl,rpcUrls:[rpcUrl],...(network.id!==config.chainId?{marketplaceAddress:null,registryAddress:null,moderatorRegistryAddress:null}:{})};
+          return artworkChainScope.run(network.id,()=>handleRequest(req,res,deps,selected));
+        }catch(error){sendJson(res,400,{error:error instanceof Error?error.message:'Invalid network.'});return Promise.resolve();}
+      }
+      return handleRequest(req, res, deps, config);
+    };
     let operation: Promise<void>;
     if (isProfileWrite) {
       pendingProfileWrites += 1;

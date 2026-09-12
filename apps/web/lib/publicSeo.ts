@@ -1,5 +1,5 @@
 import { cache } from 'react';
-import { getEnabledAppChainIds, getAppChain } from './chains';
+import { getEnabledAppChainIds, getReadableAppChainIds, getAppChain } from './chains';
 import { getIndexerBaseUrl, type ApiCollectionTokens, type ApiProfileRecord } from './indexerApi';
 import { validAssetRoute, nftPath, collectionPath } from './assetRoutes';
 import { pageMetadata, SITE_URL } from './seo';
@@ -46,8 +46,8 @@ export function validPublicTokens(data: unknown, chainId: number, address: strin
     ...(typeof value.nextCursor === 'string' && /^[a-zA-Z0-9_-]{1,64}$/.test(value.nextCursor) ? { nextCursor: value.nextCursor } : {}) };
 }
 export const getPublicArtwork = cache(async (chainId: number, address: string, tokenId?: string) => {
-  if (!getEnabledAppChainIds().includes(chainId) || !validAssetRoute(String(chainId), address, tokenId)) return null;
-  const query = new URLSearchParams({ readOnly: '1' });
+  if (!getReadableAppChainIds().includes(chainId) || !validAssetRoute(String(chainId), address, tokenId)) return null;
+  const query = new URLSearchParams({ readOnly: '1', assetChainId: String(chainId) });
   if (tokenId !== undefined) query.set('tokenId', tokenId);
   return validPublicTokens(await publicJson(`/api/collections/${address.toLowerCase()}/tokens?${query}`, chainId), chainId, address, tokenId);
 });

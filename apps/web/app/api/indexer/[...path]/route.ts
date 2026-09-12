@@ -1,3 +1,4 @@
+import {isArtworkNetworkPath} from '../../../../../../packages/profile/import-networks.mjs';
 import { boundedBody } from "../../../../lib/server/publish";
 import { requireSession, cookieValue, SESSION_COOKIE } from "../../../../lib/server/session";
 import { NextResponse } from "next/server";
@@ -55,6 +56,7 @@ async function proxyRequest(
 
     const upstreamPath = `/${path.join("/")}`.replace(/\/+/g, "/");
     const method = request.method.toUpperCase();
+    if(chainId && isArtworkNetworkPath(upstreamPath,method,inboundUrl.searchParams.get("readOnly")))inboundUrl.searchParams.set("assetChainId",String(chainId));
     const policy = evaluateIndexerProxyRequest(method, upstreamPath);
     if (!policy.ok) {
       return NextResponse.json({ error: policy.error }, { status: policy.status });

@@ -1,3 +1,4 @@
+import {IMPORT_NETWORKS} from '../../../packages/profile/import-networks.mjs';
 import { getAppChain, getEnabledAppChainIds } from "./chains";
 import {
   fetchActiveListings,
@@ -268,7 +269,7 @@ export async function fetchOwnerHoldingsAcrossChains(
     chainIds?: number[];
   }
 ): Promise<{ items: ApiOwnerHoldingsResponse["items"]; failures: ChainFailure[] }> {
-  const chainIds = options?.chainIds || getEnabledAppChainIds();
+  const chainIds = options?.chainIds || [...new Set([...IMPORT_NETWORKS.map(n=>n.id),...getEnabledAppChainIds()])];
   const perPage = options?.perPage ?? 50;
   const maxPages = options?.maxPages ?? 1;
   const failures: ChainFailure[] = [];

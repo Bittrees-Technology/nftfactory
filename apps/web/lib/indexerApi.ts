@@ -819,6 +819,7 @@ export async function fetchOwnerHoldings(
     cursor: String(cursor),
     limit: String(limit)
   });
+  if(options?.chainId)params.set("assetChainId",String(options.chainId));
   const standard = String(options?.standard || "").trim().toUpperCase();
   if (standard === "ERC721" || standard === "ERC1155") {
     params.set("standard", standard);
@@ -862,7 +863,7 @@ export async function fetchCollectionTokens(
   }
 ): Promise<ApiCollectionTokens> {
   const params = new URLSearchParams();
-  if(options?.readOnly)params.set("readOnly","1");
+  if(options?.readOnly){params.set("readOnly","1");if(options.chainId)params.set("assetChainId",String(options.chainId));}
   if(options?.tokenId)params.set("tokenId",options.tokenId);
   if(options?.cursor)params.set("cursor",options.cursor);
   if (options?.sync) {
