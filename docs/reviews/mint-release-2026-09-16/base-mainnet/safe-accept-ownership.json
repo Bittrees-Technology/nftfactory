@@ -1,0 +1,102 @@
+{
+  "version": "1.0",
+  "chainId": "8453",
+  "createdAt": 1789583326942000,
+  "meta": {
+    "name": "NFTFactory base-mainnet ownership acceptance",
+    "description": "ONLY after all 22 reviewed deployment transactions succeed and runtime/pending-owner verification passes. Predicted addresses depend on signer nonce.",
+    "txBuilderVersion": "1.18.0",
+    "createdFromSafeAddress": "0xaBE23191D53E3Caad10DE495b7Cfe0d0288b5E6f",
+    "createdFromOwnerAddress": "0xE5350D96FC3161BF5c385843ec5ee24E8B465B2f"
+  },
+  "transactions": [
+    {
+      "to": "0xf91879780b18f4b7d477c402d84d43439e87f4ca",
+      "value": "0",
+      "data": "0x79ba5097",
+      "contractMethod": {
+        "inputs": [],
+        "name": "acceptOwnership",
+        "payable": false
+      },
+      "contractInputsValues": {}
+    },
+    {
+      "to": "0x3a80668ed1c4bd97088c85b062c74be8c97b5bf8",
+      "value": "0",
+      "data": "0x79ba5097",
+      "contractMethod": {
+        "inputs": [],
+        "name": "acceptOwnership",
+        "payable": false
+      },
+      "contractInputsValues": {}
+    },
+    {
+      "to": "0xe5ac92dd58a6126bd238ef4f13f6daff24ab66ce",
+      "value": "0",
+      "data": "0x79ba5097",
+      "contractMethod": {
+        "inputs": [],
+        "name": "acceptOwnership",
+        "payable": false
+      },
+      "contractInputsValues": {}
+    },
+    {
+      "to": "0x681412a690dd18946f1e8e46c4a7a413563c6bd3",
+      "value": "0",
+      "data": "0x79ba5097",
+      "contractMethod": {
+        "inputs": [],
+        "name": "acceptOwnership",
+        "payable": false
+      },
+      "contractInputsValues": {}
+    },
+    {
+      "to": "0xccb114c798fbdceb6c47ede31c265441aa9000d9",
+      "value": "0",
+      "data": "0x79ba5097",
+      "contractMethod": {
+        "inputs": [],
+        "name": "acceptOwnership",
+        "payable": false
+      },
+      "contractInputsValues": {}
+    },
+    {
+      "to": "0x6b5a8ba5c2222bb36a8e8fdcbb22edbd8d6c203c",
+      "value": "0",
+      "data": "0x79ba5097",
+      "contractMethod": {
+        "inputs": [],
+        "name": "acceptOwnership",
+        "payable": false
+      },
+      "contractInputsValues": {}
+    },
+    {
+      "to": "0x624f86aaeb70f7e1ce287ef4df6f8952e3c52e27",
+      "value": "0",
+      "data": "0x79ba5097",
+      "contractMethod": {
+        "inputs": [],
+        "name": "acceptOwnership",
+        "payable": false
+      },
+      "contractInputsValues": {}
+    },
+    {
+      "to": "0x0865f5bb6d094be651e34b7336a88333c3630288",
+      "value": "0",
+      "data": "0x79ba5097",
+      "contractMethod": {
+        "inputs": [],
+        "name": "acceptOwnership",
+        "payable": false
+      },
+      "contractInputsValues": {}
+    }
+  ]
+}

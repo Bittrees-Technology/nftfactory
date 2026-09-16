@@ -1,0 +1,25 @@
+{
+  "network": "robinhood-mainnet",
+  "chainId": 4663,
+  "checkedAt": "2026-09-16T18:26:30.987Z",
+  "blockNumber": "64721944",
+  "blockTimestamp": "1789583190",
+  "safe": "0xaBE23191D53E3Caad10DE495b7Cfe0d0288b5E6f",
+  "signer": "0xE5350D96FC3161BF5c385843ec5ee24E8B465B2f",
+  "publicBroadcast": false,
+  "custody": {
+    "hasCode": true,
+    "owners": [
+      "0xE5350D96FC3161BF5c385843ec5ee24E8B465B2f"
+    ],
+    "threshold": "1",
+    "safeNonce": "0",
+    "signerNonce": 80,
+    "pendingSignerNonce": 80,
+    "signerBalanceWei": "3459653824555656",
+    "safeBalanceWei": "0",
+    "gasPriceWei": "49940000",
+    "passed": true
+  },
+  "passed": true
+}

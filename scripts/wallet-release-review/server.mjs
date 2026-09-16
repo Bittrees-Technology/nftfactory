@@ -1,11 +1,11 @@
+import {validateReleaseManifest} from '../lib/release-manifest.mjs';
 import {createServer} from 'node:http';
 import {readFileSync,writeFileSync,existsSync} from 'node:fs';
 import {dirname,resolve,join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 const [manifestPath]=process.argv.slice(2);if(!manifestPath)throw Error('Pass the reviewed unsigned simulation manifest.');
 const manifest=JSON.parse(readFileSync(manifestPath,'utf8'));
-if(manifest.chainId!==11155111||manifest.simulated!==true||manifest.transactions.length!==22)throw Error('Expected the reviewed Sepolia simulation.');
-for(const {transaction:t} of manifest.transactions)if(t.from.toLowerCase()!==manifest.signer.toLowerCase()||Number(BigInt(t.chainId))!==11155111||BigInt(t.value)!==0n)throw Error('Unexpected transaction authority or value.');
+validateReleaseManifest(manifest);
 const receiptPath=join(dirname(resolve(manifestPath)),'wallet-receipts.json');
 const root=dirname(fileURLToPath(import.meta.url));
 const files={'/':['index.html','text/html'],'/review.js':['review.js','text/javascript'],'/style.css':['style.css','text/css']};
@@ -23,4 +23,4 @@ createServer(async(req,res)=>{
  if(req.method!=='GET'){res.writeHead(405);return res.end();}
  if(req.url==='/manifest'||req.url==='/receipts'){res.setHeader('Content-Type','application/json');return res.end(req.url==='/manifest'?JSON.stringify(manifest):existsSync(receiptPath)?readFileSync(receiptPath):'[]');}
  const file=files[req.url];if(!file){res.writeHead(404);return res.end();}res.setHeader('Content-Type',file[1]);res.end(readFileSync(join(root,file[0])));
-}).listen(3042,'127.0.0.1',()=>console.log('Sepolia wallet review ready at http://127.0.0.1:3042. User wallet approvals required.'));
+}).listen(3042,'127.0.0.1',()=>console.log(`Chain ${manifest.chainId} wallet review ready at http://127.0.0.1:3042. User wallet approvals required.`));

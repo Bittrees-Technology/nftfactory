@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { mintedTokenId, positiveUint256, pendingMintKey, readPendingMint, pendingCollectionKey, readPendingCollection, type PendingCollection, type PendingMint } from "../../lib/mintReceipt";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { ensureWalletSession } from "../../lib/walletSession";
 import { useAccount, useChainId, usePublicClient, useSwitchChain, useWalletClient } from "wagmi";
@@ -78,6 +79,7 @@ type CollectionVerificationTxState = {
 };
 
 type UploadReceipt = {
+  storage?: { copies?: number };
   imageUri?: string | null;
   imageGatewayUrl?: string | null;
   audioUri?: string | null;
@@ -344,8 +346,8 @@ function storageKey(ownerAddress: string): string {
   return `nftfactory:known-collections:${ownerAddress.toLowerCase()}`;
 }
 
-function metadataDraftKey(ownerAddress: string): string {
-  return `nftfactory:mint-draft:${ownerAddress.toLowerCase()}`;
+function metadataDraftKey(ownerAddress: string, chainId: number): string {
+  return `nftfactory:mint-draft:${chainId}:${ownerAddress.toLowerCase()}`;
 }
 
 function collectionEnsPendingKey(ownerAddress: string): string {
@@ -385,9 +387,9 @@ function persistCollectionVerification(
   }
 }
 
-function clearMetadataDraft(ownerAddress: string): void {
+function clearMetadataDraft(ownerAddress: string, chainId: number): void {
   if (typeof window === "undefined" || !ownerAddress) return;
-  window.localStorage.removeItem(metadataDraftKey(ownerAddress));
+  window.localStorage.removeItem(metadataDraftKey(ownerAddress, chainId));
 }
 
 function shortenAddress(value: string): string {
@@ -650,8 +652,6 @@ const namedContractAbi = [
   }
 ] as const;
 
-const LOCAL_MINT_FEED_LIMIT = 50;
-const ERC721_TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 
 function localMintFeedKey(chainId: number): string {
   return `nftfactory:local-mint-feed:v1:${chainId}`;
@@ -675,17 +675,6 @@ function readLocalMintFeed(chainId: number): LocalMintFeedItem[] {
   } catch {
     return [];
   }
-}
-
-function writeLocalMintFeedItem(chainId: number, nextItem: LocalMintFeedItem): void {
-  if (typeof window === "undefined") return;
-  const current = readLocalMintFeed(chainId);
-  const merged = [nextItem, ...current.filter((item) => {
-    const sameContract = item.collection.contractAddress.toLowerCase() === nextItem.collection.contractAddress.toLowerCase();
-    const sameToken = item.tokenId === nextItem.tokenId;
-    return !(sameContract && sameToken);
-  })].slice(0, LOCAL_MINT_FEED_LIMIT);
-  window.localStorage.setItem(localMintFeedKey(chainId), JSON.stringify(merged));
 }
 
 const DEFAULT_IPFS_GATEWAY = (process.env.NEXT_PUBLIC_IPFS_GATEWAY || "https://dweb.link").replace(/\/$/, "").replace(/\/ipfs$/i, "");
@@ -945,30 +934,6 @@ function ViewCollectionTokenCard({ token }: { token: ViewCollectionToken }) {
   );
 }
 
-function extractMintedTokenId(
-  receipt: { logs: Array<{ address: string; topics: readonly (string | undefined)[] }> },
-  contractAddress: string,
-  standard: Standard,
-  fallbackTokenId?: string
-): string {
-  if (standard === "ERC1155" && fallbackTokenId) return fallbackTokenId;
-  const normalizedContract = contractAddress.toLowerCase();
-  const match = receipt.logs.find(
-    (log) =>
-      log.address.toLowerCase() === normalizedContract &&
-      log.topics[0]?.toLowerCase() === ERC721_TRANSFER_TOPIC &&
-      log.topics[3]
-  );
-  if (match?.topics[3]) {
-    try {
-      return BigInt(match.topics[3]).toString();
-    } catch {
-      return fallbackTokenId || "0";
-    }
-  }
-  return fallbackTokenId || "0";
-}
-
 const interfaceProbeAbi = [
   {
     type: "function",
@@ -1121,7 +1086,11 @@ const collectionOwnershipReadAbi = [
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function MintClient({
+export default function MintClient(props: MintClientProps) {
+  const { address } = useAccount();
+  return <MintWorkspace key={`${props.initialChainId || getPrimaryAppChainId()}:${address?.toLowerCase() || 'guest'}`} {...props} />;
+}
+function MintWorkspace({
   initialChainId,
   initialPageMode = "mint",
   initialMintMode = "shared",
@@ -1227,6 +1196,29 @@ export default function MintClient({
   // Transaction state
   const [uploadTx, setUploadTx] = useState<TxState>({ status: "idle" });
   const [mintTx, setMintTx] = useState<TxState>({ status: "idle" });
+  const [pendingMint, setPendingMint] = useState<PendingMint|null>(null);
+  const [mintRecoveryLoaded, setMintRecoveryLoaded] = useState(false);
+  const mintBusy = useRef(false);
+  const deployBusy = useRef(false);
+  const [pendingDeployment, setPendingDeployment] = useState<PendingCollection|null>(null);
+  const [deployRecoveryLoaded, setDeployRecoveryLoaded] = useState(false);
+  useEffect(() => {
+    if (!address) return;
+    try {
+      const saved = readPendingCollection(localStorage.getItem(pendingCollectionKey(config.chainId,address)),config.chainId,address);
+      if (saved) { setPendingDeployment(saved); setShowDeployForm(true); setDeployTx({status:"error",hash:saved.hash,message:"A submitted collection deployment was restored. Check confirmation before creating another collection."}); }
+      setDeployRecoveryLoaded(true);
+    } catch { setDeployTx({status:"error",message:"Collection recovery storage is unavailable or invalid. Restore it before deploying."}); }
+  },[address,config.chainId]);
+  const latestUpload = useRef<UploadReceipt>({});
+  useEffect(() => {
+    if (!address) { setMintRecoveryLoaded(true); return; }
+    try {
+      const saved = readPendingMint(localStorage.getItem(pendingMintKey(config.chainId, address)), config.chainId, address);
+      if (saved) { setPendingMint(saved); setMintTx({status:'error',hash:saved.hash,message:'A submitted mint was restored. Check confirmation to finish without minting again.'}); }
+      setMintRecoveryLoaded(true);
+    } catch { setMintTx({status:'error',message:'Mint recovery storage is unavailable or invalid. Restore browser storage before submitting another mint.'}); }
+  }, [address, config.chainId]);
   const [subnameTx, setSubnameTx] = useState<TxState>({ status: "idle" });
   const [uploadReceipt, setUploadReceipt] = useState<UploadReceipt>({});
 
@@ -1465,7 +1457,7 @@ export default function MintClient({
       }
       const values = [...merged.values()];
       if (typeof window !== "undefined" && account) {
-        window.localStorage.setItem(storageKey(account), JSON.stringify(values));
+        try { window.localStorage.setItem(storageKey(account), JSON.stringify(values)); } catch { /* Confirmed collections can be reloaded from the registry. */ }
       }
       return values;
     });
@@ -1782,7 +1774,8 @@ export default function MintClient({
     if (!account || typeof window === "undefined") {
       return;
     }
-    const raw = window.localStorage.getItem(metadataDraftKey(account));
+    let raw: string | null = null;
+    try { raw = window.localStorage.getItem(metadataDraftKey(account, config.chainId)); } catch { return; }
     if (!raw) {
       return;
     }
@@ -1798,22 +1791,22 @@ export default function MintClient({
       };
       if (parsed.name) setName(parsed.name);
       if (parsed.description) setDescription(parsed.description);
-      if (typeof parsed.includeExternalUrl === "boolean") setIncludeExternalUrl(parsed.includeExternalUrl);
+      if (typeof parsed.includeExternalUrl === "boolean") setIncludeExternalUrl(false);
       if (parsed.externalUrl) setExternalUrl(parsed.externalUrl);
-      if (typeof parsed.useCustomMetadataUri === "boolean") setUseCustomMetadataUri(parsed.useCustomMetadataUri);
+      if (typeof parsed.useCustomMetadataUri === "boolean") setUseCustomMetadataUri(false);
       if (parsed.metadataUri) setMetadataUri(parsed.metadataUri);
-      if (typeof parsed.includeAudio === "boolean") setIncludeAudio(parsed.includeAudio);
+      if (typeof parsed.includeAudio === "boolean") setIncludeAudio(false);
     } catch {
       // Ignore malformed local drafts.
     }
-  }, [account]);
+  }, [account, config.chainId]);
 
   useEffect(() => {
     if (!account || typeof window === "undefined") {
       return;
     }
-    window.localStorage.setItem(
-      metadataDraftKey(account),
+    try { window.localStorage.setItem(
+      metadataDraftKey(account, config.chainId),
       JSON.stringify({
         name,
         description,
@@ -1823,9 +1816,10 @@ export default function MintClient({
         metadataUri: useCustomMetadataUri ? metadataUri : "",
         includeAudio
       })
-    );
+    ); } catch { /* The publish gate reports unavailable recovery storage. */ }
   }, [
     account,
+    config.chainId,
     description,
     externalUrl,
     includeAudio,
@@ -2138,9 +2132,15 @@ export default function MintClient({
     data: `0x${string}`,
     valueHex?: `0x${string}`
   ): Promise<`0x${string}`> {
-    if (!walletClient?.account) throw new Error("Connect your wallet first.");
+    if (!walletClient?.account || !publicClient) throw new Error("Connect your wallet first.");
+    if (await walletClient.getChainId() !== config.chainId) throw new Error(`Select ${appChain.name} before submitting.`);
+    if ((await walletClient.getAddresses())[0]?.toLowerCase() !== walletClient.account.address.toLowerCase()) throw new Error('Wallet changed. Review the operation again.');
+    const deployedCode = await publicClient.getCode({address:to});
+    if (!deployedCode || deployedCode === '0x') throw new Error('No contract is deployed at this address on the selected network.');
+    await publicClient.call({ account: walletClient.account.address, to, data, value: valueHex ? BigInt(valueHex) : undefined });
     const hash = await walletClient.sendTransaction({
       account: walletClient.account,
+      chain: appChain,
       to: to as Address,
       data: data as Hex,
       value: valueHex ? BigInt(valueHex) : undefined
@@ -2150,7 +2150,9 @@ export default function MintClient({
 
   async function waitForReceipt(hash: `0x${string}`) {
     if (!publicClient) throw new Error("Public client unavailable — reconnect wallet.");
-    return publicClient.waitForTransactionReceipt({ hash: hash as Hex });
+    const receipt = await publicClient.waitForTransactionReceipt({ hash: hash as Hex, timeout: 60_000 });
+    if (receipt.status !== "success") throw new Error("Transaction reverted. No changes were confirmed.");
+    return receipt;
   }
 
   async function runCollectionVerification(
@@ -2272,7 +2274,8 @@ export default function MintClient({
         responseText,
         "IPFS upload route returned an invalid response."
       );
-      if (!res.ok || !payload.metadataUri) throw new Error(payload.error || "Upload failed");
+      if (!res.ok || !payload.metadataUri?.startsWith("ipfs://") || payload.storage?.copies !== 2) throw new Error(payload.error || "Storage could not verify two copies. Mint was not submitted.");
+      latestUpload.current = payload;
       setImageUri(payload.imageUri || "");
       setAudioUri(payload.audioUri || "");
       setMetadataUri(payload.metadataUri);
@@ -2292,10 +2295,15 @@ export default function MintClient({
   // ── Deploy new CreatorCollection via factory ──────────────────────────────
 
   async function onDeployCollection(): Promise<void> {
-    if (!account) { setDeployTx({ status: "error", message: "Connect wallet first." }); return; }
-    if (wrongNetwork) { setDeployTx({ status: "error", message: `Select ${appChain.name} in the wallet menu first.` }); return; }
-    if (!deployName.trim()) { setDeployTx({ status: "error", message: "Collection name is required." }); return; }
-    if (!deploySymbol.trim()) { setDeployTx({ status: "error", message: "Symbol is required." }); return; }
+    if (deployBusy.current || !deployRecoveryLoaded) return;
+    if (!account || !publicClient) { setDeployTx({status:"error",message:"Connect wallet first."}); return; }
+    if (wrongNetwork) { setDeployTx({status:"error",message:`Select ${appChain.name} first.`}); return; }
+    deployBusy.current = true;
+    let current = pendingDeployment;
+    try {
+      if (!current) {
+    if (!deployName.trim()) { throw new Error("Collection name is required."); }
+    if (!deploySymbol.trim()) { throw new Error("Symbol is required."); }
 
     const rawRoyaltyReceiver = deployRoyaltyReceiver.trim();
     let royaltyReceiver = rawRoyaltyReceiver || account;
@@ -2306,7 +2314,7 @@ export default function MintClient({
       setDeployTx({ status: "error", message: "Royalty receiver must be a valid address." });
       return;
     }
-    const bps = Number.parseInt(deployRoyaltyBps, 10);
+    const bps = Number(deployRoyaltyBps);
     if (!Number.isInteger(bps) || bps < 0 || bps > 10_000) {
       setDeployTx({ status: "error", message: "Royalty must be 0–10 000 basis points." });
       return;
@@ -2328,39 +2336,30 @@ export default function MintClient({
       defaultRoyaltyBps: BigInt(bps)
     };
 
-    try {
-      setDeployTx({ status: "pending", message: "Deploying collection contract via factory…" });
-      const calldata = encodeDeployCollection(args);
-      const txHash = await sendTransaction(config.factory, calldata);
-      const receipt = await waitForReceipt(txHash);
-
-      const deployed = extractDeployedCollectionAddress(receipt, config.factory);
-      if (deployed) {
-        setCustomCollectionAddress(deployed);
-        setManageAddress(deployed);
-        setCollectionSelector("saved");
-        mergeKnownCollections([{
-          contractAddress: deployed,
-          ensSubname: ensSubname || null,
-          ownerAddress: account
-        }]);
-        setDeployTx({
-          status: "success",
-          hash: txHash,
-          message: `Collection deployed at ${deployed}. Address auto-filled above.`
-        });
-        setShowDeployForm(false);
-        void runCollectionVerification(deployed, standard);
-      } else {
-        setDeployTx({
-          status: "success",
-          hash: txHash,
-          message: "Deployment confirmed. Recover the new collection address from the explorer receipt, then load it into the workspace."
-        });
+        localStorage.setItem(pendingCollectionKey(config.chainId,account),'');
+        setDeployTx({status:"pending",message:"Simulating collection deployment. Review the transaction in your wallet."});
+        const hash = await sendTransaction(config.factory,encodeDeployCollection(args));
+        current = {hash,chainId:config.chainId,wallet:account as `0x${string}`,factory:config.factory,standard,ensSubname};
+        setPendingDeployment(current);
+        localStorage.setItem(pendingCollectionKey(config.chainId,account),JSON.stringify(current));
       }
+      setDeployTx({status:"pending",hash:current.hash,message:"Checking the submitted collection deployment…"});
+      const receipt = await publicClient.waitForTransactionReceipt({hash:current.hash,timeout:60_000});
+      if (receipt.status !== 'success') {
+        localStorage.setItem(`${pendingCollectionKey(config.chainId,account)}:reverted:${current.hash}`,JSON.stringify(current));
+        localStorage.removeItem(pendingCollectionKey(config.chainId,account)); setPendingDeployment(null);
+        setDeployTx({status:"error",hash:current.hash,message:"Deployment reverted. No collection was created. You can review and try again."}); return;
+      }
+      const deployed = extractDeployedCollectionAddress(receipt,current.factory);
+      if (!deployed) throw new Error("The receipt has no matching collection event. Keep its transaction hash for review.");
+      setCustomCollectionAddress(deployed); setManageAddress(deployed); setCollectionSelector("saved");
+      mergeKnownCollections([{chainId:current.chainId,standard:current.standard,contractAddress:deployed,ensSubname:current.ensSubname||null,ownerAddress:current.wallet}]);
+      localStorage.removeItem(pendingCollectionKey(config.chainId,account)); setPendingDeployment(null);
+      setDeployTx({status:"success",hash:current.hash,message:`Collection deployed at ${deployed}. Address auto-filled above.`});
+      setShowDeployForm(false); void runCollectionVerification(deployed,current.standard);
     } catch (err) {
-      setDeployTx({ status: "error", message: err instanceof Error ? err.message : "Deploy failed" });
-    }
+      setDeployTx({status:"error",hash:current?.hash,message:(err instanceof Error?err.message:"Deploy failed")+(current?" Check confirmation to recover this deployment without creating another collection.":"")});
+    } finally { deployBusy.current=false; }
   }
 
   // ── Register ENS subname ──────────────────────────────────────────────────
@@ -2856,137 +2855,49 @@ export default function MintClient({
 
   async function onPublish(e: FormEvent): Promise<void> {
     e.preventDefault();
-    setMintTx({ status: "idle" });
-    if (!account) { setMintTx({ status: "error", message: "Connect wallet first." }); return; }
-    if (useCustomMetadataUri) { setMintTx({ status: "error", message: "Custom metadata minting is paused until its backup can be verified. Use the artwork upload flow." }); return; }
-    if (wrongNetwork) { setMintTx({ status: "error", message: `Select ${appChain.name} in the wallet menu first.` }); return; }
-
-    const amount = Number.parseInt(copies || "1", 10);
-    if (standard === "ERC1155" && (!Number.isInteger(amount) || amount <= 0)) {
-      setMintTx({ status: "error", message: "Number of copies must be a positive integer." });
-      return;
-    }
-
+    if (mintBusy.current || !mintRecoveryLoaded) return;
+    if (!account || !walletClient || !publicClient) { setMintTx({status:'error',message:'Connect wallet first.'}); return; }
+    if (wrongNetwork) { setMintTx({status:'error',message:`Select ${appChain.name} first.`}); return; }
+    mintBusy.current = true;
+    let current = pendingMint;
     try {
-      let effectiveMetadataUri = metadataUri.trim();
-      if (!useCustomMetadataUri) {
-        setMintTx({ status: "pending", message: "Publishing metadata to IPFS, then preparing mint…" });
-        effectiveMetadataUri = await uploadMetadata();
+      if (!current) {
+        if (useCustomMetadataUri || includeAudio || audioFile) throw new Error('This release supports PNG, JPEG and WebP uploads with generated metadata. Audio and custom metadata are not supported.');
+        const amount = standard === 'ERC1155' ? positiveUint256(copies, 'Number of copies') : 1n;
+        const tokenId = standard === 'ERC1155' && mintMode === 'custom' ? positiveUint256(custom1155TokenId, 'Token ID') : undefined;
+        if (mintMode === 'custom' && !isAddress(customCollectionAddress)) throw new Error('Choose a valid creator collection first.');
+        // Fail before sending if recovery cannot survive navigation/reload.
+        localStorage.setItem(pendingMintKey(config.chainId, account), '');
+        setMintTx({status:'pending',message:'Uploading artwork and verifying storage copies…'});
+        const metadata = await uploadMetadata();
+        const target = mintMode === 'shared' ? (standard === 'ERC721' ? config.shared721 : config.shared1155) : customCollectionAddress as `0x${string}`;
+        const data = (mintMode === 'shared'
+          ? standard === 'ERC721' ? encodePublish721('',metadata) : encodePublish1155('',amount,metadata)
+          : standard === 'ERC721' ? encodeCreatorPublish721(account as `0x${string}`,metadata,lockMetadata) : encodeCreatorPublish1155(account as `0x${string}`,tokenId!,amount,metadata,lockMetadata)) as `0x${string}`;
+        setMintTx({status:'pending',message:'Simulating mint. Review the transaction in your wallet.'});
+        const hash = await sendTransaction(target,data);
+        current = {hash,chainId:config.chainId,wallet:account as `0x${string}`,contract:target,standard,mode:mintMode,amount:String(amount),metadataUri:metadata,name:name.trim(),description:description.trim(),mediaUri:latestUpload.current.imageUri||null,immutable:mintMode==='shared'||lockMetadata,ensSubname:mintMode==='custom'?selectedKnownCollection?.ensSubname||null:null,collectionCreatedAt:mintMode==='custom'?selectedKnownCollection?.createdAt||null:null};
+        setPendingMint(current);
+        localStorage.setItem(pendingMintKey(config.chainId,account),JSON.stringify(current));
       }
-      if (!effectiveMetadataUri) {
-        setMintTx({ status: "error", message: "Provide a metadata URI or choose an image to auto-upload." });
-        return;
+      setMintTx({status:'pending',hash:current.hash,message:'Checking the submitted mint and updating artwork…'});
+      const receipt = await publicClient.waitForTransactionReceipt({hash:current.hash,timeout:60_000});
+      if (receipt.status !== 'success') {
+        localStorage.setItem(`${pendingMintKey(config.chainId,account)}:reverted:${current.hash}`,JSON.stringify(current));
+        localStorage.removeItem(pendingMintKey(config.chainId,account)); setPendingMint(null);
+        setMintTx({status:'error',hash:current.hash,message:'The transaction reverted. No NFT was created. You can review the artwork and submit a new mint.'}); return;
       }
-
-      setMintTx({ status: "pending", message: "Submitting mint transaction…" });
-
-      let targetNft: `0x${string}`;
-      let mintData: `0x${string}`;
-
-      if (mintMode === "shared") {
-        if (standard === "ERC721") {
-          targetNft = config.shared721;
-          mintData = encodePublish721("", effectiveMetadataUri) as `0x${string}`;
-        } else {
-          targetNft = config.shared1155;
-          mintData = encodePublish1155("", BigInt(amount), effectiveMetadataUri) as `0x${string}`;
-        }
-      } else {
-        if (!isAddress(customCollectionAddress)) {
-          throw new Error("Enter or deploy a valid collection contract address first.");
-        }
-        targetNft = customCollectionAddress as `0x${string}`;
-        if (standard === "ERC721") {
-          mintData = encodeCreatorPublish721(account as `0x${string}`, effectiveMetadataUri, lockMetadata) as `0x${string}`;
-        } else {
-          const tokenId = Number.parseInt(custom1155TokenId || "0", 10);
-          if (!Number.isInteger(tokenId) || tokenId <= 0) throw new Error("Token ID must be a positive integer.");
-          mintData = encodeCreatorPublish1155(
-            account as `0x${string}`,
-            BigInt(tokenId),
-            BigInt(amount),
-            effectiveMetadataUri,
-            lockMetadata
-          ) as `0x${string}`;
-        }
-      }
-
-      const txHash = await sendTransaction(targetNft, mintData);
-      const receipt = await waitForReceipt(txHash);
-      const fallbackTokenId =
-        standard === "ERC1155"
-          ? mintMode === "custom"
-            ? custom1155TokenId || "0"
-            : "0"
-          : undefined;
-      const mintedTokenId = extractMintedTokenId(receipt, targetNft, standard, fallbackTokenId);
-      const gateway = DEFAULT_IPFS_GATEWAY;
-      if (!publicClient) {
-        throw new Error("Public client is unavailable for the active chain.");
-      }
-      const mintedBlock = await publicClient.getBlock({ blockHash: receipt.blockHash });
-      const mintedAtIso = new Date(Number(mintedBlock.timestamp) * 1000).toISOString();
-      writeLocalMintFeedItem(config.chainId, {
-        id: `local:${targetNft.toLowerCase()}:${mintedTokenId}:${Date.now()}`,
-        tokenId: mintedTokenId,
-        creatorAddress: account.toLowerCase(),
-        ownerAddress: account.toLowerCase(),
-        mintTxHash: txHash,
-        draftName: name.trim() || null,
-        draftDescription: description.trim() || null,
-        mintedAmountRaw: standard === "ERC1155" ? String(amount) : "1",
-        metadataCid: effectiveMetadataUri,
-        metadataUrl: toGatewayUrl(effectiveMetadataUri, gateway),
-        mediaCid: uploadReceipt.imageUri || uploadReceipt.audioUri || null,
-        mediaUrl: toGatewayUrl(uploadReceipt.imageUri || uploadReceipt.audioUri || null, gateway),
-        immutable: standard === "ERC721" ? mintMode === "shared" ? true : lockMetadata : lockMetadata,
-        mintedAt: mintedAtIso,
-        collection: {
-          chainId: config.chainId,
-          contractAddress: targetNft.toLowerCase(),
-          ownerAddress: account.toLowerCase(),
-          ensSubname: mintMode === "custom" ? selectedKnownCollection?.ensSubname ?? null : null,
-          standard,
-          isFactoryCreated: mintMode === "shared",
-          isUpgradeable: mintMode === "custom",
-          finalizedAt: null,
-          createdAt: mintMode === "custom" ? selectedKnownCollection?.createdAt || mintedAtIso : mintedAtIso,
-          updatedAt: mintedAtIso
-        },
-        activeListing: null
-      });
-      try {
-        await syncMintedToken({
-          chainId: config.chainId,
-          contractAddress: targetNft.toLowerCase(),
-          collectionOwnerAddress: account.toLowerCase(),
-          tokenId: mintedTokenId,
-          creatorAddress: account.toLowerCase(),
-          ownerAddress: account.toLowerCase(),
-          standard,
-          isFactoryCreated: mintMode === "shared",
-          isUpgradeable: mintMode === "custom",
-          ensSubname: mintMode === "custom" ? selectedKnownCollection?.ensSubname ?? null : null,
-          collectionCreatedAt: mintMode === "custom" ? selectedKnownCollection?.createdAt ?? null : null,
-          finalizedAt: null,
-          mintTxHash: txHash,
-          draftName: name.trim() || null,
-          draftDescription: description.trim() || null,
-          mintedAmountRaw: standard === "ERC1155" ? String(amount) : "1",
-          metadataCid: effectiveMetadataUri,
-          mediaCid: uploadReceipt.imageUri || uploadReceipt.audioUri || null,
-          immutable: standard === "ERC721" ? (mintMode === "shared" ? true : lockMetadata) : lockMetadata,
-          mintedAt: mintedAtIso
-        });
-      } catch {
-        // Keep the mint flow successful even if indexer sync is temporarily unavailable.
-      }
-      setMintTx({ status: "success", hash: txHash, message: "Minted successfully." });
-      clearMetadataDraft(account);
-      resetMetadataInputs();
+      const tokenId = mintedTokenId(receipt,current.contract,current.standard,current.wallet);
+      const block = await publicClient.getBlock({blockHash:receipt.blockHash});
+      const mintedAt = new Date(Number(block.timestamp)*1000).toISOString();
+      await ensureWalletSession(current.wallet,args=>walletClient.signMessage(args),current.chainId);
+      await syncMintedToken({chainId:current.chainId,contractAddress:current.contract,tokenId,creatorAddress:current.wallet,ownerAddress:current.wallet,standard:current.standard,isFactoryCreated:current.mode==='shared',isUpgradeable:current.mode==='custom',ensSubname:current.ensSubname,collectionCreatedAt:current.collectionCreatedAt,mintTxHash:current.hash,draftName:current.name,draftDescription:current.description,mintedAmountRaw:current.amount,metadataCid:current.metadataUri,mediaCid:current.mediaUri,immutable:current.immutable,mintedAt});
+      localStorage.removeItem(pendingMintKey(config.chainId,account)); setPendingMint(null);
+      setMintTx({status:'success',hash:current.hash,message:'Mint confirmed and indexed.'});
+      clearMetadataDraft(account, config.chainId); resetMetadataInputs();
     } catch (err) {
-      setMintTx({ status: "error", message: err instanceof Error ? err.message : "Publish failed" });
-    }
+      setMintTx({status:'error',hash:current?.hash,message:(err instanceof Error?err.message:'Publish failed')+(current?' Your submitted hash is preserved. Check confirmation to retry without minting again.':'')});
+    } finally { mintBusy.current = false; }
   }
 
   // ── Collection management actions ─────────────────────────────────────────
@@ -3592,11 +3503,11 @@ export default function MintClient({
                     <button
                       type="button"
                       onClick={onDeployCollection}
-                      disabled={!isConnected || wrongNetwork || deployTx.status === "pending"}
+                      disabled={!isConnected || wrongNetwork || !deployRecoveryLoaded || deployTx.status === "pending"}
                     >
-                      {deployTx.status === "pending" ? "Deploying…" : `Deploy ${standard} collection`}
+                      {deployTx.status === "pending" ? "Confirming…" : pendingDeployment ? "Check collection confirmation" : `Deploy ${standard} collection`}
                     </button>
-                    <TxStatus state={deployTx} kind="deploy" />
+                    <TxStatus chainId={config.chainId} state={deployTx} kind="deploy" />
                     <p className="hint">
                       New collection contracts automatically submit explorer proxy verification after deployment. You can retry or inspect verification from <strong>Manage → Verification</strong>.
                     </p>
@@ -3615,11 +3526,11 @@ export default function MintClient({
             <div className="mintStepFieldGrid">
               <label>
                 Name (required)
-                <input value={name} onChange={(e) => setName(e.target.value)} />
+                <input maxLength={120} value={name} onChange={(e) => setName(e.target.value)} />
               </label>
               <label>
                 Description (optional)
-                <input value={description} onChange={(e) => setDescription(e.target.value)} />
+                <input maxLength={2000} value={description} onChange={(e) => setDescription(e.target.value)} />
               </label>
               {standard === "ERC1155" && (
                 <label>
@@ -3632,15 +3543,16 @@ export default function MintClient({
               <span className="detailLabel">Media Inputs</span>
               <label>
                 Upload image
-                <input type="file" accept="image/*" onChange={(e) => setImageFile(e.target.files?.[0] ?? null)} />
+                <input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => setImageFile(e.target.files?.[0] ?? null)} />
               </label>
               <label className="inlineCheck">
                 <input
                   type="checkbox"
+                  disabled
                   checked={includeAudio}
                   onChange={(e) => setIncludeAudio(e.target.checked)}
                 />
-                <span>Include audio file</span>
+                <span>Audio uploads are not supported in this release</span>
               </label>
               {includeAudio ? (
                 <label>
@@ -3662,10 +3574,11 @@ export default function MintClient({
               <label className="inlineCheck">
                 <input
                   type="checkbox"
+                  disabled
                   checked={includeExternalUrl}
                   onChange={(e) => setIncludeExternalUrl(e.target.checked)}
                 />
-                <span>Include external URL</span>
+                <span>External metadata links are not included in this release</span>
               </label>
               {includeExternalUrl ? (
                 <label>
@@ -3676,10 +3589,11 @@ export default function MintClient({
               <label className="inlineCheck">
                 <input
                   type="checkbox"
+                  disabled
                   checked={useCustomMetadataUri}
                   onChange={(e) => setUseCustomMetadataUri(e.target.checked)}
                 />
-                <span>Use custom IPFS metadata URI</span>
+                <span>Custom metadata is paused until backup verification is available</span>
               </label>
               {useCustomMetadataUri ? (
                 <label>
@@ -3695,7 +3609,7 @@ export default function MintClient({
                 </p>
               )}
             </div>
-            <TxStatus state={uploadTx} kind="upload" />
+            <TxStatus chainId={config.chainId} state={uploadTx} kind="upload" />
           </div>
 
           {/* Step 4: Mint settings */}
@@ -3756,23 +3670,25 @@ export default function MintClient({
             </p>
             <button
               type="submit"
-              disabled={!isConnected || wrongNetwork || mintTx.status === "pending" || uploadTx.status === "pending"}
+              disabled={!mintRecoveryLoaded || !isConnected || wrongNetwork || mintTx.status === "pending" || uploadTx.status === "pending"}
             >
               {mintTx.status === "pending" || uploadTx.status === "pending"
                 ? "Publishing…"
+                : pendingMint
+                  ? "Check confirmation"
                 : useCustomMetadataUri
                   ? "Mint With Custom Metadata"
                   : (imageFile || audioFile)
                     ? "Upload and Mint"
                     : "Mint Now"}
             </button>
-            <TxStatus state={mintTx} kind="mint" />
+            <TxStatus chainId={config.chainId} state={mintTx} kind="mint" />
             {(uploadReceipt.metadataUri || mintTx.hash) ? (
               <div className="selectionCard">
                 <span className="detailLabel">Publish Receipts</span>
                 <div className="compactList">
-                  {mintTx.hash && toExplorerTx(getContractsConfig().chainId, mintTx.hash) ? (
-                    <a href={toExplorerTx(getContractsConfig().chainId, mintTx.hash)!} target="_blank" rel="noreferrer">
+                  {mintTx.hash && toExplorerTx(config.chainId, mintTx.hash) ? (
+                    <a href={toExplorerTx(config.chainId, mintTx.hash)!} target="_blank" rel="noreferrer">
                       View transaction on explorer ↗
                     </a>
                   ) : null}
@@ -4340,7 +4256,7 @@ export default function MintClient({
             >
               {collectionIdentityButtonLabel}
             </button>
-            <TxStatus state={subnameTx} kind="identity" />
+            <TxStatus chainId={config.chainId} state={subnameTx} kind="identity" />
           </div>
 
           <div className="card formCard mintStepCard">
@@ -4387,7 +4303,7 @@ export default function MintClient({
                 >
                   {royaltyTx.status === "pending" ? "Saving royalty…" : "Save Default Royalty"}
                 </button>
-                <TxStatus state={royaltyTx} kind="royalty" />
+                <TxStatus chainId={config.chainId} state={royaltyTx} kind="royalty" />
               </div>
 
               <div className="selectionCard mintRoyaltyPanel mintStepSelectionCard">
@@ -4525,7 +4441,7 @@ export default function MintClient({
                     <p className="hint">Once configured, this panel stores collaborator royalty weights in the on-chain split registry.</p>
                   </>
                 )}
-                <TxStatus state={royaltySplitTx} kind="split" />
+                <TxStatus chainId={config.chainId} state={royaltySplitTx} kind="split" />
               </div>
             </div>
           </div>
@@ -4698,7 +4614,7 @@ export default function MintClient({
                 </button>
               </>
             )}
-            <TxStatus state={transferTx} kind="transfer" />
+            <TxStatus chainId={config.chainId} state={transferTx} kind="transfer" />
           </div>
 
           {/* Finalize upgrades */}
@@ -4734,7 +4650,7 @@ export default function MintClient({
             >
               {finalizeTx.status === "pending" ? "Finalizing…" : "Permanently Finalize Upgrades"}
             </button>
-            <TxStatus state={finalizeTx} kind="finalize" />
+            <TxStatus chainId={config.chainId} state={finalizeTx} kind="finalize" />
           </div>
         </div>
       )}
@@ -4800,7 +4716,7 @@ function getTxGuidance(kind: TxStatusKind, state: TxState): string | null {
   return null;
 }
 
-function TxStatus({ state, kind }: { state: TxState; kind: TxStatusKind }) {
+function TxStatus({ state, kind, chainId }: { state: TxState; kind: TxStatusKind; chainId: number }) {
   if (state.status === "idle") return null;
   const guidance = getTxGuidance(kind, state);
   if (state.status === "pending") {
@@ -4824,8 +4740,8 @@ function TxStatus({ state, kind }: { state: TxState; kind: TxStatusKind }) {
       <>
         <p className="success">
           {state.message || "Success"}{" "}
-          {toExplorerTx(getContractsConfig().chainId, state.hash) ? (
-            <a href={toExplorerTx(getContractsConfig().chainId, state.hash)!} target="_blank" rel="noreferrer">
+          {toExplorerTx(chainId, state.hash) ? (
+            <a href={toExplorerTx(chainId, state.hash)!} target="_blank" rel="noreferrer">
               {truncateHash(state.hash)}
             </a>
           ) : (

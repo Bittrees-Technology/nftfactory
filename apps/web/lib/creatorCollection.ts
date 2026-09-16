@@ -4,7 +4,7 @@
  * Uses viem's encodeFunctionData so tuple/struct arguments are encoded correctly
  * without error-prone manual byte-packing.
  */
-import { encodeFunctionData, type TransactionReceipt } from "viem";
+import { encodeFunctionData, toEventSelector, type TransactionReceipt } from "viem";
 
 // ── CreatorFactory ────────────────────────────────────────────────────────────
 
@@ -84,10 +84,13 @@ export function extractDeployedCollectionAddress(
   receipt: TransactionReceipt,
   factoryAddress: `0x${string}`
 ): `0x${string}` | null {
+  if (receipt.status !== 'success') return null;
+  const eventTopic = toEventSelector('CreatorCollectionDeployed(address,address,string,string,string,string)');
   const factoryLog = receipt.logs.find(
     (log) =>
       log.address.toLowerCase() === factoryAddress.toLowerCase() &&
-      log.topics.length >= 3
+      log.topics.length === 3 &&
+      log.topics[0] === eventTopic
   );
   if (!factoryLog?.topics[2]) return null;
   // topics[2] is the ABI-padded 32-byte encoding of the collection address

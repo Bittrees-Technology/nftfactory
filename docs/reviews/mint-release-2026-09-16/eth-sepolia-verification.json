@@ -1,0 +1,343 @@
+{
+  "network": "eth-sepolia",
+  "chainId": 11155111,
+  "checkedAt": "2026-09-16T18:25:48.586Z",
+  "blockNumber": "11718470",
+  "blockTimestamp": "1789583148",
+  "safe": "0xaBE23191D53E3Caad10DE495b7Cfe0d0288b5E6f",
+  "signer": "0xE5350D96FC3161BF5c385843ec5ee24E8B465B2f",
+  "publicBroadcast": false,
+  "custody": {
+    "hasCode": true,
+    "owners": [
+      "0xE5350D96FC3161BF5c385843ec5ee24E8B465B2f"
+    ],
+    "threshold": "1",
+    "safeNonce": "1",
+    "signerNonce": 104,
+    "pendingSignerNonce": 104,
+    "signerBalanceWei": "370843788132480486",
+    "safeBalanceWei": "5000000000000000",
+    "gasPriceWei": "1054596524",
+    "passed": true
+  },
+  "runtime": [
+    {
+      "name": "NftFactoryRegistry",
+      "address": "0x4530ab3ed550ec65fbcf2b1e4c2ccb5f82905b7f",
+      "runtimeHash": "0xcbe269757f656cf91e109d39c6c9c4e45fe3e144443a52c601102a4f660e9e14",
+      "exact": true
+    },
+    {
+      "name": "RoyaltySplitRegistry",
+      "address": "0x096bd73eb0ae183b59c1da7ac8ef1cac5522082d",
+      "runtimeHash": "0xdb1e32a9dcd008a4797d658d9796c3925682603993c976c6a1bbab4dfec94c41",
+      "exact": true
+    },
+    {
+      "name": "SubnameRegistrar",
+      "address": "0x0c63e82d5006e6682b7436f05f4217fc7e65f46f",
+      "runtimeHash": "0xca0c2a04776ba1dc9610a322f88340b39b23f6c97de8901c566db906a6cbf26c",
+      "exact": true
+    },
+    {
+      "name": "ModeratorRegistry",
+      "address": "0x95ec5bf5f35642ebd4d32ab1c9762798f8c71478",
+      "runtimeHash": "0xa28d4af8b1bc8cc3638de296b333aa63c9148c96c6804f5ad0925aa362d4bc42",
+      "exact": true
+    },
+    {
+      "name": "SharedMint721",
+      "address": "0x0c62a94095b73ec539b91607436bc42b8f9c7a91",
+      "runtimeHash": "0xbd933aa9264d6ad7a30b371b3e79e15e735fd7c9eaee6ab04e0f230f36f57af5",
+      "exact": true
+    },
+    {
+      "name": "SharedMint1155",
+      "address": "0x0c5b5c23bc1a47c9c15d43cba1d51c0fad9dc477",
+      "runtimeHash": "0x25e5ac6c18c71bded9bea4d8b423791dfc0bfc519415e874edc762ae504b5485",
+      "exact": true
+    },
+    {
+      "name": "CreatorCollection721",
+      "address": "0x75d5d8ad3311269647f27bf214a8186599febe02",
+      "runtimeHash": "0xc6ecb57cb63be3d1b94aa3cb8364b2e85d0be9b4970e3fef50805c88e25db539",
+      "exact": true
+    },
+    {
+      "name": "CreatorCollection1155",
+      "address": "0xe44186ab7212cd51a424644550d3b6a6c19e8ebb",
+      "runtimeHash": "0x491fb1a898ec07da5eb8fe6fdf07b84ba355bdb4e1ab10404d328406d3f128ea",
+      "exact": true
+    },
+    {
+      "name": "CreatorFactory",
+      "address": "0x350b2bc9c5a2e625b27487d71e8e9ce58f56aeae",
+      "runtimeHash": "0x5220cd1d91c8404f29727a90ab02dd072dadd69df6e7e7404e01c6699e0b7df6",
+      "exact": true
+    },
+    {
+      "name": "Marketplace",
+      "address": "0xbde18862bc7ff0b72dd0a47ae2b746a53a800b4d",
+      "runtimeHash": "0x9df4430443ab6b3c25d33963e72e0abc0d2b5e14184a9e292e23b930905d114a",
+      "exact": true
+    }
+  ],
+  "configuration": [
+    {
+      "name": "NftFactoryRegistry",
+      "field": "owner",
+      "args": [],
+      "actual": "0xaBE23191D53E3Caad10DE495b7Cfe0d0288b5E6f",
+      "expected": "0xaBE23191D53E3Caad10DE495b7Cfe0d0288b5E6f",
+      "passed": true
+    },
+    {
+      "name": "NftFactoryRegistry",
+      "field": "pendingOwner",
+      "args": [],
+      "actual": "0x0000000000000000000000000000000000000000",
+      "expected": "0x0000000000000000000000000000000000000000",
+      "passed": true
+    },
+    {
+      "name": "RoyaltySplitRegistry",
+      "field": "owner",
+      "args": [],
+      "actual": "0xaBE23191D53E3Caad10DE495b7Cfe0d0288b5E6f",
+      "expected": "0xaBE23191D53E3Caad10DE495b7Cfe0d0288b5E6f",
+      "passed": true
+    },
+    {
+      "name": "RoyaltySplitRegistry",
+      "field": "pendingOwner",
+      "args": [],
+      "actual": "0x0000000000000000000000000000000000000000",
+      "expected": "0x0000000000000000000000000000000000000000",
+      "passed": true
+    },
+    {
+      "name": "SubnameRegistrar",
+      "field": "owner",
+      "args": [],
+      "actual": "0xaBE23191D53E3Caad10DE495b7Cfe0d0288b5E6f",
+      "expected": "0xaBE23191D53E3Caad10DE495b7Cfe0d0288b5E6f",
+      "passed": true
+    },
+    {
+      "name": "SubnameRegistrar",
+      "field": "pendingOwner",
+      "args": [],
+      "actual": "0x0000000000000000000000000000000000000000",
+      "expected": "0x0000000000000000000000000000000000000000",
+      "passed": true
+    },
+    {
+      "name": "ModeratorRegistry",
+      "field": "owner",
+      "args": [],
+      "actual": "0xaBE23191D53E3Caad10DE495b7Cfe0d0288b5E6f",
+      "expected": "0xaBE23191D53E3Caad10DE495b7Cfe0d0288b5E6f",
+      "passed": true
+    },
+    {
+      "name": "ModeratorRegistry",
+      "field": "pendingOwner",
+      "args": [],
+      "actual": "0x0000000000000000000000000000000000000000",
+      "expected": "0x0000000000000000000000000000000000000000",
+      "passed": true
+    },
+    {
+      "name": "SharedMint721",
+      "field": "owner",
+      "args": [],
+      "actual": "0xaBE23191D53E3Caad10DE495b7Cfe0d0288b5E6f",
+      "expected": "0xaBE23191D53E3Caad10DE495b7Cfe0d0288b5E6f",
+      "passed": true
+    },
+    {
+      "name": "SharedMint721",
+      "field": "pendingOwner",
+      "args": [],
+      "actual": "0x0000000000000000000000000000000000000000",
+      "expected": "0x0000000000000000000000000000000000000000",
+      "passed": true
+    },
+    {
+      "name": "SharedMint1155",
+      "field": "owner",
+      "args": [],
+      "actual": "0xaBE23191D53E3Caad10DE495b7Cfe0d0288b5E6f",
+      "expected": "0xaBE23191D53E3Caad10DE495b7Cfe0d0288b5E6f",
+      "passed": true
+    },
+    {
+      "name": "SharedMint1155",
+      "field": "pendingOwner",
+      "args": [],
+      "actual": "0x0000000000000000000000000000000000000000",
+      "expected": "0x0000000000000000000000000000000000000000",
+      "passed": true
+    },
+    {
+      "name": "CreatorFactory",
+      "field": "owner",
+      "args": [],
+      "actual": "0xaBE23191D53E3Caad10DE495b7Cfe0d0288b5E6f",
+      "expected": "0xaBE23191D53E3Caad10DE495b7Cfe0d0288b5E6f",
+      "passed": true
+    },
+    {
+      "name": "CreatorFactory",
+      "field": "pendingOwner",
+      "args": [],
+      "actual": "0x0000000000000000000000000000000000000000",
+      "expected": "0x0000000000000000000000000000000000000000",
+      "passed": true
+    },
+    {
+      "name": "Marketplace",
+      "field": "owner",
+      "args": [],
+      "actual": "0xaBE23191D53E3Caad10DE495b7Cfe0d0288b5E6f",
+      "expected": "0xaBE23191D53E3Caad10DE495b7Cfe0d0288b5E6f",
+      "passed": true
+    },
+    {
+      "name": "Marketplace",
+      "field": "pendingOwner",
+      "args": [],
+      "actual": "0x0000000000000000000000000000000000000000",
+      "expected": "0x0000000000000000000000000000000000000000",
+      "passed": true
+    },
+    {
+      "name": "NftFactoryRegistry",
+      "field": "treasury",
+      "args": [],
+      "actual": "0xaBE23191D53E3Caad10DE495b7Cfe0d0288b5E6f",
+      "expected": "0xaBE23191D53E3Caad10DE495b7Cfe0d0288b5E6f",
+      "passed": true
+    },
+    {
+      "name": "SubnameRegistrar",
+      "field": "treasury",
+      "args": [],
+      "actual": "0xaBE23191D53E3Caad10DE495b7Cfe0d0288b5E6f",
+      "expected": "0xaBE23191D53E3Caad10DE495b7Cfe0d0288b5E6f",
+      "passed": true
+    },
+    {
+      "name": "CreatorFactory",
+      "field": "registry",
+      "args": [],
+      "actual": "0x4530aB3eD550eC65FbCF2B1e4C2CCb5F82905b7F",
+      "expected": "0x4530ab3ed550ec65fbcf2b1e4c2ccb5f82905b7f",
+      "passed": true
+    },
+    {
+      "name": "Marketplace",
+      "field": "registry",
+      "args": [],
+      "actual": "0x4530aB3eD550eC65FbCF2B1e4C2CCb5F82905b7F",
+      "expected": "0x4530ab3ed550ec65fbcf2b1e4c2ccb5f82905b7f",
+      "passed": true
+    },
+    {
+      "name": "CreatorFactory",
+      "field": "implementation721",
+      "args": [],
+      "actual": "0x75d5D8AD3311269647f27bF214A8186599FebE02",
+      "expected": "0x75d5d8ad3311269647f27bf214a8186599febe02",
+      "passed": true
+    },
+    {
+      "name": "CreatorFactory",
+      "field": "implementation1155",
+      "args": [],
+      "actual": "0xE44186aB7212Cd51A424644550d3b6A6c19e8EbB",
+      "expected": "0xe44186ab7212cd51a424644550d3b6a6c19e8ebb",
+      "passed": true
+    },
+    {
+      "name": "NftFactoryRegistry",
+      "field": "protocolFeeBps",
+      "args": [],
+      "actual": "0",
+      "expected": "0",
+      "passed": true
+    },
+    {
+      "name": "NftFactoryRegistry",
+      "field": "authorizedFactory",
+      "args": [
+        "0x350b2bc9c5a2e625b27487d71e8e9ce58f56aeae"
+      ],
+      "actual": "true",
+      "expected": "true",
+      "passed": true
+    },
+    {
+      "name": "SharedMint721",
+      "field": "registrar",
+      "args": [],
+      "actual": "0x0c63e82D5006e6682B7436F05F4217FC7e65f46F",
+      "expected": "0x0c63e82d5006e6682b7436f05f4217fc7e65f46f",
+      "passed": true
+    },
+    {
+      "name": "SubnameRegistrar",
+      "field": "authorizedMinter",
+      "args": [
+        "0x0c62a94095b73ec539b91607436bc42b8f9c7a91"
+      ],
+      "actual": "true",
+      "expected": "true",
+      "passed": true
+    },
+    {
+      "name": "SharedMint1155",
+      "field": "registrar",
+      "args": [],
+      "actual": "0x0c63e82D5006e6682B7436F05F4217FC7e65f46F",
+      "expected": "0x0c63e82d5006e6682b7436f05f4217fc7e65f46f",
+      "passed": true
+    },
+    {
+      "name": "SubnameRegistrar",
+      "field": "authorizedMinter",
+      "args": [
+        "0x0c5b5c23bc1a47c9c15d43cba1d51c0fad9dc477"
+      ],
+      "actual": "true",
+      "expected": "true",
+      "passed": true
+    }
+  ],
+  "simulations": [
+    {
+      "name": "SharedMint721",
+      "method": "publish",
+      "passed": true
+    },
+    {
+      "name": "SharedMint1155",
+      "method": "publish",
+      "passed": true
+    },
+    {
+      "name": "CreatorFactory",
+      "standard": "ERC721",
+      "method": "deployCollection",
+      "passed": true
+    },
+    {
+      "name": "CreatorFactory",
+      "standard": "ERC1155",
+      "method": "deployCollection",
+      "passed": true
+    }
+  ],
+  "passed": true
+}
