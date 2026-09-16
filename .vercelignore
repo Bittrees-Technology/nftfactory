@@ -16,3 +16,7 @@ packages/contracts/out
 packages/contracts/cache
 packages/contracts/broadcast
 *.log
+
+# Environment values are supplied by the deployment platform.
+.env*
+**/.env*

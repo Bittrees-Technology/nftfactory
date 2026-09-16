@@ -1,9 +1,9 @@
 {
   "network": "robinhood-mainnet",
   "chainId": 4663,
-  "checkedAt": "2026-09-16T18:26:30.987Z",
-  "blockNumber": "64721944",
-  "blockTimestamp": "1789583190",
+  "checkedAt": "2026-09-16T19:00:04.224Z",
+  "blockNumber": "64741943",
+  "blockTimestamp": "1789585204",
   "safe": "0xaBE23191D53E3Caad10DE495b7Cfe0d0288b5E6f",
   "signer": "0xE5350D96FC3161BF5c385843ec5ee24E8B465B2f",
   "publicBroadcast": false,
@@ -14,11 +14,11 @@
     ],
     "threshold": "1",
     "safeNonce": "0",
-    "signerNonce": 80,
-    "pendingSignerNonce": 80,
-    "signerBalanceWei": "3459653824555656",
+    "signerNonce": 83,
+    "pendingSignerNonce": 83,
+    "signerBalanceWei": "3364430777605027",
     "safeBalanceWei": "0",
-    "gasPriceWei": "49940000",
+    "gasPriceWei": "49842000",
     "passed": true
   },
   "passed": true
