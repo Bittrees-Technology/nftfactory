@@ -45,20 +45,20 @@ Operational notes:
 
 Current Sepolia split-registry deployment:
 
-- `RoyaltySplitRegistry`: `0x6617DD523409a78831E75E156f532d1F0402b5D8`
+- `RoyaltySplitRegistry`: `0x096bd73eb0ae183b59c1da7ac8ef1cac5522082d`
 
 Current app-wired Sepolia contract snapshot:
 
-- `Registry`: `0x2A31aE082179E3AdbCfC4Cf27aC3c094Fd41F56f`
-- `Marketplace`: `0xdB8429Eb30f36F8DB0146441645B7295fF37FfD0`
-- `RoyaltySplitRegistry`: `0x6617DD523409a78831E75E156f532d1F0402b5D8`
-- `ModeratorRegistry`: `0x5F6F4f93127c9c04a142C5138523a734112fBE40`
-- `SharedMint721`: `0xA98Db2732baD732aA588cad65478D3153A48f606`
-- `SharedMint1155`: `0xe0F306B9fB44C3d46C0360503D3B1b68366BA97d`
-- `SubnameRegistrar`: `0x549530BF5E17697d6C249Ba2b3E408aCA38f7b3F`
-- `CreatorFactory`: `0xC3D1fbacC9BF055A8c125056aB46955A268c7c56`
-- `CreatorCollection721 implementation`: `0x8F85E590047480b68cBe210AC9a433d88B2747BC`
-- `CreatorCollection1155 implementation`: `0xFc7F35DD10B5aEBA8e39eCb1CaeE3a319c0d1503`
+- `Registry`: `0x4530ab3ed550ec65fbcf2b1e4c2ccb5f82905b7f`
+- `Marketplace`: `0xbde18862bc7ff0b72dd0a47ae2b746a53a800b4d`
+- `RoyaltySplitRegistry`: `0x096bd73eb0ae183b59c1da7ac8ef1cac5522082d`
+- `ModeratorRegistry`: `0x95ec5bf5f35642ebd4d32ab1c9762798f8c71478`
+- `SharedMint721`: `0x0c62a94095b73ec539b91607436bc42b8f9c7a91`
+- `SharedMint1155`: `0x0c5b5c23bc1a47c9c15d43cba1d51c0fad9dc477`
+- `SubnameRegistrar`: `0x0c63e82d5006e6682b7436f05f4217fc7e65f46f`
+- `CreatorFactory`: `0x350b2bc9c5a2e625b27487d71e8e9ce58f56aeae`
+- `CreatorCollection721 implementation`: `0x75d5d8ad3311269647f27bf214a8186599febe02`
+- `CreatorCollection1155 implementation`: `0xe44186ab7212cd51a424644550d3b6a6c19e8ebb`
 - `ENS NameWrapper`: `0x0635513f179D50A207757E05759CbD106d7dFcE8`
 - `ENS ETH Registrar Controller`: `0xFED6a969AaA60E4961FCD3EBF1A2e8913ac65B72`
 - `RPC`: `https://ethereum-sepolia-rpc.publicnode.com`

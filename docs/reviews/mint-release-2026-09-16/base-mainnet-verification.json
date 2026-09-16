@@ -1,0 +1,25 @@
+{
+  "network": "base-mainnet",
+  "chainId": 8453,
+  "checkedAt": "2026-09-16T18:26:23.548Z",
+  "blockNumber": "51396918",
+  "blockTimestamp": "1789583183",
+  "safe": "0xaBE23191D53E3Caad10DE495b7Cfe0d0288b5E6f",
+  "signer": "0xE5350D96FC3161BF5c385843ec5ee24E8B465B2f",
+  "publicBroadcast": false,
+  "custody": {
+    "hasCode": true,
+    "owners": [
+      "0xE5350D96FC3161BF5c385843ec5ee24E8B465B2f"
+    ],
+    "threshold": "1",
+    "safeNonce": "0",
+    "signerNonce": 362,
+    "pendingSignerNonce": 362,
+    "signerBalanceWei": "31859311007013",
+    "safeBalanceWei": "0",
+    "gasPriceWei": "6000000",
+    "passed": true
+  },
+  "passed": true
+}

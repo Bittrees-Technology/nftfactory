@@ -1,0 +1,7 @@
+{
+  "candidate-contracts.json": "334cbbdb5d52dba9a8fcba27b440bb87f0e734e3a248c35c520b53157e107dc6",
+  "fork-runtime-verification.json": "94fbfa1864d2d32c9307dbcc58087b13d923033507a2f17883f3dcc1f768cbf9",
+  "rehearsal.json": "8f4592d8a15a7a24337f8a2d96235d3bad937ff32d8afd3d63a5e4b27e6556f0",
+  "safe-accept-ownership.json": "66651158f63c41b8b972a52f2c7d2e2e36b3d1c7f0e714816aa44abcb1302db0",
+  "unsigned-deployment.json": "dec71aa67c9e4592c8c85e0800c6d1bbca5e25a5e5e1be466bbc625081f5a34e"
+}

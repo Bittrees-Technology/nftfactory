@@ -108,6 +108,9 @@ jobs:
       - name: Build contracts
         run: npm --workspace packages/contracts run build
 
+      - name: Check frontend encoders against compiled contracts
+        run: node --import tsx scripts/check-mint-contract-abi.ts
+
       - name: Run Forge tests
         run: npm run test:contracts
 

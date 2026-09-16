@@ -5,7 +5,7 @@
       "block": {
         "logs": [
           {
-            "address": "0x2A31aE082179E3AdbCfC4Cf27aC3c094Fd41F56f",
+            "address": "0x4530ab3ed550ec65fbcf2b1e4c2ccb5f82905b7f",
             "decoded": {
               "name": "CreatorRegistered",
               "args": {
