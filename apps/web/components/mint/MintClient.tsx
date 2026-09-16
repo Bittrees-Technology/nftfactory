@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import HeaderWalletButton from "../HeaderWalletButton";
 import { mintedTokenId, positiveUint256, pendingMintKey, readPendingMint, pendingCollectionKey, readPendingCollection, type PendingCollection, type PendingMint } from "../../lib/mintReceipt";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { ensureWalletSession } from "../../lib/walletSession";
@@ -14,8 +15,7 @@ import {
   encodePublish1155,
   encodePublish721,
   encodeRegisterSubname,
-  toHexWei,
-  truncateHash
+  toHexWei
 } from "../../lib/abi";
 import {
   encodeAcceptOwnership,
@@ -651,7 +651,6 @@ const namedContractAbi = [
     outputs: [{ name: "", type: "string" }]
   }
 ] as const;
-
 
 function localMintFeedKey(chainId: number): string {
   return `nftfactory:local-mint-feed:v1:${chainId}`;
@@ -3181,72 +3180,19 @@ function MintWorkspace({
 
   return (
     <section className="wizard mintWorkspace">
-      <div className="card formCard mintWorkspaceHero">
-        <div className="mintWorkspaceHeroCopy">
-          <p className="eyebrow">Creator Studio</p>
-          <h1>
-            {pageMode === "manage"
-              ? "Manage"
-              : pageMode === "view"
-                ? "View"
-                : "Mint"}
-          </h1>
-          <p className="hint">
-            {pageMode === "manage"
-              ? "Handle ownership, identity, verification, and collection settings from one workspace."
-              : pageMode === "view"
-                ? "Review a collection contract, its indexed inventory, and the storefront state around it."
-                : "Create onchain media inside the shared collection or one of your collection contracts."}
-          </p>
-          <div className="mintWorkspaceHeroMeta">
-            <span className="mintWorkspaceHeroPill">
-              {pageMode === "manage"
-                ? "Verification + ownership controls"
-                : pageMode === "view"
-                  ? "Indexed collection reads"
-                  : "Shared and owned collection minting"}
-            </span>
-            <span className="mintWorkspaceHeroPill">
-              {pageMode === "manage"
-                ? "Factory collections"
-                : pageMode === "view"
-                  ? "Storefront inspection"
-                  : "IPFS-backed metadata"}
-            </span>
-          </div>
-          <div className="mintWorkspaceHeroSummary">
-            <div className="mintWorkspaceHeroSummaryCard">
-              <span className="flowLabel">Mode</span>
-              <strong>{pageMode === "mint" ? "Mint" : pageMode === "view" ? "View" : "Manage"}</strong>
-              <p>{pageMode === "mint" ? "Publish new tokens" : pageMode === "view" ? "Inspect live collection state" : "Operate a collection contract"}</p>
-            </div>
-            <div className="mintWorkspaceHeroSummaryCard">
-              <span className="flowLabel">Network</span>
-              <strong>{appChain.name}</strong>
-              <p>Chain ID {config.chainId}</p>
-            </div>
-            <div className="mintWorkspaceHeroSummaryCard">
-              <span className="flowLabel">Wallet</span>
-              <strong>{isConnected && account ? shortenAddress(account) : "Not connected"}</strong>
-              <p>{isConnected ? "Ready for wallet actions" : "Connect wallet to begin"}</p>
-            </div>
-          </div>
+      <header className="collectionToolsHeader">
+        <h1>Collection tools</h1>
+        <nav className="row mintWorkspaceModes" aria-label="Collection tools">
+          {(["mint", "view", "manage"] as const).map(mode => <button key={mode} type="button" aria-pressed={pageMode === mode} className={pageMode === mode ? "presetButton presetActive" : "presetButton"} onClick={() => setPageMode(mode)}>{mode === "mint" ? "Mint" : mode === "view" ? "View" : "Manage"}</button>)}
+        </nav>
+        <div className="collectionToolsContext">
+          <label>Network<select value={selectedWalletNetworkId} onChange={e => void onSelectWalletNetwork(Number(e.target.value))} disabled={!isConnected || isSwitchingChain}>{selectableWalletChains.map(chain => <option key={chain.id} value={chain.id}>{chain.name}</option>)}</select></label>
+          {isConnected && account ? <p className="hint">Wallet: {shortenAddress(account)}</p> : <HeaderWalletButton />}
         </div>
-        <div className="row mintWorkspaceModes">
-          <button type="button" className={pageMode === "mint" ? "presetButton presetActive mintWorkspaceModeButton" : "presetButton mintWorkspaceModeButton"} onClick={() => setPageMode("mint")}>
-            <span className="mintWorkspaceModeLabel">Mint</span>
-            <span className="mintWorkspaceModeHint">Publish</span>
-          </button>
-          <button type="button" className={pageMode === "view" ? "presetButton presetActive mintWorkspaceModeButton" : "presetButton mintWorkspaceModeButton"} onClick={() => setPageMode("view")}>
-            <span className="mintWorkspaceModeLabel">View</span>
-            <span className="mintWorkspaceModeHint">Inspect</span>
-          </button>
-          <button type="button" className={pageMode === "manage" ? "presetButton presetActive mintWorkspaceModeButton" : "presetButton mintWorkspaceModeButton"} onClick={() => setPageMode("manage")}>
-            <span className="mintWorkspaceModeLabel">Manage</span>
-            <span className="mintWorkspaceModeHint">Operate</span>
-          </button>
-        </div>
-      </div>
+        {isSwitchingChain && <p role="status">Switching network…</p>}
+        {wrongNetwork && <p className="hint">Select {appChain.name} in your wallet to continue.</p>}
+        {networkSwitchMessage && <p className="error">{networkSwitchMessage}</p>}
+      </header>
 
       {/* ════════════════════════════════════════════════════════════════════ */}
       {/* MINT FLOW                                                           */}
@@ -3254,54 +3200,14 @@ function MintWorkspace({
 
       {pageMode === "mint" && (
         <form className="wizard" onSubmit={onPublish}>
-          <div className="card actionCardStatic mintWorkspaceIntroCard">
-            <span className="flowLabel">Mint Flow</span>
-            <h3>Publish into the shared collection or one of your collection contracts.</h3>
-            <p>Use the shared path for speed, or switch to a dedicated contract when the release needs its own control.</p>
-          </div>
 
-          {/* Step 1: Wallet */}
-          <div className="card formCard mintStepCard">
-            <h3>1. Wallet</h3>
-            <div className="mintStepSummaryGrid">
-              <div className="mintStepSummaryCard">
-                <span className="flowLabel">Wallet</span>
-                <strong>{isConnected && account ? shortenAddress(account) : "Not connected"}</strong>
-                <p>{isConnected ? "Connected for signing" : "Connect wallet to continue"}</p>
-              </div>
-              <div className="mintStepSummaryCard">
-                <span className="flowLabel">Active network</span>
-                <strong>{appChain.name}</strong>
-                <p>Chain ID {selectedWalletNetworkId}</p>
-              </div>
-            </div>
-            <div className="stack mintStepStack">
-              <label className="mintStepInlineField">
-                <span>Network</span>
-                <select
-                  value={selectedWalletNetworkId}
-                  onChange={(e) => void onSelectWalletNetwork(Number(e.target.value))}
-                  disabled={!isConnected || isSwitchingChain}
-                >
-                  {selectableWalletChains.map((chain) => (
-                    <option key={chain.id} value={chain.id}>
-                      {chain.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-            {isSwitchingChain ? (
-              <p className="hint">Switching wallet network…</p>
-            ) : null}
-            {networkSwitchMessage ? <p className="error">{networkSwitchMessage}</p> : null}
-          </div>
 
-          {/* Step 2: Collection selection */}
+
+          {/* Collection */}
           <div className="card formCard mintStepCard">
-            <h3>2. Collection target</h3>
+            <h3>1. Collection</h3>
             <p className="hint">
-              Pick the shared collection for the fastest path, or use your own collection contract for more control.
+              Choose the shared collection or a contract you own.
             </p>
 
             <div className="mintStepFieldGrid">
@@ -3309,10 +3215,10 @@ function MintWorkspace({
                 Token type
                 <select value={standard} onChange={(e) => setStandard(e.target.value as Standard)}>
                   <option value="ERC721">
-                    ERC-721 — Unique / one-of-one (each token is distinct)
+                    One of one (ERC-721)
                   </option>
                   <option value="ERC1155">
-                    ERC-1155 — Multi-edition (multiple copies of the same token)
+                    Multiple copies (ERC-1155)
                   </option>
                 </select>
               </label>
@@ -3327,10 +3233,10 @@ function MintWorkspace({
                   }}
                 >
                   <option value="shared">
-                    Shared collection — mint instantly, no setup required
+                    NFTFactory shared collection
                   </option>
                   <option value="custom">
-                    Owned collection — your own contract, full control
+                    My collection
                   </option>
                 </select>
               </label>
@@ -3342,9 +3248,9 @@ function MintWorkspace({
                   <strong>Shared collection</strong>
                   <span className="profileChip">{standard}</span>
                 </div>
-                <p className="hint">Your token mints into the NFTFactory shared contract for the fastest publish path.</p>
+                <p className="hint">NFTFactory operates this shared contract.</p>
                 <p className="mono">{standard === "ERC721" ? config.shared721 : config.shared1155}</p>
-                <p className="hint">Switch to an owned collection when the release needs a dedicated contract.</p>
+
               </div>
             )}
 
@@ -3355,7 +3261,7 @@ function MintWorkspace({
                     <strong>Owned collection</strong>
                     <span className="profileChip">{standard}</span>
                   </div>
-                  <p className="hint">Mint into a contract you own. Set the NFT name and metadata in the next step.</p>
+                  <p className="hint">Select a collection or create one below.</p>
                   <label>
                     Collection source
                     <select
@@ -3391,7 +3297,7 @@ function MintWorkspace({
                   )}
                   {mintFilteredKnownCollections.length === 0 ? (
                     <p className="hint">
-                      No indexed {standard} collection contracts are available for this wallet on this network yet. Switch token type, wait for indexing, or enter an address manually.
+                      No {standard} collections found. Enter an address or create a collection.
                     </p>
                   ) : null}
                 </div>
@@ -3417,7 +3323,7 @@ function MintWorkspace({
                 {/* ERC-1155 custom: token ID */}
                 {standard === "ERC1155" && (
                   <label>
-                    Token ID (you choose for custom ERC-1155)
+                    Token ID
                     <input
                       value={custom1155TokenId}
                       onChange={(e) => setCustom1155TokenId(e.target.value)}
@@ -3436,8 +3342,7 @@ function MintWorkspace({
                   <span>
                     Lock metadata on mint
                     <span className="hint" style={{ display: "block" }}>
-                      When locked, the token URI can never be changed — permanent provenance.
-                      Uncheck to keep metadata updatable after minting.
+                      Prevents future changes to this NFT’s metadata.
                     </span>
                   </span>
                 </label>
@@ -3449,8 +3354,7 @@ function MintWorkspace({
                   </summary>
                   <div className="formCard inset" style={{ marginTop: "0.75rem" }}>
                     <p className="hint">
-                      Create a new collection contract, then mint into it in this same flow. This step sets the
-                      collection contract identity and ownership. NFT title and description are set in step 3.
+                      Deploys a collection owned by your connected wallet. Minting an NFT is a separate transaction.
                     </p>
                     <label>
                       Collection name
@@ -3507,9 +3411,9 @@ function MintWorkspace({
                     >
                       {deployTx.status === "pending" ? "Confirming…" : pendingDeployment ? "Check collection confirmation" : `Deploy ${standard} collection`}
                     </button>
-                    <TxStatus chainId={config.chainId} state={deployTx} kind="deploy" />
+                    <TxStatus chainId={config.chainId} state={deployTx} />
                     <p className="hint">
-                      New collection contracts automatically submit explorer proxy verification after deployment. You can retry or inspect verification from <strong>Manage → Verification</strong>.
+                      Check explorer verification under Manage.
                     </p>
                   </div>
                 </details>
@@ -3517,11 +3421,11 @@ function MintWorkspace({
             )}
           </div>
 
-          {/* Step 3: Asset + metadata */}
+          {/* Artwork */}
           <div className="card formCard mintStepCard">
-            <h3>3. Asset and Metadata</h3>
+            <h3>2. Artwork</h3>
             <p className="hint">
-              This step sets the NFT metadata that will be uploaded and minted.
+              Your image, name and description are stored on IPFS.
             </p>
             <div className="mintStepFieldGrid">
               <label>
@@ -3539,87 +3443,17 @@ function MintWorkspace({
                 </label>
               )}
             </div>
-            <div className="selectionCard mintStepSelectionCard">
-              <span className="detailLabel">Media Inputs</span>
-              <label>
-                Upload image
-                <input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => setImageFile(e.target.files?.[0] ?? null)} />
-              </label>
-              <label className="inlineCheck">
-                <input
-                  type="checkbox"
-                  disabled
-                  checked={includeAudio}
-                  onChange={(e) => setIncludeAudio(e.target.checked)}
-                />
-                <span>Audio uploads are not supported in this release</span>
-              </label>
-              {includeAudio ? (
-                <label>
-                  Upload audio
-                  <input type="file" accept="audio/*" onChange={(e) => setAudioFile(e.target.files?.[0] ?? null)} />
-                </label>
-              ) : null}
-              {audioFile ? (
-                <p className="hint mono">Audio: {audioFile.name}</p>
-              ) : null}
-            </div>
-            {previewUrl && (
-              <div className="previewWrap mintPreviewWrap">
-                <img src={previewUrl} alt={name || "NFT preview"} className="previewImage" />
-              </div>
-            )}
-            <div className="selectionCard mintStepSelectionCard">
-              <span className="detailLabel">Metadata Options</span>
-              <label className="inlineCheck">
-                <input
-                  type="checkbox"
-                  disabled
-                  checked={includeExternalUrl}
-                  onChange={(e) => setIncludeExternalUrl(e.target.checked)}
-                />
-                <span>External metadata links are not included in this release</span>
-              </label>
-              {includeExternalUrl ? (
-                <label>
-                  External URL
-                  <input value={externalUrl} onChange={(e) => setExternalUrl(e.target.value)} />
-                </label>
-              ) : null}
-              <label className="inlineCheck">
-                <input
-                  type="checkbox"
-                  disabled
-                  checked={useCustomMetadataUri}
-                  onChange={(e) => setUseCustomMetadataUri(e.target.checked)}
-                />
-                <span>Custom metadata is paused until backup verification is available</span>
-              </label>
-              {useCustomMetadataUri ? (
-                <label>
-                  Custom metadata URI
-                  <input
-                    value={metadataUri}
-                    onChange={(e) => setMetadataUri(e.target.value)}
-                  />
-                </label>
-              ) : (
-                <p className="hint">
-                  Leave this off to generate metadata automatically from the fields and uploaded media above.
-                </p>
-              )}
-            </div>
-            <TxStatus chainId={config.chainId} state={uploadTx} kind="upload" />
+            <label>
+              Image
+              <input type="file" accept="image/png,image/jpeg,image/webp" onChange={e => setImageFile(e.target.files?.[0] ?? null)} />
+              <span className="hint">PNG, JPEG or WebP, under 3 MiB.</span>
+            </label>
+            <TxStatus chainId={config.chainId} state={uploadTx} />
           </div>
 
-          {/* Step 4: Mint settings */}
+          {/* Review and mint */}
           <div className="card formCard mintStepCard">
-            <h3>4. Drop preview</h3>
-            {mintMode === "custom" ? (
-              <p className="hint">
-                Owned collections use the collection identity you already set.
-              </p>
-            ) : null}
+            <h3>3. Review and mint</h3>
 
             {(previewUrl || name || audioFile || metadataUri || uploadReceipt.metadataUri) ? (
               <div className="nftPreviewCard mintPreviewCard">
@@ -3641,8 +3475,7 @@ function MintWorkspace({
                       <p className="hint mono"><strong>Collection contract:</strong> {customCollectionAddress}</p>
                     ) : null}
                     <p className="hint"><strong>Token type:</strong> {standard === "ERC721" ? "ERC-721 unique mint" : `ERC-1155 with ${copies || "1"} edition${copies === "1" ? "" : "s"}`}</p>
-                    <p className="hint"><strong>NFT title:</strong> {name || "Untitled NFT"}</p>
-                    <p className="hint"><strong>Metadata:</strong> {useCustomMetadataUri ? "Custom IPFS metadata" : "Generated from form inputs"}</p>
+
                     <p className="hint"><strong>Media:</strong> {imageFile ? "Image attached" : "No image"}{audioFile ? " + audio attached" : ""}</p>
                     {includeExternalUrl && externalUrl ? <p className="hint"><strong>External link:</strong> included</p> : null}
                   </div>
@@ -3656,17 +3489,11 @@ function MintWorkspace({
                 </div>
               </div>
             ) : (
-              <p className="hint">Fill in asset details above to build the publish preview.</p>
+              <p className="hint">Choose an image and enter a name to preview your NFT.</p>
             )}
-          </div>
 
-          {/* Step 5: Publish */}
-          <div className="card formCard">
-            <h3>5. Publish onchain</h3>
             <p className="hint">
-              This is the final blockchain transaction for the flow above. Make sure your metadata URI
-              and collection choice are correct before you submit. If you selected an image above, this
-              button will upload media and metadata to IPFS and then mint in one sequence.
+              Your wallet shows the network fee before you confirm. Minting makes your image and metadata public.
             </p>
             <button
               type="submit"
@@ -3676,16 +3503,12 @@ function MintWorkspace({
                 ? "Publishing…"
                 : pendingMint
                   ? "Check confirmation"
-                : useCustomMetadataUri
-                  ? "Mint With Custom Metadata"
-                  : (imageFile || audioFile)
-                    ? "Upload and Mint"
-                    : "Mint Now"}
+                : "Mint NFT"}
             </button>
-            <TxStatus chainId={config.chainId} state={mintTx} kind="mint" />
+            <TxStatus chainId={config.chainId} state={mintTx} />
             {(uploadReceipt.metadataUri || mintTx.hash) ? (
               <div className="selectionCard">
-                <span className="detailLabel">Publish Receipts</span>
+                <span className="detailLabel">Receipt</span>
                 <div className="compactList">
                   {mintTx.hash && toExplorerTx(config.chainId, mintTx.hash) ? (
                     <a href={toExplorerTx(config.chainId, mintTx.hash)!} target="_blank" rel="noreferrer">
@@ -3701,12 +3524,12 @@ function MintWorkspace({
                   ) : null}
                   {uploadReceipt.imageGatewayUrl ? (
                     <a href={uploadReceipt.imageGatewayUrl} target="_blank" rel="noreferrer">
-                      View image asset ↗
+                      View image
                     </a>
                   ) : null}
                   {uploadReceipt.audioGatewayUrl ? (
                     <a href={uploadReceipt.audioGatewayUrl} target="_blank" rel="noreferrer">
-                      View audio asset ↗
+                      View audio
                     </a>
                   ) : null}
                 </div>
@@ -3723,29 +3546,13 @@ function MintWorkspace({
       {pageMode === "view" && (
         <div className="wizard">
 
-          <div className="card formCard mintWorkspaceIntroCard">
-            <span className="flowLabel">View Flow</span>
-            <h3>Inspect a collection contract, its live settings, and its indexed tokens.</h3>
-              <p>Review collection state without opening manager controls.</p>
-          </div>
 
           <div className="card formCard mintStepCard">
-            <h3>1. Choose collection</h3>
+            <h3>Collection</h3>
             <p className="hint">
-              Read-only view for an existing collection contract and its indexed inventory.
+              Enter a collection address to view its NFTs.
             </p>
-            <div className="mintStepSummaryGrid">
-              <div className="mintStepSummaryCard">
-                <span className="flowLabel">Network</span>
-                <strong>{appChain.name}</strong>
-                <p>Chain ID {config.chainId}</p>
-              </div>
-              <div className="mintStepSummaryCard">
-                <span className="flowLabel">Wallet</span>
-                <strong>{isConnected && account ? shortenAddress(account) : "Not connected"}</strong>
-                <p>{isConnected ? "Ready for collection reads" : "Connect wallet to inspect faster"}</p>
-              </div>
-            </div>
+
             {verifiedKnownCollections.length > 0 ? (
               <label>
                 Collection source
@@ -3785,7 +3592,7 @@ function MintWorkspace({
           </div>
 
           <div className="card formCard mintStepCard">
-            <h3>2. Collection overview</h3>
+            <h3>Details</h3>
             {!isAddress(manageAddress) ? (
               <p className="hint">Select or enter a valid collection address to load details.</p>
             ) : (
@@ -3852,7 +3659,7 @@ function MintWorkspace({
           </div>
 
           <div className="card formCard">
-            <h3>3. Indexed tokens</h3>
+            <h3>NFTs</h3>
             <div className="row" style={{ justifyContent: "space-between", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
               <p className="hint" style={{ margin: 0 }}>
                 This view reads indexed tokens directly. Re-sync runs a targeted collection refresh.
@@ -3907,7 +3714,7 @@ function MintWorkspace({
                     });
                 }}
               >
-                {viewCollectionLoading ? "Syncing…" : "Re-sync collection"}
+                {viewCollectionLoading ? "Syncing…" : "Refresh NFTs"}
               </button>
             </div>
             {!isAddress(manageAddress) ? (
@@ -3917,11 +3724,11 @@ function MintWorkspace({
             ) : viewCollectionError ? (
               <p className="error">{viewCollectionError}</p>
             ) : viewCollectionCount === 0 ? (
-              <p className="hint">No indexed tokens are visible yet. Mint activity may still be propagating, or the indexer may need another sync pass.</p>
+              <p className="hint">No NFTs found. If you just minted, refresh after confirmation.</p>
             ) : (
               <div className="stack">
                 <p className="hint">
-                  Indexed token count: <strong>{viewCollectionCount}</strong>.
+                  NFTs: <strong>{viewCollectionCount}</strong>.
                   {" "}Showing {viewCollectionTokens.length} token{viewCollectionTokens.length === 1 ? "" : "s"} in this view.
                 </p>
                 {viewCollectionTokens.map((token) => (
@@ -3943,35 +3750,12 @@ function MintWorkspace({
       {pageMode === "manage" && (
         <div className="wizard">
 
-          <div className="card formCard mintWorkspaceIntroCard">
-            <span className="flowLabel">Manage Flow</span>
-            <h3>Choose a collection, verify it, then update identity or contract settings.</h3>
-            <p>Use this route for live contract operations after the collection exists.</p>
-          </div>
+
 
           <div className="card formCard mintStepCard">
-            <h3>Wallet</h3>
-            {wrongNetwork ? (
-              <p className="hint">Select {appChain.name} in the header wallet menu to continue.</p>
-            ) : null}
-            <div className="mintStepSummaryGrid">
-              <div className="mintStepSummaryCard">
-                <span className="flowLabel">Wallet</span>
-                <strong>{isConnected && account ? shortenAddress(account) : "Not connected"}</strong>
-                <p>{connectedWalletOwnsCollection ? "Current owner detected" : "Owner wallet required for writes"}</p>
-              </div>
-              <div className="mintStepSummaryCard">
-                <span className="flowLabel">Network</span>
-                <strong>{appChain.name}</strong>
-                <p>{wrongNetwork ? "Switch network to continue" : "Ready for contract actions"}</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="card formCard mintStepCard">
-            <h3>1. Choose collection</h3>
+            <h3>Collection</h3>
             <p className="hint">
-              These actions apply to collection contracts deployed through the factory. You must be the current <code>owner</code> to call them.
+              Select a collection you own to change its settings.
             </p>
             {verifiedKnownCollections.length > 0 ? (
               <label>
@@ -4028,11 +3812,10 @@ function MintWorkspace({
             ) : null}
           </div>
 
-          <div className="card formCard mintStepCard">
-            <h3>2. Verification</h3>
+          <details className="card formCard mintStepCard collectionSetting">
+            <summary>Explorer verification</summary>
             <p className="hint">
-              Collection contracts are deployed as ERC-1967 proxies. This action submits proxy verification to the explorer
-              so the collection address resolves to verified source instead of only showing the raw proxy shell.
+              Verify the collection’s source code on the block explorer.
             </p>
             <div className="selectionCard mintStepSelectionCard">
               <div className="mintStepSelectionHeader">
@@ -4083,11 +3866,11 @@ function MintWorkspace({
                     void checkCollectionVerificationStatus(manageAddress);
                   }}
                 >
-                  Check Current Status
+                  Check status
                 </button>
                 {collectionVerificationTx.explorerUrl ? (
                   <a href={collectionVerificationTx.explorerUrl} target="_blank" rel="noreferrer" className="ctaLink secondaryLink">
-                    Open Code View
+                    View source code
                   </a>
                 ) : null}
               </div>
@@ -4110,12 +3893,12 @@ function MintWorkspace({
                 </p>
               ) : null}
             </div>
-          </div>
+          </details>
 
-          <div className="card formCard mintStepCard">
-            <h3>3. Collection Identity</h3>
+          <details className="card formCard mintStepCard collectionSetting">
+            <summary>Collection name</summary>
             <p className="hint">
-              Manage the human-readable identity for this collection. Profile ENS setup stays in <strong>Profile Setup</strong>.
+              Link an ENS name to this collection.
             </p>
             {!selectedManageCollection && isAddress(manageAddress) ? (
               <p className="hint">
@@ -4256,20 +4039,20 @@ function MintWorkspace({
             >
               {collectionIdentityButtonLabel}
             </button>
-            <TxStatus chainId={config.chainId} state={subnameTx} kind="identity" />
-          </div>
+            <TxStatus chainId={config.chainId} state={subnameTx} />
+          </details>
 
-          <div className="card formCard mintStepCard">
-            <h3>4. Royalties and Splits</h3>
+          <details className="card formCard mintStepCard collectionSetting">
+            <summary>Royalties</summary>
             <p className="hint">
-              Manage the collection contract&apos;s default royalty and, if needed, store a collaborator split policy in the protocol split registry.
+              Set the royalty recipient, rate and optional collaborator shares.
             </p>
             <div className="mintRoyaltySection">
               <div className="selectionCard mintRoyaltyPanel mintStepSelectionCard">
                 <div className="mintRoyaltyHeader">
                   <div>
                     <p><strong>Default royalty</strong></p>
-                    <p className="hint">Set the collection contract&apos;s EIP-2981 royalty receiver and basis points.</p>
+                    <p className="hint">500 basis points = 5%.</p>
                   </div>
                   <p className="hint mintRoyaltyMeta">
                     Current target: <strong>{manageRoyaltyPercent}</strong>
@@ -4303,7 +4086,7 @@ function MintWorkspace({
                 >
                   {royaltyTx.status === "pending" ? "Saving royalty…" : "Save Default Royalty"}
                 </button>
-                <TxStatus chainId={config.chainId} state={royaltyTx} kind="royalty" />
+                <TxStatus chainId={config.chainId} state={royaltyTx} />
               </div>
 
               <div className="selectionCard mintRoyaltyPanel mintStepSelectionCard">
@@ -4441,14 +4224,14 @@ function MintWorkspace({
                     <p className="hint">Once configured, this panel stores collaborator royalty weights in the on-chain split registry.</p>
                   </>
                 )}
-                <TxStatus chainId={config.chainId} state={royaltySplitTx} kind="split" />
+                <TxStatus chainId={config.chainId} state={royaltySplitTx} />
               </div>
             </div>
-          </div>
+          </details>
 
           {/* Transfer ownership */}
-          <div className="card formCard mintStepCard">
-            <h3>5. Transfer Ownership</h3>
+          <details className="card formCard mintStepCard collectionSetting">
+            <summary>Transfer ownership</summary>
             <p className="hint">
               Passes full control of this collection to a new address. New collection implementations use a
               pending acceptance flow: the next owner must accept ownership, and the current owner can reject
@@ -4614,15 +4397,15 @@ function MintWorkspace({
                 </button>
               </>
             )}
-            <TxStatus chainId={config.chainId} state={transferTx} kind="transfer" />
-          </div>
+            <TxStatus chainId={config.chainId} state={transferTx} />
+          </details>
 
           {/* Finalize upgrades */}
-          <div className="card formCard mintStepCard">
-            <h3>6. Finalize Upgrades ⚠️</h3>
+          <details className="card formCard mintStepCard collectionSetting">
+            <summary>Disable upgrades</summary>
             <div className="selectionCard mintStepSelectionCard mintDangerCard">
               <p className="hint">
-                Permanently disables the UUPS upgrade path for this collection contract. After finalization, the logic contract can <strong>never</strong> be replaced.
+                Permanently prevents changes to this collection’s contract code.
               </p>
               <p className="hint">
                 Only the collection owner can call this. It affects all future mints and interactions with the collection.
@@ -4648,10 +4431,10 @@ function MintWorkspace({
               }
               style={{ background: finalizeConfirmed ? "#c00" : undefined }}
             >
-              {finalizeTx.status === "pending" ? "Finalizing…" : "Permanently Finalize Upgrades"}
+              {finalizeTx.status === "pending" ? "Finalizing…" : "Permanently disable upgrades"}
             </button>
-            <TxStatus chainId={config.chainId} state={finalizeTx} kind="finalize" />
-          </div>
+            <TxStatus chainId={config.chainId} state={finalizeTx} />
+          </details>
         </div>
       )}
     </section>
@@ -4660,102 +4443,11 @@ function MintWorkspace({
 
 // ── Shared status display ─────────────────────────────────────────────────────
 
-type TxStatusKind = "deploy" | "upload" | "mint" | "identity" | "royalty" | "split" | "transfer" | "finalize";
-
-function getTxGuidance(kind: TxStatusKind, state: TxState): string | null {
+function TxStatus({ state, chainId }: { state: TxState; chainId: number }) {
   if (state.status === "idle") return null;
-
-  if (kind === "deploy") {
-    if (state.status === "pending") return "Keep the wallet open until the factory transaction confirms.";
-    if (state.status === "error") return "Verify the connected wallet, selected chain, royalty inputs, and factory configuration before retrying deployment.";
-    return "Next: continue into asset setup or open Manage.";
-  }
-
-  if (kind === "upload") {
-    if (state.status === "pending") return "This step depends on the IPFS route and tunnel staying healthy through the upload.";
-    if (state.status === "error") return "Check the deploy health banner, IPFS recovery notes, and gateway/backend availability before retrying the upload.";
-    return "Metadata is ready. Review the preview, then publish onchain.";
-  }
-
-  if (kind === "mint") {
-    if (state.status === "pending") return "Wait for the wallet confirmation and chain receipt before assuming the release is live.";
-    if (state.status === "error") return "Recheck the collection selection, metadata URI, wallet network, and any IPFS prerequisites before retrying publish.";
-    return "Publish completed. Use the receipts below to inspect the transaction and assets.";
-  }
-
-  if (kind === "identity") {
-    if (state.status === "pending") return "ENS and profile identity actions can take a moment to propagate after the transaction confirms.";
-    if (state.status === "error") return "Verify the collection address, wallet ownership, and ENS configuration before retrying this identity step.";
-    return "Identity updated. Refresh indexed views if the creator route does not update immediately.";
-  }
-
-  if (kind === "royalty") {
-    if (state.status === "pending") return "Wait for the royalty update to confirm before relying on the new payout target.";
-    if (state.status === "error") return "Check the collection address, connected owner wallet, receiver address, and basis points before retrying.";
-    return "Default royalty updated. Verify secondary-sale settings again before moving to production.";
-  }
-
-  if (kind === "split") {
-    if (state.status === "pending") return "The split registry write is in progress. Keep the wallet open until the collaborator policy confirms.";
-    if (state.status === "error") return "Confirm the split registry is configured, every collaborator address is valid, and the split total equals 100%.";
-    return "Collaborator split policy saved. Re-open this panel to validate the stored weights.";
-  }
-
-  if (kind === "transfer") {
-    if (state.status === "pending") return "Ownership handoff is in progress. Do not assume control changed until the transfer transaction confirms.";
-    if (state.status === "error") return "Verify the connected owner or pending-owner wallet, target address, and collection network before retrying.";
-    return "Ownership state changed. Refresh collection details if the new owner or pending owner does not appear immediately.";
-  }
-
-  if (kind === "finalize") {
-    if (state.status === "pending") return "This freeze is permanent once confirmed. Wait for the chain receipt before treating upgrades as disabled.";
-    if (state.status === "error") return "Only the collection owner can finalize upgrades. Recheck the connected wallet, network, and confirmation state.";
-    return "Upgrades are now permanently disabled for this collection.";
-  }
-
-  return null;
-}
-
-function TxStatus({ state, kind, chainId }: { state: TxState; kind: TxStatusKind; chainId: number }) {
-  if (state.status === "idle") return null;
-  const guidance = getTxGuidance(kind, state);
-  if (state.status === "pending") {
-    return (
-      <>
-        <p className="hint">{state.message}</p>
-        {guidance ? <p className="hint">{guidance}</p> : null}
-      </>
-    );
-  }
-  if (state.status === "error") {
-    return (
-      <>
-        <p className="error">{state.message}</p>
-        {guidance ? <p className="hint">{guidance}</p> : null}
-      </>
-    );
-  }
-  if (state.status === "success" && state.hash) {
-    return (
-      <>
-        <p className="success">
-          {state.message || "Success"}{" "}
-          {toExplorerTx(chainId, state.hash) ? (
-            <a href={toExplorerTx(chainId, state.hash)!} target="_blank" rel="noreferrer">
-              {truncateHash(state.hash)}
-            </a>
-          ) : (
-            <span className="mono">{truncateHash(state.hash)}</span>
-          )}
-        </p>
-        {guidance ? <p className="hint">{guidance}</p> : null}
-      </>
-    );
-  }
-  return (
-    <>
-      <p className="success">{state.message}</p>
-      {guidance ? <p className="hint">{guidance}</p> : null}
-    </>
-  );
+  const href = state.hash ? toExplorerTx(chainId, state.hash) : null;
+  return <div role="status">
+    <p className={state.status === "error" ? "error" : state.status === "success" ? "success" : "hint"}>{state.message}</p>
+    {state.hash && (href ? <a href={href} target="_blank" rel="noreferrer">View transaction</a> : <p className="mono">{state.hash}</p>)}
+  </div>;
 }

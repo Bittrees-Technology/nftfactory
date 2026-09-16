@@ -19,7 +19,7 @@ The public web health endpoint reports a healthy indexer using the replacement r
 | Network | Chain ID | First signer nonce | Deployment requests | Safe ownership acceptances |
 | --- | ---: | ---: | ---: | ---: |
 | Base mainnet | 8453 | 362 | 22 | 8 |
-| Robinhood mainnet | 4663 | 80 | 22 | 8 |
+| Robinhood mainnet | 4663 | 83 | 22 | 8 |
 
 Signer: `0xE5350D96FC3161BF5c385843ec5ee24E8B465B2f` (raging.eth).
 Administrator and treasury Safe: `0xaBE23191D53E3Caad10DE495b7Cfe0d0288b5E6f`.
@@ -38,7 +38,9 @@ Contract source is unchanged from `b26f9d149c683d5ab55ac1f9ec009ad29bc38a6c`. No
 
 ## Funding and launch holds
 
-Foundry estimated approximately 20.1 million gas per deployment set. Base's estimate was **0.000211736439152208 ETH**, versus a checked signer balance of **0.000031859311007013 ETH**: the balance is below that deployment estimate. Robinhood's estimate was **0.002022554506168116 ETH**, versus **0.003459653824555656 ETH** available. Estimates vary with fees and do not establish affordability for the later Safe execution or all rollup/data fees. Refresh balances and wallet fee quotes before signing; allow a buffer. Funding the signing wallet from another account does not consume the signer's deployment nonce.
+Funding rechecked after the user topped up the wallets. Base holds **0.003519504001786108 ETH**, above the earlier deployment estimate of **0.000211736439152208 ETH**. Robinhood holds **0.003364430777605027 ETH**, above the refreshed dry-run estimate of **0.002012341615240116 ETH** (20,104,116 gas). These are point-in-time estimates, not guarantees for the later Safe execution or all rollup/data fees; refresh fee quotes before signing.
+
+Base's signer nonce remains **362**. Robinhood's signer nonce advanced from **80 to 83**, so its deployment manifest, predicted addresses and Safe batch have been regenerated. Use only the current nonce-83 Robinhood package. Both Safes still have the reviewed sole owner and threshold 1, with Safe nonce 0.
 
 Any outgoing signer transaction on the relevant network before this sequence changes CREATE addresses. In that case regenerate the dry run, candidate addresses, Safe batch and hashes; do not reuse these files. A Safe owner/threshold change also requires another custody review. Do not enable these addresses in the public app/indexer until actual deployment, source/runtime checks and Safe acceptance have passed.
 

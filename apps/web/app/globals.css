@@ -3990,3 +3990,15 @@ nav.breadcrumb { flex-direction:row; align-items:center; justify-content:flex-st
 .profileIdentityControlRight { align-self: start; }
 
 .profileImageField{display:grid;gap:12px;border:1px solid var(--border,#d8ded9);border-radius:10px;padding:18px;min-width:0}.profileImageField img{width:100%;height:100%;max-height:160px;object-fit:cover}.profileArtworkPicker{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:14px}.profileArtworkPicker>label{display:grid;gap:10px;min-width:0;padding:12px}.profileArtworkPicker img{width:100%;aspect-ratio:1;object-fit:cover}.profileArtworkPicker small{overflow-wrap:anywhere}.profileArtworkPicker input{width:auto}.profileCustomPage{width:100%;border:0;display:block;min-height:800px}
+
+/* Collection tools keep controls ahead of explanatory copy. */
+.collectionToolsHeader { display:grid; gap:18px; padding-block:12px 20px; border-bottom:1px solid var(--line); }
+.collectionToolsHeader h1 { margin:0; }
+.collectionToolsHeader .mintWorkspaceModes { display:flex; flex-wrap:wrap; gap:8px; }
+.collectionToolsContext { display:flex; flex-wrap:wrap; gap:16px; align-items:end; }
+.collectionToolsContext label { display:grid; gap:6px; max-width:100%; }
+.collectionToolsContext select { max-width:100%; }
+.collectionSetting > summary { cursor:pointer; font-size:1.15rem; font-weight:600; }
+.collectionSetting[open] > summary { margin-bottom:20px; }
+.createLayout.createLayoutEmpty { grid-template-columns:minmax(0,680px); }
+.savedDraftPrompt { display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
