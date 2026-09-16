@@ -8,13 +8,13 @@ vi.mock('wagmi',()=>({
  usePublicClient:()=>undefined,useWalletClient:()=>({}),
  useSwitchChain:()=>({chains:[{id:11155111,name:'Sepolia'}],isPending:false})
 }));
-vi.mock('../../lib/chains',async importOriginal=>({...await importOriginal<typeof import('../../lib/chains')>(),getPrimaryAppChainId:()=>11155111}));
+vi.mock('../../lib/chains',async importOriginal=>({...await importOriginal<typeof import('../../lib/chains')>(),getPrimaryAppChainId:()=>11155111,isAppChainConfigured:()=>true}));
 vi.mock('../../lib/contracts',()=>({getContractsConfig:()=>({chainId:11155111,shared721:'0x1111111111111111111111111111111111111111',shared1155:'0x2222222222222222222222222222222222222222'})}));
 vi.mock('../HeaderWalletButton' ,()=>({default:()=> <button>Connect wallet</button>}));
 afterEach(cleanup);
-it('keeps all three collection modes accessible with one network control',()=>{
+it('keeps all three collection modes accessible without page-level network controls',()=>{
  render(<MintClient/>);
- expect(screen.getAllByRole('combobox',{name:'Network'})).toHaveLength(1);
+ expect(screen.queryByRole('combobox',{name:'Network'})).toBeNull();
  expect(screen.getByRole('heading',{name:'1. Collection'})).toBeTruthy();
  expect(screen.queryByText('Creator Studio')).toBeNull();
  expect(screen.queryByLabelText(/Audio uploads/)).toBeNull();

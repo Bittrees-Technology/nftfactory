@@ -5,6 +5,7 @@ import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
 const mocks=vi.hoisted(()=>({read:vi.fn(),clear:vi.fn(),ensure:vi.fn(),disconnect:vi.fn(),sign:vi.fn()}));
 vi.mock('wagmi',()=>({useAccount:()=>({address:'0x1111111111111111111111111111111111111111',chainId:11155111,status:'connected'}),useConnectors:()=>[],useConnect:()=>({connectAsync:vi.fn(),isPending:false}),useDisconnect:()=>({disconnectAsync:mocks.disconnect}),useSwitchChain:()=>({switchChainAsync:vi.fn()}),useWalletClient:()=>({data:{signMessage:mocks.sign}})}));
 vi.mock('../lib/chains',()=>({getPrimaryAppChainId:()=>11155111,getAppChain:()=>({name:'Sepolia'})}));
+vi.mock('../lib/networkContext',()=>({useNetwork:()=>null,useSelectedNetwork:()=>11155111,getToolbarChains:()=>[{id:11155111,name:'Sepolia'}]}));
 vi.mock('../lib/walletSession',()=>({readWalletSession:mocks.read,clearWalletSession:mocks.clear,ensureWalletSession:mocks.ensure,subscribeWalletSession:()=>()=>{}}));
 import HeaderWalletButton from './HeaderWalletButton';
 beforeEach(()=>{vi.clearAllMocks();HTMLDialogElement.prototype.showModal=function(){this.setAttribute('open','');};HTMLDialogElement.prototype.close=function(){this.removeAttribute('open');};mocks.clear.mockResolvedValue(undefined);mocks.disconnect.mockResolvedValue(undefined);mocks.read.mockResolvedValue({address:null,chainId:null});});

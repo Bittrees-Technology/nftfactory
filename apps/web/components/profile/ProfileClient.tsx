@@ -1,9 +1,10 @@
 "use client";
+import {useSelectedNetwork} from "../../lib/networkContext";
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import type { Address, Hex } from "viem";
-import { useAccount, useChainId, usePublicClient, useSwitchChain, useWalletClient } from "wagmi";
+import { useAccount, useChainId, usePublicClient, useWalletClient } from "wagmi";
 import { encodeAcceptOffer, encodeCancelOffer } from "../../lib/abi";
 import AsyncButton from "../AsyncButton";
 import DetailGridItem from "../DetailGridItem";
@@ -800,13 +801,12 @@ export default function ProfileClient({ name }: { name: string }) {
   const chainId = useChainId();
   const publicClient = usePublicClient();
   const { data: walletClient } = useWalletClient();
-  const { switchChainAsync, switchChain } = useSwitchChain();
   const canonicalRoute = `/profile/${name}`;
   const offerMarketplace = (config.marketplace || null) as Address | null;
 
   const [sellerAddress, setSellerAddress] = useState("");
   const [scanDepth, setScanDepth] = useState("250");
-  const [selectedChainFilter, setSelectedChainFilter] = useState<"all" | number>("all");
+  const selectedChainFilter = useSelectedNetwork();
   const [allListings, setAllListings] = useState<ProfileListing[]>([]);
   const [allOffers, setAllOffers] = useState<MarketplaceOffer[]>([]);
   const [offerRecipients, setOfferRecipients] = useState<Record<number, Address[]>>({});
@@ -1198,13 +1198,11 @@ export default function ProfileClient({ name }: { name: string }) {
         activeSellerAddresses.includes(listing.seller.toLowerCase()) &&
         !hidden.has(listing.key)
     );
-    if (selectedChainFilter === "all") return filtered;
     return filtered.filter((listing) => listing.chainId === selectedChainFilter);
   }, [activeSellerAddresses, allListings, hiddenListingRecordIds, selectedChainFilter]);
 
   const creatorOffersMade = useMemo(() => {
     const filtered = allOffers.filter((offer) => activeSellerAddresses.includes(offer.buyer.toLowerCase()));
-    if (selectedChainFilter === "all") return filtered;
     return filtered.filter((offer) => offer.chainId === selectedChainFilter);
   }, [activeSellerAddresses, allOffers, selectedChainFilter]);
 
@@ -1212,12 +1210,10 @@ export default function ProfileClient({ name }: { name: string }) {
     const filtered = allOffers.filter((offer) =>
       getOfferRecipients(offer, offerRecipients).some((recipient) => activeSellerAddresses.includes(recipient.toLowerCase()))
     );
-    if (selectedChainFilter === "all") return filtered;
     return filtered.filter((offer) => offer.chainId === selectedChainFilter);
   }, [activeSellerAddresses, allOffers, offerRecipients, selectedChainFilter]);
 
   const filteredCreatorHoldings = useMemo(() => {
-    if (selectedChainFilter === "all") return creatorHoldings;
     return creatorHoldings.filter((holding) => holding.collection?.chainId === selectedChainFilter);
   }, [creatorHoldings, selectedChainFilter]);
 
@@ -1232,26 +1228,9 @@ export default function ProfileClient({ name }: { name: string }) {
       ...item,
       activeListings: listingCounts.get(`${item.chainId || 0}:${item.contractAddress.toLowerCase()}`) || 0
     }));
-    if (selectedChainFilter === "all") return filtered;
     return filtered.filter((item) => (item.chainId || 0) === selectedChainFilter);
   }, [creatorListings, profileResolution, selectedChainFilter]);
 
-  const visibleChainIds = useMemo(() => {
-    const ids = new Set<number>();
-    for (const listing of allListings) {
-      if (listing.chainId > 0) ids.add(listing.chainId);
-    }
-    for (const offer of allOffers) {
-      if (offer.chainId > 0) ids.add(offer.chainId);
-    }
-    for (const holding of creatorHoldings) {
-      if ((holding.collection?.chainId || 0) > 0) ids.add(holding.collection!.chainId);
-    }
-    for (const collection of profileResolution?.collections || []) {
-      if ((collection.chainId || 0) > 0) ids.add(collection.chainId || 0);
-    }
-    return [...ids].sort((a, b) => a - b);
-  }, [allListings, allOffers, creatorHoldings, profileResolution]);
 
   const pinnedCollection = useMemo(() => {
     const pinnedAddress = primaryProfile?.collectionAddress?.toLowerCase();
@@ -1916,24 +1895,7 @@ export default function ProfileClient({ name }: { name: string }) {
     if (chainId === targetChainId) {
       return true;
     }
-    if (!switchChainAsync && !switchChain) {
-      setOfferActionState(errorActionState(`Wallet switching is unavailable. Switch to ${getAppChain(targetChainId).name} manually.`));
-      return false;
-    }
-
-    try {
-      setOfferActionState(pendingActionState(`Switching wallet to ${getAppChain(targetChainId).name}...`));
-      if (switchChainAsync) {
-        await switchChainAsync({ chainId: targetChainId });
-      } else {
-        await Promise.resolve(switchChain({ chainId: targetChainId }));
-      }
-      setOfferActionState(idleActionState(`Wallet switched to ${getAppChain(targetChainId).name}. Click again to ${actionLabel}.`));
-    } catch (err) {
-      setOfferActionState(
-        errorActionState(err instanceof Error ? err.message : `Failed to switch to ${getAppChain(targetChainId).name}.`)
-      );
-    }
+    setOfferActionState(errorActionState(`Select ${getAppChain(targetChainId).name} in the top-right toolbar, then retry to ${actionLabel}.`));
     return false;
   }
 
@@ -2494,22 +2456,7 @@ export default function ProfileClient({ name }: { name: string }) {
             Scan depth
             <input value={scanDepth} onChange={(e) => setScanDepth(e.target.value)} inputMode="numeric" placeholder="250" />
           </label>
-          <label>
-            Chain view
-            <select
-              value={selectedChainFilter === "all" ? "all" : String(selectedChainFilter)}
-              onChange={(e) =>
-                setSelectedChainFilter(e.target.value === "all" ? "all" : Number.parseInt(e.target.value, 10))
-              }
-            >
-              <option value="all">All chains</option>
-              {visibleChainIds.map((item) => (
-                <option key={item} value={item}>
-                  {getAppChain(item).name}
-                </option>
-              ))}
-            </select>
-          </label>
+
         </div>
         {activeSellerAddresses.length === 0 ? (
           <p className="hint">Enter a valid creator wallet address or rely on ENS resolution to populate this profile.</p>

@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import HeaderWalletButton from "../HeaderWalletButton";
+import {useSelectedNetwork} from "../../lib/networkContext";
+import {isAppChainConfigured} from "../../lib/chains";
+import NetworkUnavailable from "../NetworkUnavailable";
 import { mintedTokenId, positiveUint256, pendingMintKey, readPendingMint, pendingCollectionKey, readPendingCollection, type PendingCollection, type PendingMint } from "../../lib/mintReceipt";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { ensureWalletSession } from "../../lib/walletSession";
-import { useAccount, useChainId, usePublicClient, useSwitchChain, useWalletClient } from "wagmi";
+import { useAccount, useChainId, usePublicClient, useWalletClient } from "wagmi";
 import { encodeFunctionData, formatEther } from "viem";
 import type { Address, Hex } from "viem";
 import { namehash } from "viem/ens";
@@ -31,7 +33,7 @@ import {
 } from "../../lib/creatorCollection";
 import { probeCollectionVerification, verifyCollectionContract } from "../../lib/collectionVerificationApi";
 import { getContractsConfig } from "../../lib/contracts";
-import { anvil, getAppChain, getExplorerBaseUrl, getPrimaryAppChainId } from "../../lib/chains";
+import { getAppChain, getExplorerBaseUrl, getPrimaryAppChainId } from "../../lib/chains";
 import {
   buildEnsSubnameCreationTx,
   ENS_NAME_WRAPPER_WRITE_ABI,
@@ -524,53 +526,6 @@ function collectExistingEnsIdentityOptions(
     }
   }
   return [...candidates].sort((a, b) => a.localeCompare(b));
-}
-
-function getSwitchErrorCode(error: unknown): number | string | null {
-  if (!error || typeof error !== "object") return null;
-  const candidate = error as {
-    code?: number | string;
-    cause?: unknown;
-  };
-  if (typeof candidate.code === "number" || typeof candidate.code === "string") {
-    return candidate.code;
-  }
-  if (candidate.cause) {
-    return getSwitchErrorCode(candidate.cause);
-  }
-  return null;
-}
-
-function getSwitchErrorMessage({
-  error,
-  walletName,
-  chainName
-}: {
-  error: unknown;
-  walletName: string;
-  chainName: string;
-}): string {
-  const code = getSwitchErrorCode(error);
-  const normalizedMessage =
-    error instanceof Error ? error.message.toLowerCase() : typeof error === "string" ? error.toLowerCase() : "";
-
-  if (code === 4001 || normalizedMessage.includes("user rejected")) {
-    return `${walletName} rejected the network switch to ${chainName}.`;
-  }
-
-  if (code === 4902 || normalizedMessage.includes("unrecognized chain")) {
-    return `${chainName} is not available in ${walletName}. Add the network in your wallet first, then try again.`;
-  }
-
-  if (normalizedMessage.includes("does not support") || normalizedMessage.includes("unsupported")) {
-    return `${walletName} does not support switching to ${chainName} from this page.`;
-  }
-
-  if (error instanceof Error && error.message.trim()) {
-    return error.message;
-  }
-
-  return `Failed to switch ${walletName} to ${chainName}.`;
 }
 
 type MintClientProps = {
@@ -1087,7 +1042,10 @@ const collectionOwnershipReadAbi = [
 
 export default function MintClient(props: MintClientProps) {
   const { address } = useAccount();
-  return <MintWorkspace key={`${props.initialChainId || getPrimaryAppChainId()}:${address?.toLowerCase() || 'guest'}`} {...props} />;
+  const selectedChainId = useSelectedNetwork(props.initialChainId);
+  const collectionNetwork = useRef(props.initialChainId ?? selectedChainId);
+  if (!isAppChainConfigured(selectedChainId)) return <NetworkUnavailable chainId={selectedChainId} feature="Collection tools" />;
+  return <MintWorkspace key={`${selectedChainId}:${address?.toLowerCase() || 'guest'}`} {...props} initialCollectionAddress={collectionNetwork.current !== selectedChainId ? '' : props.initialCollectionAddress} initialChainId={selectedChainId} />;
 }
 function MintWorkspace({
   initialChainId,
@@ -1103,16 +1061,11 @@ function MintWorkspace({
     () => getRoyaltySplitRegistryEnvHint(config.chainId, config.chainId === getPrimaryAppChainId()),
     [config.chainId]
   );
-  const { address, isConnected, connector } = useAccount();
+  const { address, isConnected } = useAccount();
   const chainId = useChainId();
   const publicClient = usePublicClient({chainId:config.chainId});
   const { data: walletClient } = useWalletClient();
-  const {
-    chains: walletChains,
-    switchChain,
-    switchChainAsync,
-    isPending: isSwitchingChain
-  } = useSwitchChain();
+
 
   // ── Top-level page mode ───────────────────────────────────────────────────
   const [pageMode, setPageMode] = useState<PageMode>(initialPageMode);
@@ -1149,8 +1102,6 @@ function MintWorkspace({
   const [collectionVerificationTx, setCollectionVerificationTx] = useState<CollectionVerificationTxState>({
     status: "idle"
   });
-  const [networkSwitchMessage, setNetworkSwitchMessage] = useState("");
-  const [requestedWalletNetworkId, setRequestedWalletNetworkId] = useState<string | null>(null);
   const walletBootstrapKeyRef = useRef<string | null>(null);
 
   // Token metadata
@@ -1248,33 +1199,6 @@ function MintWorkspace({
 
   const wrongNetwork = isConnected && chainId !== config.chainId;
   const account = address ?? "";
-  const normalizedWalletChains = useMemo(
-    () =>
-      (walletChains || []).filter(
-        (chain): chain is (typeof walletChains)[number] & { id: number } => Boolean(chain && typeof chain.id === "number")
-      ),
-    [walletChains]
-  );
-  const selectableWalletChains = useMemo(
-    () => normalizedWalletChains.filter((chain) => chain.id !== anvil.id),
-    [normalizedWalletChains]
-  );
-  const selectedWalletNetworkId = useMemo(() => {
-    if (
-      requestedWalletNetworkId &&
-      selectableWalletChains.some((chain) => chain.id === Number(requestedWalletNetworkId))
-    ) {
-      return requestedWalletNetworkId;
-    }
-    if (!selectableWalletChains.length) return String(config.chainId);
-    if (isConnected && selectableWalletChains.some((chain) => chain.id === chainId)) {
-      return String(chainId);
-    }
-    if (selectableWalletChains.some((chain) => chain.id === config.chainId)) {
-      return String(config.chainId);
-    }
-    return String(selectableWalletChains[0]?.id ?? config.chainId);
-  }, [chainId, config.chainId, isConnected, requestedWalletNetworkId, selectableWalletChains]);
   const manageRoyaltySplitTotal = useMemo(
     () => sumRoyaltySplitBps(manageRoyaltySplits),
     [manageRoyaltySplits]
@@ -1365,62 +1289,6 @@ function MintWorkspace({
   );
   const needsWalletCollectionLookup = isConnected && Boolean(account) && (pageMode === "manage" || mintMode === "custom");
 
-  useEffect(() => {
-    if (!isConnected) {
-      setRequestedWalletNetworkId(null);
-      return;
-    }
-    if (requestedWalletNetworkId && chainId === Number(requestedWalletNetworkId)) {
-      setRequestedWalletNetworkId(null);
-      setNetworkSwitchMessage("");
-    }
-  }, [chainId, isConnected, requestedWalletNetworkId]);
-
-  async function onSelectWalletNetwork(nextChainId: number): Promise<void> {
-    const targetChain = selectableWalletChains.find((chain) => chain.id === nextChainId);
-    const walletName = connector?.name || "Your wallet";
-
-    if (!isConnected) {
-      setRequestedWalletNetworkId(null);
-      setNetworkSwitchMessage("Connect your wallet first.");
-      return;
-    }
-    if (!switchChainAsync && !switchChain) {
-      setRequestedWalletNetworkId(null);
-      setNetworkSwitchMessage(`${walletName} does not support in-app network switching.`);
-      return;
-    }
-    if (!targetChain) {
-      setRequestedWalletNetworkId(null);
-      setNetworkSwitchMessage("Select a supported network.");
-      return;
-    }
-    if (chainId === nextChainId) {
-      setRequestedWalletNetworkId(null);
-      setNetworkSwitchMessage("");
-      return;
-    }
-
-    try {
-      setRequestedWalletNetworkId(String(nextChainId));
-      setNetworkSwitchMessage("");
-      if (switchChainAsync) {
-        await switchChainAsync({ chainId: nextChainId });
-      } else {
-        switchChain?.({ chainId: nextChainId });
-      }
-    } catch (err) {
-      setRequestedWalletNetworkId(null);
-      setNetworkSwitchMessage(
-        getSwitchErrorMessage({
-          error: err,
-          walletName,
-          chainName: targetChain.name
-        })
-      );
-    }
-  }
-
   function resetMetadataInputs(): void {
     setName("");
     setDescription("");
@@ -1490,9 +1358,6 @@ function MintWorkspace({
     }
   }, [account]);
 
-  useEffect(() => {
-    setNetworkSwitchMessage("");
-  }, [chainId, isConnected]);
 
   useEffect(() => {
     if (!account || typeof window === "undefined") {
@@ -3185,13 +3050,8 @@ function MintWorkspace({
         <nav className="row mintWorkspaceModes" aria-label="Collection tools">
           {(["mint", "view", "manage"] as const).map(mode => <button key={mode} type="button" aria-pressed={pageMode === mode} className={pageMode === mode ? "presetButton presetActive" : "presetButton"} onClick={() => setPageMode(mode)}>{mode === "mint" ? "Mint" : mode === "view" ? "View" : "Manage"}</button>)}
         </nav>
-        <div className="collectionToolsContext">
-          <label>Network<select value={selectedWalletNetworkId} onChange={e => void onSelectWalletNetwork(Number(e.target.value))} disabled={!isConnected || isSwitchingChain}>{selectableWalletChains.map(chain => <option key={chain.id} value={chain.id}>{chain.name}</option>)}</select></label>
-          {isConnected && account ? <p className="hint">Wallet: {shortenAddress(account)}</p> : <HeaderWalletButton />}
-        </div>
-        {isSwitchingChain && <p role="status">Switching network…</p>}
-        {wrongNetwork && <p className="hint">Select {appChain.name} in your wallet to continue.</p>}
-        {networkSwitchMessage && <p className="error">{networkSwitchMessage}</p>}
+        <p className="hint">{appChain.name}{!isConnected ? ' · Connect your wallet in the top-right toolbar.' : ''}</p>
+        {wrongNetwork && <p className="hint">Select {appChain.name} in the top-right toolbar to continue.</p>}
       </header>
 
       {/* ════════════════════════════════════════════════════════════════════ */}

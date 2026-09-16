@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {useAccount,useWalletClient} from "wagmi";
 import {ensureWalletSession} from "../../lib/walletSession";
-import HeaderWalletButton from "../HeaderWalletButton";
 import {
   deleteProfileGuestbookEntry,
   fetchProfileGuestbook,
@@ -196,7 +195,7 @@ export default function ProfileModerationClient() {
         <p className="sectionLead">
           Owner and moderator tools for creator guestbook entries. This workspace loads the public queue plus hidden and deleted history for the actor wallet.
         </p>
-        {!address&&<HeaderWalletButton/>}
+        {!address&&<p>Connect your wallet in the top-right toolbar.</p>}
         <div className="gridMini">
           <label>
             Profile name
