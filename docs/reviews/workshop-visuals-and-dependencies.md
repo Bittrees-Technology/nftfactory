@@ -31,6 +31,8 @@ The current lockfile has 910 package/workspace entries excluding the root, and 7
 
 A read-only npm dedupe preview (using a separate temporary cache after a cache error) proposed 3 additions, 8 removals and 7 changes. It also proposed axios 1.20.0 → 1.16.0 and ws 8.21.3 → 8.21.0 despite the project pins. This is not an acceptable blanket pruning patch. No dependency declarations, overrides, lockfiles or installed packages were changed by this review. Preserve security pins and perform targeted pruning separately with reproducible clean-install checks.
 
+The current `npm audit --omit=dev` result reports zero advisories for the root production tree (910 total dependency entries across categories). GitHub separately reported 145 default-branch alerts at push time (7 critical, 49 high, 81 moderate, 8 low). Those counts have different scopes and must not be conflated; review GitHub alert manifests, including nested/vendored lockfiles, before deciding which packages to update or exclude.
+
 ## Validation
 
 - TypeScript check passed.
