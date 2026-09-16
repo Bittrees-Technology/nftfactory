@@ -9,6 +9,8 @@
   --surface-strong: #e9ece9;
   --line: #d2d8d3;
   --muted: #58615b;
+  --control-line: #87938a;
+  --brand-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 body { background: var(--bg); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
 main { max-width: 1320px; padding: 24px 40px; }
@@ -107,3 +109,124 @@ a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visib
 .wikiBlockquote { background: var(--surface-strong); color: var(--ink); border-color: var(--accent); }
 .wikiInlineCode { background: var(--surface-strong); color: var(--ink); }
 .wikiInlineLink, .wikiBackLink, .wikiTocLink { color: var(--accent-dark); }
+
+/* Interior workspaces: the landing page's paper, graphite and orange system.
+   These selectors target product chrome, never artist-owned theme containers. */
+.productPageHeader, .studioPage > .pageHeading {
+  margin: 16px 0 28px;
+  padding: 20px 0 28px;
+  border-bottom: 1px solid var(--line);
+}
+.productPageHeader h1, .studioPage > .pageHeading h1, .mintWorkspaceHeroCopy h1 {
+  font-size: clamp(2rem, 3.6vw, 3.4rem);
+  line-height: 1.08;
+  letter-spacing: -.055em;
+  font-weight: 650;
+  margin: 16px 0;
+  overflow-wrap: anywhere;
+}
+.productPageHeader .eyebrow, .studioPage > .pageHeading > .eyebrow,
+.mintWorkspaceHeroCopy > .eyebrow, .wikiSidebar > .eyebrow, .wikiArticle .eyebrow {
+  font: 600 .72rem/1.5 var(--brand-mono);
+  letter-spacing: .09em;
+  color: var(--accent);
+}
+.productPageHeader .productPageDescription, .studioPage > .pageHeading > p:not(.eyebrow) {
+  color: var(--muted); max-width: 58ch; line-height: 1.65;
+}
+.productPageActions { flex-shrink: 1; }
+.productPageActions .ctaLink { white-space: normal; text-align: center; }
+.studioPage, .discoverPage, .wikiLayout, .mintWorkspace { min-width: 0; }
+.studioPage > .createLayout > *, .wikiLayout > *, .discoverToolbar > * { min-width: 0; }
+.studioTool, .creatorArtworkGrid .artworkCard { border-radius: 12px; background: var(--surface); }
+.studioTool { padding: 24px; border-top: 3px solid var(--line); }
+.studioTool:hover, .studioTool:focus-within { border-color: var(--accent); }
+.studioTool h3 { font-size: 1.25rem; font-weight: 600; letter-spacing: -.025em; }
+.studioTool p { color: var(--muted); line-height: 1.65; }
+.studioWorkspace > .row { justify-content: space-between; }
+.studioWorkspace > .hint { max-width: 68ch; margin: 0 0 24px; }
+.studioPage > .creatorArtworkGrid { margin-block: 24px; }
+.studioPage > .createLayout .artworkDetailImage { border-radius: 3px; }
+.creationSteps { counter-reset: creation; gap: 24px; margin-block: 24px; }
+.creationSteps li { display: flex; align-items: center; gap: 12px; color: var(--muted); padding-bottom: 12px; }
+.creationSteps li::before { counter-increment: creation; content: "0" counter(creation); font: .8rem/1 var(--brand-mono); }
+.creationSteps li[aria-current=step]::before { color: var(--accent); }
+.artworkPlaceholder { color: var(--muted); font-size: clamp(1.3rem, 2.5vw, 1.8rem); letter-spacing: -.035em; }
+.reviewFacts dt { color: var(--muted); }
+.formActions { flex-wrap: wrap; }
+.advancedTools { padding-block: 12px; border-top: 1px solid var(--line); }
+.studioPage > .createLayout > .formCard > fieldset {
+  border: 1px solid var(--line); border-radius: 8px; padding: 20px; min-width: 0;
+}
+.studioPage > .createLayout > .formCard > fieldset > div { display: grid; gap: 12px; margin-block: 16px; }
+.studioPage > .createLayout > .formCard > fieldset > legend { padding-inline: 8px; font-weight: 600; }
+input, select, textarea { min-width: 0; max-width: 100%; }
+input[type=checkbox], input[type=radio] { accent-color: var(--accent); }
+input[type=file]::file-selector-button {
+  border: 1px solid var(--control-line); border-radius: 4px; padding: 8px 12px;
+  margin-right: 12px; background: var(--surface-strong); color: var(--ink); font: inherit; cursor: pointer;
+}
+.marketplaceFilters { padding: 20px; background: var(--surface-strong); border-radius: 8px; gap: 20px; }
+.marketplaceFilters label { font-size: .85rem; font-weight: 600; gap: 8px; }
+.discoverPage > .discoverPanel { background: transparent; border: 0; padding: 0; box-shadow: none; }
+.discoverPanelHeader { padding-bottom: 8px; }
+.discoverPanelHeader h2 { font-size: 1.35rem; letter-spacing: -.025em; }
+.discoverToolbar { background: var(--surface-strong); border: 0; padding: 20px; gap: 20px; }
+.discoverToolbarActions { grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); }
+.discoverPage .profileChip { background: var(--surface-strong); color: var(--muted); border-color: var(--line); }
+.discoverPage .profileDirectoryGrid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); }
+.discoverPage .discoverRecordCard { padding: 20px; gap: 16px; }
+.discoverRecordTitle { font-size: 1.3rem; letter-spacing: -.025em; }
+.discoverRecordTitle a:hover { text-decoration: underline; text-underline-offset: 4px; }
+.discoveryCollectionCover { border-radius: 3px; }
+[data-section-state-panel="true"] {
+  background: var(--surface-strong); border: 1px solid var(--line); border-left: 3px solid var(--accent);
+  border-radius: 0 8px 8px 0; box-shadow: none; padding: 24px;
+}
+.mintWorkspace .mintWorkspaceHero { background: transparent; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; padding: 20px 0 28px; }
+.mintWorkspaceHeroSummaryCard { background: var(--surface); border-color: var(--line); border-radius: 8px; }
+.mintWorkspaceHeroPill { background: var(--surface-strong); color: var(--muted); border-color: var(--line); border-radius: 4px; }
+.mintWorkspace .flowLabel, .mintWorkspace .actionHint { color: var(--accent); }
+.mintWorkspaceHeroSummaryCard p, .mintWorkspace .heroText, .mintWorkspace .sectionLead { color: var(--muted); }
+.mintWorkspace .actionCardStatic, .mintWorkspace .selectionCard, .mintWorkspace .flowCell { background: var(--surface-strong); border-color: var(--line); box-shadow: none; }
+.mintWorkspace .presetButton { background: var(--surface); color: var(--ink); border-color: var(--control-line); border-radius: 6px; }
+.mintWorkspace .presetActive { background: var(--accent); color: #fff; border-color: var(--accent-dark); }
+.mintWorkspace .mintWorkspaceIntroCard { background: var(--chrome); border-color: var(--chrome); color: #fff; }
+.mintWorkspaceIntroCard .hint { color: #d2d8d3; }
+.wikiLayout { gap: 32px; padding-top: 28px; }
+.wikiSidebar { background: transparent; border: 0; padding: 0; box-shadow: none; gap: 20px; }
+.wikiSidebar h2 { margin: 0; font-size: 2rem; letter-spacing: -.045em; font-weight: 600; }
+.wikiSidebar .sectionLead { color: var(--muted); line-height: 1.65; }
+.wikiArticle { padding: clamp(20px, 3.5vw, 44px); gap: 24px; }
+.wikiContent { gap: 20px; }
+.wikiContent h1 { font-size: clamp(2rem, 3.6vw, 3rem); line-height: 1.12; letter-spacing: -.045em; font-weight: 650; }
+.wikiContent h2 { font-size: 1.6rem; line-height: 1.25; letter-spacing: -.03em; }
+.wikiContent h3 { font-size: 1.2rem; letter-spacing: -.02em; }
+.wikiParagraph, .wikiList { max-width: 72ch; line-height: 1.8; color: var(--ink); }
+.wikiToc, .wikiTocLink.active, .wikiTable th { background: var(--surface-strong); color: var(--ink); }
+.wikiTable { background: var(--surface); }
+.wikiTable, .wikiTable th, .wikiTable td { border-color: var(--line); }
+.wikiCodeLanguage, .wikiHeadingAnchor::after { color: var(--accent); }
+.wikiCodeBlock { background: var(--surface-strong); border-color: var(--line); color: var(--ink); }
+.wikiNavLink.active { border-left: 3px solid var(--accent); }
+@media (max-width: 760px) {
+  .productPageHeader, .studioPage > .pageHeading { padding-top: 12px; margin-top: 8px; }
+  .creationSteps { gap: 12px; }
+  .creationSteps li { flex: 1; align-items: flex-start; gap: 8px; font-size: .8rem; }
+  .creationSteps li::before { line-height: 1.5; }
+  .marketplaceFilters, .discoverToolbar, .discoverPage .discoverRecordCard, .studioTool { padding: 16px; }
+  .wikiLayout { gap: 24px; }
+  .wikiArticle { padding: 20px; }
+  .mintWorkspace .mintWorkspaceHero { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Secondary actions and legacy collection controls share the same surfaces. */
+.ctaLink.secondaryLink { background: transparent; color: var(--ink); border-color: var(--control-line); }
+.profileSelectorPage .profileSelectorEmptyCard { background: var(--surface-strong); border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; padding: 24px; }
+.profileSelectorPage .profileSelectorMetaGrid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); }
+.mintWorkspace :is(.mintStepSelectionCard, .mintPreviewCard, .mintStepSummaryCard, .selectionButton) {
+  background: var(--surface); color: var(--ink); border-color: var(--line); border-radius: 8px; box-shadow: none;
+}
+.mintWorkspace .selectionButtonActive { background: var(--surface-strong); border-color: var(--accent); }
+.mintWorkspace .mintStepSummaryCard p { color: var(--muted); }
+.statusStackItem:not(.error):not(.success) { background: var(--surface-strong); border-color: var(--line); color: var(--muted); }

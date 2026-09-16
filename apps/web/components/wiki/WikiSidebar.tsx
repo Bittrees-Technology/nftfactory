@@ -51,7 +51,7 @@ export default function WikiSidebar({
           const href = page.slug === "home" ? "/wiki" : `/wiki/${page.slug}`;
           const isActive = page.slug === activeSlug;
           return (
-            <Link key={page.slug} href={href} className={`wikiNavLink${isActive ? " active" : ""}`}>
+            <Link key={page.slug} href={href} aria-current={isActive ? "page" : undefined} className={`wikiNavLink${isActive ? " active" : ""}`}>
               <strong>{page.title}</strong>
               {page.description ? <span>{page.description}</span> : null}
             </Link>

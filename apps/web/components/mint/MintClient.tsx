@@ -3273,13 +3273,13 @@ export default function MintClient({
       <div className="card formCard mintWorkspaceHero">
         <div className="mintWorkspaceHeroCopy">
           <p className="eyebrow">Creator Studio</p>
-          <h2>
+          <h1>
             {pageMode === "manage"
               ? "Manage"
               : pageMode === "view"
                 ? "View"
                 : "Mint"}
-          </h2>
+          </h1>
           <p className="hint">
             {pageMode === "manage"
               ? "Handle ownership, identity, verification, and collection settings from one workspace."

@@ -78,7 +78,7 @@ export default function CreateClient({initialChainId}:{initialChainId?:number}={
   }
   return <section className="studioPage">
     <ProductPageHeader section="Create" title="Create an NFT" description="Upload your artwork, preview the details, and publish a one-of-one collectible." />
-    <ol className="creationSteps" aria-label="Creation progress">{['Artwork', 'Details & preview', 'Review & mint'].map((name, i) => <li key={name} aria-current={stage === i ? 'step' : undefined}>{i + 1}. {name}</li>)}</ol>
+    <ol className="creationSteps" aria-label="Creation progress">{['Artwork', 'Details & preview', 'Review & mint'].map((name, i) => <li key={name} aria-current={stage === i ? 'step' : undefined}>{name}</li>)}</ol>
     <p className="hint">{draftNotice}</p>
     <div className="createLayout">
       <div className="card formCard">
