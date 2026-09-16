@@ -1,4 +1,6 @@
 "use client";
+import {useSelectedNetwork} from "../../lib/networkContext";
+import {isAppChainConfigured} from "../../lib/chains";
 
 import ProductPageHeader from '../ProductPageHeader';
 import Link from "next/link";
@@ -73,6 +75,10 @@ function usePrevious<T>(value: T): T | undefined {
 }
 
 export default function DiscoverClient() {
+  const selectedNetwork=useSelectedNetwork();
+  return <DiscoverWorkspace key={selectedNetwork} selectedNetwork={selectedNetwork}/>;
+}
+function DiscoverWorkspace({selectedNetwork}:{selectedNetwork:number}) {
   const [retryAttempt,setRetryAttempt]=useState(0);
   const [view, setView] = useState<DiscoverView>("profiles");
   const [searchValue, setSearchValue] = useState("");
@@ -177,7 +183,8 @@ export default function DiscoverClient() {
     let cancelled = false;
     setFeedLoading(true);
     setFeedError("");
-    void fetchMintFeed(feedCursor, 48)
+    if(!isAppChainConfigured(selectedNetwork)){setFeedItems([]);setFeedCanLoadMore(false);setFeedLoading(false);setFeedError("NFT feeds are not available on this network yet. Choose a supported network in the top-right toolbar.");return;}
+    void fetchMintFeed(feedCursor, 48, {chainId:selectedNetwork})
       .then((response) => {
         if (cancelled) return;
         setFeedItems((current) => (
@@ -201,7 +208,7 @@ export default function DiscoverClient() {
     return () => {
       cancelled = true;
     };
-  }, [feedCursor, view,retryAttempt]);
+  }, [feedCursor, view,retryAttempt,selectedNetwork]);
 
   const searchedFeedItems = useMemo(() => {
     const query = searchValue.trim().toLowerCase();

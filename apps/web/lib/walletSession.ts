@@ -1,4 +1,4 @@
-import {getPrimaryAppChainId} from './chains';
+import {getSelectedNetworkId} from './networkSelection';
 import type {Address, Hex} from 'viem';
 
 type Session = {address: string | null; chainId: number | null};
@@ -44,7 +44,7 @@ export function clearWalletSession(): Promise<void> {
   changed();
   return result;
 }
-export function ensureWalletSession(address: Address, signMessage: (args: {message: string}) => Promise<Hex>, chainId = getPrimaryAppChainId()): Promise<void> {
+export function ensureWalletSession(address: Address, signMessage: (args: {message: string}) => Promise<Hex>, chainId = getSelectedNetworkId()): Promise<void> {
   const expected = generation;
   const key = `${address.toLowerCase()}:${chainId}`;
   if (pending?.generation === expected) {

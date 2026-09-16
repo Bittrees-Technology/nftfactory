@@ -1,7 +1,10 @@
 "use client";
+import {useSelectedNetwork} from "../../lib/networkContext";
+import {isAppChainConfigured} from "../../lib/chains";
+import NetworkUnavailable from "../NetworkUnavailable";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useAccount, useChainId, usePublicClient, useSwitchChain, useWalletClient } from "wagmi";
+import { useAccount, useChainId, usePublicClient, useWalletClient } from "wagmi";
 import { formatEther, type Address, type Hex } from "viem";
 import AsyncButton from "../AsyncButton";
 import DetailGridItem from "../DetailGridItem";
@@ -383,18 +386,22 @@ type ListingManagementClientProps = {
   chainFilter?: "all" | number;
 };
 
-export default function ListingManagementClient({
+export default function ListingManagementClient(props:ListingManagementClientProps={}) {
+  const selected=useSelectedNetwork();
+  if(!isAppChainConfigured(selected))return <NetworkUnavailable chainId={selected} feature="Listing management"/>;
+  return <ListingWorkspace key={selected} {...props} chainFilter={selected}/>;
+}
+function ListingWorkspace({
   embedded = false,
   ownerAddress = null,
   chainFilter
 }: ListingManagementClientProps = {}) {
-  const config = useMemo(() => getContractsConfig(), []);
+  const config = useMemo(() => getContractsConfig(typeof chainFilter === "number" ? chainFilter : undefined), [chainFilter]);
   const enabledChainIds = useMemo(() => getEnabledAppChainIds(), []);
   const { isConnected, address } = useAccount();
   const chainId = useChainId();
   const { data: walletClient } = useWalletClient();
   const publicClient = usePublicClient();
-  const { switchChainAsync, switchChain } = useSwitchChain();
 
   const [feeQuote,setFeeQuote]=useState<FeeQuote|null>(null);
   const [feeQuoteError,setFeeQuoteError]=useState("");
@@ -776,39 +783,7 @@ export default function ListingManagementClient({
     if (chainId === targetChainId) {
       return true;
     }
-    if (!switchChainAsync && !switchChain) {
-      setState(
-        errorActionState(
-          `Wallet switching is unavailable. Switch to ${getAppChain(targetChainId).name} manually.`,
-          undefined,
-          targetChainId
-        )
-      );
-      return false;
-    }
-    try {
-      setState(pendingActionState(`Switching wallet to ${getAppChain(targetChainId).name}...`, undefined, targetChainId));
-      if (switchChainAsync) {
-        await switchChainAsync({ chainId: targetChainId });
-      } else {
-        await Promise.resolve(switchChain({ chainId: targetChainId }));
-      }
-      setState(
-        idleActionState(
-          `Wallet switched to ${getAppChain(targetChainId).name}. Click again to ${actionLabel}.`,
-          undefined,
-          targetChainId
-        )
-      );
-    } catch (err) {
-      setState(
-        errorActionState(
-          err instanceof Error ? err.message : `Failed to switch to ${getAppChain(targetChainId).name}.`,
-          undefined,
-          targetChainId
-        )
-      );
-    }
+    setState(errorActionState(`Select ${getAppChain(targetChainId).name} in the top-right toolbar, then retry to ${actionLabel}.`));
     return false;
   }
 
@@ -1131,24 +1106,7 @@ export default function ListingManagementClient({
                 <option value="ERC1155">ERC1155</option>
               </select>
             </label>
-            {chainFilter === undefined ? (
-              <label>
-                Chain view
-                <select
-                  value={selectedChainFilter === "all" ? "all" : String(selectedChainFilter)}
-                  onChange={(e) =>
-                    setSelectedChainFilter(e.target.value === "all" ? "all" : Number.parseInt(e.target.value, 10))
-                  }
-                >
-                  <option value="all">All chains</option>
-                  {enabledChainIds.map((item) => (
-                    <option key={item} value={item}>
-                      {getAppChain(item).name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : null}
+
           </div>
           <p className="hint">
             {inventoryOwnerAddress
@@ -1158,7 +1116,7 @@ export default function ListingManagementClient({
               : "Connect a wallet from the header to load owned NFTs that can be listed."}
           </p>
           {submitNeedsChainSwitch && submitTargetChain ? (
-            <p className="hint">Current selection is on {submitTargetChain.name}. Clicking the action button below will switch the wallet first.</p>
+            <p className="hint">Current selection is on {submitTargetChain.name}. Select that network in the top-right toolbar before continuing.</p>
           ) : null}
           {contractOptions.length > 1 ? (
             <div className="gridMini">

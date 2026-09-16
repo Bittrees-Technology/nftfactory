@@ -4002,3 +4002,9 @@ nav.breadcrumb { flex-direction:row; align-items:center; justify-content:flex-st
 .collectionSetting[open] > summary { margin-bottom:20px; }
 .createLayout.createLayoutEmpty { grid-template-columns:minmax(0,680px); }
 .savedDraftPrompt { display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+
+.headerNetworkControl { position:relative; display:flex; align-items:center; gap:6px; }
+.headerNetworkControl select { max-width:170px; min-height:42px; padding:8px; }
+.headerNetworkControl [role="alert"] { position:absolute; top:100%; right:0; z-index:20; width:260px; padding:12px; background:var(--surface,#fff); border:1px solid currentColor; }
+.headerNetworkControl .srOnly { position:absolute; width:1px; height:1px; padding:0; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; }
+@media(max-width:640px) { .headerActions { gap:6px; flex-wrap:wrap; justify-content:flex-end; } .headerNetworkControl select { max-width:125px; } .siteHeader { flex-wrap:wrap; gap:10px; } }

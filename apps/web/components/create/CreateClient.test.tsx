@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({ address: '0x1111111111111111111111111111111111
 vi.mock('wagmi', () => ({ useAccount: () => ({ address: mocks.address, chainId: 11155111 }), useWalletClient: () => ({ data: { signMessage: vi.fn(), sendTransaction: mocks.send } }), usePublicClient: () => ({ getCode: async () => '0x1234', call: mocks.call, waitForTransactionReceipt: mocks.receipt }) }));
 vi.mock('../../lib/indexerApi', () => ({ syncMintedToken: mocks.sync }));
 vi.mock('../../lib/contracts', () => ({ getContractsConfig: () => ({ shared721: mocks.address }) }));
-vi.mock('../../lib/chains', () => ({ getPrimaryAppChainId: () => 11155111, getAppChain: () => ({ id: 11155111, name: 'Sepolia' }) }));
+vi.mock('../../lib/chains', () => ({ isAppChainConfigured: (id:number) => id===11155111, getPrimaryAppChainId: () => 11155111, getAppChain: (id:number) => ({ id, name: id===8453?'Base':'Sepolia' }) }));
 vi.mock('../../lib/draftStore', () => ({ loadArtworkDraft: mocks.load, saveArtworkDraft: mocks.save, archiveArtworkDraft: mocks.archive, loadArtworkReceipts: mocks.history }));
 vi.mock('../../lib/walletSession', () => ({ ensureWalletSession: mocks.session }));
 vi.mock('../HeaderWalletButton', () => ({ default: () => <span>Wallet</span> }));
@@ -48,4 +48,11 @@ it('shows no placeholder NFT when starting with an empty draft',async()=>{
   expect(screen.getByRole('link',{name:'Mint'}).getAttribute('href')).toContain('view=mint');
   expect(screen.getByRole('link',{name:'View'}).getAttribute('href')).toContain('view=view');
   expect(screen.getByRole('link',{name:'Manage'}).getAttribute('href')).toContain('view=manage');
+});
+
+it('does not load a draft or offer minting on an undeployed toolbar network',()=>{
+ render(<CreateClient initialChainId={8453}/>);
+ expect(screen.getByText(/Minting is not available on Base yet/)).toBeTruthy();
+ expect(screen.queryByLabelText('Artwork file')).toBeNull();
+ expect(mocks.load).not.toHaveBeenCalled();expect(mocks.send).not.toHaveBeenCalled();
 });

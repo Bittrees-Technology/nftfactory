@@ -3,6 +3,7 @@
 import { ReactNode, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { WagmiProvider } from "wagmi";
+import {NetworkProvider} from "../lib/networkContext";
 import { createWagmiConfig } from "../lib/wagmi";
 
 export default function AppProviders({
@@ -18,7 +19,7 @@ export default function AppProviders({
   return (
     <WagmiProvider config={wagmiConfig}>
       <QueryClientProvider client={queryClient}>
-        {children}
+        <NetworkProvider>{children}</NetworkProvider>
       </QueryClientProvider>
     </WagmiProvider>
   );

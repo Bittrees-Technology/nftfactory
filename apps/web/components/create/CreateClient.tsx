@@ -10,11 +10,14 @@ import { getContractsConfig } from '../../lib/contracts';
 import { getAppChain, getPrimaryAppChainId } from '../../lib/chains';
 import { ensureWalletSession } from '../../lib/walletSession';
 import { loadArtworkDraft, saveArtworkDraft, archiveArtworkDraft, loadArtworkReceipts, type ArtworkDraft } from '../../lib/draftStore';
-import HeaderWalletButton from '../HeaderWalletButton';
+import {useSelectedNetwork} from '../../lib/networkContext';
+import {isAppChainConfigured} from '../../lib/chains';
+import NetworkUnavailable from '../NetworkUnavailable';
 const LIMIT = 3 * 1024 * 1024 - 64 * 1024;
 export default function CreateClient({initialChainId}:{initialChainId?:number}={}) {
   const { address } = useAccount();
-  const target = initialChainId || getPrimaryAppChainId();
+  const target = useSelectedNetwork(initialChainId);
+  if (!isAppChainConfigured(target)) return <NetworkUnavailable chainId={target} feature="Minting" />;
   return <CreateWorkspace key={`${target}:${address?.toLowerCase() || 'guest'}`} initialChainId={target} />;
 }
 function CreateWorkspace({initialChainId}:{initialChainId:number}) {
@@ -118,7 +121,7 @@ function CreateWorkspace({initialChainId}:{initialChainId:number}) {
       <div className="card formCard">
         {stage === 0 && <><h2>Choose your artwork</h2><label>PNG, JPEG, or WebP · under 3 MiB<input aria-label="Artwork file" type="file" accept="image/png,image/jpeg,image/webp" disabled={!loaded || busy || Boolean(savedDraft) || Boolean(draft.txHash)} onChange={e => { const file = e.target.files?.[0]; if (!file) return; if (file.size > LIMIT || !['image/png','image/jpeg','image/webp'].includes(file.type)) { setMessage('Choose a PNG, JPEG, or WebP smaller than 3 MiB.'); return; } edit({ file }); }} /></label><p>Original files are stored on IPFS. A public copy is created only when you choose Mint.</p></>}
         {stage === 1 && <><h2>NFT details</h2><label>Artwork name<input value={draft.name} maxLength={120} disabled={busy || Boolean(draft.txHash)} onChange={e => edit({ name: e.target.value })} /></label><label>Description <span className="hint">Optional</span><textarea value={draft.description} maxLength={2000} disabled={busy || Boolean(draft.txHash)} onChange={e => edit({ description: e.target.value })} /></label></>}
-        {stage === 2 && <><h2>{complete ? 'Published' : 'Review your NFT'}</h2><dl className="reviewFacts"><dt>Collection</dt><dd>NFTFactory shared collection</dd><dt>Edition</dt><dd>One of one</dd><dt>Network</dt><dd>{getAppChain(targetChainId).name}</dd><dt>Storage</dt><dd>Local and offsite copies required before minting</dd></dl><p>You own the NFT. NFTFactory operates the shared collection. Public IPFS content may remain accessible even if removed from this site.</p><p>Your wallet shows the network fee before you confirm.</p>{!address && <HeaderWalletButton />}{address && !complete && <button disabled={busy || !loaded} onClick={() => void publish()}>{busy ? 'Please wait…' : draft.txHash ? 'Check confirmation' : 'Mint NFT'}</button>}{complete && <><Link className="ctaLink" href="/profile/setup">Set up your creator page</Link><button className="secondary" disabled={busy} onClick={() => void startNew()}>Create another NFT</button></>}{draft.txHash && <p className="receiptHash">Transaction: {draft.txHash}</p>}</>}
+        {stage === 2 && <><h2>{complete ? 'Published' : 'Review your NFT'}</h2><dl className="reviewFacts"><dt>Collection</dt><dd>NFTFactory shared collection</dd><dt>Edition</dt><dd>One of one</dd><dt>Network</dt><dd>{getAppChain(targetChainId).name}</dd><dt>Storage</dt><dd>Local and offsite copies required before minting</dd></dl><p>You own the NFT. NFTFactory operates the shared collection. Public IPFS content may remain accessible even if removed from this site.</p><p>Your wallet shows the network fee before you confirm.</p>{!address && <p>Connect your wallet in the top-right toolbar.</p>}{address && !complete && <button disabled={busy || !loaded} onClick={() => void publish()}>{busy ? 'Please wait…' : draft.txHash ? 'Check confirmation' : 'Mint NFT'}</button>}{complete && <><Link className="ctaLink" href="/profile/setup">Set up your creator page</Link><button className="secondary" disabled={busy} onClick={() => void startNew()}>Create another NFT</button></>}{draft.txHash && <p className="receiptHash">Transaction: {draft.txHash}</p>}</>}
         <div role="status" aria-live="polite" className="flowMessage">{message}</div>
         <div className="formActions">{stage > 0 && !draft.txHash && <button className="secondary" disabled={busy} onClick={() => setStage(stage - 1)}>Back</button>}{stage < 2 && <button disabled={!loaded || !draft.file || (stage === 1 && !draft.name.trim())} onClick={() => setStage(stage + 1)}>Continue</button>}</div>
       </div>
