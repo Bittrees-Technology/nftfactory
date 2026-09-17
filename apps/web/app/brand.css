@@ -138,13 +138,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visib
 .productPageActions .ctaLink { white-space: normal; text-align: center; }
 .studioPage, .discoverPage, .wikiLayout, .mintWorkspace { min-width: 0; }
 .studioPage > .createLayout > *, .wikiLayout > *, .discoverToolbar > * { min-width: 0; }
-.studioTool, .creatorArtworkGrid .artworkCard { border-radius: 12px; background: var(--surface); }
-.studioTool { padding: 24px; border-top: 3px solid var(--line); }
-.studioTool:hover, .studioTool:focus-within { border-color: var(--accent); }
-.studioTool h3 { font-size: 1.25rem; font-weight: 600; letter-spacing: -.025em; }
-.studioTool p { color: var(--muted); line-height: 1.65; }
-.studioWorkspace > .row { justify-content: space-between; }
-.studioWorkspace > .hint { max-width: 68ch; margin: 0 0 24px; }
+.creatorArtworkGrid .artworkCard { border-radius: 12px; background: var(--surface); }
 .studioPage > .creatorArtworkGrid { margin-block: 24px; }
 .studioPage > .createLayout .artworkDetailImage { border-radius: 3px; }
 .creationSteps { counter-reset: creation; gap: 24px; margin-block: 24px; }
@@ -214,7 +208,7 @@ input[type=file]::file-selector-button {
   .creationSteps { gap: 12px; }
   .creationSteps li { flex: 1; align-items: flex-start; gap: 8px; font-size: .8rem; }
   .creationSteps li::before { line-height: 1.5; }
-  .marketplaceFilters, .discoverToolbar, .discoverPage .discoverRecordCard, .studioTool { padding: 16px; }
+  .marketplaceFilters, .discoverToolbar, .discoverPage .discoverRecordCard { padding: 16px; }
   .wikiLayout { gap: 24px; }
   .wikiArticle { padding: 20px; }
   .mintWorkspace .mintWorkspaceHero { grid-template-columns: minmax(0, 1fr); }
@@ -230,3 +224,32 @@ input[type=file]::file-selector-button {
 .mintWorkspace .selectionButtonActive { background: var(--surface-strong); border-color: var(--accent); }
 .mintWorkspace .mintStepSummaryCard p { color: var(--muted); }
 .statusStackItem:not(.error):not(.success) { background: var(--surface-strong); border-color: var(--line); color: var(--muted); }
+
+/* Compact destination tabs for the private studio workspace. */
+.studioToolTabs {
+  display: flex;
+  gap: 4px;
+  margin: 8px 0 28px;
+  border-bottom: 1px solid var(--line);
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.studioToolTabs a {
+  flex: 0 0 auto;
+  padding: 12px 16px;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  font-size: .94rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+.studioToolTabs a:hover, .studioToolTabs a:focus-visible {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  background: var(--surface-strong);
+}
+.studioToolTabs a:focus-visible { outline-offset: -3px; }
+@media (max-width: 600px) {
+  .studioToolTabs { margin-bottom: 20px; }
+  .studioToolTabs a { padding: 12px; }
+}
