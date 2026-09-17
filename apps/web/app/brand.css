@@ -228,9 +228,17 @@ input[type=file]::file-selector-button {
 /* Compact destination tabs for the private studio workspace. */
 .studioToolTabs {
   display: flex;
+  flex-flow: row nowrap;
+  align-items: center;
   gap: 4px;
+  padding: 0;
   margin: 8px 0 28px;
+  border: 0;
   border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
   overflow-x: auto;
   scrollbar-width: thin;
 }
