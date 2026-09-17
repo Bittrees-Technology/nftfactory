@@ -56,7 +56,8 @@ async function proxyRequest(
 
     const upstreamPath = `/${path.join("/")}`.replace(/\/+/g, "/");
     const method = request.method.toUpperCase();
-    if(chainId && isArtworkNetworkPath(upstreamPath,method,inboundUrl.searchParams.get("readOnly")))inboundUrl.searchParams.set("assetChainId",String(chainId));
+    const artworkRequest = isArtworkNetworkPath(upstreamPath,method,inboundUrl.searchParams.get("readOnly"));
+    if(chainId && artworkRequest)inboundUrl.searchParams.set("assetChainId",String(chainId));
     const policy = evaluateIndexerProxyRequest(method, upstreamPath);
     if (!policy.ok) {
       return NextResponse.json({ error: policy.error }, { status: policy.status });
@@ -76,7 +77,7 @@ async function proxyRequest(
       }
     }
 
-    const baseUrl = (resolveIndexerServerUrl(chainId) || getIndexerBaseUrl(chainId ? { chainId } : undefined)).replace(/\/$/, "");
+    const baseUrl = (resolveIndexerServerUrl(chainId, artworkRequest) || getIndexerBaseUrl(chainId ? { chainId } : undefined)).replace(/\/$/, "");
     const upstreamUrl = `${baseUrl}${upstreamPath}${inboundUrl.search}`;
 
     const hasBody = !["GET", "HEAD"].includes(method);

@@ -1,4 +1,4 @@
-import { getLegacyChainPublicEnv, getScopedChainPublicEnv } from "./publicEnv";
+import { getLegacyChainPublicEnv, getScopedChainPublicEnv, getLegacyPrimaryChainIdOrDefault } from "./publicEnv";
 
 function normalize(value: string | undefined | null): string | undefined {
   const trimmed = String(value || "").trim();
@@ -13,12 +13,12 @@ export function getLegacyIndexerServerUrl(): string | undefined {
   return normalize(process.env.INDEXER_API_URL);
 }
 
-export function resolveIndexerServerUrl(chainId?: number): string | undefined {
+export function resolveIndexerServerUrl(chainId?: number, allowArtworkFallback = false): string | undefined {
   if (typeof chainId === "number" && Number.isInteger(chainId) && chainId > 0) {
     return (
       getScopedIndexerServerUrl(chainId) ||
       getScopedChainPublicEnv("NEXT_PUBLIC_INDEXER_API_URL", chainId) ||
-      getLegacyIndexerServerUrl()
+      ((chainId === getLegacyPrimaryChainIdOrDefault() || allowArtworkFallback) ? getLegacyIndexerServerUrl() || getLegacyChainPublicEnv("NEXT_PUBLIC_INDEXER_API_URL") : undefined)
     );
   }
 

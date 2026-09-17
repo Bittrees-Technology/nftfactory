@@ -1,0 +1,499 @@
+{
+  "network": "base-mainnet",
+  "chainId": 8453,
+  "checkedAt": "2026-09-17T00:08:21.035Z",
+  "blockNumber": "51407176",
+  "blockTimestamp": "1789603699",
+  "safe": "0xaBE23191D53E3Caad10DE495b7Cfe0d0288b5E6f",
+  "signer": "0xE5350D96FC3161BF5c385843ec5ee24E8B465B2f",
+  "publicBroadcast": false,
+  "custody": {
+    "hasCode": true,
+    "owners": [
+      "0xE5350D96FC3161BF5c385843ec5ee24E8B465B2f"
+    ],
+    "threshold": "1",
+    "safeNonce": "1",
+    "signerNonce": 386,
+    "pendingSignerNonce": 386,
+    "signerBalanceWei": "424904304356325",
+    "safeBalanceWei": "0",
+    "gasPriceWei": "6000000",
+    "passed": true
+  },
+  "receipts": [
+    {
+      "hash": "0xeefafa4ef6986e4cffa61627b22dbec5bac2c52bd6da94b8c26578f8632d0c53",
+      "blockNumber": "51406751",
+      "name": "NftFactoryRegistry",
+      "contractAddress": "0xf91879780b18f4b7d477c402d84d43439e87f4ca",
+      "passed": true
+    },
+    {
+      "hash": "0x12bd20cd1a568387ab990faa0bef19d714b0ab2dd2b494478729a8b553d8e82c",
+      "blockNumber": "51406754",
+      "name": "RoyaltySplitRegistry",
+      "contractAddress": "0x3a80668ed1c4bd97088c85b062c74be8c97b5bf8",
+      "passed": true
+    },
+    {
+      "hash": "0xfdd7cb64fbbd9bf4e57985dda3db432395d6549fe21f3bf41f654f5c3a7fc1f2",
+      "blockNumber": "51406756",
+      "name": "SubnameRegistrar",
+      "contractAddress": "0xe5ac92dd58a6126bd238ef4f13f6daff24ab66ce",
+      "passed": true
+    },
+    {
+      "hash": "0x20cc6df3a60c9b45252a892a156df037432da06efe2aee881817a36ce61f7cd2",
+      "blockNumber": "51406758",
+      "name": "ModeratorRegistry",
+      "contractAddress": "0x681412a690dd18946f1e8e46c4a7a413563c6bd3",
+      "passed": true
+    },
+    {
+      "hash": "0x793c2c8b2a16de4f846be92cfe609d72963d57063f158fbc9d8847ca7328c348",
+      "blockNumber": "51406761",
+      "name": "SharedMint721",
+      "contractAddress": "0xccb114c798fbdceb6c47ede31c265441aa9000d9",
+      "passed": true
+    },
+    {
+      "hash": "0x06a1a0c3cc90feff0aa9d32571b903e995537a3a5f55dad9a27100e84e0a1eb5",
+      "blockNumber": "51406764",
+      "name": "SharedMint1155",
+      "contractAddress": "0x6b5a8ba5c2222bb36a8e8fdcbb22edbd8d6c203c",
+      "passed": true
+    },
+    {
+      "hash": "0x517f4b3b3d37c82b22242408a4b643bd82ac297b1d1f06d952fc2a49091665c0",
+      "blockNumber": "51406767",
+      "name": "CreatorCollection721",
+      "contractAddress": "0x4a516bc55a059b1a428742a57ab0d1dac4584e1e",
+      "passed": true
+    },
+    {
+      "hash": "0xb0c6d5e4fb6ee85ff55e6d52c9fa6675d99bdbe0c0ae8ac511e5d954ce9ed2a8",
+      "blockNumber": "51406770",
+      "name": "CreatorCollection1155",
+      "contractAddress": "0x4611f99b36cc64c99d9dd3326de839874621bb8f",
+      "passed": true
+    },
+    {
+      "hash": "0xff4ea0dde43863f0648df75375f54f4a5422d00f0392833fbd72cabe1f37fa3e",
+      "blockNumber": "51406773",
+      "name": "CreatorFactory",
+      "contractAddress": "0x624f86aaeb70f7e1ce287ef4df6f8952e3c52e27",
+      "passed": true
+    },
+    {
+      "hash": "0x6b085f3990f71828b04f8d61bbfd95bd156677068a999e04d40e92c7dddce29b",
+      "blockNumber": "51406776",
+      "name": "Marketplace",
+      "contractAddress": "0x0865f5bb6d094be651e34b7336a88333c3630288",
+      "passed": true
+    },
+    {
+      "hash": "0x480f0e556c024860403b4f83b14ebfb1fd91d042404710f268f00e33a5624ea8",
+      "blockNumber": "51406779",
+      "name": "CreatorFactory",
+      "contractAddress": null,
+      "passed": true
+    },
+    {
+      "hash": "0xeb4287c8941578fc16cf2c94ce691e02841da6f5b9cfd5527ca3645aa493bc1e",
+      "blockNumber": "51406783",
+      "name": "NftFactoryRegistry",
+      "contractAddress": null,
+      "passed": true
+    },
+    {
+      "hash": "0xea04e4964228f4a0f5a8220898c89c499535d056c651353960017d9bd0b5508b",
+      "blockNumber": "51406787",
+      "name": "SubnameRegistrar",
+      "contractAddress": null,
+      "passed": true
+    },
+    {
+      "hash": "0x6089d3abd4a99ec2180b1fae87a123ff14fd3d83c98a41fbfa9bccb5fc5a08e0",
+      "blockNumber": "51406791",
+      "name": "SubnameRegistrar",
+      "contractAddress": null,
+      "passed": true
+    },
+    {
+      "hash": "0x62fa40b86414ec64c65b75befb118d329c229703b8e266000517bbdbd429e5dc",
+      "blockNumber": "51406797",
+      "name": "NftFactoryRegistry",
+      "contractAddress": null,
+      "passed": true
+    },
+    {
+      "hash": "0x4a8a80b6bf28abe3de9d9881582ad0b84538ef1a9376c989112a0cc5ad59bdaf",
+      "blockNumber": "51406802",
+      "name": "RoyaltySplitRegistry",
+      "contractAddress": null,
+      "passed": true
+    },
+    {
+      "hash": "0x27dc9e01e634e0472873887fdb96799f76c1f10ad406cf1ea7a189dff199109e",
+      "blockNumber": "51406812",
+      "name": "SubnameRegistrar",
+      "contractAddress": null,
+      "passed": true
+    },
+    {
+      "hash": "0xe6a56223ba9bffd5877ce7cce8bfdfd8432c9aadc9d17303eb51abb5794c76c1",
+      "blockNumber": "51406817",
+      "name": "ModeratorRegistry",
+      "contractAddress": null,
+      "passed": true
+    },
+    {
+      "hash": "0x6cc2cc6634ee1e74b14e0aee32595fb9230108d23f8444de5dbed26612766d12",
+      "blockNumber": "51406823",
+      "name": "SharedMint721",
+      "contractAddress": null,
+      "passed": true
+    },
+    {
+      "hash": "0x49d0a5deb24163a20da88007b936e1f94070c1d88e23b3b04b3b4ba3191febab",
+      "blockNumber": "51406829",
+      "name": "SharedMint1155",
+      "contractAddress": null,
+      "passed": true
+    },
+    {
+      "hash": "0x0e0b7f41c67ee337c170763473f89c602423561159b4111cde1b4393a11bfe05",
+      "blockNumber": "51406835",
+      "name": "CreatorFactory",
+      "contractAddress": null,
+      "passed": true
+    },
+    {
+      "hash": "0x732257d1013d05ddbe15867043eeb23cc21f84e9d1592414f52a8d09e4e0a65a",
+      "blockNumber": "51406844",
+      "name": "Marketplace",
+      "contractAddress": null,
+      "passed": true
+    }
+  ],
+  "runtime": [
+    {
+      "name": "NftFactoryRegistry",
+      "address": "0xf91879780b18f4b7d477c402d84d43439e87f4ca",
+      "runtimeHash": "0xcbe269757f656cf91e109d39c6c9c4e45fe3e144443a52c601102a4f660e9e14",
+      "exact": true
+    },
+    {
+      "name": "RoyaltySplitRegistry",
+      "address": "0x3a80668ed1c4bd97088c85b062c74be8c97b5bf8",
+      "runtimeHash": "0xdb1e32a9dcd008a4797d658d9796c3925682603993c976c6a1bbab4dfec94c41",
+      "exact": true
+    },
+    {
+      "name": "SubnameRegistrar",
+      "address": "0xe5ac92dd58a6126bd238ef4f13f6daff24ab66ce",
+      "runtimeHash": "0xca0c2a04776ba1dc9610a322f88340b39b23f6c97de8901c566db906a6cbf26c",
+      "exact": true
+    },
+    {
+      "name": "ModeratorRegistry",
+      "address": "0x681412a690dd18946f1e8e46c4a7a413563c6bd3",
+      "runtimeHash": "0xa28d4af8b1bc8cc3638de296b333aa63c9148c96c6804f5ad0925aa362d4bc42",
+      "exact": true
+    },
+    {
+      "name": "SharedMint721",
+      "address": "0xccb114c798fbdceb6c47ede31c265441aa9000d9",
+      "runtimeHash": "0xbd933aa9264d6ad7a30b371b3e79e15e735fd7c9eaee6ab04e0f230f36f57af5",
+      "exact": true
+    },
+    {
+      "name": "SharedMint1155",
+      "address": "0x6b5a8ba5c2222bb36a8e8fdcbb22edbd8d6c203c",
+      "runtimeHash": "0x25e5ac6c18c71bded9bea4d8b423791dfc0bfc519415e874edc762ae504b5485",
+      "exact": true
+    },
+    {
+      "name": "CreatorCollection721",
+      "address": "0x4a516bc55a059b1a428742a57ab0d1dac4584e1e",
+      "runtimeHash": "0xeb91ccd8935711175f00da2569b1816c2b8098da6ed282aee8e2e178069d7f35",
+      "exact": true
+    },
+    {
+      "name": "CreatorCollection1155",
+      "address": "0x4611f99b36cc64c99d9dd3326de839874621bb8f",
+      "runtimeHash": "0x05a22bc1f580264715ee46ce3967b8afa646fe7b3c27f958224b7c45fab05435",
+      "exact": true
+    },
+    {
+      "name": "CreatorFactory",
+      "address": "0x624f86aaeb70f7e1ce287ef4df6f8952e3c52e27",
+      "runtimeHash": "0xa3732b1f5ac1a11ea952623a6a74ae00610ca60142c2836f1a1d9a5b2e2b7a9e",
+      "exact": true
+    },
+    {
+      "name": "Marketplace",
+      "address": "0x0865f5bb6d094be651e34b7336a88333c3630288",
+      "runtimeHash": "0xe4b89ff5233dccdf5e628e11a9fca8ba425ed2fd9ab4e52a0c2b69740c2a32c5",
+      "exact": true
+    }
+  ],
+  "configuration": [
+    {
+      "name": "NftFactoryRegistry",
+      "field": "owner",
+      "args": [],
+      "actual": "0xaBE23191D53E3Caad10DE495b7Cfe0d0288b5E6f",
+      "expected": "0xaBE23191D53E3Caad10DE495b7Cfe0d0288b5E6f",
+      "passed": true
+    },
+    {
+      "name": "NftFactoryRegistry",
+      "field": "pendingOwner",
+      "args": [],
+      "actual": "0x0000000000000000000000000000000000000000",
+      "expected": "0x0000000000000000000000000000000000000000",
+      "passed": true
+    },
+    {
+      "name": "RoyaltySplitRegistry",
+      "field": "owner",
+      "args": [],
+      "actual": "0xaBE23191D53E3Caad10DE495b7Cfe0d0288b5E6f",
+      "expected": "0xaBE23191D53E3Caad10DE495b7Cfe0d0288b5E6f",
+      "passed": true
+    },
+    {
+      "name": "RoyaltySplitRegistry",
+      "field": "pendingOwner",
+      "args": [],
+      "actual": "0x0000000000000000000000000000000000000000",
+      "expected": "0x0000000000000000000000000000000000000000",
+      "passed": true
+    },
+    {
+      "name": "SubnameRegistrar",
+      "field": "owner",
+      "args": [],
+      "actual": "0xaBE23191D53E3Caad10DE495b7Cfe0d0288b5E6f",
+      "expected": "0xaBE23191D53E3Caad10DE495b7Cfe0d0288b5E6f",
+      "passed": true
+    },
+    {
+      "name": "SubnameRegistrar",
+      "field": "pendingOwner",
+      "args": [],
+      "actual": "0x0000000000000000000000000000000000000000",
+      "expected": "0x0000000000000000000000000000000000000000",
+      "passed": true
+    },
+    {
+      "name": "ModeratorRegistry",
+      "field": "owner",
+      "args": [],
+      "actual": "0xaBE23191D53E3Caad10DE495b7Cfe0d0288b5E6f",
+      "expected": "0xaBE23191D53E3Caad10DE495b7Cfe0d0288b5E6f",
+      "passed": true
+    },
+    {
+      "name": "ModeratorRegistry",
+      "field": "pendingOwner",
+      "args": [],
+      "actual": "0x0000000000000000000000000000000000000000",
+      "expected": "0x0000000000000000000000000000000000000000",
+      "passed": true
+    },
+    {
+      "name": "SharedMint721",
+      "field": "owner",
+      "args": [],
+      "actual": "0xaBE23191D53E3Caad10DE495b7Cfe0d0288b5E6f",
+      "expected": "0xaBE23191D53E3Caad10DE495b7Cfe0d0288b5E6f",
+      "passed": true
+    },
+    {
+      "name": "SharedMint721",
+      "field": "pendingOwner",
+      "args": [],
+      "actual": "0x0000000000000000000000000000000000000000",
+      "expected": "0x0000000000000000000000000000000000000000",
+      "passed": true
+    },
+    {
+      "name": "SharedMint1155",
+      "field": "owner",
+      "args": [],
+      "actual": "0xaBE23191D53E3Caad10DE495b7Cfe0d0288b5E6f",
+      "expected": "0xaBE23191D53E3Caad10DE495b7Cfe0d0288b5E6f",
+      "passed": true
+    },
+    {
+      "name": "SharedMint1155",
+      "field": "pendingOwner",
+      "args": [],
+      "actual": "0x0000000000000000000000000000000000000000",
+      "expected": "0x0000000000000000000000000000000000000000",
+      "passed": true
+    },
+    {
+      "name": "CreatorFactory",
+      "field": "owner",
+      "args": [],
+      "actual": "0xaBE23191D53E3Caad10DE495b7Cfe0d0288b5E6f",
+      "expected": "0xaBE23191D53E3Caad10DE495b7Cfe0d0288b5E6f",
+      "passed": true
+    },
+    {
+      "name": "CreatorFactory",
+      "field": "pendingOwner",
+      "args": [],
+      "actual": "0x0000000000000000000000000000000000000000",
+      "expected": "0x0000000000000000000000000000000000000000",
+      "passed": true
+    },
+    {
+      "name": "Marketplace",
+      "field": "owner",
+      "args": [],
+      "actual": "0xaBE23191D53E3Caad10DE495b7Cfe0d0288b5E6f",
+      "expected": "0xaBE23191D53E3Caad10DE495b7Cfe0d0288b5E6f",
+      "passed": true
+    },
+    {
+      "name": "Marketplace",
+      "field": "pendingOwner",
+      "args": [],
+      "actual": "0x0000000000000000000000000000000000000000",
+      "expected": "0x0000000000000000000000000000000000000000",
+      "passed": true
+    },
+    {
+      "name": "NftFactoryRegistry",
+      "field": "treasury",
+      "args": [],
+      "actual": "0xaBE23191D53E3Caad10DE495b7Cfe0d0288b5E6f",
+      "expected": "0xaBE23191D53E3Caad10DE495b7Cfe0d0288b5E6f",
+      "passed": true
+    },
+    {
+      "name": "SubnameRegistrar",
+      "field": "treasury",
+      "args": [],
+      "actual": "0xaBE23191D53E3Caad10DE495b7Cfe0d0288b5E6f",
+      "expected": "0xaBE23191D53E3Caad10DE495b7Cfe0d0288b5E6f",
+      "passed": true
+    },
+    {
+      "name": "CreatorFactory",
+      "field": "registry",
+      "args": [],
+      "actual": "0xF91879780b18f4b7d477c402D84d43439E87F4ca",
+      "expected": "0xf91879780b18f4b7d477c402d84d43439e87f4ca",
+      "passed": true
+    },
+    {
+      "name": "Marketplace",
+      "field": "registry",
+      "args": [],
+      "actual": "0xF91879780b18f4b7d477c402D84d43439E87F4ca",
+      "expected": "0xf91879780b18f4b7d477c402d84d43439e87f4ca",
+      "passed": true
+    },
+    {
+      "name": "CreatorFactory",
+      "field": "implementation721",
+      "args": [],
+      "actual": "0x4a516BC55A059B1A428742a57Ab0D1DAc4584e1E",
+      "expected": "0x4a516bc55a059b1a428742a57ab0d1dac4584e1e",
+      "passed": true
+    },
+    {
+      "name": "CreatorFactory",
+      "field": "implementation1155",
+      "args": [],
+      "actual": "0x4611F99b36Cc64C99d9dD3326de839874621bb8F",
+      "expected": "0x4611f99b36cc64c99d9dd3326de839874621bb8f",
+      "passed": true
+    },
+    {
+      "name": "NftFactoryRegistry",
+      "field": "protocolFeeBps",
+      "args": [],
+      "actual": "0",
+      "expected": "0",
+      "passed": true
+    },
+    {
+      "name": "NftFactoryRegistry",
+      "field": "authorizedFactory",
+      "args": [
+        "0x624f86aaeb70f7e1ce287ef4df6f8952e3c52e27"
+      ],
+      "actual": "true",
+      "expected": "true",
+      "passed": true
+    },
+    {
+      "name": "SharedMint721",
+      "field": "registrar",
+      "args": [],
+      "actual": "0xe5aC92dd58a6126bD238EF4F13F6DAfF24Ab66Ce",
+      "expected": "0xe5ac92dd58a6126bd238ef4f13f6daff24ab66ce",
+      "passed": true
+    },
+    {
+      "name": "SubnameRegistrar",
+      "field": "authorizedMinter",
+      "args": [
+        "0xccb114c798fbdceb6c47ede31c265441aa9000d9"
+      ],
+      "actual": "true",
+      "expected": "true",
+      "passed": true
+    },
+    {
+      "name": "SharedMint1155",
+      "field": "registrar",
+      "args": [],
+      "actual": "0xe5aC92dd58a6126bD238EF4F13F6DAfF24Ab66Ce",
+      "expected": "0xe5ac92dd58a6126bd238ef4f13f6daff24ab66ce",
+      "passed": true
+    },
+    {
+      "name": "SubnameRegistrar",
+      "field": "authorizedMinter",
+      "args": [
+        "0x6b5a8ba5c2222bb36a8e8fdcbb22edbd8d6c203c"
+      ],
+      "actual": "true",
+      "expected": "true",
+      "passed": true
+    }
+  ],
+  "simulations": [
+    {
+      "name": "SharedMint721",
+      "method": "publish",
+      "passed": true
+    },
+    {
+      "name": "SharedMint1155",
+      "method": "publish",
+      "passed": true
+    },
+    {
+      "name": "CreatorFactory",
+      "standard": "ERC721",
+      "method": "deployCollection",
+      "passed": true
+    },
+    {
+      "name": "CreatorFactory",
+      "standard": "ERC1155",
+      "method": "deployCollection",
+      "passed": true
+    }
+  ],
+  "passed": true
+}

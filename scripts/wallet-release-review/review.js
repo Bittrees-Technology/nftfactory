@@ -33,7 +33,7 @@ $('connect').onclick=async()=>{try{
  if(!provider)throw Error('Open this local page in the browser with your Rabby wallet.');
  await request('eth_requestAccounts');
  if(await request('eth_chainId')!==chainHex())await request('wallet_switchEthereumChain',[{chainId:chainHex()}]);
- await checkWallet();$('next').disabled=false;note('Connected. Review the transaction list, then request the next wallet approval.');
+ await checkWallet();$('next').disabled=busy||hashes.length===manifest.transactions.length;note('Connected. Review the transaction list, then request the next wallet approval.');
 }catch(e){note(e.message);}};
 $('next').onclick=async()=>{if(busy)return;busy=true;$('next').disabled=true;try{
  await checkWallet();
@@ -44,6 +44,7 @@ $('next').onclick=async()=>{if(busy)return;busy=true;$('next').disabled=true;try
  const pending=await request('eth_getTransactionCount',[manifest.signer,'pending']);
  if(BigInt(pending)!==BigInt(t.nonce))throw Error('The wallet transaction sequence changed. Stop and ask Codex to refresh the simulation.');
  note(`Review request ${i+1} of ${manifest.transactions.length} in your wallet.`);
+ await checkWallet();
  const hash=await request('eth_sendTransaction',[{from:manifest.signer,...(t.to?{to:t.to}:{}),data:t.input,value:'0x0',nonce:t.nonce,chainId:chainHex()}]);
  hashes.push(hash);
  const saved=await fetch('/receipts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(hashes)});
