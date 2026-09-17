@@ -8,7 +8,7 @@ describe('indexer network isolation',()=>{
     vi.stubEnv('NEXT_PUBLIC_PRIMARY_CHAIN_ID','11155111');
     vi.stubEnv('NEXT_PUBLIC_INDEXER_API_URL','https://sepolia.example');
     vi.stubEnv('INDEXER_API_URL','https://private-sepolia.example');
-    for(const id of [8453,4663]){
+    for(const id of [1,11155111,8453,4663]){
       vi.stubEnv(`NEXT_PUBLIC_INDEXER_API_URL_${id}`,'');
       vi.stubEnv(`INDEXER_API_URL_${id}`,'');
     }
