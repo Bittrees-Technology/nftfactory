@@ -36,7 +36,7 @@ function splitEnvList(value: string | undefined): string[] {
     .filter(Boolean);
 }
 
-function getLegacyPrimaryChainIdOrDefault(): number {
+export function getLegacyPrimaryChainIdOrDefault(): number {
   const raw = normalizeEnvValue(process.env.NEXT_PUBLIC_PRIMARY_CHAIN_ID || process.env.NEXT_PUBLIC_CHAIN_ID);
   const parsed = Number.parseInt(String(raw || "1"), 10);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : 1;

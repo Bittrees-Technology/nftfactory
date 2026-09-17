@@ -1,5 +1,6 @@
 import {
   getLegacyChainPublicEnv,
+  getLegacyPrimaryChainIdOrDefault,
   getScopedChainPublicEnv
 } from "./publicEnv";
 import { isPrivateOrLocalUrl } from "./ipfsUpload";
@@ -47,6 +48,9 @@ export function getIndexerBaseUrl(options?: IndexerRequestOptions): string {
   if (options?.chainId) {
     const scoped = getScopedChainPublicEnv("NEXT_PUBLIC_INDEXER_API_URL", options.chainId);
     if (scoped) return scoped;
+    if (options.chainId !== getLegacyPrimaryChainIdOrDefault()) {
+      throw new Error(`Indexer is not configured for network ${options.chainId}.`);
+    }
   }
   const legacy = getLegacyChainPublicEnv("NEXT_PUBLIC_INDEXER_API_URL");
   if (legacy) {
