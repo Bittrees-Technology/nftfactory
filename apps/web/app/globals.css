@@ -3937,12 +3937,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .createLayout .studioCheckbox input { width:1.1rem; height:1.1rem; margin:0; flex:none; }
 .studioPage .formCard h2, .studioPage .formCard h3 { margin:.6rem 0 .2rem; }
 .studioPage .formCard p { margin:.2rem 0 .6rem; }
-.studioToolGrid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1rem; }
-.studioTool { padding:1.4rem; }
-.studioTool h3 { margin:0 0 .6rem; }
-.studioWorkspace { margin:2rem 0; }
 @media(min-width:901px) { .studioPage .artworkPreview { position:sticky; top:1.5rem; } }
-@media(max-width:600px) { .studioToolGrid { grid-template-columns:1fr; } }
 
 nav.breadcrumb { flex-direction:row; align-items:center; justify-content:flex-start; background:none; border:0; box-shadow:none; padding:0; border-radius:0; }
 
@@ -3956,11 +3951,6 @@ nav.breadcrumb { flex-direction:row; align-items:center; justify-content:flex-st
 .productPageIntro { max-width:680px; min-width:0; }
 .productPageHeader .productPageDescription { max-width:58ch; margin:12px 0 0; color:#62594f; font-size:1.05rem; }
 .productPageActions { display:flex; flex-wrap:wrap; gap:10px; flex-shrink:0; }
-.studioTool { background:#fffcf8; border:1px solid var(--line); border-radius:16px; box-shadow:none; }
-.studioTool h3 a { display:flex; align-items:center; justify-content:space-between; gap:16px; }
-.studioToolArrow { color:var(--accent-dark); font-size:1.15rem; }
-.studioTool p { color:#62594f; max-width:42ch; }
-.studioTool:focus-within { border-color:var(--accent-dark); }
 .creatorArtworkGrid .artworkCard { padding:0; border:1px solid var(--line); border-radius:16px; box-shadow:none; }
 .artworkCardImage, .artworkDetailImage { background:#f2eee7; }
 .artworkCardBody h2, .artworkCardBody h3 { font-size:1.1rem; line-height:1.4; margin:.45rem 0; overflow-wrap:anywhere; }
