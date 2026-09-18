@@ -1,17 +1,21 @@
 # Storage and outages
 
-NFTFactory stores NFT files on IPFS. A content identifier (CID) identifies the file independently of this website.
+NFTFactory stores NFT files on IPFS, a distributed storage network. Each file has a content identifier (CID) that identifies its content independently of any particular server or website.
 
 ## Where files live
 
-The primary node runs on the Acer server. Filebase provides a separate public replica for files successfully copied there. A file is redundant only after that copy is confirmed; uploading to one node alone does not guarantee availability.
+Files are stored on a primary IPFS node and replicated to an independent storage service. Redundancy depends on successful replication: a file has an additional copy only once that copy is confirmed.
+
+A CID identifies content, but does not guarantee permanent availability. Files must remain stored and accessible through at least one reachable provider.
 
 ## If the primary service is unavailable
 
-Existing replicated NFT files can remain readable through an alternate gateway. New uploads, profile edits, imports, and tag changes may be temporarily unavailable. Retry when service returns.
+Replicated NFT files may remain accessible through an alternate IPFS gateway. Features that depend on the application's backend—including new uploads, profile edits, imports, and tag changes—may be temporarily unavailable. Retry when service returns.
 
-For profiles with an exported public snapshot, the site can show a dated, read-only copy. It may not reflect recent transfers or edits, and live marketplace activity is disabled in that copy. Profiles without a snapshot will show an unavailable message instead.
+Where a public profile snapshot exists, the site can display a dated, read-only version. This snapshot may not include recent transfers or edits, and live marketplace activity is disabled in that view. Profiles without a snapshot display an unavailable message.
 
-## What this does not cover
+## Backups and recovery
 
-A public snapshot is not a backup of private account data or a second live database. Private offsite database backups are planned after launch. Local database backups and restore checks remain part of operating the primary server.
+File replication, public snapshots, and database backups serve different purposes. Replication helps keep NFT files accessible. Public snapshots preserve a limited view of profile content. Database backups support recovery of application data.
+
+Public snapshots do not back up private account data or provide a second live database. Local database backups and recovery checks remain part of routine operations; private offsite database backups are planned after launch.
