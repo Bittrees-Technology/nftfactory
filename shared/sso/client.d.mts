@@ -1,0 +1,13 @@
+export type SharedSession = {key:string;identity:string;authTime:number};
+export type SessionAdapter = {current(req:Request):Promise<SharedSession|null>;establish(identity:string,authTime:number,req:Request):Promise<{key:string;cookies:string[]}>};
+export function createSsoClient(options:{clientId:string;origin:string;issuer:string;secret?:string;enabled:boolean;adapter:SessionAdapter;fetcher?:typeof fetch;callbackPath?:'/api/sso/callback'|'/api/project-admin/sso/callback';cookiePrefix?:string}):(req:Request)=>Promise<Response>;
+export function digest(value:string):string;
+export function identity(value:unknown):string;
+export function cookie(name:string,value:string,seconds:number,origin:string):string;
+export function readCookie(req:Request,name:string,origin:string):string;
+export function suppressSso(res:any,origin:string,prefix?:string):void;
+export function nodeRequest(req:any,origin:string):Promise<Request>;
+export function nodeResponse(response:Response,res:any):Promise<any>;
+export function seal(value:unknown,secret:string):string;
+export function pkce(value:string):string;
+export function random():string;
