@@ -1,3 +1,5 @@
+import { generateKeyPairSync, sign } from "node:crypto";
+import { decisionMessage, AUDIENCE, SCOPE, principalFor, resourceFor } from "../../../packages/roles/protocol.mjs";
 // Receipt verification has its own chain-data tests; these suites exercise persistence.
 vi.mock('./mintReceipt.js', () => ({ verifyMintReceipt: vi.fn(async (_client, input, signer) => ({ ownerAddress: signer, creatorAddress: signer, collectionOwnerAddress: input.collectionOwnerAddress || signer })) }));
 import { issueToken } from "../../../packages/auth/session.mjs";
@@ -208,6 +210,31 @@ describe("indexer handler", () => {
     const handler = createRequestHandler({ prisma: createMockPrisma(), getClientIpImpl: () => "127.0.0.1", isRateLimitedImpl: () => false }, { chainId: 11155111, adminToken: "", adminAllowlist: new Set([actor]), trustProxy: false });
     const result = await runHandler(handler, createReq({ method: "POST", url: "/api/moderation/listings/42/visibility", headers: { "content-type": "application/json", "x-admin-address": actor }, body: JSON.stringify({ hidden: true, actor }) }));
     expect(result.status).toBe(401);
+  });
+
+  it("requires native token before checking exact signed operational permission", async () => {
+    const service = generateKeyPairSync("ed25519"), authority = generateKeyPairSync("ed25519");
+    let enrolled = true, allowed = true;
+    const remote = vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, init) => {
+      const { request } = JSON.parse(String(init?.body));
+      expect(request.operation).toBe("payment-tokens.read");
+      expect(request.chainId).toBe(8453);
+      const now = Date.now();
+      const decision = { version: 1, issuer: "https://roles.bittrees.org", audience: AUDIENCE, request, principal: principalFor(8453), scope: SCOPE, resource: resourceFor(8453), enrolled, allowed, checkedAt: now, expiresAt: now + 5000 };
+      return new Response(JSON.stringify({ decision, signature: sign(null, Buffer.from(decisionMessage(decision)), authority.privateKey).toString("base64") }), { status: 200 });
+    });
+    onTestFinished(() => remote.mockRestore());
+    const handler = createRequestHandler({ prisma: createMockPrisma(), getClientIpImpl: () => "127.0.0.1", isRateLimitedImpl: () => false }, { chainId: 8453, adminToken: "native-token", adminAllowlist: new Set(), trustProxy: false, operationsAuthority: { mode: "integrated", privateKey: String(service.privateKey.export({ type: "pkcs8", format: "pem" })), publicKey: String(authority.publicKey.export({ type: "spki", format: "pem" })) } });
+    const call = (token: string) => runHandler(handler, createReq({ method: "GET", url: "/api/admin/payment-tokens", headers: { authorization: `Bearer ${token}` } }));
+    expect((await call("bad-token")).status).toBe(401);
+    expect(remote).not.toHaveBeenCalled();
+    expect((await call("native-token")).status).toBe(200);
+    allowed = false;
+    expect((await call("native-token")).status).toBe(401);
+    enrolled = false;
+    expect((await call("native-token")).status).toBe(200);
+    remote.mockRejectedValue(new Error("offline"));
+    expect((await call("native-token")).status).toBe(401);
   });
 
   it("enforces admin token for visibility mutation", async () => {

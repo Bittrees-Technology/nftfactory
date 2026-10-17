@@ -1,3 +1,4 @@
+import { authorizeOperation, operationsConfig, type OperationsConfig } from "../../../packages/roles/client.mjs";
 import {discoverCollectionArtwork} from './collectionImport.js';
 import {discoverOwnedArtwork} from './artworkDiscovery.js';
 import {AsyncLocalStorage} from 'node:async_hooks';
@@ -474,6 +475,7 @@ function isGuestbookPostRateLimited(params: { slug: string; ip: string; authorAd
 
 class BadRequestError extends Error {}
 type RequestHandlerConfig = {
+  operationsAuthority?: OperationsConfig;
   authChainId?: number;
   chainId: number;
   rpcUrl: string;
@@ -2310,7 +2312,7 @@ async function assertAdminRequest(
   req: IncomingMessage,
   config: RequestHandlerConfig,
   actor?: string,
-  options?: { includeDynamicModerators?: boolean }
+  options?: { includeDynamicModerators?: boolean; operation: string }
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!config.adminToken && !config.allowUnprotectedAdmin) {
     return { ok: false, error: "Admin token authentication is required; an address alone is not authentication" };
@@ -2333,7 +2335,10 @@ async function assertAdminRequest(
     }
   }
 
-  return { ok: true };
+  if (!config.adminToken && config.operationsAuthority?.mode === "integrated") {
+    return { ok: false, error: "Admin token authentication is required" };
+  }
+  return authorizeOperation(config.operationsAuthority, config.chainId, options?.operation);
 }
 
 function sendJson(res: ServerResponse, status: number, payload: unknown): void {
@@ -6440,7 +6445,7 @@ async function handleRequest(
       sendJson(res, 400, { error: "Invalid resolve payload" });
       return;
     }
-    const auth = await assertAdminRequest(req, config, payload.actor);
+    const auth = await assertAdminRequest(req, config, payload.actor, { operation: "moderation.resolve" });
     if (!auth.ok) {
       sendJson(res, 401, { error: auth.error });
       return;
@@ -6559,7 +6564,7 @@ async function handleRequest(
       sendJson(res, 400, { error: "Invalid visibility payload" });
       return;
     }
-    const auth = await assertAdminRequest(req, config, payload.actor);
+    const auth = await assertAdminRequest(req, config, payload.actor, { operation: "moderation.visibility" });
     if (!auth.ok) {
       sendJson(res, 401, { error: auth.error });
       return;
@@ -6602,7 +6607,7 @@ async function handleRequest(
       sendJson(res, 429, { error: "Too many requests" });
       return;
     }
-    const auth = await assertAdminRequest(req, config, undefined, { includeDynamicModerators: false });
+    const auth = await assertAdminRequest(req, config, undefined, { includeDynamicModerators: false, operation: "moderators.read" });
     if (!auth.ok) {
       sendJson(res, 401, { error: auth.error });
       return;
@@ -6665,7 +6670,7 @@ async function handleRequest(
       return;
     }
     const payload = await readJsonBody<ModeratorPayload>(req);
-    const auth = await assertAdminRequest(req, config, payload.address, { includeDynamicModerators: false });
+    const auth = await assertAdminRequest(req, config, payload.address, { includeDynamicModerators: false, operation: "moderators.manage" });
     if (!auth.ok) {
       sendJson(res, 401, { error: auth.error });
       return;
@@ -6708,7 +6713,7 @@ async function handleRequest(
       sendJson(res, 429, { error: "Too many requests" });
       return;
     }
-    const auth = await assertAdminRequest(req, config, undefined, { includeDynamicModerators: false });
+    const auth = await assertAdminRequest(req, config, undefined, { includeDynamicModerators: false, operation: "payment-tokens.read" });
     if (!auth.ok) {
       sendJson(res, 401, { error: auth.error });
       return;
@@ -6724,7 +6729,7 @@ async function handleRequest(
       return;
     }
     const payload = await readJsonBody<PaymentTokenReviewPayload>(req);
-    const auth = await assertAdminRequest(req, config, undefined, { includeDynamicModerators: false });
+    const auth = await assertAdminRequest(req, config, undefined, { includeDynamicModerators: false, operation: "payment-tokens.manage" });
     if (!auth.ok) {
       sendJson(res, 401, { error: auth.error });
       return;
@@ -6760,7 +6765,7 @@ async function handleRequest(
       return;
     }
     const payload = await readJsonBody<BackfillSubnamePayload>(req);
-    const auth = await assertAdminRequest(req, config);
+    const auth = await assertAdminRequest(req, config, undefined, { operation: "collections.backfill-subname" });
     if (!auth.ok) {
       sendJson(res, 401, { error: auth.error });
       return;
@@ -6808,7 +6813,7 @@ async function handleRequest(
       sendJson(res, 429, { error: "Too many requests" });
       return;
     }
-    const auth = await assertAdminRequest(req, config);
+    const auth = await assertAdminRequest(req, config, undefined, { operation: "collections.backfill-tokens" });
     if (!auth.ok) {
       sendJson(res, 401, { error: auth.error });
       return;
@@ -6828,7 +6833,7 @@ async function handleRequest(
       sendJson(res, 429, { error: "Too many requests" });
       return;
     }
-    const auth = await assertAdminRequest(req, config);
+    const auth = await assertAdminRequest(req, config, undefined, { operation: "collections.backfill-registry" });
     if (!auth.ok) {
       sendJson(res, 401, { error: auth.error });
       return;
@@ -6845,7 +6850,7 @@ async function handleRequest(
       sendJson(res, 429, { error: "Too many requests" });
       return;
     }
-    const auth = await assertAdminRequest(req, config, undefined, { includeDynamicModerators: false });
+    const auth = await assertAdminRequest(req, config, undefined, { includeDynamicModerators: false, operation: "tokens.backfill-mint-tx" });
     if (!auth.ok) {
       sendJson(res, 401, { error: auth.error });
       return;
@@ -7122,7 +7127,7 @@ async function handleRequest(
       sendJson(res, 429, { error: "Too many requests" });
       return;
     }
-    const auth = await assertAdminRequest(req, config, undefined, { includeDynamicModerators: false });
+    const auth = await assertAdminRequest(req, config, undefined, { includeDynamicModerators: false, operation: "listings.sync" });
     if (!auth.ok) {
       sendJson(res, 401, { error: auth.error });
       return;
@@ -7148,7 +7153,7 @@ async function handleRequest(
       sendJson(res, 429, { error: "Too many requests" });
       return;
     }
-    const auth = await assertAdminRequest(req, config, undefined, { includeDynamicModerators: false });
+    const auth = await assertAdminRequest(req, config, undefined, { includeDynamicModerators: false, operation: (path === "/api/admin/offers/sync" ? "offers.sync" : "marketplace.sync") });
     if (!auth.ok) {
       sendJson(res, 401, { error: auth.error });
       return;
@@ -9140,6 +9145,7 @@ export async function main() {
   log.info({ rpcOrigin: publicRpcOrigin(rpcUrl), rpcOrigins: rpcUrls.map(publicRpcOrigin), databaseConfigured: Boolean(dbUrl) }, "Indexer booting");
 
   const requestConfig: RequestHandlerConfig = {
+    operationsAuthority: operationsConfig(),
     chainId: CHAIN_ID,
     rpcUrl,
     rpcUrls,
