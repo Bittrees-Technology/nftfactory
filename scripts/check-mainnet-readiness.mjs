@@ -3,6 +3,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { adminProtection } from "./check-admin-protection.mjs";
 
 const ROOT = resolve(new URL("..", import.meta.url).pathname);
 const STRICT = process.argv.includes("--strict");
@@ -95,7 +96,7 @@ function buildRows() {
   const ipfsAuth = value("IPFS_API_BEARER_TOKEN")
     || (value("IPFS_API_BASIC_AUTH_USERNAME") && value("IPFS_API_BASIC_AUTH_PASSWORD"))
     || isTruthy(value("ALLOW_PUBLIC_IPFS_API_WITHOUT_AUTH"));
-  const adminProtected = value("INDEXER_ADMIN_TOKEN") || value("INDEXER_ADMIN_ALLOWLIST");
+  const adminProtected = adminProtection(env).protected;
 
   rows.push(dirty.length === 0
     ? row("pass", "repo", "working tree", "no local changes detected", "keep release branch clean for cutover")
@@ -134,8 +135,8 @@ function buildRows() {
     : row("blocker", "ipfs", "ipfs auth posture", "no IPFS auth or explicit public override detected", "set IPFS_API_BEARER_TOKEN, basic auth vars, or ALLOW_PUBLIC_IPFS_API_WITHOUT_AUTH=1"));
 
   rows.push(adminProtected
-    ? row("pass", "admin", "indexer admin protection", "admin token or allowlist is configured", "confirm /health reports adminProtection.protected=true")
-    : row("blocker", "admin", "indexer admin protection", "no indexer admin protection env detected", "set INDEXER_ADMIN_TOKEN or INDEXER_ADMIN_ALLOWLIST"));
+    ? row("pass", "admin", "indexer admin protection", "admin token is configured and unprotected access is disabled", "confirm /health reports adminProtection.protected=true")
+    : row("blocker", "admin", "indexer admin protection", "administrator authentication is missing or explicitly bypassed", "set INDEXER_ADMIN_TOKEN and disable INDEXER_ALLOW_UNPROTECTED_ADMIN; an allowlist alone is insufficient"));
 
   rows.push(value("TREASURY_SAFE")
     ? row("pass", "governance", "treasury safe", "TREASURY_SAFE is configured", "verify protocol owner transfer plan before launch")
