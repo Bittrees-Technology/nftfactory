@@ -181,13 +181,7 @@ if [[ -n "$primary_ipfs_url" ]] && ! is_private_or_local_url "$primary_ipfs_url"
   fi
 fi
 
-if normalize_truthy_env_flag "${INDEXER_ALLOW_UNPROTECTED_ADMIN:-}"; then
-  echo "INDEXER_ALLOW_UNPROTECTED_ADMIN must be unset for release readiness."
-  reachability_failed=1
-fi
-
-if [[ -z "${INDEXER_ADMIN_TOKEN:-}" && -z "${INDEXER_ADMIN_ALLOWLIST:-}" ]]; then
-  echo "Release readiness requires INDEXER_ADMIN_TOKEN or INDEXER_ADMIN_ALLOWLIST."
+if ! node scripts/check-admin-protection.mjs; then
   reachability_failed=1
 fi
 
