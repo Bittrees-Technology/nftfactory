@@ -1,10 +1,11 @@
+import {readFileSync} from 'node:fs';
 import {createPrivateKey, randomUUID, sign} from 'node:crypto';
 import {ENDPOINT,AUDIENCE,validRequest,requestMessage,verifyDecision} from './protocol.mjs';
 
 export function operationsConfig(env=process.env) {
  const mode=env.NFTFACTORY_ROLES_OPERATIONS_MODE || 'legacy';
  if(!['legacy','integrated'].includes(mode)) throw Error('Invalid operational authority mode');
- const config={mode,privateKey:env.NFTFACTORY_ROLES_OPERATIONS_PRIVATE_KEY,publicKey:env.ROLES_ECOSYSTEM_DECISION_PUBLIC_KEY};
+ const config={mode,privateKey:env.NFTFACTORY_ROLES_OPERATIONS_PRIVATE_KEY_FILE ? readFileSync(env.NFTFACTORY_ROLES_OPERATIONS_PRIVATE_KEY_FILE,'utf8') : env.NFTFACTORY_ROLES_OPERATIONS_PRIVATE_KEY,publicKey:env.ROLES_ECOSYSTEM_DECISION_PUBLIC_KEY_FILE ? readFileSync(env.ROLES_ECOSYSTEM_DECISION_PUBLIC_KEY_FILE,'utf8') : env.ROLES_ECOSYSTEM_DECISION_PUBLIC_KEY};
  if(mode==='integrated' && (!config.privateKey || !config.publicKey)) throw Error('Operational authority keys are required');
  return config;
 }
