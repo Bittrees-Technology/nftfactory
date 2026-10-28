@@ -1,0 +1,22 @@
+name: Shared session contract
+on:
+  pull_request:
+    paths: ["shared/**", "lib/shared/sso/**", "scripts/shared-session-refresh.node.mjs", ".github/workflows/shared-session.yml"]
+  push:
+    branches: [main]
+    paths: ["shared/**", "lib/shared/sso/**", "scripts/shared-session-refresh.node.mjs", ".github/workflows/shared-session.yml"]
+permissions:
+  contents: read
+concurrency:
+  group: shared-session-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  shared-session:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: node --test scripts/shared-session-refresh.node.mjs
